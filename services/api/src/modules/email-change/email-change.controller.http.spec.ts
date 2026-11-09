@@ -1,4 +1,12 @@
-import { BadRequestException, ExecutionContext, ForbiddenException, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ExecutionContext,
+  ForbiddenException,
+  INestApplication,
+  ServiceUnavailableException,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
@@ -83,13 +91,25 @@ describe('EmailChangeController (HTTP layer)', () => {
       expect(service.requestChange).not.toHaveBeenCalled();
     });
 
-    it('a malformed address reaches the service (it must be the SAME answer as any other unusable address)', async () => {
-      service.requestChange.mockRejectedValue(
-        new BadRequestException({ statusCode: 400, error: 'Bad Request', code: 'email_change_not_accepted', message: 'That email address cannot be used.' }),
-      );
-      const res = await request(app.getHttpServer()).post('/users/me/email-change').send({ ...body, newEmail: 'nonsense' }).expect(400);
-      expect(res.body.code).toBe('email_change_not_accepted');
+    it('a malformed address reaches the service and gets the same 202 (Decision Log #476)', async () => {
+      service.requestChange.mockResolvedValue(undefined);
+      const res = await request(app.getHttpServer()).post('/users/me/email-change').send({ ...body, newEmail: 'nonsense' }).expect(202);
+      expect(res.body).toEqual({ status: 'verification_sent' });
       expect(service.requestChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a spent request cap is a 429 with Retry-After too', async () => {
+      service.requestChange.mockRejectedValue(new AuthLimitExceeded(1800));
+      const res = await request(app.getHttpServer()).post('/users/me/email-change').send(body).expect(429);
+      expect(res.headers['retry-after']).toBe('1800');
+    });
+
+    it('an unusable WEB_APP_BASE_URL is the coded 503', async () => {
+      service.requestChange.mockRejectedValue(
+        new ServiceUnavailableException({ statusCode: 503, error: 'Service Unavailable', code: 'email_change_unavailable', message: 'x' }),
+      );
+      const res = await request(app.getHttpServer()).post('/users/me/email-change').send(body).expect(503);
+      expect(res.body.code).toBe('email_change_unavailable');
     });
 
     it.each([

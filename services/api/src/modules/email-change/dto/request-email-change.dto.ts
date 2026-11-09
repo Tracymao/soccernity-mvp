@@ -1,8 +1,8 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
-// POST /users/me/email-change. newEmail is deliberately NOT @IsEmail(): a malformed address must come back as the
-// ONE email_change_not_accepted answer every other unusable address gets, not as the global ValidationPipe's
-// message (which would say "not valid" and so tell the reasons apart). The service checks the format.
+// POST /users/me/email-change. newEmail is deliberately NOT @IsEmail(): since Decision Log #476 a malformed address is
+// the SAME 202 every other address gets (nothing is sent to it), not the global ValidationPipe's 400, which would tell
+// the caller the address was bad. The service checks the format in the background.
 export class RequestEmailChangeDto {
   @IsString()
   password!: string;
