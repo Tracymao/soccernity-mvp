@@ -251,7 +251,8 @@ DTO bounds (1 to 3000 characters, no extra fields). The first edit stores the te
 **Delete rules.** `me`: any message in a conversation the caller is in, including the other person's. Inserts a
 `MessageHide` row; idempotent (a second call is a no-op 204). `everyone`: the sender only (403
 `message_delete_not_sender` otherwise), at any time, idempotent (the first timestamp is kept). **The row, the text and
-any original STAY in the database; nothing is purged.** Deleting never checks Block (a person can always delete) and
+any original STAY in the database until the 12-month retention job removes them (see "Retention" below); nothing else
+purges them.** Deleting never checks Block (a person can always delete) and
 has no time limit. `DELETE /conversations/:id` upserts `ConversationHide` at the server time for the caller; calling it
 again moves the cutoff forward.
 
@@ -312,8 +313,9 @@ is rule 4.
   for the chat) while build-register B-067 read it as conversation hiding only.
 * **No user can ever read an original.** There is no admin read of originals in this PR; one needs its own decision
   (who may read it, audited how) and is a follow-up.
-* **No new retention period.** The original is kept under whatever message retention exists, which today is "kept".
-  Because the text stays, "delete for everyone" is NOT erasure; the register already records this (Section 80b).
+* **Retention: SUPERSEDED by B-287 (Decision Log #478).** This PR added no retention period and said the original is
+  "kept". A message, its edited original and a message deleted for everyone are now removed 12 months after they
+  were sent, see "Retention" below. Until then "delete for everyone" is still NOT erasure (the text stays in the row).
 * The hidden-conversation rule compares `lastMessageAt` with `hiddenAt`, so a newer message the caller hid
   individually or that was deleted for everyone still brings the conversation back, as an empty-looking thread.
 * A legacy message that carries `mediaUrl` (the column still exists) cannot be edited.
@@ -333,6 +335,47 @@ but they read this module's state, so they are listed:
   `contentText` and `originalContentText` are never removed, and the admin report detail returns that ONE message
   (current text, original text if edited, `editedAt`, `deletedForEveryone`) to a moderator. No user-facing read ever
   returns `originalContentText`; only the admin report detail does, and only for a reported message.
-- Nothing purges a message while a report against it is open: no job deletes `Message` rows at all (`Message.sender`
-  is RESTRICT; the anonymiser deletes only `MessageHide`/`ConversationHide` rows).
+- Nothing purges a message while a report against it exists. The anonymiser deletes only `MessageHide`/`ConversationHide`
+  rows (`Message.sender` is RESTRICT), and the 12-month retention job (B-287) skips any message a `Report` with
+  `targetType: 'message'` points at, in the SELECT and again in the DELETE (see "Retention").
 - Moderators can record `content_removed` against a message report but cannot delete a message (known gap).
+
+## Retention (`backend/b287-message-retention`, B-287, Decision Log #478)
+
+`MessageRetentionService` (`message-retention.service.ts`) deletes direct messages **12 months after they were sent**,
+for everyone, minors and adults alike. This replaces the earlier "kept, no new period" wording of the B-067 section.
+
+- **Schedule and size.** Daily at 04:00 (`@Cron('0 0 4 * * *')`, after the 03:45 Contact Us job), oldest first, at most
+  `MESSAGE_RETENTION_MAX_PER_RUN` = 500 messages per run (a backlog drains over several nights), `purgeExpired(now)` takes
+  an injectable clock. The log carries counts only, never an id, name or text.
+- **The figure.** `MESSAGE_RETENTION_MONTHS`, default 12 (`DEFAULT_MESSAGE_RETENTION_MONTHS`), in `.env.example` and both
+  `render.yaml` services, guarded by `env-completeness.spec.ts`. A blank, zero, negative or non-numeric value falls back
+  to 12. Calendar months in UTC (`setUTCMonth`); a message is due only when `sentAt` is **strictly** older than the cutoff.
+- **What counts as old.** `sentAt`, not `editedAt`, not read time. An edit does not restart the clock. The edited original
+  (`originalContentText`) is part of the row and goes with it; a message deleted for everyone is deleted like any other.
+- **Never deleted: a message that is evidence.** A message is skipped when a `Report` with `targetType: 'message'` has it
+  as `targetId` (a bare string, no foreign key), or when a `ReportContextMessage` row attached it to a report. Both tests
+  are in the SELECT and repeated in the DELETE statement, so a report filed between the two still protects the message.
+  The message then stays for as long as the report does; removing a report (its own retention) is not built, so a
+  reported message is kept until that exists. `ReportContextMessage.messageId` is a RESTRICT foreign key, so the database
+  would refuse the delete anyway.
+- **What goes with a message.** `MessageHide` rows (ON DELETE CASCADE). There is no stored media object to delete: a DM has
+  carried no media since B-259 (the send DTO refuses `mediaUrl`), this module has no storage, and no route has ever
+  written `Message.mediaUrl`. If DM media is ever added, the sweep must delete the object too.
+- **Empty conversations.** A conversation that lost messages in a run and now has none is deleted (its `ConversationHide`
+  rows cascade); the inbox would list it as an empty thread otherwise. Only conversations touched by the run's own DELETE
+  are examined, so a thread just started with nothing sent is never removed, and the "no messages left" test sits in the
+  conversation DELETE, so a message sent meanwhile keeps it. The participant key is then free: the two people can start a
+  new thread.
+- **Held accounts: no exemption.** The account hold (B-044) pauses *anonymisation/erasure of a `pending_deletion` account*.
+  It never touched messages, which stay after an account is anonymised, so there was nothing to extend. A report-derived
+  hold on an account is covered by the evidence rule above only for the specific message(s) a report names; a *legal hold*
+  (`AccountHold`, "the whole account is kept") does not currently stop this job from deleting that account's old messages.
+  Whether it should is a founder / counsel call, not decided here (see `docs/backend-message-retention-report.md`).
+- **Side effects worth knowing.** A `message` Notification for a deleted thread degrades to `data: null` (the existing
+  stale-reference rule). An adult can start a conversation with a minor only if no thread exists; after the old thread is
+  deleted that exemption is gone (rule #347 unchanged). `Message.sender` and `Conversation.participantIds` are classed as
+  content that blocks the anonymised-row purge, so an anonymised account whose only blockers were old DMs becomes
+  purgeable after this job runs.
+- **Not done:** counsel has not signed off the 12 months for minors' messages (the legal draft carries it as a
+  `[PROPOSAL]` starting figure); no user-facing wording was written.

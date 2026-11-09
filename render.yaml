@@ -378,6 +378,8 @@ services:
         value: support@soccernity.com
       - key: CONTACT_ENQUIRY_RETENTION_MONTHS
         value: "12"
+      - key: MESSAGE_RETENTION_MONTHS
+        value: "12"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
         value: "3"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
@@ -721,6 +723,8 @@ services:
       - key: SUPPORT_INBOX_EMAIL
         value: support@soccernity.com
       - key: CONTACT_ENQUIRY_RETENTION_MONTHS
+        value: "12"
+      - key: MESSAGE_RETENTION_MONTHS
         value: "12"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
         value: "3"
