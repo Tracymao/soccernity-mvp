@@ -405,18 +405,28 @@ describe('Withhold guardian notices (B-280) -- real Postgres + real Redis', () =
   // ================================================================== recovery
 
   describe('guardian-assisted two-factor recovery', () => {
-    it('a withheld minor gets the same answer as a minor with no confirmed guardian: nothing created, nothing sent', async () => {
+    it('a withheld minor takes the ADULT path (Decision Log #480): a link to their OWN email, nothing to a guardian', async () => {
       const withheld = await enrolled();
-      const noGuardian = await enrolled({ consent: null });
       const admin = await seedAdmin('moderator', true);
       await withhold(withheld.id, admin);
 
       const a = await http().post('/auth/two-factor/recovery/request').send({ email: withheld.email, password: PASSWORD }).expect(202);
-      const b = await http().post('/auth/two-factor/recovery/request').send({ email: noGuardian.email, password: PASSWORD }).expect(202);
 
-      expect(a.body).toEqual({ audience: 'no_guardian' });
-      expect(a.body).toEqual(b.body);
-      expect(await prisma().twoFactorRecoveryRequest.count({ where: { userId: withheld.id } })).toBe(0);
+      expect(a.body).toEqual({ audience: 'account' });
+      const rows = await prisma().twoFactorRecoveryRequest.findMany({ where: { userId: withheld.id } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ kind: 'adult', state: 'pending' });
+      expect(calls('sendTwoFactorRecoveryLinkEmail')).toHaveLength(1);
+      expect(lastArgs('sendTwoFactorRecoveryLinkEmail')[0]).toBe(withheld.email);
+      expect(calls('sendTwoFactorRecoveryGuardianLinkEmail')).toHaveLength(0);
+      expect(calls('sendTwoFactorRecoveryMinorNoticeEmail')).toHaveLength(0);
+    });
+
+    it('an UNFLAGGED minor with no confirmed guardian still gets no_guardian: nothing created, nothing sent', async () => {
+      const noGuardian = await enrolled({ consent: null });
+      const res = await http().post('/auth/two-factor/recovery/request').send({ email: noGuardian.email, password: PASSWORD }).expect(202);
+      expect(res.body).toEqual({ audience: 'no_guardian' });
+      expect(await prisma().twoFactorRecoveryRequest.count({ where: { userId: noGuardian.id } })).toBe(0);
       expect(sent.filter((c) => c.method.startsWith('sendTwoFactorRecovery'))).toHaveLength(0);
     });
 
