@@ -18,6 +18,12 @@ import { evidenceKeysToDeleteNow } from './rejected-media-evidence.util';
 // post with a report not yet closed. Then the object is NOT deleted, a PostMediaDeferredDeletion record is
 // written in the same transaction as the row delete, and the daily sweep retries it. Statutory-reporting and
 // evidence handling beyond that stay OPEN under counsel (B-206).
+//
+// backend/b290-removed-post-media (B-290, Decision Log #484): the same protection now covers the PRIVATE copy kept
+// of a file whose post a moderator removed (Remove Content). Until the removing report closes, that copy is
+// evidence: if the author deletes the removed post, or the account is anonymised, the copy is NOT deleted with the
+// row; a deferral record is written and the daily sweep deletes it once neither protection applies. (A closed
+// report's private copy is deleted by RejectedMediaSweepService.confirmModerationRemovals, not by these paths.)
 
 type Db = Pick<Prisma.TransactionClient, 'postMedia'>;
 type EvidenceDb = Pick<Prisma.TransactionClient, 'accountHold' | 'report' | 'postMediaDeferredDeletion'>;
@@ -28,6 +34,8 @@ export interface MediaObjectRow {
   publicKey: string | null;
   privateKey: string | null;
   quarantineKey: string | null;
+  /** The post the file is attached to; its removal state decides whether the private copy is evidence (B-290). */
+  post?: { removedByModerationAt: Date | null } | null;
 }
 
 /** A media row with what the protection rule needs to know about it. */
@@ -47,14 +55,17 @@ export interface MediaCleanupRow extends MediaObjectRow {
 export function deletableKeys(row: MediaObjectRow): string[] {
   const keys: string[] = [];
   if (row.publishedAt && row.publicKey) keys.push(row.publicKey);
-  if (row.privateKey && row.status !== 'rejected') keys.push(row.privateKey);
+  if (row.privateKey && evidenceKeyOf(row) === null) keys.push(row.privateKey);
   if (row.quarantineKey) keys.push(row.quarantineKey);
   return keys;
 }
 
-/** The private object of a REJECTED file (the one that needs the protection check), or null. */
-export function evidenceKeyOf(row: Pick<MediaObjectRow, 'status' | 'privateKey'>): string | null {
-  return row.status === 'rejected' ? row.privateKey : null;
+/**
+ * The private object that needs the protection check, or null: the private object of a REJECTED file (B-283) and
+ * the private copy kept of a file whose post a moderator removed (B-290).
+ */
+export function evidenceKeyOf(row: Pick<MediaObjectRow, 'status' | 'privateKey' | 'post'>): string | null {
+  return row.status === 'rejected' || row.post?.removedByModerationAt ? row.privateKey : null;
 }
 
 /**
@@ -80,6 +91,7 @@ const CLEANUP_SELECT = {
   publicKey: true,
   privateKey: true,
   quarantineKey: true,
+  post: { select: { removedByModerationAt: true } },
 } as const;
 
 /** The storage keys of every file attached to a post (read BEFORE the post, and so its rows, is deleted). */

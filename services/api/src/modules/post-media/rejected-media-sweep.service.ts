@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService, StorageListNotPermittedError } from '../../storage/direct-upload-storage.service';
 import { PostMediaConfig } from './post-media.config';
 import { PRIVATE_PREFIX, PUBLIC_PREFIX } from './post-media-objects.service';
-import { partitionEvidence, uploadersUnderHold } from './rejected-media-evidence.util';
+import { partitionEvidence, removedMediaDeletableNow, uploadersUnderHold } from './rejected-media-evidence.util';
 
 // backend/b283-delete-rejected-media (B-283; Decision Log #462 (g), #464). The second half of rejected-file
 // deletion. The lifecycle paths (post deleted, upload deleted, purges, account anonymised) delete a rejected
@@ -29,6 +29,11 @@ import { partitionEvidence, uploadersUnderHold } from './rejected-media-evidence
 //                              and reported, never deleted).
 //                          At most POST_MEDIA_STRAY_SWEEP_MAX_DELETES per run (the cap convention of
 //                          ANONYMIZED_PURGE_MAX_PER_RUN), and POST_MEDIA_STRAY_SWEEP_DRY_RUN=true only counts.
+//   4. confirmModerationRemovals -- B-290 (Decision Log #484). The private copy kept of a removed post's media is
+//                          deleted when the report that removed the post CLOSES (the appeal window lapsed, or the
+//                          appeal was upheld), through the one evidence function removedMediaDeletableNow (the
+//                          existing protection rule unchanged; B-206 hooks in there). The PostMedia row and the post
+//                          stay; the row records deletedByModerationAt and privateKey becomes null.
 //   3. deleteUploaderObjects -- called by the account purge (AnonymizedRowPurgeService) right after it deletes a
 //                          User row: removes whatever is still under that user's prefixes.
 //
@@ -65,6 +70,18 @@ export interface StraySweepResult {
   capped: boolean;
   dryRun: boolean;
 }
+
+export interface ModerationRemovalResult {
+  /** Private copies deleted (and recorded) this run. */
+  deleted: number;
+  /** Files still waiting: the removing report is not closed, the uploader is held, or a report on the post is open. */
+  waiting: number;
+  failed: number;
+  capped: boolean;
+}
+
+/** How many candidate rows confirmModerationRemovals reads at a time (it pages until the deletion cap is reached). */
+const MODERATION_REMOVAL_PAGE_SIZE = 200;
 
 export interface UploaderObjectsResult {
   outcome: ListOutcome;
@@ -118,6 +135,14 @@ export class RejectedMediaSweepService {
       this.logger.error(`Deferred media deletions failed: ${msg(err)}`);
     }
     try {
+      const m = await this.confirmModerationRemovals(this.clock.now());
+      if (m.deleted + m.waiting + m.failed > 0) {
+        this.logger.log(`Removed-post media: deleted=${m.deleted} waiting=${m.waiting} failed=${m.failed} capped=${m.capped}`);
+      }
+    } catch (err) {
+      this.logger.error(`Removed-post media deletion failed: ${msg(err)}`);
+    }
+    try {
       const r = await this.sweepStrays(this.clock.now());
       this.logger.log(
         `Stray media sweep: outcome=${r.outcome} dryRun=${r.dryRun} scanned=${r.scanned} deleted=${r.deleted} wouldDelete=${r.wouldDelete} ` +
@@ -160,6 +185,68 @@ export class RejectedMediaSweepService {
       }
     }
     return result;
+  }
+
+  // ---- 4. removed-post media: delete the kept private copy when the removing report closed (B-290) --------
+
+  async confirmModerationRemovals(now: Date = this.clock.now()): Promise<ModerationRemovalResult> {
+    const result: ModerationRemovalResult = { deleted: 0, waiting: 0, failed: 0, capped: false };
+    if (!this.storage) return result;
+    const cap = this.config.straySweepMaxDeletes;
+    let afterSequence = 0;
+    for (;;) {
+      // Files with no public copy any more (withdrawn) whose post is removed by a report and whose private copy
+      // still exists. A file still published waits for the reconciler to withdraw it first.
+      const rows = await this.prisma.postMedia.findMany({
+        where: {
+          sequence: { gt: afterSequence },
+          deletedByModerationAt: null,
+          privateKey: { not: null },
+          publishedAt: null,
+          post: { is: { removedByModerationAt: { not: null }, removedByReportId: { not: null } } },
+        },
+        select: {
+          id: true,
+          sequence: true,
+          uploaderId: true,
+          postId: true,
+          privateKey: true,
+          post: { select: { removedByReportId: true } },
+        },
+        orderBy: { sequence: 'asc' },
+        take: MODERATION_REMOVAL_PAGE_SIZE,
+      });
+      if (rows.length === 0) return result;
+      afterSequence = rows[rows.length - 1].sequence;
+
+      const items = rows.map((r) => ({
+        mediaId: r.id,
+        uploaderId: r.uploaderId,
+        postId: r.postId,
+        key: r.privateKey as string,
+        removingReportId: r.post?.removedByReportId as string,
+      }));
+      const { free, waiting } = await removedMediaDeletableNow(this.prisma, items, now);
+      result.waiting += waiting.length;
+      for (const item of free) {
+        if (result.deleted + result.failed >= cap) {
+          result.capped = true;
+          return result;
+        }
+        try {
+          await this.storage.delete(item.key); // deleting a missing object is a success
+          await this.prisma.postMedia.updateMany({
+            where: { id: item.mediaId, privateKey: item.key, publishedAt: null, deletedByModerationAt: null },
+            data: { privateKey: null, deletedByModerationAt: now },
+          });
+          result.deleted += 1;
+        } catch (err) {
+          result.failed += 1;
+          this.logger.warn(`Removed-post media ${item.mediaId} not deleted (${msg(err)}); it is retried next run.`);
+        }
+      }
+      if (rows.length < MODERATION_REMOVAL_PAGE_SIZE) return result;
+    }
   }
 
   // ---- 2. stray sweep -----------------------------------------------------------------------------------
