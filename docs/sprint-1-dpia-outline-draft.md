@@ -26,12 +26,51 @@ belonging to the founder and counsel, which this draft deliberately does not
 resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
-- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3)
+- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
-  Claude Code, from the merged code rather than from summaries; v0.3 likewise
+  Claude Code, from the merged code rather than from summaries; v0.3 and v0.4 likewise
 - **Reviewed by counsel:** NOT YET — see Section 6
-- **Version:** 0.3 (draft — still NOT APPROVED)
+- **Version:** 0.4 (draft — still NOT APPROVED)
+
+### Changelog — v0.3 → v0.4 (2026-11-10)
+
+**What this update is, stated plainly.** v0.4 brings four parts of this DPIA into line with what the founder has
+decided and what is merged on `origin/main` (`29e0966`), and nothing else. **It does not itself constitute progress
+toward sign-off.** The Section 6 sign-off block is unchanged and empty ("Reviewed by counsel: NOT YET"); no lawful basis
+has been chosen; no residual risk has been rated; no [PROPOSAL] or [ACTION FOR REVIEW] from an earlier version has been
+accepted or closed. Every changed passage below carries the marker **[CHANGED v0.4 — 2026-11-10]** so counsel can find
+it. Facts were read from the merged code and from the per-feature reports named in each passage; **nothing was run
+against a live environment** and **no statute, regulator guidance or case law was retrieved** (the §0 item 5
+limitation applies in full to everything added here).
+
+Changed:
+
+1. **Direct messages** (Decision Log #478, B-287; #482). The line that private messages are kept under an anonymous
+   label after an account is anonymised (§2.4) is superseded: a daily job deletes each message **12 months after it was
+   sent**, except messages kept under a report or an active legal hold. Messages are **not end-to-end encrypted**; this
+   is now stated. §1.3, §2.2, §2.4, new **R33**, §4, §5.
+2. **Reporter-added context** (Decision Log #477, B-286). When a person reports a message they may attach up to 10
+   messages before and 10 after it; staff see them. Who sees them, why, and where the child-safety-vetting gate does and
+   does not apply are set out in **R33**.
+3. **Soft removal of posts, comments and messages** (Decision Log #483, B-289). A moderator's "Remove Content" hides the
+   item from users and keeps the row and its text for staff; what that keeps, and for how long, is set out in new **R34**.
+4. **Media of a removed post** (Decision Log #484, B-290): summarised in R34 and set out in full in the new §1.5 and the
+   amended R30 of `docs/dpia-addendum-post-media-draft.md` (v0.2).
+
+New risks **R33** and **R34**, numbered after the post-media addendum's R23–R31 (**R32 is held** by the option in
+`docs/cloudflare-processor-and-cross-border-draft.md` §8.4). Added §5 items 29–34.
+
+**What is not changed, and is now visibly stale.** Noticed while reading the code, deliberately not edited because this
+update was scoped to the four subjects above: (a) §2.4's statement that an open `Report` "holds the anonymization
+indefinitely" and §2.4's "no purge timer" for the anonymised `User` row predate Decision Log #375 and #376; (b) R8 and
+§1.2 still describe `Post.mediaUrls` and `Message.mediaUrl` as the media path (the free-address path was replaced by the
+upload pipeline, and no route writes `Message.mediaUrl`); (c) R9 says no field records whether a report concerns a minor
+and that no staff vetting exists, which is no longer true (`Report.concernsMinor`, `AdminUser.childSafetyVetted`); (d) R2(e)
+says no rate limit, message-content control or safeguarding flag was found inside a conversation, and does not mention that a recipient can now report a message.
+These are listed so counsel does not read the unedited text as current.
+
+---
 
 ### Changelog — v0.2 → v0.3 (2026-09-21)
 
@@ -241,8 +280,24 @@ the date of birth itself is not copied), `occurredAt`.
 membership, `SavedPost`, `Follow` (social graph), `MediaAsset` (image/video, size,
 uploader).
 
+**[CHANGED v0.4 — 2026-11-10]** `Post` and `Comment` each carry `removedByModerationAt` and `removedByReportId` (a moderator's soft removal, R34);
+`PostMedia.deletedByModerationAt` records that the stored file of a removed post was deleted (`dpia-addendum-post-media-draft.md`
+§1.5). Source: `schema.prisma` (migrations `20261125090000_add_content_removal`,
+`20261126090000_add_post_media_deleted_by_moderation`).
+
 **Private communications:** `Conversation` (`participantIds`), `Message`
 (`contentText`, `mediaUrl`, `sentAt`, `readAt`).
+
+**[CHANGED v0.4 — 2026-11-10]** The `Message` row now also carries: `editedAt`; **`originalContentText`**, the text as first sent, written once on
+the first edit and never overwritten (no user-facing read returns it; staff see it only on a reported message, R33);
+`deletedForEveryoneAt`; and `removedByModerationAt` / `removedByReportId` (a moderator's removal, R34). Per-person hiding
+is kept in `MessageHide` and `ConversationHide`. `ReportContextMessage` links a report to messages the reporter chose as
+context (R33). `Message.mediaUrl` is a leftover column: the send route refuses it and nothing writes it.
+**Messages are not end-to-end encrypted.** `contentText` is a plain text column in Postgres; the messaging module has no
+encryption code (the application-level encryption this pass found elsewhere is the `DOB_ENCRYPTION_KEY` cipher used for
+date of birth and authenticator secrets; this pass did not search the whole codebase for others). Whether the database host also encrypts storage at rest is a provider matter that is
+**not verified** (no hosting account exists). Sources: `services/api/prisma/schema.prisma` (`Message`),
+`modules/messaging/messaging.service.ts`.
 
 **Behavioural and engagement:** `Notification`, `LeaderboardEntry` (points, rank,
 period — a **publicly ranked** record potentially including children).
@@ -251,6 +306,11 @@ period — a **publicly ranked** record potentially including children).
 free-text `reason`, status). Reports are the highest-sensitivity records in the
 system: a report may contain an allegation about a named child, written by a
 named child.
+
+**[CHANGED v0.4 — 2026-11-10]** A report can now target a **message** (`targetType: 'message'`). It can then link, through `ReportContextMessage`,
+to up to 20 further messages of the same conversation that the reporter chose, so a report about a message can bring the
+text of other people's private messages (including other children's) into the staff moderation tool (R33). Source:
+`modules/moderation/moderation.service.ts`, `moderation.constants.ts`.
 
 **Grassroots records:** `GrassrootsTeam` (name, city, league type, creator),
 `Fixture` (time, venue), `Result` (scores, who entered). **Note for counsel:**
@@ -382,7 +442,7 @@ Assessed field by field against the built schema. **All conclusions provisional.
 | `phone` (optional) | **Questionable.** No MVP feature identified that requires it | **[PROPOSAL]** Counsel to consider whether it should be collectable from minors at all |
 | `displayName` | Necessary | **[PROPOSAL]** Consider guidance discouraging minors from using full real names |
 | Guardian `name`, `email`, `relationship` | Necessary to the consent flow | Confirm `relationship` free-text is proportionate |
-| `Conversation` / `Message` content | Necessary to a messaging feature | **The harder question is not necessity but whether minors should have unrestricted DM access at all — see R2** |
+| `Conversation` / `Message` content | Necessary to a messaging feature | **The harder question is not necessity but whether minors should have unrestricted DM access at all — see R2.** **[CHANGED v0.4 — 2026-11-10]** Retention is now 12 months from sending (founder decision, Decision Log #478), with exceptions; the stored original of an edited message and the reporter-chosen context messages are new data; see R33. No counsel position exists on the 12-month figure |
 | `Fixture.venue` + `scheduledAt` | Necessary to fixtures | **Proportionality turns on visibility, not collection — see R7** |
 | `LeaderboardEntry` (public rank) | Necessary to the feature | **[PROPOSAL]** Public ranking of identifiable minors is a design choice, not a technical necessity — counsel to consider whether minors should be excluded from public boards or shown pseudonymously |
 | `Report.reason` (free text) | Necessary to moderation | Free text will attract sensitive disclosures by design; handling needs care |
@@ -419,9 +479,11 @@ is present in the data model. Specifically:
   `pending_deletion`; after a 30-day grace period a daily job anonymizes the `User` row
   in place (it never `DELETE`s it — Decision Log #341): identifying fields are overwritten or
   nulled, the user's follows, likes, saves, notifications and Banter / Community Group / Club
-  memberships are deleted, and teams they organised become dormant. `Post`, `Comment`,
-  `Message` and `Result` rows are **kept**, now attributed to "[deleted user]"; `Report` rows
-  are never touched. An open moderation `Report` involving the account **holds** the
+  memberships are deleted, and teams they organised become dormant. `Post`, `Comment`
+  and `Result` rows are **kept**, now attributed to "[deleted user]"; `Report` rows
+  are never touched. **[CHANGED v0.4 — 2026-11-10]** **`Message` rows are no longer kept indefinitely**: a daily job deletes each message 12 months
+  after it was sent, whoever sent it and whatever the state of the account (Decision Log #478; R33). Anonymisation itself still
+  does not touch messages. An open moderation `Report` involving the account **holds** the
   anonymization indefinitely (no maximum duration; Decision Log #345 adds admin visibility
   only). **[ACTION FOR REVIEW]** Whether retaining a departed user's posts, comments and
   private messages under an anonymous label satisfies Article 17 for that user — particularly
@@ -429,6 +491,11 @@ is present in the data model. Specifically:
   that may themselves identify the author — is a question for counsel; the design rests on the
   Recital 26 reasoning recorded in the sweep's own header comment, which is an argument, not a
   determination. The anonymized `User` row itself has no purge timer (Decision Log #344).
+  **[CHANGED v0.4 — 2026-11-10]** For messages the question above is therefore narrower than v0.3 stated: a departed user's private
+  messages stay under the anonymous label for at most 12 months from the day each was sent, **unless** a report targets the
+  message, a report attached it as context, or an active legal hold covers its sender or any other participant of its
+  conversation, in which case it stays for as long as that report or hold does (R33). No retention clock exists for a
+  report, so "as long as the report" is open-ended. A moderator's soft removal does not delete anything (R34).
 - **`MediaAsset.uploaderId` is a plain `String` with no foreign-key relation to
   `User`.** Media therefore may not be reliably discoverable from a user record,
   which affects both erasure and access requests. **[PROPOSAL]** Flag as a
@@ -800,6 +867,9 @@ across those four outcomes, so a regression that re-adds an early return fails a
 - **(f) `participantIds` still has no foreign key**, and the two-party constraint is enforced in
   the application (`participantKey`, a sorted-and-joined unique key, makes find-or-create
   race-safe), not by the schema.
+- **(g)** **[CHANGED v0.4 — 2026-11-10]** Messages are not end-to-end encrypted, are deleted 12 months after sending (with exceptions), and a
+  recipient can report a message, which shows it and chosen context to staff. See **R33**. Note that (e) above is now partly
+  out of date: a recipient *can* report a message; the content of a thread is still not screened.
 
 *Draft severity: very high — unchanged; the controls reduce the likelihood of the direct
 adult-initiated path but do not reduce the severity of a contact that gets through. Draft
@@ -1150,6 +1220,132 @@ that band without a stronger consent method or a scope change.**
 
 *Draft severity: very high. Draft likelihood: high. Placeholder ratings for counsel.*
 
+### R33 — Private messages: readable by the server, kept 12 months, and shown to staff when reported — with chosen surrounding context
+
+**[CHANGED v0.4 — 2026-11-10]** *New in v0.4. Sources: `modules/messaging/message-retention.service.ts`, `messaging.service.ts`;
+`modules/moderation/moderation.service.ts`, `moderation.constants.ts`; `schema.prisma` (`Message`, `ReportContextMessage`);
+Decision Log #477, #478, #482; build-register B-286, B-287; `docs/backend-message-retention-report.md`,
+`docs/backend-message-retention-legal-hold-report.md`, `docs/backend-message-report-context-report.md`.*
+
+**(a) Messages are stored readable and are not end-to-end encrypted.** The server holds the plain text of every message
+(§1.3). An edited message also keeps its **original text**, which no user can read. "Delete for me" and "delete for
+everyone" hide a message but do not remove the row or the text; only the retention job (b) or a hard delete of the
+conversation does. Anyone with database access, or a breach of it (R10), exposes private conversations, including those
+between children. Encryption at rest by the host is not verified.
+
+**(b) Retention: 12 months from sending, decided by the founder.** `MessageRetentionService` runs daily at 04:00 and deletes
+every message strictly older than `MESSAGE_RETENTION_MONTHS` calendar months (default 12), oldest first, at most 500 per
+run, for **minors and adults alike**, together with the stored original of an edited message and messages already
+deleted for everyone. A conversation left with no messages is deleted by the same run; per-person hide rows go with the
+message. A DM carries no media, so there is no stored file to delete. The 12-month figure is the founder's decision
+(Decision Log #478); **it has no counsel position**, and the public legal draft carries 12 months only as a `[PROPOSAL]`
+starting figure. **[ACTION FOR REVIEW]** whether 12 months is defensible for children's private messages, and why not
+shorter.
+
+**(c) Exceptions — a message is kept past 12 months when:** (i) a `Report` with `targetType: 'message'` points at it;
+(ii) a `ReportContextMessage` row attached it to a report as context; or (iii) an **active legal hold** exists for the
+message's sender **or for any other participant of its conversation** (`AccountHold.type = 'legal_hold'`, not lifted,
+Decision Log #482). Bad-faith holds and holds derived from a report do **not** exempt a message (the report guard already
+protects the specific reported message). (The stored files of a removed post are treated differently: **either** kind of
+active admin hold keeps them; see `dpia-addendum-post-media-draft.md` §1.5, finding 3.) Nothing is recorded about skipped messages: when the report or hold ends, the
+next run deletes whatever is then past 12 months. **Open-ended in practice:** exceptions (i) and (ii) last as long as the
+`Report` row exists, and **no retention clock exists for reports** (`backend-message-retention-report.md`, last bullet of
+"Other things the reviewer should know"). **[ACTION FOR REVIEW]** counsel to say how long a reported message, and the
+context attached to it, may be kept after the report is closed. A report filed in the instant between the job's
+two statements cannot save a message the delete has already removed (a single-transaction window).
+
+**(d) Reporter-added context (Decision Log #477, B-286).** A person who reports a message from a conversation they take
+part in may attach other messages of **that conversation**: up to 20 in total, each among the 10 messages immediately
+before or after the reported one. The server checks every id: same conversation, inside the window (counted over all of the
+conversation's messages, so the window reveals nothing about hidden ones), and visible to the reporter exactly as the
+reported message must be (not hidden by them, after any "delete chat" cutoff, not deleted for everyone). The reporter's own
+messages are allowed; the reported message itself is not a valid context id; one bad id refuses the whole set with the same
+404 the other refusals give. Only a recipient can report: the sender of a message, a stranger and a participant of another
+conversation all receive that same 404. The public (logged-out) report route never accepts a message target or context.
+A repeat report on the same message by the same person while the first is open returns the first and adds any new valid
+ids to it, up to the 20.
+
+**(e) Who sees them, and why.** Staff only: the admin report detail (`GET /admin/moderation/reports/:id`, moderator and
+superadmin roles) returns the reported message and the context messages, oldest first, each with the sender's **public
+name**, the text, the **original text before any edit**, whether it was edited, deleted for everyone or removed, and (for
+context) whether the reporter sent it. No conversation id, recipient, sender id or any other message of the thread is
+returned. Filing a report notifies nobody (not the reported person, not the other participant). The purpose is to let a
+moderator judge a message in context rather than in isolation; whether the context is *necessary* and *proportionate* is the
+founder's product decision, and **this draft does not assess it**. **[ACTION FOR REVIEW]** the context a reporter picks will
+often contain the **other person's** messages (the person reported) and, in a thread between two children, messages by a
+child who never agreed to share them with staff; no notice to the other participants that their messages may be shown to
+staff exists in the product, and none is drafted here (the legal draft is not edited by this pass).
+
+**(f) The vetting gate does not follow the children in the thread.** The child-safety-vetting gate
+(`AdminUser.childSafetyVetted`, read fresh on every call) applies to a report only when `Report.concernsMinor` is true. For
+a message report made through `POST /reports` that flag is set **only** when the reporter chooses the reason category
+`child_safety_concern` (Decision Log #466; that route has no minor field of its own). A message report made under any other
+category — for example harassment between two 14-year-olds — is therefore readable, with up to 20 context messages and the
+original text of edited ones, by **any moderator or superadmin, vetted or not**; editors have no access to the moderation
+queue. **[ACTION FOR REVIEW]** whether the gate should key off the ages of the participants rather than the reporter's
+category. This pass did not check whether a staff read of a reported message is itself logged.
+
+**(g) Right of access.** "Download my data" exports the account holder's **own sent messages** (current text of an edited
+message; never the original; not messages deleted for everyone; never other people's messages), so messages received, the
+stored originals and the context messages in a report are not in the export (`modules/data-export/data-export-file.builder.ts`).
+Whose rights apply to a child's request is still a counsel question (legal draft Part C row 12, not edited).
+
+**(h) What this does not change.** The rules that stop an adult starting a conversation with a minor, the under-16
+exclusion and the equal-work 404s (R2) are untouched. An adult cannot start a **new** conversation with a minor, but may
+reply in an existing one; once the 12-month job deletes a quiet thread that exemption is gone and the adult cannot start a
+new one. A `message` notification for a deleted thread degrades to "no longer available".
+
+*Draft severity: high (the data are children's private conversations and a moderator-visible copy of them). Draft
+likelihood: certain (it is how the product is built). Placeholder ratings for counsel.*
+
+### R34 — Soft removal: content a moderator removes is hidden, not erased
+
+**[CHANGED v0.4 — 2026-11-10]** *New in v0.4. Sources: `modules/moderation/content-removal.util.ts`, `moderation.service.ts`; `feed`, `messaging`,
+`search`, `notifications`, `post-media` modules; Decision Log #483, #484; build-register B-289, B-290;
+`docs/backend-content-removal-report.md`, `docs/backend-removed-post-media-report.md`.*
+
+**(a) What is built.** A moderator's "Remove Content" on a report now acts on the **one reported item** when its target is
+a **post, comment or message** (any other target type is refused). It is a **soft** removal: the row, its text, its edit
+history and its engagement rows stay in the database; two columns (`removedByModerationAt`, `removedByReportId`) say it is
+removed. Users see: a removed **message** as a text-less stub to both people (no text, no sender), in the thread and in the
+inbox preview; a removed **comment** as a text-less stub with no author, not counted; a removed **post** disappears from
+feeds, search, saved items, notifications' data and counts, a direct link answers as a missing post, and **only its author**
+sees a "removed" stub. The sender of a removed message can no longer edit or delete it. Staff reads still return the full
+item. Context messages attached to a message report are **never** removed; only the reported item is.
+
+**(b) Removed is not deleted, and no retention clock applies.** The text of a removed post, comment or message stays for as
+long as the row does. Posts and comments follow the account rules (kept under "[deleted user]" after anonymisation).
+A removed **message** is the target of a report, so the 12-month job keeps it (R33(c)) for as long as the report exists, and
+reports have no retention clock. **[ACTION FOR REVIEW]** whether removed content should have a deletion clock once the appeal
+window has closed; whether keeping the text of a removed item indefinitely meets data minimisation and storage limitation;
+how this interacts with Article 17 for the author.
+
+**(c) The author can still delete a removed post.** `DELETE /posts/:id` is not blocked for the author of a removed post;
+the hard delete removes the post row and with it the item the removal rests on (the report keeps its own record). The
+stored files are protected separately (see (g)).
+
+**(d) Appeals.** An overturned appeal on a `content_removed` report clears the removal on that item (and a comment is counted
+again). An upheld appeal, or the lapse of the appeal window (30 days by default, founder decision, Decision Log #442),
+closes the report (`reportClosedAt`); closure is what starts the deletion of a removed post's stored files.
+
+**(e) Data access is unchanged.** The author's own "Download my data" still includes the full text of their own posts,
+comments and sent messages **including ones a moderator has removed**. Probably right (it is the person's own data) but it
+means a removed item's text is still downloadable by its author. **[OPEN]** founder.
+
+**(f) Effects not decided.** Engagement points already earned on a removed item stay; a removed Contest entry is hidden from
+entry lists but its entry, votes and impression rows remain and any ranking or points effect is unchanged; how an admin who
+is not child-safety-vetted sees a removed item about a minor is recorded, not decided; the guardian of a minor whose content
+is removed receives a notice of the *kind* of action only, never the reason or the content (build-register B-279).
+
+**(g) Media of a removed post (Decision Log #484, B-290).** In short: the public copy of every file is withdrawn (copied to
+the private prefix, size verified, then the public object deleted) as soon as the removal is recorded; the private copy is
+kept so an overturned appeal can republish it; when the removing report **closes**, a daily sweep deletes the private copy
+too, except where the uploader has an active admin hold or the post has another unclosed report. The full account,
+including a short window in which the public object can still exist, is in `docs/dpia-addendum-post-media-draft.md` §1.5.
+
+*Draft severity: moderate-to-high. Draft likelihood: certain (it is how the product is built). Placeholder ratings for
+counsel.*
+
 ---
 
 ## 4. Mitigations, cross-referenced to product controls
@@ -1180,6 +1376,8 @@ entry below should be read as a claim that the mitigation is adequate.*
 | **R14** Age reclassification | Daily recompute of `isMinor` / `isUnder16`, both directions; append-only `AgeReclassificationLog` written in the same transaction; guardian email at 18, in-app notice at 16; `Guardian` row kept at 18 | `AgeReclassificationSweepService` (PRs #275 / #279 / #281 / #282; Decision Log #349). **Open:** ~24h lag; third-party email about an adult; guardian data retained for an adult's account; log has no retention period; younger-direction users may be stranded | **Code merged** — not verified live |
 | **R15** EU GDPR | Decide whether EU users are intentionally served; if so appoint an Article 27 representative and name them in the privacy notice; confirm the lawful basis so it is clear whether Article 8 or national contract-capacity law governs; keep thresholds ≥ 16 | `computeIsMinor` (<18), `computeIsUnder16` (<16) — both ≥ the highest member-state floor. No country field, no geo-control. **Open:** representative not appointed; verification of parental authorisation (R16); no backend age floor | **Partially** — thresholds yes; representative, country awareness, verification no |
 | **R16** COPPA VPC | One of: (A) a recognised stronger consent method for under-13s; (B) no disclosure of under-13s' information + email-plus with a delayed confirming step; (C) do not accept under-13s; (D) rely on not serving US children. **None chosen** | Current control is the emailed consent link: `RegistrationService.register`, `GuardianConsentService.confirmConsent`. **No guardian≠child email check; no second step; single bundled consent; no parent data-review route** (§2.6.3, §2.6.4). Not COPPA-grade for under-13s in the drafter's reading | **No** — current mechanism very likely insufficient; stronger method not built |
+| **R33** Private messages | Messages are not E2E encrypted (stated, not mitigated); 12-month deletion of every message (minors and adults); exceptions only for reported messages, report context and active legal holds; a reporter's context is limited to 20 messages in a 10-before / 10-after window, checked server-side; only the recipient can report; staff-only read; filing notifies nobody; vetting gate for `concernsMinor` reports | `MessageRetentionService`; `MessagingService`; `ModerationService.createReport` / `resolveContextMessageIds` / admin report detail; `AdminUser.childSafetyVetted` (Decision Log #477, #478, #482, #466). **Open:** the 12-month figure has no counsel position; exceptions are open-ended because reports have no retention clock; the vetting gate keys off the report's category, not the participants' ages; other participants are not told their messages can be shown to staff; no at-rest encryption verified | **Code merged** — partial; not verified live |
+| **R34** Soft removal | Moderator removal hides the item from users and keeps it for staff; reported item only, never context; appeal restores; stored files of a removed post follow a two-stage deletion (public copy withdrawn, private copy deleted when the report closes, unless an admin hold or another open report applies) | `content-removal.util.ts`; `ModerationService.actionReport` / `decideAppeal`; `PostMediaObjectsService.withdraw`; `RejectedMediaSweepService.confirmModerationRemovals` (Decision Log #483, #484). **Open:** no retention clock for removed text; author can still hard-delete a removed post; own-data export still includes removed items; Contest and points effects undecided; evidence set-aside for statutory reporting is B-206 (counsel) | **Code merged** — partial; not verified live |
 
 ### 4.1 The safeguarding fields are load-bearing
 
@@ -1243,6 +1441,12 @@ Restated in one place so nothing here is mistaken for settled.
 | 26 | **No backend age floor** — below-5 block is web-only; API accepts any past date of birth (§2.5.2 item 5) | Gap flagged; Decision Log candidate | `backend-api` + founder |
 | 27 | **COPPA secondary gaps** — direct-notice content of the consent email unverified; no parent data-review route; no separate consent to third-party disclosure (§2.6.4) | **NOT ASSESSED / not built** | Counsel + `backend-api` |
 | 28 | **Legal propositions in §2.5 / §2.6 were written from general knowledge, not retrieved sources** — 2025 COPPA amendments and member-state ages must be verified (§0 item 5) | Outstanding | Counsel |
+| 29 | **[CHANGED v0.4 — 2026-11-10]** **Message retention (R33):** 12 months from sending for children's and adults' private messages (founder decision, Decision Log #478); no counsel position; whether it is defensible and whether shorter is required | Flagged for counsel; nothing decided by this draft | Counsel + founder |
+| 30 | **[CHANGED v0.4 — 2026-11-10]** **Messages kept under a report, as report context or under an active legal hold (R33(c))** — open-ended because reports have no retention clock; bad-faith and report-derived holds do not exempt messages | Flagged for counsel; nothing decided | Counsel + founder |
+| 31 | **[CHANGED v0.4 — 2026-11-10]** **Reporter-added context (R33(d)–(f)):** necessity and proportionality of showing up to 20 surrounding messages (including other children's and the reported person's) to staff; no notice to other participants; vetting gate keyed to the report category, not to the participants' ages | **NOT ASSESSED** by counsel | Counsel |
+| 32 | **[CHANGED v0.4 — 2026-11-10]** **Messages not end-to-end encrypted; at-rest encryption by the host unverified (R33(a), R10)** | Stated; no decision | Counsel + founder |
+| 33 | **[CHANGED v0.4 — 2026-11-10]** **Soft removal (R34):** retention of removed text with no clock; author's ability to hard-delete a removed post; removed items in the author's own data export; Contest and points effects | Flagged for counsel; nothing decided | Counsel + founder |
+| 34 | **[CHANGED v0.4 — 2026-11-10]** **Media of a removed post (R34(g); addendum §1.5):** the window before the public object is withdrawn; the two-stage deletion; evidence set-aside is B-206 | Flagged for counsel; nothing decided | Counsel |
 
 ---
 
@@ -1308,6 +1512,11 @@ Date: ______________________________________________
 ---
 
 ## Closing statement
+
+*v0.4 (2026-11-10) note: this revision updates the DPIA for direct-message retention and encryption, reporter-added message
+context, moderator soft removal and the media of a removed post, and adds R33 and R34; every changed passage is marked
+"CHANGED v0.4". It does not complete, advance or approve the DPIA, no legal proposition in it was checked against a primary
+source, and the Section 6 sign-off block remains empty; "Reviewed by counsel: NOT YET."*
 
 *v0.3 (2026-09-21) note: this revision extends the assessed scope to EU GDPR and US COPPA and surfaces two new risks (R15, R16); it does not complete, advance or approve the DPIA, and its legal propositions were not verified against primary sources. The Section 6 sign-off block remains empty; "Reviewed by counsel: NOT YET."*
 

@@ -5,7 +5,7 @@
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
-`docs/sprint-1-dpia-outline-draft.md` (v0.3), which is the DPIA it would attach to, and it does not edit
+`docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post), which is the DPIA it would attach to, and it does not edit
 `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8) or `docs/dpia-addendum-contest-view-data-draft.md`. If counsel
 accepts it, folding it into the main DPIA (as proposed risks R23 to R31, a new §1.3 row group and new §5 items) is a
 separate step for whoever maintains that file.
@@ -22,11 +22,31 @@ counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to th
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED)
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2)
+- **Version:** 0.2 (draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
+
+
+### Changelog — v0.1 → v0.2 (2026-11-10) **[COPY PENDING LEGAL REVIEW]**
+
+**[CHANGED v0.2 — 2026-11-10]** **What this update is, stated plainly.** v0.2 adds one subject, the stored pictures and videos of a **post a moderator has
+removed** (Decision Log #483, #484; build-register B-289, B-290, merged as PR #714 and PR #716), and changes only the passages that
+subject requires: this header, §1.2 (one new field), a new **§1.5**, R30 (one marked paragraph), §9 (one bullet), §10.2 (one marked
+note), §11 (assumption 14), §12 (questions 21 to 23) and the closing statement. Every changed passage carries the marker
+**[CHANGED v0.2 — 2026-11-10]**. It does **not** complete or advance the addendum: the sign-off block (§13) is unchanged and empty;
+no option in §10 has been chosen; nothing here is a legal conclusion. No statute or regulator text was retrieved. Facts were read from
+the merged code on `origin/main` (`29e0966`) and `docs/backend-removed-post-media-report.md`; **nothing was run against a live
+service.**
+
+**What is not changed, and is now stale.** The body of this addendum (§1.1, §1.2's other rows, R24, R30's first paragraph, §10.2,
+§10.6) describes the pipeline as it stood on 2026-10-27, when a processed file was written to the **public** prefix before any
+check, and a rejected file was **kept**. Since then the **private prefix with copy on approval** was built (B-257, PR #489: pending
+and rejected files live in `private-media/` and reach the public prefix only on approval) and the deletion of rejected files on
+every path was built (B-283, PR #608). Neither was folded into this addendum: that is outside the scope of this update. **§1.5 below
+relies on the later build, and where it differs from §1.1, R24 or R30's first paragraph, §1.5 reflects the code.** A separate
+refresh is needed for the rest.
 
 ---
 
@@ -89,6 +109,7 @@ One `PostMedia` row per file (migration `20261029100000_add_post_media`). Sensit
 | **`checkLabels`** | **moderation category NAMES only** (for example a category such as "Explicit") at or above the pass threshold; no confidence value, no image | **Derived data about a (possibly child) uploader's content. A label on a minor's file could itself be sensitive** (R30) |
 | `checkState`, `checkAttempts`, `checkNextAt`, `checkLeaseUntil`, `checkedAt`, `checkError` | bookkeeping; `checkError` is an error NAME, never content | server only |
 | `postId` | the post it is attached to | yes |
+| `deletedByModerationAt` **[CHANGED v0.2 — 2026-11-10]** | set when the stored file of a **removed post** was deleted at closure of the removing report (§1.5); the row and the post stay (migration `20261126090000_add_post_media_deleted_by_moderation`) | with the uploader link, yes |
 
 The processed **file itself** is the main item: a photograph or video that may show the uploader, other people, **children
 who are not users**, and places (Sections 1.3 and R29).
@@ -125,6 +146,52 @@ check. **A report does not currently reach a moderator as a media report**: the 
 `banter_room`, `grassroots_team` and `fixture` (`moderation.constants.ts`); there is no media target (the Figma design
 pass Q left that as an open scope point), and recording the moderation action `content_removed` has not, according to the
 moderation README, hidden content (the README says that in terms; the claim was not re-verified in code in this pass).
+
+### 1.5 The files of a post a moderator has removed **[COPY PENDING LEGAL REVIEW]**
+
+**[CHANGED v0.2 — 2026-11-10]** *New in v0.2. Sources: `services/api/src/modules/post-media/post-media-objects.service.ts` (`withdraw`,
+`republishForPost`, `finishPublish`, the reconciler), `post-media/rejected-media-evidence.util.ts`
+(`removedMediaDeletableNow`, `partitionEvidence`), `post-media/rejected-media-sweep.service.ts`
+(`confirmModerationRemovals`); `modules/moderation/moderation.service.ts` (`actionReport`, `decideAppeal`);
+`modules/account-hold/account-hold.rules.ts` (`reportClosedAt`); Decision Log #483, #484, #442; build-register B-290, B-206;
+`docs/backend-removed-post-media-report.md`.*
+
+A moderator's "Remove Content" on a report about a **post** (Decision Log #483) hides the post from users and keeps its row and
+text for staff (DPIA v0.4, R34). It also starts a rule for the post's **stored files** (Decision Log #484), which applies to
+pictures and videos alike, including a Contest entry's video (it is the media of the entry's post). A removed comment or message has
+no media, so the rule concerns posts only.
+
+| Step | What happens | Where the file is |
+|---|---|---|
+| 1. Removal recorded | In the same database transaction that records the moderator's action, the post gets `removedByModerationAt` and `removedByReportId`. From that moment the application's read gate hides the post from everyone except staff, and shows its author only a "removed" stub. The files' own status fields are untouched | unchanged |
+| 2. Public copy withdrawn | **After** the commit, in the background, best effort: for each approved (published) file the server **copies** it from the public prefix to the private prefix, checks the size, claims the row with a guarded update, and only then **deletes the public object**. An approved, published file normally has **no** private copy (the private original is deleted when a file is published), so this step creates one. A public object is never deleted without a verified private copy. If the copy fails, the public object is left in place and a reconciler retries **every 5 minutes** | R2: public prefix → private prefix |
+| 3. Private copy kept | The private copy stays while the removing report is open and while its appeal window runs. An **overturned appeal** that really restores the post copies the file back to the public prefix and drops the private copy again | R2, private prefix (`private-media/`) |
+| 4. Closure | The removing report **closes** (`reportClosedAt`: the appeal window lapsed — 30 days by default, `REPORT_APPEAL_WINDOW_DAYS`, a founder decision, Decision Log #442 — or an appeal was upheld). A daily sweep (04:00) then deletes the private object, empties `privateKey` and sets `PostMedia.deletedByModerationAt`. **The `PostMedia` row and the post remain** | nowhere |
+| 5. Exceptions | The private copy is **kept**, and the check repeated the next day, if the uploader has an **active admin hold** (a legal hold **or** a bad-faith hold) or the post has **another report not yet closed**. This is the same protection rule that applies to rejected files; one function (`removedMediaDeletableNow`) decides it | R2, private prefix |
+| 6. Author deletes first | If the author deletes the removed post, or the account is anonymised, **before** closure, the private copy is **not** deleted with the row: a deferred-deletion record is written and the file is deleted after closure under the same rule | R2, private prefix |
+
+**Findings for counsel (nothing here is a conclusion):**
+
+1. **"Withdrawn at once" is exact for what the app shows, not for the object.** The post is hidden the instant the database write
+   commits. The public *object* is withdrawn by a background step afterwards. If that step fails, the object stays at its public
+   address until the reconciler's next pass (up to about 5 minutes), and anyone who holds the address can fetch it in that window.
+   The address is unsigned and not expiring (R24). A related known gap: a file approved while its post is removed is published until
+   the next reconciler pass. **[ACTION FOR REVIEW]** whether a window of minutes is acceptable for a removed child's image.
+2. **Nothing sets a removed file aside for statutory reasons.** The private copy lives only until closure (the appeal window is
+   30 days from the decision, longer under a hold or another open report), then is deleted. Whether a removed file must be
+   preserved for a statutory report, and for how long, is the open B-206 question (Section 7). When it is decided it is meant to
+   hook into the single function above and would override deletion for that file. Until then deletion at closure may be **too
+   early** for any preservation duty. **[ACTION FOR REVIEW]**
+3. **The two retention rules differ on holds.** For these files, **either kind** of active admin hold keeps the file. For direct
+   messages (DPIA v0.4, R33(c)) only a **legal** hold keeps a message. Whether the difference is intended is a founder question.
+4. **The `PostMedia` row outlives its files.** It keeps the moderation category names, the rejection reason and the decision fields
+   (§1.2) with no clock of its own (R30). Only `deletedByModerationAt` is added.
+5. **The 30-day appeal window is the only clock** and has no counsel position; it is also the period during which a removed
+   child's image sits in private storage.
+6. **"Private" depends on a launch step that has not been done.** The private prefix is only private if the public address serves
+   `post-media/` and `profile-media/` only, or the private files sit in a separate bucket (build-register B-265, a founder-owned
+   launch-gate step, not verified against a real bucket). Object versioning, lifecycle rules and provider backups at R2 were not
+   examined; "deleted" here means deleted from the live bucket.
 
 ---
 
@@ -438,6 +505,13 @@ anonymised, loses its evidence (register B-239 point 3, not decided). Backups at
 
 *Draft severity: moderate. Draft likelihood: certain. Placeholder ratings.* Options 10.2, 10.3.
 
+**[CHANGED v0.2 — 2026-11-10]** **A clock now exists for one case: the files of a post a moderator removed** (§1.5). Their private copy is deleted when
+the removing report closes (appeal window lapsed or appeal upheld), unless an admin hold or another open report applies, and a
+deferred-deletion record stops an author's own delete or an anonymisation from destroying it early. This narrows the last
+sentence of the paragraph above ("a reported post ... loses its evidence") **for removed posts' files only**; it does not
+help the post row itself (the author can still hard-delete a removed post, DPIA v0.4 R34(c)), a reported post that was never
+removed, the check labels or decision fields (still no clock), or any statutory evidence duty (B-206, undecided).
+
 ### R31 — No notice to the uploader or the guardian about the check, the reviewers or the retention **[COPY PENDING LEGAL REVIEW]**
 
 The guardian consent screen does not mention uploads. The uploader is told only that a file did not meet the rules, in a
@@ -469,6 +543,10 @@ draft discloses the check for avatars and cover photos only (PP §5). Changing t
 - Only the category names above the threshold are stored, never the image or a confidence; nothing identifying the user is
   sent to AWS.
 - A rejected file's reason shown to the uploader is generic for an automatic rejection.
+- **[CHANGED v0.2 — 2026-11-10]** A removed post's files leave the public address when the background step succeeds, are kept privately so an overturned
+  appeal can republish them, and are deleted when the removing report closes unless an admin hold or another open report
+  applies; an author's own delete or an anonymisation before closure does not delete them early; a public object is never deleted
+  without a verified private copy (§1.5).
 
 ---
 
@@ -501,6 +579,10 @@ anonymised.
 | F-3 Delete the **public** copy on rejection, keep a quarantined/private copy for N days | A move to a private prefix; N chosen by counsel | Keeps a suspect file; needs access rules (10.1) |
 | F-4 Keep a private copy **only** for files that were rejected in a reject category at high confidence or reported, for N days or until counsel says | A flag and a purge job | The retention clock and the legal-hold interaction (#398) need defining |
 | F-5 Hash-and-delete: keep only a one-way hash, not the file | A hash step; counsel decides whether a hash alone is enough | Helps detect re-uploads; not evidence of content |
+
+**[CHANGED v0.2 — 2026-11-10]** For the files of a **removed post** a rule resembling F-3 is built: the public copy is withdrawn, a private copy is kept, and
+"N" is not a number of days but the closure of the removing report (§1.5). It is a product decision (Decision Log #484), not a
+counsel-approved retention period.
 
 ### 10.3 Retention of the check's category labels and decision fields **[COPY PENDING LEGAL REVIEW]**
 
@@ -584,6 +666,9 @@ Added because R24 turns on it. Built today: the public prefix.
 12. **All processing described is test-only.** No live data exists; nothing here has been run on children's images.
 13. **The v0.3 DPIA R8, R9 and R11 texts are read as not yet updated for the media pipeline** (R8 still refers to
     `mediaUrls`; R11 records media storage as unselected). This addendum extends them rather than correcting them.
+14. **[CHANGED v0.2 — 2026-11-10]** **§1.5 reflects `origin/main` at `29e0966` (2026-11-10)** and `docs/backend-removed-post-media-report.md`; the 15 end-to-end
+    tests that report cites were **not** re-run in this pass. It assumes the private-prefix design of B-257 as merged (the rest of
+    this addendum was written before it). The 30-day appeal window is read as the default of `REPORT_APPEAL_WINDOW_DAYS`.
 
 ---
 
@@ -649,6 +734,16 @@ Added because R24 turns on it. Built today: the public prefix.
 20. Which existing statement in the DPIA or the legal draft is now inaccurate and must change (v0.3 R8, R9, R11; v0.8 PP §5
     "avatars and cover photos"; PP §7; Part C row 37)?
 
+**[CHANGED v0.2 — 2026-11-10]** **Media of a removed post (§1.5)**
+
+21. Is deleting the stored file of a removed post at closure of the removing report (about 30 days after the decision, longer
+    under an admin hold or another open report) the right moment, or must it be preserved longer or shorter — for a statutory
+    report, for evidence, or because it shows a child? Does the answer depend on whether the removal concerned a child? (B-206)
+22. Is a window of minutes in which the public object of a removed post's file can still be fetched, after the post is hidden,
+    acceptable? (§1.5 finding 1)
+23. Is it intended that either kind of admin hold keeps a removed post's files while only a legal hold keeps a direct message
+    (DPIA v0.4 R33(c))?
+
 ---
 
 ## 13. Sign-off **[COPY PENDING LEGAL REVIEW]**
@@ -685,6 +780,9 @@ This block is intentionally empty. A completed addendum requires a competent per
 ---
 
 ## Closing statement **[COPY PENDING LEGAL REVIEW]**
+
+**[CHANGED v0.2 — 2026-11-10]** *v0.2 note: this revision adds the files of a post a moderator has removed (§1.5) and the matching amendments. It does not
+complete or approve the addendum, it chooses no option, and it claims nothing as solved. The §13 sign-off block remains empty.*
 
 This addendum exists to put in front of counsel exactly what happens when a child uploads a picture or a video: the file is
 sent from the browser to storage, stripped of metadata, optionally sent frame by frame to a third-party moderation service
