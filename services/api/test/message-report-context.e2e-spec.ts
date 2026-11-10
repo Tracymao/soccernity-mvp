@@ -275,7 +275,7 @@ describe('Message report context e2e (b286-message-report-context)', () => {
       expect(ctx[1]).toMatchObject({ contentText: 'edited now', originalContentText: 'as first sent', sentByReporter: true });
       expect(ctx[2]).toMatchObject({ sentByReporter: true });
       expect(ctx[3]).toMatchObject({ sentByReporter: false });
-      expect(ctx.every((m) => ['id', 'sentAt', 'sender', 'sentByReporter', 'contentText', 'originalContentText', 'editedAt', 'deletedForEveryone'].sort().join() === Object.keys(m).sort().join())).toBe(true);
+      expect(ctx.every((m) => ['id', 'sentAt', 'sender', 'sentByReporter', 'contentText', 'originalContentText', 'editedAt', 'deletedForEveryone', 'removedByModerationAt'].sort().join() === Object.keys(m).sort().join())).toBe(true);
       const json = JSON.stringify(res.body.contextMessages);
       expect(json).not.toContain(conversation.id);
       expect(json).not.toContain(sender.userId);

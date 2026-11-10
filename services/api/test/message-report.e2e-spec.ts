@@ -296,6 +296,7 @@ describe('Message reports e2e (b067-message-report)', () => {
         originalContentText: null,
         editedAt: null,
         deletedForEveryone: false,
+        removedByModerationAt: null, // B-289: the admin read also says whether a moderator removed it
       });
       // Nothing about the rest of the conversation or either person's real identity.
       const raw = JSON.stringify(res.body);
