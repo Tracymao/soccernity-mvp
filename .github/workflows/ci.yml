@@ -76,29 +76,78 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history so the docs-only check below can diff against the
+          # base commit (the default shallow clone has no base to diff).
+          fetch-depth: 0
+
+      # Docs-only changes (docs/**, any *.md) skip everything below: install,
+      # lint, unit tests, e2e tests and build take about 18 minutes and
+      # cannot be affected by a document. The job and its name still run and
+      # report success, so the required "build-and-test" check is satisfied
+      # (a workflow-level paths-ignore would leave it pending forever).
+      #
+      # Files that code or tests read from docs/ are NOT treated as docs, see
+      # .github/scripts/docs-only-change.sh. Any error in this step, an
+      # unreachable base commit, or an empty file list means "not docs-only":
+      # the full CI runs. Fail safe, never fail open.
+      - name: Detect docs-only change
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          docs_only=false
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # HEAD is the PR merged into its base; HEAD^1 is the base tip.
+            base="$(git rev-parse HEAD^1 2>/dev/null || true)"
+          else
+            base="$PUSH_BEFORE"
+          fi
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            if files="$(git diff --name-only "$base" HEAD)"; then
+              echo "Changed files:"
+              echo "$files"
+              docs_only="$(printf '%s\n' "$files" | bash .github/scripts/docs-only-change.sh || echo false)"
+            fi
+          else
+            echo "No usable base commit; running the full CI."
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          if [ "$docs_only" = "true" ]; then
+            echo "::notice::Docs-only change: install, lint, tests and build skipped."
+          fi
 
       - uses: actions/setup-node@v7
+        if: steps.changes.outputs.docs_only != 'true'
         with:
           node-version: "22.22.0"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm install
 
       - name: Generate Prisma client
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run prisma:generate
 
       - name: Run database migrations
+        if: steps.changes.outputs.docs_only != 'true'
         working-directory: services/api
         run: npx prisma migrate deploy
 
       - name: Lint
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run lint
 
       - name: Test
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run test
 
       - name: Run e2e tests
+        if: steps.changes.outputs.docs_only != 'true'
         working-directory: services/api
         # Normal: 13 minutes. A tighter step limit than the job's, so a Jest
         # that finished but will not exit is cut off with the log intact.
@@ -110,6 +159,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Build
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run build
 
   # Dependency audit. Decision Log #423, build-register B-250.
