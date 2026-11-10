@@ -138,23 +138,19 @@ test.describe.serial('Account Information and email change', () => {
     expect(await emailRowsFor(acct.userId)).toHaveLength(0);
   });
 
-  test('an address that cannot be used gets ONE message, whatever the reason', async ({ page }) => {
+  test('a taken address gets the same "Check your inbox" screen as any other (Decision Log #476)', async ({ page }) => {
     const taken = await registerViaApi({ age: 30, label: 'ec-taken' });
     await signIn(page, acct.email);
     await openInfo(page);
     await startFlow(page);
     await passwordStep(page);
 
-    const messages: string[] = [];
-    for (const address of [taken.email, acct.email, taken.email.toUpperCase()]) {
-      await sendLink(page, address);
-      const alert = page.getByRole('alert').filter({ hasText: 'We couldn’t use that email address.' });
-      await expect(alert).toBeVisible();
-      messages.push((await alert.innerText()).trim());
-    }
-    expect(new Set(messages).size).toBe(1);
-    expect(messages[0]).toBe('We couldn’t use that email address. Check it, or try a different one.');
-    await shot(page, '04-email-not-accepted-desktop');
+    await sendLink(page, taken.email);
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(page.getByText(`We sent a link to ${taken.email}.`)).toBeVisible();
+    await expect(page.getByText('We couldn’t use that email address.')).toHaveCount(0);
+    await shot(page, '04-taken-address-same-screen-desktop');
+    // Nothing is linked to the account: the taken address gets a different email, not a confirm link.
     expect(await emailRowsFor(acct.userId)).toHaveLength(0);
   });
 
