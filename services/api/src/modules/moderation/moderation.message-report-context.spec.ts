@@ -194,6 +194,7 @@ describe('message report context (b286-message-report-context)', () => {
         id: true,
         sentAt: true,
         deletedForEveryoneAt: true,
+        removedByModerationAt: true,
         hides: { where: { userId: RECIPIENT }, select: { userId: true }, take: 1 },
       });
     });
@@ -345,6 +346,7 @@ describe('message report context (b286-message-report-context)', () => {
           originalContentText: null,
           editedAt: null,
           deletedForEveryoneAt: null,
+          removedByModerationAt: null,
           sender: { username: 'recipient_name', displayName: 'Real Recipient' },
           ...over,
         },
@@ -360,6 +362,7 @@ describe('message report context (b286-message-report-context)', () => {
         originalContentText: null,
         editedAt: null,
         deletedForEveryoneAt: null,
+        removedByModerationAt: null,
         sender: { username: 'sender_name', displayName: 'Real Sender' },
       });
     }
@@ -387,11 +390,12 @@ describe('message report context (b286-message-report-context)', () => {
         originalContentText: null,
         editedAt: null,
         deletedForEveryone: false,
+        removedByModerationAt: null,
       });
       expect(detail.contextMessages![1]).toMatchObject({ sentByReporter: false, contentText: 'second' });
       for (const m of detail.contextMessages!) {
         expect(Object.keys(m).sort()).toEqual(
-          ['contentText', 'deletedForEveryone', 'editedAt', 'id', 'originalContentText', 'sender', 'sentAt', 'sentByReporter'].sort(),
+          ['contentText', 'deletedForEveryone', 'editedAt', 'id', 'originalContentText', 'removedByModerationAt', 'sender', 'sentAt', 'sentByReporter'].sort(),
         );
       }
       const json = JSON.stringify(detail.contextMessages);
@@ -409,7 +413,7 @@ describe('message report context (b286-message-report-context)', () => {
       const select = prisma.reportContextMessage.findMany.mock.calls[0][0].select;
       expect(Object.keys(select)).toEqual(['message']);
       expect(Object.keys(select.message.select).sort()).toEqual(
-        ['contentText', 'deletedForEveryoneAt', 'editedAt', 'id', 'originalContentText', 'sender', 'senderId', 'sentAt'].sort(),
+        ['contentText', 'deletedForEveryoneAt', 'editedAt', 'id', 'originalContentText', 'removedByModerationAt', 'sender', 'senderId', 'sentAt'].sort(),
       );
     });
 

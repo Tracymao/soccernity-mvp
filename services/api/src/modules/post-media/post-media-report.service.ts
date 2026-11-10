@@ -1,3 +1,4 @@
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
@@ -68,6 +69,8 @@ export class PostMediaReportService {
         // B-060: a file on a post whose author's profile is private to the reporter cannot be reported by them
         // (they cannot see it), the same 404 as any other unseen file. Banter and Contest posts are exempt.
         postProfileVisibleTo(userId),
+        // B-289: a file on a post a moderator removed cannot be reported (the same 404 as any unseen file).
+        POST_NOT_REMOVED,
       ],
     };
     const media = await this.prisma.postMedia.findFirst({

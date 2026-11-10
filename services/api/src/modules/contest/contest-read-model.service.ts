@@ -1,4 +1,5 @@
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -307,7 +308,7 @@ export class ContestReadModel {
 
     const entries = await this.prisma.contestEntry.findMany({
       // Only entries whose uploaded video is approved are shown or ranked (Decision Log #419 item 7).
-      where: { roundId: round4.id, post: { is: POST_MEDIA_ALL_APPROVED } },
+      where: { roundId: round4.id, post: { is: { AND: [POST_MEDIA_ALL_APPROVED, POST_NOT_REMOVED] } } },
       select: {
         id: true,
         postId: true,

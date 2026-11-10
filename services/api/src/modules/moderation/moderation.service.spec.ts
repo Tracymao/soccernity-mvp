@@ -18,11 +18,20 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
+    // B-289: content_removed now removes the reported target in the action's own transaction.
     post: {
       findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     comment: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    message: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: {
       findUnique: jest.fn(),
@@ -904,7 +913,7 @@ describe('ModerationService', () => {
 
     it('sends NO outcome email for a report made from a Contact Us enquiry, whatever the action (Decision Log #445)', async () => {
       // room_deactivated is refused (400) on any non-Banter-room report before a send could happen; covered below.
-      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated')) {
+      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated' && a !== 'content_removed')) {
         const prisma = buildPrismaMock();
         (prisma.report.findUnique as jest.Mock).mockResolvedValue(
           report({
@@ -1179,7 +1188,7 @@ describe('ModerationService', () => {
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned', concernsMinor: true }));
       const service = buildService(prisma);
 
-      const result = await service.actionReport('report-1', 'vetted-admin', { action: 'content_removed' });
+      const result = await service.actionReport('report-1', 'vetted-admin', { action: 'warning_issued' });
 
       expect(result.status).toBe('actioned');
       expect(prisma.report.update).toHaveBeenCalled();

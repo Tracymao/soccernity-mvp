@@ -267,6 +267,7 @@ describe('message reports (b067-message-report)', () => {
         originalContentText: null,
         editedAt: null,
         deletedForEveryoneAt: null,
+        removedByModerationAt: null,
         sender: { username: 'sender_name', displayName: 'Real Sender Name' },
         ...over,
       };
@@ -285,6 +286,7 @@ describe('message reports (b067-message-report)', () => {
         originalContentText: null,
         editedAt: null,
         deletedForEveryone: false,
+        removedByModerationAt: null,
       });
     });
 
@@ -295,10 +297,10 @@ describe('message reports (b067-message-report)', () => {
       const detail = await buildService(prisma).getReportById('report-1', 'admin-1');
       expect(prisma.message.findUnique.mock.calls[0][0].where).toEqual({ id: MESSAGE_ID });
       expect(Object.keys(prisma.message.findUnique.mock.calls[0][0].select).sort()).toEqual(
-        ['contentText', 'deletedForEveryoneAt', 'editedAt', 'id', 'originalContentText', 'sender', 'sentAt'].sort(),
+        ['contentText', 'deletedForEveryoneAt', 'editedAt', 'id', 'originalContentText', 'removedByModerationAt', 'sender', 'sentAt'].sort(),
       );
       expect(Object.keys(detail.reportedMessage!).sort()).toEqual(
-        ['contentText', 'deletedForEveryone', 'editedAt', 'id', 'originalContentText', 'sender', 'sentAt'].sort(),
+        ['contentText', 'deletedForEveryone', 'editedAt', 'id', 'originalContentText', 'removedByModerationAt', 'sender', 'sentAt'].sort(),
       );
       expect(JSON.stringify(detail)).not.toContain('Real Sender Name');
       expect(JSON.stringify(detail.reportedMessage)).not.toContain('conv-1');

@@ -95,7 +95,9 @@ export class TrendingService {
         AS DOUBLE PRECISION) AS "score"
       FROM "PostHashtag" ph
       INNER JOIN "Hashtag" h ON h.id = ph."hashtagId"
+      INNER JOIN "Post" p ON p.id = ph."postId"
       WHERE ph."createdAt" >= ${windowStart}
+        AND p."removedByModerationAt" IS NULL
       GROUP BY h.id, h."tag"
       ORDER BY "score" DESC
       LIMIT ${limit}

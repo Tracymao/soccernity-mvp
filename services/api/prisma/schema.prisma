@@ -1002,6 +1002,14 @@ model Post {
   // a service-enforced allow-list (BanterRoom.scopeType/status convention).
   // Never retroactively removes existing comments.
   commentPermission String        @default("everyone")
+  // backend/b289-content-removal (B-289, Decision Log #483): set by ModerationService.actionReport when a
+  // moderator records content_removed against THIS post. Soft removal: the row, its text, its media and its
+  // engagement rows STAY as evidence; every user-facing read treats the post as absent, and only staff can read
+  // it. removedByReportId is the report that removed it (RESTRICT: a report that removed content is never
+  // deleted); an overturned appeal on that report clears both columns. Both NULL = not removed.
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?       @relation("PostRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
   // sprint-4/post-view-tracking (Build Plan Section 4.3, POST
   // /posts/:id/view) -- same denormalized-cache convention as
   // likeCount/commentCount above: incremented transactionally alongside
@@ -1025,6 +1033,8 @@ model Post {
   // sprint-4/trending-topics-backend (Build Plan Section 4.7, GET
   // /trending) -- see PostHashtag below.
   hashtags          PostHashtag[]
+
+  @@index([removedByReportId])
 }
 
 model Comment {
@@ -1055,7 +1065,15 @@ model Comment {
   // still cascade-deleted with the post, and the commenter keeps their copy).
   // Hidden comments do not count toward Post.commentCount.
   hidden      Boolean  @default(false)
+  // backend/b289-content-removal (B-289, Decision Log #483): same meaning as Post.removedByModerationAt. A removed
+  // comment stays in the thread as a text-less stub and, like a hidden one, does not count toward
+  // Post.commentCount (removal decrements it, an overturned appeal restores it).
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?  @relation("CommentRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
+
+  @@index([removedByReportId])
 }
 
 model BanterRoom {
@@ -1427,6 +1445,12 @@ model Message {
   editedAt             DateTime?
   originalContentText  String?
   deletedForEveryoneAt DateTime?
+  // backend/b289-content-removal (B-289, Decision Log #483): same meaning as Post.removedByModerationAt. A removed
+  // message stays in the thread and in the conversation preview as a text-less stub for both people; the row, the
+  // text and any original stay for staff (and for the retention job's report exception).
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?      @relation("MessageRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
   hides                MessageHide[]
   // backend/b286-message-report-context: the reports that attached this message as surrounding context.
   reportContexts       ReportContextMessage[]
@@ -1437,6 +1461,7 @@ model Message {
   // conversationId + senderId + readAt. Postgres does not auto-index
   // foreign keys, so this is added explicitly.
   @@index([conversationId, sentAt])
+  @@index([removedByReportId])
 }
 
 model Notification {
@@ -1841,6 +1866,11 @@ model Report {
   accountHolds     AccountHold[]
   // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.escalatedReport.
   contactEnquiries ContactEnquiry[]
+  // backend/b289-content-removal (B-289, Decision Log #483): the post, comments and messages this report removed
+  // (content_removed). A report removes at most ONE target; the arrays exist for the relation only.
+  removedPosts     Post[]    @relation("PostRemovedByReport")
+  removedComments  Comment[] @relation("CommentRemovedByReport")
+  removedMessages  Message[] @relation("MessageRemovedByReport")
 }
 
 // backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and

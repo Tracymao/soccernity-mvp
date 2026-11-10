@@ -20,6 +20,13 @@ import { GuardianSecurityNoticeService } from '../guardian-security-notice/guard
 import { resolveConcernsMinor } from './report-concerns-minor.util';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 import { resolveReportedUserId } from './report-target.util';
+import {
+  CONTENT_REMOVAL_NOT_APPLICABLE_CODE,
+  ContentRemovalOutcome,
+  applyContentRemoval,
+  isContentRemovalTarget,
+  restoreContentRemoval,
+} from './content-removal.util';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
@@ -49,6 +56,12 @@ import {
 // B-046 part B: a report made from a Contact Us enquiry carries `source: 'contact_enquiry'` (the key is ABSENT on
 // every other report, so existing response shapes are unchanged).
 export type ReportWithSource = Report & { source?: typeof REPORT_SOURCE_CONTACT_ENQUIRY };
+
+// B-289 (Decision Log #483): what actionReport returns. `contentRemoval` is present ONLY when the action was
+// content_removed, and says what happened to the one reported item: 'removed', 'already_removed' (another report
+// removed it first and keeps the claim) or 'target_not_found' (the row is gone; nothing to remove, the action is
+// still recorded).
+export type ActionedReport = Report & { contentRemoval?: ContentRemovalOutcome };
 
 export interface ReportListPage {
   items: ReportWithSource[];
@@ -81,6 +94,8 @@ export interface ReportedMessageView {
   originalContentText: string | null;
   editedAt: Date | null;
   deletedForEveryone: boolean;
+  // B-289: when a moderator removed it (null = not removed). The text above is still returned in full.
+  removedByModerationAt: Date | null;
 }
 
 // backend/b286-message-report-context (Decision Log #477): one message the reporter attached as context to a
@@ -95,6 +110,7 @@ export interface ReportContextMessageView {
   originalContentText: string | null;
   editedAt: Date | null;
   deletedForEveryone: boolean;
+  removedByModerationAt: Date | null;
 }
 
 export type ReportDetail = ReportWithSource & {
@@ -347,12 +363,15 @@ export class ModerationService {
         id: true,
         sentAt: true,
         deletedForEveryoneAt: true,
+        removedByModerationAt: true,
         hides: { where: { userId: reporterId }, select: { userId: true }, take: 1 },
       },
     });
     const visible = rows.filter(
       (r) =>
         !r.deletedForEveryoneAt &&
+        // B-289: a message a moderator removed is a stub to the reporter, so it cannot be attached as context.
+        !r.removedByModerationAt &&
         r.hides.length === 0 &&
         !(reported.chatHiddenAt && r.sentAt <= reported.chatHiddenAt),
     );
@@ -733,6 +752,7 @@ export class ModerationService {
           originalContentText: true,
           editedAt: true,
           deletedForEveryoneAt: true,
+          removedByModerationAt: true,
           sender: { select: PUBLIC_NAME_SELECT },
         },
       });
@@ -745,6 +765,7 @@ export class ModerationService {
             originalContentText: row.originalContentText,
             editedAt: row.editedAt,
             deletedForEveryone: row.deletedForEveryoneAt !== null,
+            removedByModerationAt: row.removedByModerationAt,
           }
         : null;
       // Decision Log #477: the context the reporter attached, oldest first. Only the fields below; no conversation
@@ -762,6 +783,7 @@ export class ModerationService {
               originalContentText: true,
               editedAt: true,
               deletedForEveryoneAt: true,
+              removedByModerationAt: true,
               sender: { select: PUBLIC_NAME_SELECT },
             },
           },
@@ -776,6 +798,7 @@ export class ModerationService {
         originalContentText: m.originalContentText,
         editedAt: m.editedAt,
         deletedForEveryone: m.deletedForEveryoneAt !== null,
+        removedByModerationAt: m.removedByModerationAt,
       }));
       return { ...report, reportedMessage, contextMessages };
     }
@@ -790,7 +813,7 @@ export class ModerationService {
   // Report.status's own pre-existing enum (dismissed -> 'reviewed',
   // anything else -> 'actioned'), never a fourth status value.
   // -------------------------------------------------------------------
-  async actionReport(reportId: string, adminId: string, dto: ActionReportDto): Promise<Report> {
+  async actionReport(reportId: string, adminId: string, dto: ActionReportDto): Promise<ActionedReport> {
     const report = await this.assertReportExists(reportId);
 
     // 404 (existence) is already settled above; this is the "403 on
@@ -809,8 +832,20 @@ export class ModerationService {
       throw new BadRequestException('room_deactivated may only be recorded against a Banter Room report');
     }
 
+    // B-289 (Decision Log #483): content_removed is enforced for a post, a comment or a message and offered for
+    // nothing else (a user, a room, a team, a fixture or an enquiry has no content to remove).
+    if (dto.action === 'content_removed' && !isContentRemovalTarget(report.targetType)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: CONTENT_REMOVAL_NOT_APPLICABLE_CODE,
+        message: 'Content can only be removed from a post, a comment or a message.',
+      });
+    }
+
     const newStatus = dto.action === 'dismissed' ? 'reviewed' : 'actioned';
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
+    let contentRemoval: ContentRemovalOutcome | undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // Decision Log #357 — the one action with a side effect beyond the
@@ -818,6 +853,11 @@ export class ModerationService {
       // also rolls back the recorded outcome.
       if (dto.action === ROOM_DEACTIVATED_ACTION) {
         await this.banterService.setRoomStatus(tx, report.targetId, 'inactive');
+      }
+      // B-289: the removal itself, in the SAME transaction as recording the action. Only the reported target is
+      // touched; a context message attached to a message report never is.
+      if (dto.action === 'content_removed') {
+        contentRemoval = await applyContentRemoval(tx, report, new Date());
       }
 
       const updatedReport = await tx.report.update({
@@ -864,12 +904,13 @@ export class ModerationService {
     void this.notifyReporterOfOutcome(report, dto.action);
 
     // B-279: tell the REPORTED minor's guardian the outcome (never the reporter's, and never on 'dismissed').
+    // For content_removed this is now literally true (B-289): the item really is removed.
     const guardianEvent = GUARDIAN_NOTICE_FOR_REPORT_ACTION[dto.action];
     if (guardianEvent && reportedUserId) {
       this.guardianNotices.notifyInBackground(reportedUserId, guardianEvent);
     }
 
-    return updated;
+    return contentRemoval ? { ...updated, contentRemoval } : updated;
   }
 
   // -------------------------------------------------------------------
@@ -912,6 +953,11 @@ export class ModerationService {
         data.reviewedByAdmin = { disconnect: true };
         data.reviewedAt = null;
         data.actionTaken = null;
+        // B-289 (Decision Log #483): overturning an appeal on a content_removed report brings the content back,
+        // in the same transaction, but only if THIS report is the one that removed it.
+        if (report.actionTaken === 'content_removed') {
+          await restoreContentRemoval(tx, report);
+        }
       }
 
       const updatedReport = await tx.report.update({ where: { id: reportId }, data });

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import { resolvePublicName } from '../users/public-name.util';
 import { PageViewService, type MonthlyPageViewCount } from '../page-views/page-view.service';
 import { DASHBOARD_LATEST_POSTS_DEFAULT } from './admin-dashboard.constants';
@@ -47,11 +48,12 @@ export interface DashboardLatestPost {
 //    confirmed consent is excluded too, so an editor never sees a minor's post on this screen;
 //  - the post must be visible: a final contest entry before its reveal (Post.visibleFrom) is hidden, and a post
 //    with any media that is not approved (pending, rejected, or held for review) is hidden.
-// There is no "removed" flag on Post: DELETE /posts/:id is a hard delete, so a removed post is simply gone.
+// B-289: Post.removedByModerationAt (a moderator's soft removal) is left out too; DELETE /posts/:id is a hard delete.
 function latestPostsWhere(now: Date): Prisma.PostWhereInput {
   return {
     author: { accountStatus: 'active', isMinor: false, isUnder16: false },
-    AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED],
+    // B-289 (Decision Log #483): a post a moderator removed is not "a latest post" any more.
+    AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED, POST_NOT_REMOVED],
   };
 }
 
