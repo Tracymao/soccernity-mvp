@@ -188,13 +188,14 @@ describe("ChangeEmailPage", () => {
       );
     });
 
-    it("shows ONE message on the new-email step for a not-accepted address, whatever the reason", async () => {
-      vi.mocked(requestEmailChange).mockRejectedValue(err("email_change_not_accepted", 400));
+    it("shows 'Check your inbox' for every 202, whatever the address (no per-address answer exists)", async () => {
+      vi.mocked(requestEmailChange).mockResolvedValue(undefined);
       renderPage();
       enterPassword();
       enterEmail("taken@example.com");
-      expect(await screen.findByText(MESSAGES.emailNotAccepted)).not.toBeNull();
-      expect(screen.getByLabelText("New email address")).not.toBeNull();
+      await screen.findByRole("heading", { name: "Check your inbox" });
+      expect(screen.getByText("We sent a link to taken@example.com.")).not.toBeNull();
+      expect(screen.queryByText(MESSAGES.emailNotAccepted)).toBeNull();
     });
 
     it("refuses an address that is not shaped like an email without a request", () => {
@@ -212,6 +213,15 @@ describe("ChangeEmailPage", () => {
       enterEmail();
       expect(await screen.findByText(MESSAGES.consentPending)).not.toBeNull();
       expect(screen.queryByLabelText("New email address")).toBeNull();
+    });
+
+    it("shows the same plain too-many-attempts line for a 429 on the request cap, with the details kept", async () => {
+      vi.mocked(requestEmailChange).mockRejectedValue(new EmailChangeApiError("x", { status: 429 }));
+      renderPage();
+      enterPassword();
+      enterEmail();
+      expect(await screen.findByText(MESSAGES.tooMany)).not.toBeNull();
+      expect((screen.getByLabelText("New email address") as HTMLInputElement).value).toBe("new@example.com");
     });
 
     it("shows plain lines for 429, 503 and any other failure", async () => {

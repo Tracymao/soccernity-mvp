@@ -16,7 +16,9 @@
 //   - 403 wrong_password        -> back to the password step with the frame's error;
 //   - 403 two_factor_required   -> the two-factor step (never shown on a guess);
 //   - 403 two_factor_invalid    -> stay on the code step with an error;
-//   - 400 email_change_not_accepted -> ONE message on the new-email step, never a reason;
+//   - 202 for every other request (Decision Log #476): the server never says whether the
+//     address is usable or registered, so "Check your inbox" shows for every 202;
+//   - 429 (failed-password budget or request cap) -> the same plain too-many-attempts line;
 //   - 403 guardian_consent_pending -> a plain "not available until your guardian has
 //     approved your account" line (a restricted-pending minor), not a raw error.
 // The password, the new address and the code live in component state only: never in
@@ -28,7 +30,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   EMAIL_CHANGE_CONSENT_PENDING,
-  EMAIL_CHANGE_NOT_ACCEPTED,
   EMAIL_CHANGE_TWO_FACTOR_INVALID,
   EMAIL_CHANGE_TWO_FACTOR_REQUIRED,
   EMAIL_CHANGE_WRONG_PASSWORD,
@@ -77,7 +78,8 @@ function Callout({ children }: { children: string }) {
   );
 }
 
-// The same loose shape check the server's own validator starts from; the server decides.
+// A loose shape check so an obvious typo is caught before sending. It says nothing about whether
+// an address is registered; the server answers 202 either way (Decision Log #476).
 function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -209,10 +211,6 @@ export default function ChangeEmailPage() {
         focusId.current = "ec-code";
       } else if (err.code === EMAIL_CHANGE_CONSENT_PENDING) {
         setBlocked(true);
-      } else if (err.code === EMAIL_CHANGE_NOT_ACCEPTED) {
-        setEmailError(MESSAGES.emailNotAccepted);
-        setStep("newEmail");
-        focusId.current = "ec-new-email";
       } else if (err.status === 429) {
         setFormError(MESSAGES.tooMany);
       } else if (err.code === "email_change_unavailable") {
