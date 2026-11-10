@@ -90,6 +90,40 @@ describe('evidenceKeyOf', () => {
   });
 });
 
+// backend/b290-removed-post-media (B-290; Decision Log #484): the private copy kept of a removed post's media is
+// evidence until the removing report closes, so deleting the post (or the account) must not delete it with the row.
+describe('a file whose post was removed by moderation (B-290)', () => {
+  const removedPost = { removedByModerationAt: new Date('2026-11-04T10:00:00Z') };
+  const kept = (over: Record<string, unknown> = {}) =>
+    row({ status: 'approved', publishedAt: null, privateKey: 'private-media/u1/m1.jpg', post: removedPost, ...over });
+
+  it('its private copy is the evidence key, and is not in the list that needs no protection check', () => {
+    expect(evidenceKeyOf(kept())).toBe('private-media/u1/m1.jpg');
+    expect(deletableKeys(kept())).toEqual([]);
+  });
+
+  it('the same file on a post that is NOT removed is an ordinary deletable file', () => {
+    const ordinary = kept({ post: { removedByModerationAt: null } });
+    expect(evidenceKeyOf(ordinary)).toBeNull();
+    expect(deletableKeys(ordinary)).toEqual(['private-media/u1/m1.jpg']);
+  });
+
+  it('a leftover public object is still listed: it must not stay public', () => {
+    expect(deletableKeys(kept({ publishedAt: new Date('2026-11-05T10:00:00Z') }))).toEqual(['post-media/u1/m1.jpg']);
+  });
+
+  it('while the removing report is open the copy is kept and deferred; once it is long closed it goes', async () => {
+    const db = buildDb({ reports: [OPEN_REPORT] });
+    expect(await keysToDeleteNow(db as never, [kept()], NOW)).toEqual([]);
+    expect(db.postMediaDeferredDeletion.createMany).toHaveBeenCalledWith({
+      data: [{ objectKey: 'private-media/u1/m1.jpg', mediaId: 'm1', uploaderId: 'u1', postId: 'p1' }],
+      skipDuplicates: true,
+    });
+    const closed = { ...OPEN_REPORT, status: 'reviewed', reviewedAt: new Date('2026-01-01T00:00:00Z') };
+    expect(await keysToDeleteNow(buildDb({ reports: [closed] }) as never, [kept()], NOW)).toEqual(['private-media/u1/m1.jpg']);
+  });
+});
+
 describe('keysToDeleteNow', () => {
   it('a rejected file with no hold and no report: its private object IS listed, and nothing is deferred', async () => {
     const db = buildDb();

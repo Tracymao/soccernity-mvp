@@ -50,14 +50,19 @@ function build(reportRow: Record<string, unknown>) {
     sendReportActionedEmail: jest.fn().mockResolvedValue(undefined),
     sendAppealDecisionEmail: jest.fn().mockResolvedValue(undefined),
   };
+  const postMediaObjects = {
+    withdrawForPost: jest.fn().mockResolvedValue({ withdrawn: 1, failed: 0 }),
+    republishForPost: jest.fn().mockResolvedValue({ published: 1, failed: 0 }),
+  };
   const service = new ModerationService(
     prisma as never,
     emailService as never,
     { record: jest.fn().mockResolvedValue(undefined) } as never,
     { setRoomStatus: jest.fn() } as never,
     guardianNotices as never,
+    postMediaObjects as never,
   );
-  return { prisma, service, guardianNotices };
+  return { prisma, service, guardianNotices, postMediaObjects };
 }
 
 describe('ModerationService: content removal wiring', () => {
@@ -162,5 +167,83 @@ describe('ModerationService: content removal wiring', () => {
       expect(prisma.comment.updateMany).not.toHaveBeenCalled();
       expect(prisma.message.updateMany).not.toHaveBeenCalled();
     });
+  });
+});
+
+// backend/b290-removed-post-media (B-290; Decision Log #484): a removed POST also has its media files taken out of
+// the public prefix (after the commit), and an overturned appeal puts them back.
+describe('ModerationService: removed-post media wiring (B-290)', () => {
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  it('Remove Content on a post withdraws its media AFTER the transaction, for exactly that post', async () => {
+    const { prisma, service, postMediaObjects } = build(baseReport({ targetType: 'post', targetId: 'post-9' }));
+    prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => {
+      const out = await fn(prisma);
+      expect(postMediaObjects.withdrawForPost).not.toHaveBeenCalled(); // not yet: still inside the transaction
+      return out;
+    });
+    await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+    await flush();
+    expect(postMediaObjects.withdrawForPost).toHaveBeenCalledTimes(1);
+    expect(postMediaObjects.withdrawForPost).toHaveBeenCalledWith('post-9');
+  });
+
+  it('does not withdraw when another report already removed the post, for other actions, or for a comment or a message', async () => {
+    const already = build(baseReport({ targetType: 'post' }));
+    already.prisma.post.updateMany.mockResolvedValue({ count: 0 });
+    await already.service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+
+    const warn = build(baseReport({ targetType: 'post' }));
+    await warn.service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+    const comment = build(baseReport({ targetType: 'comment' }));
+    await comment.service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+
+    const message = build(baseReport({ targetType: 'message' }));
+    await message.service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+    await flush();
+    for (const t of [already, warn, comment, message]) expect(t.postMediaObjects.withdrawForPost).not.toHaveBeenCalled();
+  });
+
+  it('a failed withdraw never fails or delays the moderator action', async () => {
+    const { service, postMediaObjects } = build(baseReport({ targetType: 'post' }));
+    postMediaObjects.withdrawForPost.mockResolvedValue({ withdrawn: 0, failed: 1 });
+    await expect(service.actionReport('report-1', 'admin-1', { action: 'content_removed' })).resolves.toBeDefined();
+  });
+
+  it('works with no object store wired (the dependency is optional)', async () => {
+    const prisma = build(baseReport({ targetType: 'post' })).prisma;
+    const service = new ModerationService(
+      prisma as never,
+      { sendReportActionedEmail: jest.fn().mockResolvedValue(undefined) } as never,
+      { record: jest.fn().mockResolvedValue(undefined) } as never,
+      { setRoomStatus: jest.fn() } as never,
+      { notifyInBackground: jest.fn() } as never,
+    );
+    await expect(service.actionReport('report-1', 'admin-1', { action: 'content_removed' })).resolves.toBeDefined();
+  });
+
+  const appealed = (over: Record<string, unknown> = {}) =>
+    baseReport({ status: 'actioned', actionTaken: 'content_removed', appealStatus: 'pending', reviewedByAdminId: 'admin-1', targetId: 'post-9', ...over });
+
+  it('an overturned appeal that really restored the post republishes its media, after the commit', async () => {
+    const { service, postMediaObjects } = build(appealed({ targetType: 'post' }));
+    await service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+    await flush();
+    expect(postMediaObjects.republishForPost).toHaveBeenCalledWith('post-9');
+  });
+
+  it('does not republish when upheld, when another report holds the removal (nothing restored), or for a comment', async () => {
+    const upheld = build(appealed({ targetType: 'post' }));
+    await upheld.service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+    const otherClaim = build(appealed({ targetType: 'post' }));
+    otherClaim.prisma.post.updateMany.mockResolvedValue({ count: 0 });
+    await otherClaim.service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+
+    const comment = build(appealed({ targetType: 'comment' }));
+    await comment.service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+    await flush();
+    for (const t of [upheld, otherClaim, comment]) expect(t.postMediaObjects.republishForPost).not.toHaveBeenCalled();
   });
 });

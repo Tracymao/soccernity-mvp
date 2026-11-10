@@ -117,3 +117,47 @@ export async function evidenceKeysToDeleteNow(
   await recordDeferrals(db, protectedItems);
   return free.map((i) => i.key);
 }
+
+// backend/b290-removed-post-media (B-290; Decision Log #484). THE ONE FUNCTION that decides whether the private copy
+// kept of a removed post's media may be deleted now. It is the existing protection rule UNCHANGED (partitionEvidence:
+// the uploader has an active admin hold, or the post has a report not yet closed) with one condition in front of it:
+// the report that REMOVED the post must itself be closed (reportClosedAt, the one closure predicate: the appeal window
+// has lapsed, or the appeal was upheld). B-206 (statutory-reporting / evidence set-aside under counsel) is meant to hook
+// in HERE and nowhere else: a set-aside is one more reason to put an item in `waiting`.
+
+export interface RemovedMediaItem extends EvidenceItem {
+  /** Post.removedByReportId: the report whose closure starts the deletion clock. */
+  removingReportId: string;
+}
+
+export interface RemovedMediaPartition {
+  /** The removing report is closed and neither protection applies: delete the private object now. */
+  free: RemovedMediaItem[];
+  /** Not yet: the removing report is still open / in its appeal window, the uploader is held, or a report on the post is open. */
+  waiting: RemovedMediaItem[];
+}
+
+export async function removedMediaDeletableNow(
+  db: HoldDb & ReportDb,
+  items: readonly RemovedMediaItem[],
+  now: Date,
+  appealWindowDays: number = resolveReportAppealWindowDays(),
+): Promise<RemovedMediaPartition> {
+  if (items.length === 0) return { free: [], waiting: [] };
+  const reports = await db.report.findMany({
+    where: { id: { in: [...new Set(items.map((i) => i.removingReportId))] } },
+    select: { id: true, status: true, appealStatus: true, reviewedAt: true, appealReviewedAt: true },
+  });
+  const closed = new Set<string>();
+  for (const r of reports) {
+    const closure = reportClosedAt(r, appealWindowDays);
+    if (closure !== null && now.getTime() >= closure.getTime()) closed.add(r.id);
+  }
+  const candidates = items.filter((i) => closed.has(i.removingReportId));
+  const { free } = await partitionEvidence(db, candidates, now);
+  const freeKeys = new Set(free.map((i) => i.key));
+  return {
+    free: candidates.filter((i) => freeKeys.has(i.key)),
+    waiting: items.filter((i) => !closed.has(i.removingReportId) || !freeKeys.has(i.key)),
+  };
+}

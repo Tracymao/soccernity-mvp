@@ -1676,6 +1676,8 @@ describe('FeedService', () => {
           publicKey: true,
           privateKey: true,
           quarantineKey: true,
+          // B-290: whether the post is removed by moderation decides if a private copy is evidence.
+          post: { select: { removedByModerationAt: true } },
         },
       });
       expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['post-media/owner/a.jpg', 'post-media/owner/b.mp4', 'quarantine/owner/b']);

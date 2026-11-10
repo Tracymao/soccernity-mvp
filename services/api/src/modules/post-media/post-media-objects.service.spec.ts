@@ -43,6 +43,7 @@ interface Row {
   privateKey: string | null;
   publicKey: string | null;
   publishedAt: Date | null;
+  post?: { removedByModerationAt: Date | null } | null;
 }
 
 function build(row: Partial<Row> | null, store = new FakeStore()) {
@@ -78,6 +79,13 @@ describe('key helpers', () => {
     expect(shouldBePublic({ status: 'approved', hiddenPendingReview: true })).toBe(false);
     expect(shouldBePublic({ status: 'pending', hiddenPendingReview: false })).toBe(false);
     expect(shouldBePublic({ status: 'rejected', hiddenPendingReview: false })).toBe(false);
+  });
+
+  // B-290
+  it('an approved, un-held item whose post is removed by moderation should NOT be public; an unremoved or unattached one is', () => {
+    expect(shouldBePublic({ status: 'approved', hiddenPendingReview: false, post: { removedByModerationAt: NOW } })).toBe(false);
+    expect(shouldBePublic({ status: 'approved', hiddenPendingReview: false, post: { removedByModerationAt: null } })).toBe(true);
+    expect(shouldBePublic({ status: 'approved', hiddenPendingReview: false, post: null })).toBe(true);
   });
 });
 
@@ -242,8 +250,20 @@ describe('PostMediaObjectsService.reconcile', () => {
     const { service, prisma } = build({});
     await service.reconcile();
     const wheres = prisma.postMedia.findMany.mock.calls.map((c) => (c[0] as { where: unknown }).where);
-    expect(wheres[0]).toEqual({ publishedAt: { not: null }, OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }] });
-    expect(wheres[1]).toEqual({ status: 'approved', hiddenPendingReview: false, publishedAt: null, privateKey: { not: null }, uploadState: 'ready' });
+    // B-290: the invariant gained "and the post is not removed by moderation" in both directions.
+    expect(wheres[0]).toEqual({
+      publishedAt: { not: null },
+      OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }, { post: { is: { removedByModerationAt: { not: null } } } }],
+    });
+    expect(wheres[1]).toEqual({
+      status: 'approved',
+      hiddenPendingReview: false,
+      publishedAt: null,
+      privateKey: { not: null },
+      uploadState: 'ready',
+      deletedByModerationAt: null,
+      OR: [{ postId: null }, { post: { is: { removedByModerationAt: null } } }],
+    });
     expect(wheres[2]).toEqual({ status: 'approved', hiddenPendingReview: false, publishedAt: { not: null }, privateKey: { not: null } });
   });
 
@@ -296,5 +316,102 @@ describe('PostMediaObjectsService.reconcile', () => {
       .mockResolvedValueOnce([{ id: 'm1', status: 'approved', hiddenPendingReview: false, contentType: 'image/jpeg', privateKey: PRIV, publicKey: PUB, publishedAt: null }])
       .mockResolvedValue([]);
     await expect(t.service.reconcile()).resolves.toEqual({ withdrawn: 0, published: 0, cleaned: 0 });
+  });
+});
+
+// backend/b290-removed-post-media (B-290; Decision Log #484).
+describe('PostMediaObjectsService: a post removed by moderation', () => {
+  const removedPost = { removedByModerationAt: NOW };
+
+  it('withdraw() takes an APPROVED, un-held file whose post is removed out of the public prefix, making the evidence copy first', async () => {
+    // The normal approved state: published, NO private copy.
+    const t = build({ status: 'approved', publishedAt: NOW, privateKey: null, post: removedPost });
+    t.store.objects.set(PUB, { size: 50, contentType: 'image/jpeg' });
+    expect(await t.service.withdraw('m1')).toBe('withdrawn');
+    expect(t.store.copied).toEqual([[PUB, PRIV]]); // copy first ...
+    expect(t.store.objects.get(PRIV)).toEqual({ size: 50, contentType: 'image/jpeg' });
+    expect(t.store.objects.has(PUB)).toBe(false); // ... then the public object goes
+    expect(t.store.deleted).toEqual([PUB]);
+    expect(t.row).toMatchObject({ privateKey: PRIV, publishedAt: null });
+  });
+
+  it('withdraw() leaves the same file alone while its post is NOT removed', async () => {
+    const t = build({ status: 'approved', publishedAt: NOW, privateKey: null, post: { removedByModerationAt: null } });
+    t.store.objects.set(PUB, { size: 1, contentType: 'image/jpeg' });
+    expect(await t.service.withdraw('m1')).toBe('noop');
+    expect(t.store.objects.has(PUB)).toBe(true);
+  });
+
+  it('no private copy can be made: nothing is deleted, it reports failed (the post is already hidden) and the marker stays', async () => {
+    const t = build({ status: 'approved', publishedAt: NOW, privateKey: null, post: removedPost });
+    t.store.objects.set(PUB, { size: 1, contentType: 'image/jpeg' });
+    t.store.failCopy = true;
+    expect(await t.service.withdraw('m1')).toBe('failed');
+    expect(t.store.objects.has(PUB)).toBe(true);
+    expect(t.row?.publishedAt).toEqual(NOW);
+  });
+
+  it('finishPublish() never drops the private copy of a file whose post is removed', async () => {
+    const t = build({ status: 'approved', publishedAt: NOW, post: removedPost });
+    t.store.objects.set(PRIV, { size: 1, contentType: 'image/jpeg' });
+    await t.service.finishPublish('m1');
+    expect(t.store.deleted).toEqual([]);
+    expect(t.store.objects.has(PRIV)).toBe(true);
+  });
+
+  it('withdrawForPost() withdraws every PUBLISHED file of the post, counts them, and never throws', async () => {
+    const t = build({ status: 'approved', publishedAt: NOW, privateKey: null, post: removedPost });
+    t.store.objects.set(PUB, { size: 3, contentType: 'image/jpeg' });
+    t.prisma.postMedia.findMany.mockResolvedValueOnce([{ id: 'm1' }]);
+    expect(await t.service.withdrawForPost('p1')).toEqual({ withdrawn: 1, failed: 0 });
+    expect(t.prisma.postMedia.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { postId: 'p1', publishedAt: { not: null } } }));
+
+    t.prisma.postMedia.findMany.mockRejectedValueOnce(new Error('db down'));
+    expect(await t.service.withdrawForPost('p1')).toEqual({ withdrawn: 0, failed: 1 });
+  });
+
+  it('withdrawForPost() counts a failed move without throwing', async () => {
+    const t = build({ status: 'approved', publishedAt: NOW, privateKey: null, post: removedPost });
+    t.store.objects.set(PUB, { size: 3, contentType: 'image/jpeg' });
+    t.store.failCopy = true;
+    t.prisma.postMedia.findMany.mockResolvedValueOnce([{ id: 'm1' }]);
+    expect(await t.service.withdrawForPost('p1')).toEqual({ withdrawn: 0, failed: 1 });
+  });
+
+  it('republishForPost() asks for approved, un-held, withdrawn files whose private copy still exists, and publishes them from it', async () => {
+    const t = build({ status: 'approved', publishedAt: null, privateKey: PRIV, post: { removedByModerationAt: null } });
+    t.store.objects.set(PRIV, { size: 9, contentType: 'image/jpeg' });
+    t.prisma.postMedia.findMany.mockResolvedValueOnce([
+      { id: 'm1', status: 'approved', hiddenPendingReview: false, contentType: 'image/jpeg', privateKey: PRIV, publicKey: PUB, publishedAt: null, post: { removedByModerationAt: null } },
+    ]);
+    expect(await t.service.republishForPost('p1')).toEqual({ published: 1, failed: 0 });
+    expect(t.prisma.postMedia.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          postId: 'p1',
+          status: 'approved',
+          hiddenPendingReview: false,
+          publishedAt: null,
+          privateKey: { not: null },
+          uploadState: 'ready',
+          deletedByModerationAt: null,
+        },
+      }),
+    );
+    expect(t.store.objects.get(PUB)).toEqual({ size: 9, contentType: 'image/jpeg' });
+    // back to the normal approved state: public only
+    expect(t.store.objects.has(PRIV)).toBe(false);
+    expect(t.row).toMatchObject({ publishedAt: NOW, privateKey: null });
+  });
+
+  it('republishForPost() reports a failed copy and never throws', async () => {
+    const t = build({ status: 'approved', publishedAt: null, privateKey: PRIV });
+    t.store.objects.set(PRIV, { size: 9, contentType: 'image/jpeg' });
+    t.store.failCopy = true;
+    t.prisma.postMedia.findMany.mockResolvedValueOnce([
+      { id: 'm1', status: 'approved', hiddenPendingReview: false, contentType: 'image/jpeg', privateKey: PRIV, publicKey: PUB, publishedAt: null },
+    ]);
+    expect(await t.service.republishForPost('p1')).toEqual({ published: 0, failed: 1 });
+    expect(t.store.objects.has(PUB)).toBe(false);
   });
 });

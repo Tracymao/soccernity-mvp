@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -16,6 +17,7 @@ import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admi
 import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityEventKey } from '../guardian-security-notice/guardian-security-notice.constants';
+import { PostMediaObjectsService } from '../post-media/post-media-objects.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { resolveConcernsMinor } from './report-concerns-minor.util';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
@@ -168,6 +170,9 @@ export class ModerationService {
     private readonly banterService: BanterService,
     // B-279: the guardian of a minor who is the REPORTED user hears the outcome (never that a report exists).
     private readonly guardianNotices: GuardianSecurityNoticeService,
+    // B-290 (Decision Log #484): Remove Content on a post withdraws the public copy of its media (after the commit,
+    // best effort); an overturned appeal republishes it. Optional so a unit test needs no object store.
+    @Optional() private readonly postMediaObjects?: PostMediaObjectsService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -901,6 +906,12 @@ export class ModerationService {
       dto.action,
     );
 
+    // B-290: the post is already hidden by the read gate; now take its media out of the public prefix. The private
+    // copy stays as evidence until this report closes (RejectedMediaSweepService.confirmModerationRemovals).
+    if (contentRemoval === 'removed' && report.targetType === 'post') {
+      void this.postMediaObjects?.withdrawForPost(report.targetId);
+    }
+
     void this.notifyReporterOfOutcome(report, dto.action);
 
     // B-279: tell the REPORTED minor's guardian the outcome (never the reporter's, and never on 'dismissed').
@@ -941,6 +952,7 @@ export class ModerationService {
 
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
 
+    let restoredPostId = null as string | null;
     const updated = await this.prisma.$transaction(async (tx) => {
       const data: Prisma.ReportUpdateInput = {
         appealStatus: dto.decision,
@@ -956,7 +968,8 @@ export class ModerationService {
         // B-289 (Decision Log #483): overturning an appeal on a content_removed report brings the content back,
         // in the same transaction, but only if THIS report is the one that removed it.
         if (report.actionTaken === 'content_removed') {
-          await restoreContentRemoval(tx, report);
+          const restored = await restoreContentRemoval(tx, report);
+          if (restored && report.targetType === 'post') restoredPostId = report.targetId;
         }
       }
 
@@ -980,6 +993,9 @@ export class ModerationService {
       reportId,
       dto.decision,
     );
+
+    // B-290: the post is back, so its media goes back to the public prefix (from the private copy kept at removal).
+    if (restoredPostId) void this.postMediaObjects?.republishForPost(restoredPostId);
 
     void this.notifyAppellantOfDecision(reportId, reportedUserId, dto.decision);
 
