@@ -14,6 +14,7 @@ import {
   MESSAGE_NOT_EDITABLE_CODE,
   MessagingApiError,
   isDeletedMessage,
+  isRemovedMessage,
   type Message,
   type ThreadMessage,
 } from "../../../api/messaging";
@@ -41,6 +42,9 @@ export function canEditNow(message: Message, now: number = Date.now()): boolean 
 export function seenLabelMessageId(messages: readonly ThreadMessage[], currentUserId: string): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
+    // A message a moderator removed carries no sender and no read time (B-289), so it can neither hold the
+    // label nor tell us whose it was; it is stepped over like a message of the other person's.
+    if (isRemovedMessage(message)) continue;
     if (message.senderId !== currentUserId) continue;
     if (isDeletedMessage(message)) return null;
     return message.readAt ? message.id : null;
@@ -60,8 +64,9 @@ export const REPORT_CONTEXT_WINDOW = 10;
 
 // The rows of the "Add messages for context" step for a reported message: the loaded thread (oldest first), the
 // reported message and up to 10 messages either side of it, counted by position in the list. A message deleted
-// for everyone keeps its place in the count (the server counts it too) but is not offered, since it has no text
-// and the server will not take it as context. Returns [] when the reported message is not in the list.
+// for everyone or removed by a moderator keeps its place in the count (the server counts it too) but is not
+// offered, since it has no text and the server will not take it as context. Returns [] when the reported message
+// is not in the list.
 export function reportContextRows(
   messages: readonly ThreadMessage[],
   reportedId: string,
@@ -74,7 +79,7 @@ export function reportContextRows(
   const to = Math.min(messages.length, index + REPORT_CONTEXT_WINDOW + 1);
   const rows: ReportContextRow[] = [];
   for (const m of messages.slice(from, to)) {
-    if (isDeletedMessage(m)) continue;
+    if (isDeletedMessage(m) || isRemovedMessage(m)) continue;
     const mine = m.senderId === currentUserId;
     rows.push({
       id: m.id,

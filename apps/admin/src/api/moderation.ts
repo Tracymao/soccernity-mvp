@@ -52,6 +52,25 @@ export const REPORT_ACTIONS = [
 ] as const;
 export type ReportAction = (typeof REPORT_ACTIONS)[number];
 
+// B-289 (Decision Log #483): Remove Content is a real soft removal now, and is offered for exactly these three
+// target types. On any other target the server answers 400 with CONTENT_REMOVAL_NOT_APPLICABLE_CODE, so
+// ReportDetailPage never offers it there (the page never decides anything else: the server is the authority).
+export const CONTENT_REMOVABLE_TARGET_TYPES = ["post", "comment", "message"] as const;
+export const CONTENT_REMOVAL_NOT_APPLICABLE_CODE = "content_removal_not_applicable";
+
+export function canRemoveContent(targetType: string): boolean {
+  return (CONTENT_REMOVABLE_TARGET_TYPES as readonly string[]).includes(targetType);
+}
+
+// The actions the Take action row offers for a report of this target type.
+export function actionsForTarget(targetType: string): ReportAction[] {
+  return REPORT_ACTIONS.filter((action) => {
+    if (action === "room_deactivated") return targetType === "banter_room";
+    if (action === "content_removed") return canRemoveContent(targetType);
+    return true;
+  });
+}
+
 export const APPEAL_DECISIONS = ["upheld", "overturned"] as const;
 export type AppealDecision = (typeof APPEAL_DECISIONS)[number];
 
@@ -120,6 +139,17 @@ export const CHILD_SAFETY_VETTING_REQUIRED_CODE = "child_safety_vetting_required
 // surfaces verbatim (e.g. Decision Log #138's "may not review your own
 // action" rejection). Used to render a dedicated restricted state rather
 // than a generic inline error.
+// The stable `code` of a 4xx from the admin API, when it sent one. Errors are told apart by this, never by the
+// server's message text.
+export function errorCodeOf(err: unknown): string | undefined {
+  if (!(err instanceof AdminApiError)) return undefined;
+  const body = err.body;
+  if (body && typeof body === "object" && typeof (body as { code?: unknown }).code === "string") {
+    return (body as { code: string }).code;
+  }
+  return undefined;
+}
+
 export function isChildSafetyVettingRequiredError(err: unknown): boolean {
   if (!(err instanceof AdminApiError) || err.status !== 403) return false;
   const body = err.body;
@@ -139,6 +169,15 @@ export const REPORT_ACTION_LABELS: Record<ReportAction, string> = {
   user_suspended: "Suspend User",
   dismissed: "Dismiss Report",
   room_deactivated: "Deactivate Room",
+};
+
+// What a recorded action reads as in a read-only row ("Action taken"), as opposed to the button that records it.
+export const REPORT_ACTION_TAKEN_LABELS: Record<ReportAction, string> = {
+  content_removed: "Content removed",
+  warning_issued: "Warning issued",
+  user_suspended: "User suspended",
+  dismissed: "Dismissed",
+  room_deactivated: "Room deactivated",
 };
 
 // The real Report row — services/api prisma/schema.prisma's `Report`
@@ -224,6 +263,8 @@ export interface ReportedMessage {
   originalContentText: string | null;
   editedAt: string | null;
   deletedForEveryone: boolean;
+  // B-289: when a moderator removed the message (null = not removed). The text above is still returned in full.
+  removedByModerationAt?: string | null;
 }
 
 // One message the reporter added as context to a message report (services/api ReportContextMessageView).
@@ -383,4 +424,18 @@ export function liftHold(holdId: string, reason: string): Promise<{ hold: HoldVi
     method: "PATCH",
     body: { reason },
   });
+}
+
+// B-289 (Decision Log #483): has a moderator removed the content this report is about? For a message the
+// single-report read says so itself (`reportedMessage.removedByModerationAt`). A post or comment report carries
+// no such field, so it is read from the report's own decision: an actioned `content_removed` (an overturned
+// appeal clears `actionTaken` and reopens the report, so a restored item stops reading as removed).
+export function isContentRemoved(
+  report: Pick<Report, "targetType" | "status" | "actionTaken" | "reportedMessage">,
+): boolean {
+  if (report.targetType === "message" && report.reportedMessage) {
+    return Boolean(report.reportedMessage.removedByModerationAt);
+  }
+  if (!canRemoveContent(report.targetType)) return false;
+  return report.status === "actioned" && report.actionTaken === "content_removed";
 }

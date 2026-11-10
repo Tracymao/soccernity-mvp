@@ -27,3 +27,17 @@
   font: 600 18px "Inter", sans-serif;
   color: var(--sn-text-primary);
 }
+
+/* B-289: the notice the post's author sees on a post Soccernity removed (Figma M5, D4). */
+.post-page__removed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-page__removed-link {
+  align-self: flex-start;
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: underline;
+}

@@ -26,7 +26,7 @@ import {
   MessagingApiError,
   type Conversation,
   type Message,
-  type MessagePreview,
+  type LastMessage,
 } from "../../../api/messaging";
 import { isUnder16Restricted, UNDER_16_MESSAGE } from "../../../lib/under16";
 import { useIsMobile } from "../../../layout/useIsMobile";
@@ -140,7 +140,7 @@ function DesktopMessages({ accessToken, currentUserId }: CommunityMessagesProps)
 
   // After an edit or delete inside a chat: the row's preview follows, and the
   // row keeps its place in the list.
-  const setPreview = useCallback((id: string, preview: MessagePreview | null) => {
+  const setPreview = useCallback((id: string, preview: LastMessage | null) => {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, lastMessage: preview } : c)));
   }, []);
 

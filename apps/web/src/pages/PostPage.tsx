@@ -17,13 +17,15 @@
 // records an impression: only a carousel tile does (docs/contest-spec.md section 10b).
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { FeedApiError, getPostById, type FeedPost } from "../api/feed";
+import { FeedApiError, getPostById, isRemovedPost, type FeedPost } from "../api/feed";
+import RemovedPlaceholder from "../components/removed/RemovedPlaceholder";
+import { REMOVED_POST_TEXT } from "../components/removed/removedContent";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import PostCard from "./community/PostCard";
 import "./community/CommunityPage.css";
 import "./PostPage.css";
 
-type LoadState = "loading" | "loaded" | "not-found" | "error";
+type LoadState = "loading" | "loaded" | "removed" | "not-found" | "error";
 
 export default function PostPage() {
   const { postId } = useParams<{ postId: string }>();
@@ -41,6 +43,12 @@ export default function PostPage() {
     getPostById(token, postId)
       .then((result) => {
         if (cancelled) return;
+        // B-289: a post a moderator removed. Only its AUTHOR gets this stub (everyone else is the 404 below).
+        if (isRemovedPost(result)) {
+          setPost(null);
+          setState("removed");
+          return;
+        }
         setPost(result);
         setState("loaded");
       })
@@ -73,6 +81,14 @@ export default function PostPage() {
       {state === "loading" && (
         <div className="community-status" role="status">
           Loading…
+        </div>
+      )}
+      {state === "removed" && (
+        <div className="post-page__removed" role="status">
+          <RemovedPlaceholder text={REMOVED_POST_TEXT} variant="heading" />
+          <Link to="/" className="post-page__removed-link">
+            Back to home
+          </Link>
         </div>
       )}
       {state === "not-found" && (
