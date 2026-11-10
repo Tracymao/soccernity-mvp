@@ -7,9 +7,12 @@
 //     403 two_factor_required       two-factor is on and no code was sent
 //     403 two_factor_invalid        the code is wrong, replayed or spent
 //     403 guardian_consent_pending  a restricted-pending minor (GuardianConsentGuard)
-//     400 email_change_not_accepted ONE answer for every reason the new address cannot be used
 //     503 email_change_unavailable  no link could be built (server configuration)
-//     429                           too many attempts (Retry-After; the page never prints a wait)
+//     429                           too many attempts: the failed-password budget or the request
+//                                   cap (Retry-After; the page never prints a wait)
+//   Decision Log #476: the answer is 202 for EVERY request that passes the password and any
+//   second factor, whether or not the new address is usable or registered, so the client never
+//   learns anything about the address from the response. There is no "not accepted" answer.
 //
 //   POST /auth/email-change/confirm { token }                            (public: the secret
 //     in the emailed link is the credential)
@@ -23,7 +26,6 @@ export const EMAIL_CHANGE_WRONG_PASSWORD = "wrong_password";
 export const EMAIL_CHANGE_TWO_FACTOR_REQUIRED = "two_factor_required";
 export const EMAIL_CHANGE_TWO_FACTOR_INVALID = "two_factor_invalid";
 export const EMAIL_CHANGE_CONSENT_PENDING = "guardian_consent_pending";
-export const EMAIL_CHANGE_NOT_ACCEPTED = "email_change_not_accepted";
 export const EMAIL_CHANGE_UNAVAILABLE = "email_change_unavailable";
 export const EMAIL_CHANGE_LINK_INVALID = "email_change_link_invalid";
 
