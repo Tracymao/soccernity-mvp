@@ -99,9 +99,34 @@ export interface FeedComment {
   createdAt: string;
 }
 
+// B-289 (Decision Log #483): a comment a moderator removed stays in the thread as exactly this stub: no text,
+// no author, no `hidden` flag. It carries no actions (no hide, no report) and is not counted in commentCount.
+export interface RemovedFeedComment {
+  id: string;
+  createdAt: string;
+  removedByModeration: true;
+}
+
+export type CommentThreadItem = FeedComment | RemovedFeedComment;
+
+export function isRemovedComment(item: CommentThreadItem): item is RemovedFeedComment {
+  return "removedByModeration" in item && item.removedByModeration === true;
+}
+
 export interface CommentPage {
-  items: FeedComment[];
+  items: CommentThreadItem[];
   nextCursor: string | null;
+}
+
+// B-289: what GET /posts/:id answers to the post's AUTHOR (and only the author) when a moderator removed the
+// post: this stub and nothing else. Everyone else gets the ordinary 404.
+export interface RemovedPostStub {
+  id: string;
+  removedByModeration: true;
+}
+
+export function isRemovedPost(post: FeedPost | RemovedPostStub): post is RemovedPostStub {
+  return "removedByModeration" in post && post.removedByModeration === true;
 }
 
 // POST /posts/:id/like and DELETE /posts/:id/like both return this.
@@ -361,14 +386,14 @@ export async function recordPostView(accessToken: string, postId: string): Promi
 
 // GET /posts/:id -- one post with the per-caller viewer state. A post the caller may not see (a
 // hidden final contest entry before the reveal, a blocked author, a missing id) is the same 404.
-export async function getPostById(accessToken: string, postId: string): Promise<FeedPost> {
+export async function getPostById(accessToken: string, postId: string): Promise<FeedPost | RemovedPostStub> {
   const response = await authedFetch(`/posts/${encodeURIComponent(postId)}`, accessToken);
   if (!response.ok) {
     throw new FeedApiError(await errorMessageFrom(response, `Couldn't load that post (${response.status}).`), {
       status: response.status,
     });
   }
-  return (await response.json()) as FeedPost;
+  return (await response.json()) as FeedPost | RemovedPostStub;
 }
 
 // POST /posts/:id/view-heartbeat -- server-validated view qualification (B-093). The client reports

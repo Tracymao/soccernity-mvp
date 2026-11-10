@@ -63,10 +63,13 @@ import {
   sendMessage,
   markConversationRead,
   isDeletedMessage,
+  isRemovedMessage,
   MessagingApiError,
   type OtherParticipant,
   type ThreadMessage,
 } from "../../api/messaging";
+import RemovedPlaceholder from "../../components/removed/RemovedPlaceholder";
+import { REMOVED_MESSAGE_TEXT } from "../../components/removed/removedContent";
 import { getStoredAccessToken, decodeAccessToken } from "../../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../../lib/under16";
 import {
@@ -124,7 +127,9 @@ export default function ConversationPage() {
   // person's id comes from the router state; on a direct visit it falls back
   // to the sender of any message that is not mine.
   const otherId =
-    passedOther?.id ?? messages.find((m) => decoded && m.senderId !== decoded.sub)?.senderId ?? null;
+    passedOther?.id ??
+    messages.flatMap((m) => (!isRemovedMessage(m) && decoded && m.senderId !== decoded.sub ? [m.senderId] : []))[0] ??
+    null;
   const otherName = passedOther?.publicName ?? null;
   const messageActions = useMessageActions({
     accessToken: token ?? "",
@@ -296,6 +301,15 @@ export default function ConversationPage() {
         )}
 
         {messages.map((m) => {
+          // B-289: a message a moderator removed is the same stub for both people, with no sender, so it is
+          // drawn neutrally (left) and carries no menu, no time line, no edit or delete and no report.
+          if (isRemovedMessage(m)) {
+            return (
+              <div key={m.id} className="conversation-bubble--removed">
+                <RemovedPlaceholder text={REMOVED_MESSAGE_TEXT} variant="bubble" meta={timeFor(m.sentAt)} />
+              </div>
+            );
+          }
           const mine = m.senderId === decoded.sub;
           if (isDeletedMessage(m)) {
             return (

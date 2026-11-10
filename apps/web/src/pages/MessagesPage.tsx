@@ -22,7 +22,8 @@
 // (NewConversationPage.tsx, the recipient picker, Decision Log #139).
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { listConversations, MessagingApiError, type Conversation } from "../api/messaging";
+import { isRemovedPreview, listConversations, MessagingApiError, type Conversation } from "../api/messaging";
+import { REMOVED_MESSAGE_TEXT } from "../components/removed/removedContent";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import "./messages/MessagesPage.css";
@@ -47,8 +48,11 @@ function nameFor(conversation: Conversation): string {
 }
 
 function previewFor(conversation: Conversation): string {
-  if (!conversation.lastMessage) return "No messages yet — say hello.";
-  return conversation.lastMessage.contentText ?? "This message was deleted";
+  const last = conversation.lastMessage;
+  if (!last) return "No messages yet — say hello.";
+  // B-289: a last message a moderator removed carries no text.
+  if (isRemovedPreview(last)) return REMOVED_MESSAGE_TEXT;
+  return last.contentText ?? "This message was deleted";
 }
 
 function timeFor(iso: string): string {
