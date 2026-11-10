@@ -1,6 +1,6 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.12) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.13) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,11 +33,15 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.12 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.13 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
-  counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice. Their
+  counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice; v0.13 (2026-11-09) wrote the direct-message retention wording and the report-a-message disclosure. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.13 changelog (2026-11-09)
+
+A one-topic edit: **direct messages** (retention, and what is seen when one is reported). No other text changed. Founder decisions of 2026-11-08 and 2026-11-09 (Decision Log #478 and #477; the founder's decisions, **not counsel's**). (1) **Retention (Privacy Policy §9, Terms §8.3, Part C row 46):** a direct message is deleted **12 months after it was sent**, for everyone including under-18s; a message that is the subject of a report, or that the reporter chose as context, is kept with that report under the report's retention. This replaces the v0.12 wording that messages are "retained" with a rolling window that was only "a proposal". The 12 months is the same figure as the Contact Us form (v0.9); it is the only figure added. (2) **Disclosure (Privacy Policy §8, Part C row 47):** when a person reports a message, our safeguarding team sees that message and any messages around it that the reporter chooses to include, and nothing else of the conversation. (3) **Read-only check, no clause changed (Part C row 48):** every place the draft, the DPIA and the screen copy calls messages private, secure or encrypted was listed and checked against the code; the result is in `docs/legal-copy-v0.13-report.md`. **Every new sentence is tagged `[COPY PENDING LEGAL REVIEW]`; counsel has not seen any of it.** Two knock-on edits were needed so the draft does not contradict itself: "messages" is taken out of the lists that say content stays after an account is anonymised (Terms §8.3; the §9 "Content you posted" row), each with a pointer to the new rule. The retention job and the report-context fields exist in the back end; the report dialog step that lets the reporter choose context messages is not built, so the disclosure stays `[PROPOSAL, not yet built]`.
 
 ### v0.12 changelog (2026-11-03)
 
@@ -463,9 +467,11 @@ below). Your email address, phone number, date of birth, and club
 affiliation are cleared, your display name is replaced with "[deleted user]," your password is
 made unusable, and the account is marked permanently deleted. Specifically:
 
-- **Content you posted is not deleted.** Your posts, comments, messages, and match results stay
+- **Content you posted is not deleted.** Your posts, comments, and match results stay
   visible, attributed to "[deleted user]," because other users' replies, likes, and saves on that
-  content are not yours to take down with you.
+  content are not yours to take down with you. **Direct messages are different:** they stay visible
+  in the conversation, attributed to "[deleted user]," only until they reach 12 months after they
+  were sent, and are then deleted (Privacy Policy, Section 9). **[COPY PENDING LEGAL REVIEW]**
 - **Signals that are yours alone are removed:** your follows, likes, saves, notifications, and
   your memberships of groups, Banter Rooms, and club pages.
 - **If you organised a Grassroots team, the team survives — deliberately.** It goes dormant and
@@ -924,6 +930,15 @@ Messages you send through Soccernity's direct-messaging feature are visible to t
 in that conversation and to Soccernity's moderation staff where a report is made. Banter Room
 posts follow the same visibility rules as other community content.
 
+**If a message is reported.** **[PROPOSAL, not yet built]** When a person reports a message, our
+safeguarding team sees that message and any messages around it that the reporter chooses to include
+with the report, and nothing else of the conversation. **[COPY PENDING LEGAL REVIEW]**
+
+**How long messages are kept.** A direct message is deleted 12 months after it was sent, for
+everyone, including people under 18. A message that is the subject of a report, or that the
+reporter chose to include as context, is kept with that report, under the retention that applies
+to reports (Section 9). **[COPY PENDING LEGAL REVIEW]**
+
 **Who can message whom — summary.** A restricted-pending minor cannot send messages and cannot be
 found as a recipient. An account under 16 can neither send nor receive direct messages, even after
 guardian consent. A 16- or 17-year-old whose guardian has confirmed consent can message and be
@@ -967,7 +982,7 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | Active account data (profile, content, guardian-consent record while the account is active) | For as long as your account remains active | Account deletion request (see below), guardian refusal of consent, or a defined review at the age of majority **[PROPOSAL, not yet built]** |
 | **Account deletion — the 30-day grace period** | Your account and content are retained for **30 days** after you request deletion, in a `pending_deletion` state during which you cannot log in | Automatic, scheduled, once the 30-day window elapses |
 | **Account deletion — after the 30-day window** | Your account record is **anonymized in place**: email, phone, date of birth, and club affiliation cleared; display name replaced with "[deleted user]"; password made unusable; account marked permanently deleted. **[PROPOSAL, not yet built — Decision Log #375; counsel review pending]** 30 days after anonymisation the record is permanently deleted for (a) a minor's account whose guardian never approved it and (b) any account with no content; an anonymised account that still has content stays anonymised and is not purged until counsel has reviewed it (this replaces the earlier "no purge timer" position, Decision Log #344) | Automatic, scheduled, unless a hold applies |
-| **Content you posted** (posts, comments, messages, match results) | On **account** deletion: **not deleted.** Stays visible, attributed to "[deleted user]" | — |
+| **Content you posted** (posts, comments, match results; direct messages are covered in their own row below) | On **account** deletion: **not deleted.** Stays visible, attributed to "[deleted user]" | — |
 | **A post you delete yourself** | **Permanently deleted**, with every comment, like and save others made on it (Decision Log #360) | Immediate, on your request |
 | **Signals that are yours alone** (follows, likes, saves, notifications, group/room/club memberships) | Removed at anonymization | Automatic, at anonymization |
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
@@ -978,7 +993,7 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and — where captured — the consent-screen version and coarse device type; not the full guardian record — the guardian's name, email and relationship to the minor are **not** retained past anonymisation — and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). While the account is a minor account it follows the same retention as the rest of a minor's account data; once the account is promoted to adult, the ordinary adult retention rules apply | Promotion to adult |
 | **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. When you later delete your account, guardian data is handled on the normal guardian-data deletion timeframe — snapshotted into the consent record above, then deleted | Account deletion |
-| Messages between users | Retained; stay visible in conversations attributed to "[deleted user]" after account anonymization. A rolling retention window for messages generally is **[PROPOSAL]** (starting figure only: 12 months) | Automatic purge past the window, if adopted |
+| **Messages between users** **[PROPOSAL, not yet built — Decision Log #478]** | Deleted automatically **12 months after the message was sent**, for every user, including under-18s. After an account is anonymised its messages stay visible in the conversation, attributed to "[deleted user]," until they reach that age. A message that is the subject of a report, or that the reporter chose to include as context, is not deleted at 12 months: it is kept with that report, under the retention that applies to reports (see "Moderation reports and actions" below) **[COPY PENDING LEGAL REVIEW]**. A conversation left with no messages is deleted with its last message **[COPY PENDING LEGAL REVIEW]** | 12 months after each message was sent, automatic; or the retention of the report the message is attached to |
 | Moderation reports and actions | Data tied to a concluded investigation or moderation case is held for **6–7 years**, for accountability, legal claims and pattern detection | End of the retention period |
 | Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted |
 
@@ -1138,6 +1153,9 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 43 | **New in v0.8 — avatar, cover photo, bio and country visible to other users including minors.** Includes minors seeing other minors' profiles. Not built. Counsel status: **pending** | ToS §9.1; PP §1.3, §7 | Founder + counsel |
 | 44 | **New in v0.8 — other new processing:** authenticator-app two-factor authentication (what is stored), email to the minor on guardian approval, mandatory email verification for every user, and the guardian consent page's request summary (returns the minor's name and DOB to an unauthenticated token holder). Not built. Counsel status: **pending** | PP §1.9, §4.2 | Counsel |
 | 45 | **New in v0.10 -- Contact Us form notice (screen copy).** The short notice under the form says who reads the message (our support team), that it is kept 12 months after the last message in the enquiry and then deleted, that a safeguarding concern or complaint may be kept longer as part of a report or case record, and links to the Privacy Policy. Wording is in the block below the table. Same 12-month figure and escalation wording as row 42, so the same counsel questions apply. No reply or reply time is promised because none is decided. The form is not built. Counsel status: **pending** | Contact Us form (screen copy); PP §1.9, §9 | Temi + counsel |
+| 46 | **New in v0.13 -- direct-message retention (Decision Log #478, the founder's decision, not counsel's).** A direct message is deleted 12 months after it was sent, for everyone including minors; a message that is the subject of a report, or was chosen by the reporter as context, is kept with that report. Replaces the v0.12 "retained, rolling window proposed" wording. As built in the back end (the daily retention job): the 12 months is configurable; the edited original text goes with the message; a message deleted for everyone is deleted like any other; a conversation emptied by the job is deleted. **Counsel questions:** (a) the job does **not** pause for an investigation hold or a legal hold on an account (it protects only a message a report points at or that a reporter attached as context), whereas §9 says that during a hold "we keep the report, the reported content and messages" -- decide whether messages of a held account must also be kept; (b) a thread is one shared record, so deletion removes it for **both** participants, including a person who has not deleted their account; (c) 12 months against the 6--7 year moderation-case retention, for a message that becomes evidence only after the 12 months have passed (it is already gone); (d) the post-anonymisation purge (Decision Log #375) treats a remaining message as content that keeps an anonymised account row alive, so after 12 months an account that only had old messages becomes purgeable. Counsel status: **pending** | ToS §8.3; PP §8, §9 | Temi + counsel |
+| 47 | **New in v0.13 -- what the safeguarding team sees when a message is reported (Decision Log #477).** The reporter may attach up to 10 messages before and 10 after the reported one (20 in all, from the same conversation, visible to the reporter); staff see the reported message, the chosen ones, the sender's public name, the time, and -- for an edited message -- the **original text as well as the current text**, and a message the sender deleted for everyone is still shown to staff as reported. Nothing else of the conversation is shown. The reporter's own messages can be attached, so a reporter discloses their own messages too. Filing a report notifies nobody. **Counsel questions:** (a) the existing PP §8 sentence says messages are visible "to Soccernity's moderation staff where a report is made", which is wider than the new sentence -- left unchanged, flagged; (b) whether the original text of an edited message and the text of a message deleted for everyone must be disclosed to the reported person or the other participants; (c) a child may be reporting and attaching messages from a thread with an adult. The report dialog step that lets the reporter choose context is not built (Figma only), so the disclosure is `[PROPOSAL, not yet built]`. Counsel status: **pending** | PP §8, §1.6 | Counsel |
+| 48 | **New in v0.13 -- read-only check: are messages "private", "secure" or "encrypted"?** Messages are **not end-to-end encrypted**; the server stores the text. The draft does not call messages private, secure or encrypted anywhere, so no clause was changed (a clause saying so would be inaccurate). The only related commitments are PP §11 ("we commit to encryption at rest", itself `[PROPOSAL -- technical standard TBD]`, depending on the hosting setup) and the DPIA's "private messaging" / "private communications" labels, which describe a direct, non-public channel and not a confidentiality guarantee. Counsel to decide whether the policy should state affirmatively that messages are readable by Soccernity's systems and (when reported) its staff, and whether PP §11's at-rest commitment is true of the message table. Full list of places checked: `docs/legal-copy-v0.13-report.md`. Counsel status: **pending** | PP §8, §11 | Counsel |
 
 ### Screen copy -- Contact Us form notice **[PROPOSAL, not yet built]**
 

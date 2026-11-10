@@ -1,16 +1,35 @@
-# Soccernity — incident-response and breach-notification plan (DRAFT v0.1)
+# Soccernity — incident-response and breach-notification plan (DRAFT v0.2)
 
 > **DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE.**
-> Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context),
+> Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
+> v0.2 also reflects **#456**, **#458**, **#459**, **#477**, **#478** and **#479**),
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (2026-10-31): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
 **Marker used in this file.** `[PLACEHOLDER: …]` = a name, number or address the founder must fill in. `[UNVERIFIED — for counsel]`
 = a legal statement I could not confirm from a primary source. `[OPEN]` = a question this draft deliberately does not answer.
+**`[v0.2 CHANGED — source]`** = a passage that differs from v0.1; the source is the repo file or Decision Log entry the change
+rests on. A reader can find every difference by searching for `v0.2 CHANGED`. Everything not marked is v0.1 text, unchanged.
+
+---
+
+## v0.2 changes (what changed since v0.1, and why)
+
+*Draft for counsel review — not approved, not legal advice.* Refreshed 2026-11-09 against `origin/main` so the plan matches
+what is decided and built. Only what these five facts require was changed; the full item list with source files is in
+`docs/incident-plan-v0.2-report.md`.
+
+| # | Fact | Where it changed in this file |
+|---|---|---|
+| 1 | Decision Log **#456** settles **#438**: a guardian is told of every security action on a minor's account. | §0, §7.5 (new), §12 Q10 (was "open under counsel"; now settled), §7.4 |
+| 2 | **#458** / **#459**: a child-safety-vetted admin can withhold guardian notices; no hold ever notifies a guardian. | §1, §7.5 (new), §12 Q5 and Q18 (new) |
+| 3 | Messages are not end-to-end encrypted; a reported message and the context the reporter chose are shown to staff only, with the vetting gate for minors; 12-month retention, held with the report (**#477**, **#478**). | §1, §2, §8.2, §12 Q19 (new) |
+| 4 | Email change and two-factor recovery work as the READMEs describe. | §1, §4.1, §4.3, §4.9 |
+| 5 | Social sign-in was removed (**#479**). | Searched for any containment or data-held entry: **none existed in v0.1**, so nothing was deleted (see the report). |
 
 ---
 
@@ -32,8 +51,8 @@ rate-limiters, `instrument.ts` and `docs/deployment.md` to check what the platfo
   `isMinor` — a flag that **marks which records are children** — and asks counsel whether guardians must be told, not only users.
   DPIA §4 lists "a breach-response plan naming who notifies guardians" as a **[PROPOSAL]** with built-today = **No**.
 - Decision Log #426 says the plan is "required before any real minor's data is processed" — a **recommendation, not a decision**.
-- Decision Log #438 / #432 (B-263): whether a guardian is told when a minor's sign-in is locked is **OPEN under counsel** and is
-  decided together with this plan. See §12.
+- Decision Log #438 / #432 (B-263): whether a guardian is told when a minor's sign-in is locked was **open under counsel** in
+  v0.1 and decided together with this plan. **[v0.2 CHANGED — Decision Log #456 settles #438; see §7.5 and §12 Q10.]**
 
 **Method for the legal timelines (§6).** Timelines were checked with web search on 2026-10-31 and, where possible, read from the
 primary text. What was and was not verified is stated per row. The ICO's own website returned server errors (HTTP 503 and
@@ -63,7 +82,11 @@ whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **
 | Password | Postgres `User.passwordHash`, `AdminUser.passwordHash` | argon2id | Offline guessing only; strength depends on the password. |
 | Guardian name, email, relationship; consent status, declined/withdrawn/expired state; consent-screen version; device type; declared country | Postgres `Guardian`, later `ConsentAuditRecord` | Plain columns | Names an adult tied to a child's account — a third party's data, held for a child's sake. |
 | Guardian consent token and withdrawal token | Postgres `Guardian.consentToken`, `withdrawalToken` | **Stored as issued** (a random UUID / token), not hashed (hashing not seen in the code) | A DB read yields **live links** that can approve or withdraw a minor's consent until they expire or are used (default 72 hours for the consent link). |
-| Direct messages | Postgres `Message.contentText` | **Plain text** (no application-level encryption); under-16s are excluded from DMs, adults cannot start a thread with a minor | Private conversations, including those between minors. |
+| Direct messages | Postgres `Message.contentText` (and, once a message has been edited, `Message.originalContentText`) | **Plain text** (no application-level encryption); under-16s are excluded from DMs, adults cannot start a thread with a minor. **[v0.2 CHANGED — `services/api/src/modules/messaging/README.md`: messages are NOT end-to-end encrypted; the server stores the text, and the text as first sent is kept after an edit. Deleting a message "for me" or "for everyone" hides it but does not remove the row; only the 12-month retention job does (§8.2). No user can read an original; staff see it only on a reported message (next row).]** | Private conversations, including those between minors. |
+| A reported message, and the messages the reporter attached as context | Postgres `Report` (`targetType: 'message'`) and `ReportContextMessage` (`reportId`, `messageId`) | The message text is read from `Message` at the time. **[v0.2 CHANGED — `moderation/README.md` "Reporting a message" and "Context messages" (Decision Log #477, B-286): a reporter may attach up to 20 other messages of the same conversation (10 before, 10 after the reported one). Only staff see them, through `GET /admin/moderation/reports/:id` (moderator, superadmin); a report that concerns a minor is visible only to a child-safety-vetted admin, fresh-checked on every call. The view returns the reported message, its edit original and the chosen context messages, with the sender's public name only; no conversation id, no recipient, no other message.]** | Exposes the chosen slice of a private conversation to whoever holds a moderator or superadmin session (and, for a minor's report, a vetted one). |
+| "Withhold guardian notices" flag and its reason | Postgres `GuardianNoticeWithhold` (one row per minor's account while ON) | Plain text; the reason is staff-written. **[v0.2 CHANGED — `admin-users/README.md` "Guardian notices" and `guardian-security-notice/README.md` (Decision Log #458): set, cleared and reviewed only by a child-safety-vetted admin (fresh-read, any role); the three changes are logged in `AdminActionLog`; no endpoint a minor, guardian or non-vetted admin can call returns the flag or its reason.]** | The reason may describe a concern about a guardian or household; proposed: treat a leak as S1 (it is a safeguarding record). |
+| Email-change requests | Postgres `EmailChangeRequest` (`newEmail` lower-cased, `tokenHash` SHA-256, expiry, `usedAt`) | Link token stored **hashed**, single use, 48 hours. **[v0.2 CHANGED — `email-change/README.md` (Decision Log #476).]** | A pending new address; the token itself is not recoverable from the row. |
+| Two-factor recovery requests | Postgres `TwoFactorRecoveryRequest` (state, `executeAt`, link and cancel tokens) | Tokens stored **hashed** (SHA-256); one active request per account. **[v0.2 CHANGED — `two-factor/README.md` "Recovery" (Decision Log #455, #456, #480).]** | Shows that an account is mid-recovery; rows for ended requests are deleted 30 days after they end, unused links 30 days after expiry. |
 | Posts, comments, Bants posts, reports, Contact Us enquiries (name, email, message) | Postgres | Plain columns | Content; reports and enquiries may contain safeguarding disclosures. |
 | Photos and videos | Cloudflare R2: `private-media/` (waiting, held, rejected) and `post-media/` (approved) | Private prefix is private **only if** the public address serves `post-media/` alone — **not verified against a real bucket (B-265)** | Images of children; rejected files are kept private and never deleted (B-206, open under counsel). |
 | Refresh tokens, password-reset tokens | Redis | Stored as SHA-256 hashes | Not directly replayable from a Redis dump. Email-verification tokens: hashing **not confirmed**. |
@@ -95,7 +118,7 @@ woken*, not whether a legal duty exists (that is a separate assessment, §5 step
 
 | Class | Meaning | Examples tied to this platform |
 |---|---|---|
-| **S1 — Critical** | Confirmed or credible exposure of data that identifies children, or loss of control of a secret that protects it; or a child is in immediate danger. | A Postgres dump or backup leaves our control; **`DOB_ENCRYPTION_KEY` leaks** (alone it exposes nothing, but with any DB copy it exposes every date of birth and every two-factor secret); `JWT_SECRET` or `ADMIN_JWT_SECRET` leaks (tokens can be forged — admin forgery would reach the moderation queue and the date-of-birth read); an attacker holds a **superadmin** session; the private media prefix is publicly readable and holds images of children; guardian consent or withdrawal links exposed in bulk; messages exposed. |
+| **S1 — Critical** | Confirmed or credible exposure of data that identifies children, or loss of control of a secret that protects it; or a child is in immediate danger. | A Postgres dump or backup leaves our control; **`DOB_ENCRYPTION_KEY` leaks** (alone it exposes nothing, but with any DB copy it exposes every date of birth and every two-factor secret); `JWT_SECRET` or `ADMIN_JWT_SECRET` leaks (tokens can be forged — admin forgery would reach the moderation queue and the date-of-birth read); an attacker holds a **superadmin** session **[v0.2 CHANGED — such a session can open a reported message, its edit original and its attached context messages, and can read or clear the withhold-guardian-notices flag only if that admin is also child-safety-vetted; see §1]**; the private media prefix is publicly readable and holds images of children; guardian consent or withdrawal links exposed in bulk; messages exposed. |
 | **S2 — High** | Exposure or misuse limited to a small set of accounts, or a control failed in a way that *could* have exposed S1 data. | One admin account compromised; a suspended/closed account still reachable; an admin looked at a date of birth without a reason (audit anomaly); Redis exposed (refresh tokens are hashed, but enrolment secrets and verification tokens may be at risk); a processor tells us of its own breach; a rate limiter fails open during an attack. |
 | **S3 — Moderate** | Contained, low-sensitivity, or no personal data exposed; availability loss. | A single user's account taken over by a guessed password; a misdirected email (one guardian link sent to the wrong address); an outage of Neon / Redis / Render that blocks sign-in (Redis outage blocks sign-in, refresh, reset and verification — Decision Log #439 — and is *not* a breach). |
 | **S4 — Low / near miss** | No exposure; logged for learning. | A failed attack stopped by a limiter; a dependency advisory with no reachable path; a misconfiguration caught before deploy (the production boot checks refusing a placeholder secret are the model). |
@@ -145,7 +168,9 @@ system.** Where a tool does not exist, §4.9 says so.
 ### 4.1 End one user's sessions
 - `TokenService.revokeAllSessionsForUser(userId)` — deletes the user's refresh tokens from Redis. It runs on: password change,
   password reset, deactivate, delete, an **admin suspend or delete** of the account (`PATCH /admin/users/:id`, moderator or
-  superadmin), and `POST /auth/logout` with `allSessions`.
+  superadmin), and `POST /auth/logout` with `allSessions`. **[v0.2 CHANGED — `email-change/README.md`, `two-factor/README.md`: a
+  confirmed email change (`POST /auth/email-change/confirm`) and a completed two-factor recovery (guardian approval, or the
+  hourly sweep after the 24-hour adult wait) also end every session of the account.]**
 - **Limit:** an already-issued access token stays valid until it expires (15 minutes by default). Ending a session is therefore
   "within about 15 minutes", not instant. There is no per-request database check for ordinary users.
 
@@ -163,6 +188,14 @@ system.** Where a tool does not exist, §4.9 says so.
   (`SMEMBERS admin:refresh:admin:<id>`, then `DEL`).
 - Users: they turn two-factor off with their password; there is no admin reset for a *user's* two-factor except clearing the
   three `totp*` columns and the `UserBackupCode` rows by hand (`docs/dob-encryption-rollback.md`).
+  **[v0.2 CHANGED — `two-factor/README.md` "Recovery" (Decision Log #455, #456, #480): a user who lost both the device and the
+  backup codes now has a self-service route, `POST /auth/two-factor/recovery/request` (email and password; one answer for
+  every outcome). An adult gets a link at their own email, a 24-hour wait and a "this wasn't me" cancel link; the hourly sweep
+  then removes two-factor and ends all sessions. A minor's request goes to the confirmed guardian's email (72-hour link; the
+  guardian approves or says "I didn't expect this"), except that a minor whose guardian notices are withheld takes the adult
+  path to their own email (#480). Anyone who has the account's password and its mailbox can therefore remove its second
+  factor after the wait; a responder who suspects that must look for a `TwoFactorRecoveryRequest` row in state `pending` or
+  `waiting` (§4.9 notes there is no staff tool to cancel one).]**
 
 ### 4.4 Rotate the signing secrets (kill every session at once)
 - Changing `JWT_SECRET` invalidates every **user** access token and changing `ADMIN_JWT_SECRET` every **admin** access token on the
@@ -224,6 +257,10 @@ opened.
 - No **global sign-out command**, no **maintenance mode**, no **IP block list**.
 - No **secret-scanning in production** beyond GitHub's repository settings (founder-reported as on; Decision Log #441 (d)).
 - No **status page** or user-facing incident channel.
+- **[v0.2 CHANGED — `email-change/README.md`, `two-factor/README.md`]** No staff tool to **cancel a user's pending email change or
+  two-factor recovery request**. A user can cancel a recovery with the cancel link; a responder otherwise has only the
+  database (update the `TwoFactorRecoveryRequest` state, delete the `EmailChangeRequest` row) — `[UNVERIFIED]` inferred from the
+  modules having no admin route, never tried.
 - **Sentry, Postmark, Upstash alerting, Render, Neon: none live.** This plan cannot be exercised until they are.
 
 ---
@@ -350,6 +387,9 @@ does not (so far as verified) say *who* is told when the data subject is a child
   but has not necessarily been approved. An account that turned 18 keeps a `Guardian` row (consent history) but the guardian is
   no longer the right person — `isMinor` must be read **at the time of the incident**, not from an old flag (the age sweep runs
   daily, so the flag can lag by about 24 hours).
+- **[v0.2 CHANGED — Decision Log #456, #458, #459]** Guardians are already told about many things on a minor's account (§7.5).
+  A breach notice must be read in that light, and a minor whose account has the withhold flag has been deliberately **not** told
+  those things; see §7.5 and Q18 before any guardian notice for that account.
 - **Never include in the message:** passwords, links that sign someone in, the child's date of birth, anything that would let a
   recipient act on the account. Use fixed, plain wording (§10). Do not link to a page that asks for a password.
 - **Do not use the message to ask the child for anything.** Direct them to the guardian or to `support@soccernity.com`.
@@ -377,7 +417,43 @@ does not (so far as verified) say *who* is told when the data subject is a child
 - **Sending itself is processing:** Postmark sees the recipient list. `[OPEN]` DPIA treatment.
 
 ### 7.4 Special case — a minor's sign-in is locked (Decision Log #438)
-Not an incident class here. See §12, Q10 for the options; this plan does not pick one.
+Not an incident class here. **[v0.2 CHANGED — Decision Log #456 settles #438: the guardian of a minor is emailed when a sign-in
+lock trips, at most once per account per 24 hours; see §7.5 and §12 Q10.]**
+
+### 7.5 What guardians are already told, and when they are deliberately not **[v0.2 CHANGED — new section]**
+
+*Draft for counsel review — not approved, not legal advice.* Source: `guardian-security-notice/README.md`,
+`two-factor/README.md`, `email-change/README.md`, Decision Log #456 (founder, 2026-11-01), #458 and #459.
+
+**Decided and built (the platform, not this plan).** When the account holder is a **minor** and a **confirmed** guardian email
+is on file, the guardian gets a short email for each security or safety action: two-factor turned on or off, backup codes
+regenerated, password changed or reset, **email address changed**, a **sign-in lock** (at most once per account per 24 hours),
+and the existing guardian-email-replaced notice; for an actual two-factor recovery the guardian's own link email is the one
+message. Separately, for **platform safety actions** (content removed, warning, suspension or its reversal, account removal,
+username removed or restored, room deactivated, media or profile picture not approved, appeal upheld or overturned) the
+guardian is told the **kind** of action and when — never the reason, the rule, a report, or who reported. Two rules are fixed:
+a minor's **own** reports, blocks and mutes **never** notify a guardian (a child reporting may be reporting someone in their own
+household), and **no hold ever notifies a guardian** — not a legal hold, a bad-faith hold, lifting one, or the report-derived
+account hold (#459).
+
+**What this means for who is told in an incident (proposals for counsel; none is a legal conclusion):**
+- A breach notice (§7.1–§7.3) is a **separate, manual message**. The code that sends the notices above does not send it and does
+  not gate it.
+- If an attacker acted on a minor's account (changed the password or email, turned two-factor off), the guardian of a minor
+  **without** the withhold flag may already have received one of the notices above. The responder can check
+  `Guardian.consentStatus` for the account, and should not assume the guardian first learns of it from us (the platform keeps
+  no record of notices sent, so whether one went out is `[UNVERIFIED]` and must be asked of Postmark).
+- **Withheld accounts.** A child-safety-vetted admin can switch "withhold guardian notices" on for one minor's account, with a
+  written reason (#458). While it is on, **every** notice above is skipped silently (an internal log line only), and
+  guardian-assisted two-factor recovery is replaced by the adult path to the minor's own email (#480). Notices skipped are
+  **not** sent when the flag is cleared. The consent request, withdrawal, expiry and turned-18 emails, and the
+  guardian-email-replaced notice, are **not** affected by the flag.
+- **`[OPEN — Q18]`** Does the flag also stop a **breach** notice to that guardian? The flag's purpose (a safeguarding concern
+  about the guardian or household) argues for asking the vetted admin who set it, and the reason is staff-only, so the
+  safeguarding lead cannot see it unless vetted. The code does not answer this; this draft does not either.
+- **Proposal, for counsel to adjust:** before sending any guardian notice for an affected minor, the safeguarding lead (a
+  child-safety-vetted admin) checks whether `GuardianNoticeWithhold` exists for the account and decides the route (guardian,
+  minor only, or counsel first) in writing in the incident log.
 
 ---
 
@@ -403,6 +479,8 @@ Not an incident class here. See §12, Q10 for the options; this plan does not pi
 | Database state | Neon | Take a **branch / snapshot** at once (Neon branches and point-in-time restore exist per `docs/deployment.md` and the rotation procedure's step 0); do not restore over production. |
 | Admin audit trail | `AdminActionLog` | SQL export (no read endpoint); includes `user.dob_viewed`, `admin_user.two_factor_reset`, hold, revoke and report actions. |
 | Redis state | Upstash | Note key names only (`auth:refresh:*`, `admin:refresh:*`, `auth-limit:*`); values are hashes or counters. Do **not** dump values into a ticket. |
+| Messages **[v0.2 CHANGED — `messaging/README.md` "Retention" (Decision Log #478)]** | Postgres `Message`, `ReportContextMessage` | A daily job (04:00) **deletes every direct message 12 months after it was sent**, minors and adults alike, with its edit original; it skips a message that a `Report` points at or a `ReportContextMessage` row attaches. It runs inside an incident like any other night. **Take the Neon snapshot first** (a message past 12 months may be gone by the next morning); there is no pause switch in the code (`[UNVERIFIED]` — a very large `MESSAGE_RETENTION_MONTHS` is the only lever and has not been tried). A legal hold on an account does **not** stop the job (Q19). |
+| Email-change and recovery requests **[v0.2 CHANGED]** | Postgres `EmailChangeRequest`, `TwoFactorRecoveryRequest` | Note the rows and states for the affected accounts before cancelling or deleting anything. Ended recovery rows are removed 30 days after they end. |
 | Media | R2 `private-media/` and `post-media/` | Object list and access logs if enabled `[UNVERIFIED]`. |
 | Repository history | GitHub | Commit hashes; a secret ever committed is treated as exposed. |
 | Sentry events | Sentry | Inactive until the DSN is real. |
@@ -560,12 +638,12 @@ trade-offs; the draft deliberately does not pick one.**
 | **Q2** | When two regimes apply to one breach, is a single filing with merged contents acceptable, or two separate filings on separate clocks? |
 | **Q3** | What exactly makes Soccernity "aware" for the 72-hour clock in each regime? The wording could not be read from the ICO page. Does a credible but unconfirmed report start it? |
 | **Q4** | Is a **leaked database copy without the encryption key** a notifiable breach, and would the Art. 34(3)(a) "unintelligible" exception apply to the date of birth (encrypted) but not to email, name, `isMinor` and messages (not encrypted)? What if the key may also have leaked? |
-| **Q5** | **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? |
+| **Q5** | **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? **[v0.2 CHANGED — still open. #456 tells guardians of security actions, not of breaches; see §7.5.]** |
 | **Q6** | For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
 | **Q7** | Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
 | **Q8** | Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. |
 | **Q9** | Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
-| **Q10** | **Decision Log #438 (B-263): is a guardian told when a minor's sign-in is locked?** See the options below. |
+| **Q10** | **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes** — the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged `[COPY PENDING LEGAL REVIEW]` in the platform's manifest, and no counsel position is recorded here. |
 | **Q11** | Who else is told: police, insurers, the platform's processors' own regulators? Obligations to report suspected child-safety crimes? |
 | **Q12** | Is one-person incident leadership acceptable at launch, or must a second named responder exist? Does counsel require a **data-protection officer** (UK GDPR Art. 37; NDPA's DPO duty for controllers of major importance, GAID Art. 11) — thresholds not verified here. |
 | **Q13** | Nigeria: does the NDPA require Soccernity to register as a controller "of major importance"? That decides some reporting duties (GAID Arts. 8–9). Not assessed. |
@@ -574,26 +652,23 @@ trade-offs; the draft deliberately does not pick one.**
 | **Q16** | Privilege: how to route the assessment so that it is privileged in each jurisdiction? |
 | **Q17** | Processor contracts: do the Art. 28 (UK/EU) and NDPA data-processing terms with Render, Neon, Upstash, Postmark, Sentry, R2 and AWS give us the notice speed this plan assumes (a processor must tell the controller "without undue delay")? Cross-border transfer assessments (DPIA R11). |
 
-### Q10 in full — a guardian notice when a minor's sign-in is locked (Decision Log #438, B-263)
+### Q10 — settled in v0.2, v0.1 options kept for the record **[v0.2 CHANGED]**
 
-**What exists today (built, PR #491):** the account's **own** email address receives one lockout notice per account per 24 hours
-when the failed-attempt budget for an account-and-IP pair is spent. For a minor's account, **nobody else is told.** The founder
-decided (2026-10-29) not to build a guardian notice now. The platform is not live. The options, **not ranked and not
-recommended**:
+*Draft for counsel review — not approved, not legal advice.* v0.1 set out five options (A do nothing; B every lockout; C only
+when the account-wide ceiling of 20 failed attempts in 24 hours trips; D a batched or other channel; E under-13 or under-16
+accounts only) and picked none. The founder has since decided (Decision Log #456) that the guardian of a minor is told of
+every security action on the account, **including a sign-in lock, at most once per account per 24 hours** — the broadest of
+those options, throttled. Withheld accounts (#458) are excluded by the platform, not by this plan (§7.5). Questions this
+decision leaves for counsel — not reopened here — are the privacy-notice and DPIA treatment of the guardian's email for this
+purpose, and whether a stranger who can trigger a lock by guessing a password can in effect cause an email to a guardian
+(the throttle bounds it to one per day per account).
 
-| Option | What it is | For | Against / cost |
-|---|---|---|---|
-| **A. Do nothing (current)** | Only the account email is told. | No new use of the guardian's email; no noise; nothing to build or review; waiting costs nothing while not live. | A guardian never learns that a child's account is being attacked; a child may not tell anyone. If the child's email is itself the attacker's (a compromised mailbox), the notice goes to the wrong person. |
-| **B. Notify the guardian on every lockout** | Each time a pair budget is spent, also email the `Guardian` address. | Maximum visibility for the guardian. | A **new purpose** for the guardian's email (counsel on wording, the privacy notice, the DPIA); **noisy** (a child mistyping a password would email an adult); a **stranger can trigger it** by guessing a child's password from anywhere, so an attacker can spam a guardian; reveals to a possibly wrong/stale guardian address that the account exists. |
-| **C. Notify the guardian only when the account-wide ceiling trips** (the narrower alternative recorded for counsel) | When 20 failed attempts across addresses in 24 hours is reached, email the guardian at most once a day. | Targets the sign of a *distributed* attack on a child's account rather than a mistyped password; far less noise; a defined cap. | Still a new use of the guardian's email; still triggerable by a stranger (20 guesses from many addresses); the same wrong-address risk; a distributed attacker may stay just under 20; the ceiling is shared with the real owner, so the owner can be locked out while the guardian is told. |
-| **D. Tell the guardian at the next consent-related touch point** (an in-app notice to a guardian is not possible; they have no account) or **add the lockout to a periodic guardian summary** | A different channel or batching. | Lower noise. | Needs a new feature that does not exist (no guardian account, no summary email); delays the signal. |
-| **E. Notify only under-13 or under-16 accounts' guardians** | Narrow by tier. | Matches the under-16 tier already in the product (Decision Log #346); fewer sends. | Still B or C within that group; creates two classes of child; the under-16 line rests on self-declared date of birth. |
+### New questions added in v0.2 **[v0.2 CHANGED]**
 
-**Trade-offs counsel must weigh:** purpose limitation and the privacy notice for a guardian's email; whether a lockout is a
-"security incident affecting a child" that warrants telling a guardian at all; proportionality (a lockout is not a breach — no
-data was accessed); the risk that the notice itself becomes an attack vector (spam, social engineering, confirming that an account
-exists); the wrong-address problem; and the relationship to this plan's breach notices (§7), which already contemplate emailing
-guardians for genuine breaches. **The draft takes no position.**
+| # | Question |
+|---|---|
+| **Q18** | Does the "withhold guardian notices" flag (#458) also stop a **breach** notice to that guardian? Who decides, given the reason is visible only to child-safety-vetted admins? (§7.5) |
+| **Q19** | Direct messages are deleted after 12 months (#478) with their edit originals, except where a report points at them; a **legal hold** on an account does not stop that job. If an incident is discovered after the retention window, or while a hold is in force, may the platform be unable to show which messages were exposed — and does counsel want the job paused while an incident or hold is open? Messages are not end-to-end encrypted, so a database leak exposes the text of every message still within 12 months. |
 
 ---
 
@@ -607,6 +682,13 @@ guardians for genuine breaches. **The draft takes no position.**
 `docs/admin-two-factor-recovery.md`; `docs/deployment.md`; `services/api/src/validate-runtime-env.ts`;
 `services/api/src/instrument.ts`; `services/api/prisma/schema.prisma`; the token stores and revocation call sites;
 `services/api/src/modules/admin-action-log`.
+
+**Repository sources added in v0.2:** `services/api/src/modules/guardian-security-notice/README.md` and its constants;
+`services/api/src/modules/two-factor/README.md` ("Recovery", "Recovery and the withhold flag");
+`services/api/src/modules/email-change/README.md`; `services/api/src/modules/messaging/README.md` ("Reporting a message",
+"Retention", "Edit, delete for me, delete for everyone"); `services/api/src/modules/moderation/README.md` ("Reporting a
+message in a chat", "Context messages"); `services/api/src/modules/admin-users/README.md` ("Guardian notices"); Decision Log
+entries #455–#459 and #476–#480 as recorded in `CLAUDE.md`. Not re-read in v0.2: the docx itself.
 
 **External sources:**
 - UK GDPR Art. 33 — <https://www.legislation.gov.uk/eur/2016/679/article/33> (via search summary; not read in full)
@@ -627,5 +709,5 @@ controller of major importance; everything for the US and EU.
 
 ---
 
-*End of draft v0.1. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
+*End of draft v0.2. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
 Log Book, the register and the Build Plan were not edited by this draft.*
