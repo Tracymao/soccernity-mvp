@@ -83,13 +83,73 @@ describe('MessageRetentionService.purgeExpired', () => {
     expect(del.sql).toContain('m."sentAt" <');
     expect(del.sql).toContain(`r."targetType" = 'message' AND r."targetId" = m."id"`);
     expect(del.sql).toContain(`c."messageId" = m."id"`);
-    expect(del.values).toEqual([['a', 'b'], CUTOFF]);
+    expect(del.values).toEqual([['a', 'b'], CUTOFF, NOW]);
   });
 
-  it('does not filter by age of the sender, edit state, deletedForEveryone or minor status (applies to all)', async () => {
+  // Decision Log #482. The predicate is findActiveAccountHold's (account-hold.rules.ts): liftedAt IS NULL AND
+  // (expiresAt IS NULL OR expiresAt > now), type legal_hold only. The behaviour (held sender, held other
+  // participant, lifted, expired, bad_faith, report-derived, hold placed in between) runs on real rows in
+  // test/message-retention.e2e-spec.ts; here the text and parameters of both statements are pinned.
+  describe('legal-hold exemption (Decision Log #482)', () => {
+    const HOLD_PREDICATES = [
+      `FROM "AccountHold" h`,
+      `h."type" = 'legal_hold'`,
+      `h."liftedAt" IS NULL`,
+      `(h."expiresAt" IS NULL OR h."expiresAt" >`,
+      `h."userId" = m."senderId"`,
+      `FROM "Conversation" cv`,
+      `cv."id" = m."conversationId" AND h."userId" = ANY(cv."participantIds")`,
+    ];
+
+    it('the SELECT excludes a message whose sender, or any other participant of its conversation, has an active legal hold', async () => {
+      const { service, raw } = build();
+      await service.purgeExpired(NOW);
+      expect(raw[0].sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM "AccountHold" h/);
+      for (const p of HOLD_PREDICATES) expect(raw[0].sql).toContain(p);
+    });
+
+    it('repeats the whole hold test in the DELETE, so a legal hold placed after the SELECT still protects the message', async () => {
+      const { service, raw, queue } = build();
+      queue.push([{ id: 'a' }], [{ conversationId: 'c1' }]);
+      await service.purgeExpired(NOW);
+      expect(raw[1].sql).toContain('DELETE FROM "Message" m');
+      expect(raw[1].sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM "AccountHold" h/);
+      for (const p of HOLD_PREDICATES) expect(raw[1].sql).toContain(p);
+    });
+
+    it('evaluates "active" at the same injected instant the cutoff comes from (held hold expiring after NOW, expired before it)', async () => {
+      const { service, raw, queue } = build();
+      queue.push([{ id: 'a' }], []);
+      await service.purgeExpired(NOW);
+      expect(raw[0].values).toEqual([CUTOFF, NOW, MESSAGE_RETENTION_MAX_PER_RUN + 1]);
+      expect(raw[1].values).toEqual([['a'], CUTOFF, NOW]);
+    });
+
+    it('exempts ONLY legal_hold: a bad_faith hold and report-derived holds are not mentioned in either statement', async () => {
+      const { service, raw, queue } = build();
+      queue.push([{ id: 'a' }], []);
+      await service.purgeExpired(NOW);
+      for (const stmt of raw) {
+        expect(stmt.sql).not.toContain('bad_faith');
+        expect(stmt.sql).not.toMatch(/h\."type" (<>|!=|IN)/);
+        // Report-derived holds are not read here; the only Report test is the specific reported-message guard.
+        expect(stmt.sql).not.toContain('"appealStatus"');
+        expect(stmt.sql).not.toContain('"reviewedAt"');
+        expect(stmt.sql).not.toContain('"reportId"');
+      }
+    });
+
+    it('has no catch-up logic: nothing is recorded about skipped messages, so a lifted or expired hold is simply not in the next SELECT', async () => {
+      const { service, raw } = build();
+      await service.purgeExpired(NOW);
+      expect(raw[0].sql).not.toMatch(/INSERT|UPDATE|heldAt|retentionHold/i);
+    });
+  });
+
+  it('does not filter by edit state, deletedForEveryone or minor status (applies to all); the only sender test is the legal-hold exemption', async () => {
     const { service, raw } = build();
     await service.purgeExpired(NOW);
-    for (const forbidden of ['isMinor', 'deletedForEveryoneAt', 'editedAt', 'originalContentText', 'senderId']) {
+    for (const forbidden of ['isMinor', 'deletedForEveryoneAt', 'editedAt', 'originalContentText']) {
       expect(raw[0].sql).not.toContain(forbidden);
     }
   });
