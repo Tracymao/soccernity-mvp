@@ -45,6 +45,20 @@ export interface MessagePreview {
   sentAt: string;
 }
 
+// B-289 (Decision Log #483): the last-message preview of a conversation whose
+// latest message a moderator removed. Exactly this, no text and no sender.
+export interface RemovedMessagePreview {
+  id: string;
+  sentAt: string;
+  removedByModeration: true;
+}
+
+export type LastMessage = MessagePreview | RemovedMessagePreview;
+
+export function isRemovedPreview(preview: LastMessage): preview is RemovedMessagePreview {
+  return "removedByModeration" in preview && preview.removedByModeration === true;
+}
+
 // GET /conversations, POST /conversations (ConversationView). `unreadCount`
 // and `lastMessage` are computed per-caller, server-side, on every read --
 // never derived client-side.
@@ -53,7 +67,7 @@ export interface Conversation {
   otherParticipant: OtherParticipant | null;
   lastMessageAt: string;
   createdAt: string;
-  lastMessage: MessagePreview | null;
+  lastMessage: LastMessage | null;
   unreadCount: number;
 }
 
@@ -89,10 +103,27 @@ export interface DeletedMessage {
   contentText: null;
 }
 
-export type ThreadMessage = Message | DeletedMessage;
+// B-289 (Decision Log #483): a message a moderator removed. It stays in the
+// thread for BOTH people as exactly this: no text, no original, no edit data,
+// no read time, and deliberately no senderId or conversationId (so the client
+// cannot tell whose it was). The user cannot edit, delete or report it.
+export interface RemovedMessage {
+  id: string;
+  sentAt: string;
+  removedByModeration: true;
+}
+
+export type ThreadMessage = Message | DeletedMessage | RemovedMessage;
+
+// A message that still carries its sender (every kind except the moderator's stub).
+export type SenderMessage = Message | DeletedMessage;
+
+export function isRemovedMessage(message: ThreadMessage): message is RemovedMessage {
+  return "removedByModeration" in message && message.removedByModeration === true;
+}
 
 export function isDeletedMessage(message: ThreadMessage): message is DeletedMessage {
-  return message.deletedForEveryone === true;
+  return !isRemovedMessage(message) && message.deletedForEveryone === true;
 }
 
 export interface MessagePage {
@@ -106,6 +137,8 @@ export const MESSAGE_EDIT_WINDOW_CLOSED_CODE = "message_edit_window_closed";
 export const MESSAGE_NOT_EDITABLE_CODE = "message_not_editable";
 export const MESSAGE_EDIT_NOT_SENDER_CODE = "message_edit_not_sender";
 export const MESSAGE_DELETE_NOT_SENDER_CODE = "message_delete_not_sender";
+// B-289: edit or delete refused because a moderator removed the message since the page loaded.
+export const MESSAGE_REMOVED_CODE = "message_removed";
 
 // The latest edit's result: the fields an edit can change.
 export interface EditMessageResult {

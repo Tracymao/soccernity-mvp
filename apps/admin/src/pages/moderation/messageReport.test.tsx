@@ -218,11 +218,12 @@ describe("Report Detail: message target", () => {
     expect(screen.getByRole("heading", { name: /Report #/, level: 1 }).textContent).not.toContain("Training");
   });
 
-  it("has no Delete message control, and says Remove Content does not delete the message", async () => {
+  it("has no Delete message control, and says what Remove Content does to a message (B-289)", async () => {
     renderDetail(<ReportDetailPage />, report({ reportedMessage: message() }));
     await screen.findByText("Reported content");
     expect(screen.queryByRole("button", { name: /delete message/i })).toBeNull();
-    expect(screen.getByText(/can’t delete a message yet/i).textContent).toMatch(/only records the decision/);
+    expect(screen.queryByText(/can’t delete a message yet/i)).toBeNull();
+    expect(screen.getByText(/Remove Content hides it from everyone but you and the other moderators/i)).toBeTruthy();
   });
 
   it("leaves every action as it is: the same buttons as any other report, none for a room", async () => {

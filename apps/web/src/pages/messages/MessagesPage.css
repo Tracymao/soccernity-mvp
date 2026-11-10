@@ -377,6 +377,12 @@
   border-color: var(--sn-brand-green);
 }
 
+/* B-289: a message a moderator removed. The placeholder draws its own pill. */
+.conversation-bubble--removed {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
 .conversation-bubble__text {
   margin: 0;
   font: 400 15px/1.5 "Inter", sans-serif;

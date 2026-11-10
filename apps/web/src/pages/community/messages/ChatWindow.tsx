@@ -36,12 +36,15 @@ import {
   markConversationRead,
   MessagingApiError,
   isDeletedMessage,
+  isRemovedMessage,
   type Conversation,
   type Message,
-  type MessagePreview,
+  type LastMessage,
   type ThreadMessage,
 } from "../../../api/messaging";
 import { isUnder16Restricted, UNDER_16_MESSAGE } from "../../../lib/under16";
+import RemovedPlaceholder from "../../../components/removed/RemovedPlaceholder";
+import { REMOVED_MESSAGE_TEXT } from "../../../components/removed/removedContent";
 import chatMinimise from "../../../assets/icons/chat-minimise.svg";
 import chatClose from "../../../assets/icons/chat-close.svg";
 import chatExpand from "../../../assets/icons/chat-expand.svg";
@@ -74,7 +77,7 @@ export interface ChatWindowProps {
   onSent: (conversationId: string, message: Message) => void;
   // After an edit or a delete, the new last message for the sidebar preview
   // (null when no message is left to show).
-  onPreviewChange?: (conversationId: string, preview: MessagePreview | null) => void;
+  onPreviewChange?: (conversationId: string, preview: LastMessage | null) => void;
   // "Delete chat": the chat closes and leaves the sidebar.
   onChatDeleted?: (conversationId: string) => void;
 }
@@ -137,7 +140,10 @@ export default function ChatWindow({
   useEffect(() => {
     if (changeTick === 0) return;
     const last = [...messages].reverse().find((m) => !isDeletedMessage(m));
-    if (last && !isDeletedMessage(last)) {
+    if (last && isRemovedMessage(last)) {
+      // B-289: the sidebar preview of a removed last message is the same stub the server sends.
+      onPreviewRef.current?.(conversationId, { id: last.id, sentAt: last.sentAt, removedByModeration: true });
+    } else if (last && !isDeletedMessage(last)) {
       onPreviewRef.current?.(conversationId, {
         contentText: last.contentText,
         senderId: last.senderId,
@@ -301,11 +307,23 @@ export default function ChatWindow({
             )}
 
             {messages.map((m, i) => {
-              const mine = m.senderId === currentUserId;
               const prev = messages[i - 1];
               const showTime =
                 !prev || new Date(m.sentAt).getTime() - new Date(prev.sentAt).getTime() >= TIME_LABEL_GAP_MS;
-              const startsRun = !prev || prev.senderId !== m.senderId || showTime;
+              // B-289: a message a moderator removed has no sender, so it is drawn neutrally (left, no avatar
+              // run logic) with no menu, no edit, no delete and no report.
+              if (isRemovedMessage(m)) {
+                return (
+                  <div key={m.id} className="chat-message-wrap">
+                    {showTime && <p className="chat-message-time">{messageTimeLabel(m.sentAt)}</p>}
+                    <div className="chat-message">
+                      <RemovedPlaceholder text={REMOVED_MESSAGE_TEXT} variant="bubble" />
+                    </div>
+                  </div>
+                );
+              }
+              const mine = m.senderId === currentUserId;
+              const startsRun = !prev || isRemovedMessage(prev) || prev.senderId !== m.senderId || showTime;
               const deleted = isDeletedMessage(m);
               return (
                 <div key={m.id} className="chat-message-wrap">

@@ -33,7 +33,12 @@ import {
   getReportById,
   isChildSafetyVettingRequiredError,
   reasonCategoryLabel,
-  REPORT_ACTIONS,
+  REPORT_ACTION_TAKEN_LABELS,
+  actionsForTarget,
+  canRemoveContent,
+  errorCodeOf,
+  CONTENT_REMOVAL_NOT_APPLICABLE_CODE,
+  isContentRemoved,
   REPORT_ACTION_LABELS,
   type HoldView,
   type Report,
@@ -147,6 +152,10 @@ export default function ReportDetailPage() {
     } catch (err) {
       if (isChildSafetyVettingRequiredError(err)) {
         setActionRestricted(true);
+      } else if (errorCodeOf(err) === CONTENT_REMOVAL_NOT_APPLICABLE_CODE) {
+        // The server refuses Remove Content for a target that is not a post, comment or message. The page does
+        // not offer it there, so this is only a stale or hand-made request.
+        setActionError("Content can only be removed for a post, a comment or a message.");
       } else {
         setActionError(
           err instanceof AdminApiError ? err.message : "Couldn’t record that action. Please try again.",
@@ -237,6 +246,14 @@ export default function ReportDetailPage() {
             <span className="mod-field__label">Target id</span>
             <span className="mod-field__value">{report.targetId}</span>
           </div>
+          {isContentRemoved(report) ? (
+            <div className="mod-field">
+              <span className="mod-field__label">Content</span>
+              <span className="mod-field__value">
+                <span className="mod-pill mod-pill--strong">Content removed</span>
+              </span>
+            </div>
+          ) : null}
           {report.targetType === "message" ? <ReportedMessageFields message={report.reportedMessage} /> : null}
         </div>
 
@@ -281,6 +298,14 @@ export default function ReportDetailPage() {
             <span className="mod-field__label">Status</span>
             <span className="mod-field__value">{report.status}</span>
           </div>
+          {report.actionTaken ? (
+            <div className="mod-field">
+              <span className="mod-field__label">Action taken</span>
+              <span className="mod-field__value">
+                {REPORT_ACTION_TAKEN_LABELS[report.actionTaken as ReportAction] ?? report.actionTaken}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {alreadyReviewed ? (
@@ -336,7 +361,7 @@ export default function ReportDetailPage() {
               </p>
             ) : null}
             <div className="mod-action-row">
-              {REPORT_ACTIONS.filter((action) => action !== "room_deactivated" || report.targetType === "banter_room").map((action) => (
+              {actionsForTarget(report.targetType).map((action) => (
                 <button
                   key={action}
                   type="button"
@@ -355,13 +380,10 @@ export default function ReportDetailPage() {
             </div>
             <p className="mod-note">
               Once actioned, both the reporter and the reported user are notified of the outcome.
-              Recording an action does not by itself remove content or suspend an account.
+              {canRemoveContent(report.targetType)
+                ? " Remove Content hides it from everyone but you and the other moderators; the original is kept as evidence. The other actions only record the decision and do not suspend an account."
+                : " Recording an action does not by itself remove content or suspend an account."}
             </p>
-            {report.targetType === "message" ? (
-              <p className="mod-note">
-                Moderators can’t delete a message yet. Remove Content only records the decision; the message stays as it is.
-              </p>
-            ) : null}
             <CaseLevelHoldCallout />
           </div>
         )}

@@ -7,6 +7,9 @@ import {
   deleteMessage,
   editMessage,
   isDeletedMessage,
+  isRemovedMessage,
+  MESSAGE_REMOVED_CODE,
+  MessagingApiError,
   type DeleteMessageScope,
   type Message,
   type ThreadMessage,
@@ -66,6 +69,19 @@ export function useMessageActions({
   // on every load.
   const [changeTick, setChangeTick] = useState(0);
 
+  // The server refused an edit or delete with message_removed: a moderator removed it since the page loaded.
+  // Show the stub the next load would show, and close whatever was open for it.
+  const markRemoved = useCallback(
+    (id: string) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { id: m.id, sentAt: m.sentAt, removedByModeration: true as const } : m)),
+      );
+      setEdit((e) => (e && e.id === id ? null : e));
+      setDel((d) => (d && d.id === id ? null : d));
+    },
+    [setMessages],
+  );
+
   const openMenu = useCallback((id: string) => setMenuId(id), []);
   const closeMenu = useCallback(() => setMenuId(null), []);
 
@@ -96,7 +112,7 @@ export function useMessageActions({
       const result = await editMessage(accessToken, conversationId, id, text);
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === id && !isDeletedMessage(m)
+          m.id === id && !isDeletedMessage(m) && !isRemovedMessage(m)
             ? { ...m, contentText: result.contentText, editedAt: result.editedAt ?? new Date().toISOString() }
             : m,
         ),
@@ -104,6 +120,10 @@ export function useMessageActions({
       setEdit(null);
       setChangeTick((t) => t + 1);
     } catch (err) {
+      if (err instanceof MessagingApiError && err.code === MESSAGE_REMOVED_CODE) {
+        markRemoved(id);
+        return;
+      }
       const failure = editFailure(err);
       setEdit((e) => (e && e.id === id ? { ...e, status: failure.status, error: failure.text } : e));
     }
@@ -142,7 +162,7 @@ export function useMessageActions({
         scope === "me"
           ? prev.filter((m) => m.id !== id)
           : prev.map((m) =>
-              m.id === id
+              m.id === id && !isRemovedMessage(m)
                 ? {
                     id: m.id,
                     conversationId: m.conversationId,
@@ -159,6 +179,10 @@ export function useMessageActions({
       setDel(null);
       setChangeTick((t) => t + 1);
     } catch (err) {
+      if (err instanceof MessagingApiError && err.code === MESSAGE_REMOVED_CODE) {
+        markRemoved(id);
+        return;
+      }
       setDel((d) => (d && d.id === id ? { ...d, status: "error", error: deleteFailure(err) } : d));
     }
   }

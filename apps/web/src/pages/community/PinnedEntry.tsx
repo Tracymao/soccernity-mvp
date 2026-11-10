@@ -18,7 +18,7 @@
 // Only a FINAL entry is lockable. A weekly entry that is still pinned is an ordinary card.
 import { useEffect, useState } from "react";
 import { getCurrentContest, getPinnedEntry, type PinnedContestEntry } from "../../api/contest";
-import { getPostById, type FeedPost } from "../../api/feed";
+import { getPostById, isRemovedPost, type FeedPost } from "../../api/feed";
 import PostCard from "./PostCard";
 import "./CommunityPage.css";
 import "./PinnedEntry.css";
@@ -48,6 +48,9 @@ export default function PinnedEntry({ accessToken, userId, currentUserId }: Prop
         const { entry } = await getPinnedEntry(accessToken, userId);
         if (!entry) return;
         const post = await getPostById(accessToken, entry.postId);
+        // B-289: the post's own author gets a "removed" stub here instead of a 404. A pinned entry that
+        // Soccernity removed shows nothing on the profile, exactly as a hidden one does.
+        if (isRemovedPost(post)) return;
         let locked = false;
         if (entry.kind === "final") {
           try {

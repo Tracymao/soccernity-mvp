@@ -13,8 +13,9 @@
 //  * R12 says "Yes, at 08:09 (within the 15 minutes)"; whether the edit was inside the window is not returned and
 //    is not worked out here, so only "Yes, at <time>" is shown.
 //
-// This card is read-only. Nothing here removes the message: a moderator cannot delete a message today, and none
-// of the wording below implies it.
+// This card is read-only. Removing the message is the Remove Content action on the report (B-289, Decision Log
+// #483: a soft removal, the text stays here for review); the "Content removed" indicator is drawn by
+// ReportDetailPage from `removedByModerationAt`.
 import type { ReactNode } from "react";
 import type { ReportedMessage } from "../../api/moderation";
 import { formatDateTime } from "./moderationShared";

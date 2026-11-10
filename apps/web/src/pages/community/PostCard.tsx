@@ -28,7 +28,9 @@ import {
   unlikePost,
   unsavePost,
   type CommentPermission,
+  type CommentThreadItem,
   type FeedComment,
+  isRemovedComment,
   type FeedPost,
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
@@ -36,6 +38,8 @@ import PostMedia from "./PostMedia";
 import { useViewHeartbeat } from "../../lib/useViewHeartbeat";
 import OwnPostMenu from "./OwnPostMenu";
 import ReportAction from "./ReportAction";
+import RemovedPlaceholder from "../../components/removed/RemovedPlaceholder";
+import { REMOVED_COMMENT_TEXT } from "../../components/removed/removedContent";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -101,7 +105,7 @@ export default function PostCard({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const autoOpened = useRef(false);
   const articleRef = useRef<HTMLElement | null>(null);
-  const [comments, setComments] = useState<FeedComment[]>([]);
+  const [comments, setComments] = useState<CommentThreadItem[]>([]);
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentCount, setCommentCount] = useState(post.commentCount);
@@ -117,7 +121,7 @@ export default function PostCard({
     try {
       const next = !c.hidden;
       await setCommentHidden(accessToken, post.id, c.id, next);
-      setComments((prev) => prev.map((x) => (x.id === c.id ? { ...x, hidden: next } : x)));
+      setComments((prev) => prev.map((x) => (x.id === c.id && !isRemovedComment(x) ? { ...x, hidden: next } : x)));
       setCommentCount((n) => Math.max(0, n + (next ? -1 : 1)));
     } catch (err) {
       setCommentError(err instanceof FeedApiError ? err.message : "Couldn't update that comment.");
@@ -375,7 +379,11 @@ export default function PostCard({
 
       {commentsOpen && (
         <div className="comments">
-          {comments.map((c) => (
+          {comments.map((c) =>
+            isRemovedComment(c) ? (
+              // B-289: a comment a moderator removed. No author, no text, nothing to hide or report.
+              <RemovedPlaceholder key={c.id} text={REMOVED_COMMENT_TEXT} variant="row" className="comment--removed" />
+            ) : (
             <div key={c.id} className={c.hidden ? "comment comment--hidden" : "comment"} style={c.hidden ? { opacity: 0.6 } : undefined}>
               <span className="comment__author">
                 {c.author.publicName}
@@ -400,7 +408,8 @@ export default function PostCard({
                 />
               )}
             </div>
-          ))}
+            ),
+          )}
           {commentsLoading && <p className="community-status">Loading comments…</p>}
           {!commentsLoading && comments.length === 0 && !commentError && (
             <p className="composer__note">No comments yet. Be the first.</p>

@@ -112,7 +112,7 @@ test.describe.serial('admin: reports about a chat message', () => {
     await page.context().close();
   });
 
-  test('a message report shows Type, Sender, Sent and the message text, and says Remove Content only records', async ({ browser }) => {
+  test('a message report shows Type, Sender, Sent and the message text, and says what Remove Content does', async ({ browser }) => {
     const page = await adminPage(browser);
     await page.goto(`${URLS.admin}/moderation/reports/${plainReport}`);
     await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
@@ -126,7 +126,7 @@ test.describe.serial('admin: reports about a chat message', () => {
 
     // Nothing offers to delete the message, and the note says what Remove Content does.
     await expect(page.getByRole('button', { name: /delete message/i })).toHaveCount(0);
-    await expect(page.getByText(/can’t delete a message yet/)).toBeVisible();
+    await expect(page.getByText(/Remove Content hides it from everyone but you and the other moderators/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remove Content' })).toBeVisible();
     // The page title and heading carry no message text.
     expect(await page.title()).not.toContain(RUN);
