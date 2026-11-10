@@ -54,7 +54,14 @@ export interface ReportSubmission {
   targetId: string;
   reasonCategory: ReportReasonCategory;
   reason?: string;
+  /** Message reports only (B-286, Decision Log #477): ids of messages from the same chat, within 10 before or
+   *  after the reported one, that the reporter chose to add. OMITTED when none are chosen: the server refuses the
+   *  field with any other target type, even as an empty array. */
+  contextMessageIds?: string[];
 }
+
+// The most messages a message report may carry as context (the server's own limit).
+export const REPORT_CONTEXT_MAX = 20;
 
 // The real Report row, over HTTP — services/api's own Report model.
 // apps/web only ever needs the id + a couple of fields back from a

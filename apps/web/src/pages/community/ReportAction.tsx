@@ -18,6 +18,11 @@ import {
   type ReportTargetType,
 } from "../../api/moderation";
 import { ReportCategoryField, ReportDetailsField } from "../../components/report/ReportFields";
+import ReportContextStep, {
+  contextSentLine,
+  contextSubmitLabel,
+  type ReportContextRow,
+} from "../../components/report/ReportContextStep";
 import { canSubmitReport, detailsToSend } from "../../lib/reportReasons";
 import "./ReportAction.css";
 
@@ -44,9 +49,13 @@ interface ReportActionProps {
   /** Called when the person presses Close on the "Reported — thanks" confirmation. With it, the caller takes over
    *  (and unmounts this) instead of the plain "Reported" note replacing the trigger. Used by the message menu. */
   onFinished?: () => void;
+  /** Message reports only (B-286, Decision Log #477): the messages around the reported one, from the chat the
+   *  page has already loaded, oldest first, with the reported message flagged. With at least one other message
+   *  in it the report gains an optional "Add messages for context" step; without, it is the plain form. */
+  contextRows?: ReportContextRow[];
 }
 
-type Stage = "closed" | "menu" | "reason" | "done" | "reported";
+type Stage = "closed" | "menu" | "reason" | "context" | "done" | "reported";
 
 // The dialog title names what is being reported (Figma: "Report this post / comment / user").
 const DIALOG_TITLES: Record<ReportTargetType, string> = {
@@ -66,6 +75,7 @@ export default function ReportAction({
   startOpen = false,
   onCancel,
   onFinished,
+  contextRows,
 }: ReportActionProps) {
   const [stage, setStage] = useState<Stage>(() => {
     if (!startOpen || targets.length === 0) return "closed";
@@ -76,6 +86,9 @@ export default function ReportAction({
   );
   const [category, setCategory] = useState<ReportReasonCategory | null>(null);
   const [details, setDetails] = useState("");
+  const [contextIds, setContextIds] = useState<string[]>([]);
+  // How many messages went with the report that was just sent (for the confirmation line).
+  const [sentWith, setSentWith] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleId = useId();
@@ -86,8 +99,20 @@ export default function ReportAction({
   // Opened by another control: that control, not a trigger here, gets focus back.
   const handedOver = startOpen && Boolean(onCancel);
 
+  // Moving between the steps removes the button that had focus, which would drop it to the page (and Escape and
+  // Tab would stop working inside the dialog). The context step takes focus on the dialog itself; going Back puts
+  // it on the category that is chosen, or the first.
+  const cameBackRef = useRef(false);
+
   // The confirmation takes focus so it does not fall back to the page; so does the "Reported" note.
   useEffect(() => {
+    if (stage === "context") dialogRef.current?.focus();
+    if (stage === "reason" && cameBackRef.current) {
+      cameBackRef.current = false;
+      const radios = dialogRef.current?.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      const target = Array.from(radios ?? []).find((r) => r.checked) ?? radios?.[0];
+      target?.focus();
+    }
     if (stage === "done") dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
     if (stage === "reported") reportedRef.current?.focus();
   }, [stage]);
@@ -108,11 +133,15 @@ export default function ReportAction({
     setStage("reason");
   }
 
+  // The context step exists only for a message report that has other messages to offer.
+  const hasContextStep = selected?.targetType === "message" && (contextRows?.some((r) => !r.reported) ?? false);
+
   function cancel() {
     setStage("closed");
     setSelected(null);
     setCategory(null);
     setDetails("");
+    setContextIds([]);
     setError(null);
     onCancel?.();
     if (!handedOver) setTimeout(() => triggerRef.current?.focus(), 0);
@@ -127,8 +156,18 @@ export default function ReportAction({
     setStage("reported");
   }
 
+  // On the first step of a message report with a context step, the main button moves on instead of sending.
+  function next() {
+    if (!canSubmitReport(category, details)) return;
+    setError(null);
+    setStage("context");
+  }
+
   async function submit() {
     if (submitting || !selected || category === null || !canSubmitReport(category, details)) return;
+    // Only a message report may carry context, and only when something was chosen: the server refuses the field
+    // on any other target, even as an empty list.
+    const contextMessageIds = hasContextStep && contextIds.length > 0 ? contextIds : undefined;
     setSubmitting(true);
     setError(null);
     try {
@@ -137,7 +176,9 @@ export default function ReportAction({
         targetId: selected.targetId,
         reasonCategory: category,
         reason: detailsToSend(details),
+        contextMessageIds,
       });
+      setSentWith(contextMessageIds?.length ?? 0);
       setStage("done");
     } catch (err) {
       setError(reportSubmitErrorMessage(err, selected.targetType));
@@ -225,6 +266,7 @@ export default function ReportAction({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={subtitleId}
+        tabIndex={-1}
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onDialogKeyDown}
@@ -237,9 +279,42 @@ export default function ReportAction({
             <p className="report-dialog__subtitle" id={subtitleId}>
               Our team will review it.
             </p>
+            {sentWith > 0 && <p className="report-dialog__subtitle">{contextSentLine(sentWith)}</p>}
             <div className="report-dialog__buttons">
               <button type="button" className="report-dialog__submit" onClick={close}>
                 Close
+              </button>
+            </div>
+          </>
+        ) : stage === "context" ? (
+          <>
+            <ReportContextStep
+              rows={contextRows ?? []}
+              selected={contextIds}
+              onChange={setContextIds}
+              disabled={submitting}
+              titleId={titleId}
+            />
+            {error && (
+              <p className="report-dialog__error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="report-dialog__buttons">
+              <button type="button" className="report-dialog__submit" onClick={submit} disabled={submitting}>
+                {submitting ? "Submitting…" : contextSubmitLabel(contextIds.length)}
+              </button>
+              <button
+                type="button"
+                className="report-dialog__cancel"
+                onClick={() => {
+                  setError(null);
+                  cameBackRef.current = true;
+                  setStage("reason");
+                }}
+                disabled={submitting}
+              >
+                Back
               </button>
             </div>
           </>
@@ -268,10 +343,10 @@ export default function ReportAction({
               <button
                 type="button"
                 className="report-dialog__submit"
-                onClick={submit}
+                onClick={hasContextStep ? next : submit}
                 disabled={!canSubmitReport(category, details) || submitting}
               >
-                {submitting ? "Submitting…" : "Submit report"}
+                {submitting ? "Submitting…" : hasContextStep ? "Next" : "Submit report"}
               </button>
               <button type="button" className="report-dialog__cancel" onClick={cancel} disabled={submitting}>
                 Cancel

@@ -106,13 +106,15 @@ test.describe.serial('Report a message', () => {
     // The dialog never carries the message text.
     await expect(dialog).not.toContainText('this is the message to report');
     await expect(dialog.getByRole('radio')).toHaveCount(9);
-    await expect(dialog.getByRole('button', { name: 'Submit report' })).toBeDisabled();
+    // This thread has other messages, so the first step moves on to the optional context step (B-286).
+    await expect(dialog.getByRole('button', { name: 'Next' })).toBeDisabled();
     await shot(page, '02-popup-report-nothing-chosen');
 
     await dialog.getByRole('radio', { name: 'Spam or scam' }).check();
-    await expect(dialog.getByRole('button', { name: 'Submit report' })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: 'Next' })).toBeEnabled();
     await shot(page, '03-popup-report-chosen');
-    await dialog.getByRole('button', { name: 'Submit report' }).click();
+    await dialog.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('dialog', { name: 'Add messages for context' }).getByRole('button', { name: 'Submit report' }).click();
     await expect(page.getByText('Reported — thanks')).toBeVisible();
     await shot(page, '04-popup-reported');
 
@@ -138,7 +140,8 @@ test.describe.serial('Report a message', () => {
     await menu.getByRole('menuitem', { name: 'Report' }).click();
     const dialog = page.getByRole('dialog', { name: 'Report this message' });
     await dialog.getByRole('radio', { name: 'Harassment or bullying' }).check();
-    await dialog.getByRole('button', { name: 'Submit report' }).click();
+    await dialog.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('dialog', { name: 'Add messages for context' }).getByRole('button', { name: 'Submit report' }).click();
     await expect(page.getByText('Reported — thanks')).toBeVisible();
     expect(await reportsAbout(bMessage)).toHaveLength(1);
   });

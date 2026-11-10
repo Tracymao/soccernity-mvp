@@ -207,6 +207,9 @@ export interface Report {
   // (and nothing else of the conversation). null if the row is gone; absent on the queue rows and on every
   // other kind of report.
   reportedMessage?: ReportedMessage | null;
+  // B-286: on the same read, the messages the reporter added as context, oldest first (empty when none).
+  // Absent on the queue rows and on every other kind of report.
+  contextMessages?: ReportContextMessage[];
 }
 
 // The one message behind a "message" report (services/api ReportedMessageView). contentText is what is
@@ -221,6 +224,13 @@ export interface ReportedMessage {
   originalContentText: string | null;
   editedAt: string | null;
   deletedForEveryone: boolean;
+}
+
+// One message the reporter added as context to a message report (services/api ReportContextMessageView).
+// Same fields as ReportedMessage, plus whether the reporter themselves sent it; no conversation id, recipient or
+// sender id.
+export interface ReportContextMessage extends ReportedMessage {
+  sentByReporter: boolean;
 }
 
 // The enquiry behind an "enquiry" report (services/api ReportContactEnquiryView). Name and email are

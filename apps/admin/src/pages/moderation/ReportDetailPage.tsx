@@ -41,6 +41,7 @@ import {
 } from "../../api/moderation";
 import EnquiryReportView from "./EnquiryReportView";
 import ReportedMessageFields from "./ReportedMessageFields";
+import ContextMessagesCard from "./ContextMessagesCard";
 import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
 import {
   EscalateReportCard,
@@ -87,13 +88,19 @@ export default function ReportDetailPage() {
                   holds: found.holds ?? [],
                   source: found.source ?? prev.source,
                   contactEnquiry: found.contactEnquiry,
-                  ...(prev.targetType === "message" ? { reportedMessage: found.reportedMessage ?? null } : {}),
+                  ...(prev.targetType === "message"
+                    ? { reportedMessage: found.reportedMessage ?? null, contextMessages: found.contextMessages ?? [] }
+                    : {}),
                 }
               : found,
           );
           return;
         }
-        setReport(found.targetType === "message" ? { ...found, reportedMessage: found.reportedMessage ?? null } : found);
+        setReport(
+          found.targetType === "message"
+            ? { ...found, reportedMessage: found.reportedMessage ?? null, contextMessages: found.contextMessages ?? [] }
+            : found,
+        );
         setLoadState("loaded");
       })
       .catch((err: unknown) => {
@@ -232,6 +239,10 @@ export default function ReportDetailPage() {
           </div>
           {report.targetType === "message" ? <ReportedMessageFields message={report.reportedMessage} /> : null}
         </div>
+
+        {report.targetType === "message" ? (
+          <ContextMessagesCard reportedMessage={report.reportedMessage} contextMessages={report.contextMessages} />
+        ) : null}
 
         <div className="mod-card">
           <h2 className="mod-card__title">Report details</h2>

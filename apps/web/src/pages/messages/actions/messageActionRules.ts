@@ -17,6 +17,7 @@ import {
   type Message,
   type ThreadMessage,
 } from "../../../api/messaging";
+import type { ReportContextRow } from "../../../components/report/ReportContextStep";
 
 export const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
@@ -52,6 +53,39 @@ export function seenLabelMessageId(messages: readonly ThreadMessage[], currentUs
 export function firstNameOf(name: string | null | undefined): string | null {
   const first = name?.trim().split(/\s+/)[0];
   return first ? first : null;
+}
+
+// The most messages before and after the reported one the report may offer as context (Decision Log #477).
+export const REPORT_CONTEXT_WINDOW = 10;
+
+// The rows of the "Add messages for context" step for a reported message: the loaded thread (oldest first), the
+// reported message and up to 10 messages either side of it, counted by position in the list. A message deleted
+// for everyone keeps its place in the count (the server counts it too) but is not offered, since it has no text
+// and the server will not take it as context. Returns [] when the reported message is not in the list.
+export function reportContextRows(
+  messages: readonly ThreadMessage[],
+  reportedId: string,
+  currentUserId: string,
+  otherName: string | null | undefined,
+): ReportContextRow[] {
+  const index = messages.findIndex((m) => m.id === reportedId);
+  if (index < 0) return [];
+  const from = Math.max(0, index - REPORT_CONTEXT_WINDOW);
+  const to = Math.min(messages.length, index + REPORT_CONTEXT_WINDOW + 1);
+  const rows: ReportContextRow[] = [];
+  for (const m of messages.slice(from, to)) {
+    if (isDeletedMessage(m)) continue;
+    const mine = m.senderId === currentUserId;
+    rows.push({
+      id: m.id,
+      mine,
+      senderLabel: mine ? "You" : otherName?.trim() || "The other person",
+      sentAt: m.sentAt,
+      text: m.contentText,
+      reported: m.id === reportedId,
+    });
+  }
+  return rows;
 }
 
 export const WORDING = {

@@ -140,6 +140,10 @@
   box-shadow: 0 4px 16px 0 var(--sn-shadow-elevated);
 }
 
+.report-dialog:focus {
+  outline: none;
+}
+
 .report-dialog__title {
   margin: 0;
   font: 600 20px/24px "Inter", sans-serif;

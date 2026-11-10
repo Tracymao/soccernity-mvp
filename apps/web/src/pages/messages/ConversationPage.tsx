@@ -131,6 +131,7 @@ export default function ConversationPage() {
     conversationId: conversationId ?? "",
     currentUserId: decoded?.sub ?? "",
     otherName,
+    messages,
     setMessages,
   });
   const conversationActions = useConversationActions({
