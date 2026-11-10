@@ -21,7 +21,8 @@
 // off-palette #041BF2 and the row hover is a grey. All four are drawn from
 // the brand tokens instead (green tint 12%, navy, navy semibold).
 import { Link } from "react-router";
-import type { Conversation } from "../../../api/messaging";
+import { isRemovedPreview, type Conversation } from "../../../api/messaging";
+import { REMOVED_MESSAGE_TEXT } from "../../../components/removed/removedContent";
 import msgCompose from "../../../assets/icons/msg-compose.svg";
 import msgUnreadDot from "../../../assets/icons/msg-unread-dot.svg";
 import msgMetaDot from "../../../assets/icons/msg-meta-dot.svg";
@@ -125,8 +126,11 @@ export default function MessagesSidebar({
           {visible.map((c) => {
             const unread = c.unreadCount > 0;
             const last = c.lastMessage;
+            // B-289: a last message a moderator removed has no text and no sender, so no "You: " prefix.
             const preview = last
-              ? `${last.senderId === currentUserId ? "You: " : ""}${last.contentText ?? "This message was deleted"}`
+              ? isRemovedPreview(last)
+                ? REMOVED_MESSAGE_TEXT
+                : `${last.senderId === currentUserId ? "You: " : ""}${last.contentText ?? "This message was deleted"}`
               : "No messages yet";
             const className = [
               "msg-row",
