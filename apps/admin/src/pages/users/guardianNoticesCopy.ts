@@ -19,7 +19,7 @@ export const OFF_EXPLAIN =
 export const WITHHOLD_BUTTON = "Withhold guardian notices";
 export const ALERT_TITLE = "Guardian notices are being withheld";
 export const ALERT_BODY =
-  "Guardian security and safety-action notices for this account are skipped silently. Guardian-assisted two-factor recovery is off: the child is pointed to Contact us and staff help them. Consent emails are not affected.";
+  "Guardian security and safety-action notices for this account are skipped silently. Guardian-assisted two-factor recovery is off: the child recovers through the adult route (a link to their own email, their password and a 24-hour wait). Consent emails are not affected.";
 export const REVIEW_DUE_NOTE =
   "This has been on for more than 30 days. Record a review, or clear it if it is no longer needed.";
 export const REASON_LABEL = "Reason (visible to child-safety-vetted admins only)";
@@ -38,7 +38,7 @@ export const withholdIntro = (name: string, hasConfirmedGuardian: boolean) =>
 export const WITHHOLD_BULLET_NOTICES =
   "Guardian security notices and safety-action notices for this account are skipped silently.";
 export const WITHHOLD_BULLET_RECOVERY =
-  "Guardian-assisted two-factor recovery is switched off. The child is pointed to Contact us and staff help them.";
+  "Guardian-assisted two-factor recovery is switched off. The child can still recover through the adult route: a link to their own email, their password and a 24-hour wait.";
 export const WITHHOLD_BULLET_CONSENT =
   "Consent emails (consent request, withdrawal, expiry, turned-18 notice, guardian-email-replaced) are not affected. [COPY PENDING LEGAL REVIEW]";
 export const AUDIT_HELP = "The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]";
