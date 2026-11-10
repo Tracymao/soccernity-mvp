@@ -353,7 +353,7 @@ for everyone, minors and adults alike. This replaces the earlier "kept, no new p
   to 12. Calendar months in UTC (`setUTCMonth`); a message is due only when `sentAt` is **strictly** older than the cutoff.
 - **What counts as old.** `sentAt`, not `editedAt`, not read time. An edit does not restart the clock. The edited original
   (`originalContentText`) is part of the row and goes with it; a message deleted for everyone is deleted like any other.
-- **Never deleted: a message that is evidence.** A message is skipped when a `Report` with `targetType: 'message'` has it
+- **Never deleted: a message that is evidence** (and see "Held accounts" below for the legal-hold exemption). A message is skipped when a `Report` with `targetType: 'message'` has it
   as `targetId` (a bare string, no foreign key), or when a `ReportContextMessage` row attached it to a report. Both tests
   are in the SELECT and repeated in the DELETE statement, so a report filed between the two still protects the message.
   The message then stays for as long as the report does; removing a report (its own retention) is not built, so a
@@ -367,11 +367,18 @@ for everyone, minors and adults alike. This replaces the earlier "kept, no new p
   are examined, so a thread just started with nothing sent is never removed, and the "no messages left" test sits in the
   conversation DELETE, so a message sent meanwhile keeps it. The participant key is then free: the two people can start a
   new thread.
-- **Held accounts: no exemption.** The account hold (B-044) pauses *anonymisation/erasure of a `pending_deletion` account*.
-  It never touched messages, which stay after an account is anonymised, so there was nothing to extend. A report-derived
-  hold on an account is covered by the evidence rule above only for the specific message(s) a report names; a *legal hold*
-  (`AccountHold`, "the whole account is kept") does not currently stop this job from deleting that account's old messages.
-  Whether it should is a founder / counsel call, not decided here (see `docs/backend-message-retention-report.md`).
+- **Held accounts: an ACTIVE LEGAL HOLD exempts (Decision Log #482, founder, 2026-11-10).** The sweep never deletes a
+  message when an active legal hold (`AccountHold.type = 'legal_hold'`, `liftedAt IS NULL`, and `expiresAt IS NULL OR
+  expiresAt > now`) exists for the message's **sender** OR for **any other participant** of its conversation
+  (`Conversation.participantIds`). The predicate is exactly `findActiveAccountHold`'s (`account-hold.rules.ts`, used by
+  `resolveAccountHold`), with `now` the same injected instant the cutoff comes from. Like the report guards it sits in the
+  SELECT and is repeated, in full, in the DELETE statement, so a legal hold placed between the two still protects the
+  message. **Only `legal_hold`.** A `bad_faith` hold and the report-derived holds (open report, appeal window,
+  post-closure) do NOT exempt: a report-derived hold already protects the specific reported message through the report
+  guard and nothing else. **No catch-up logic:** nothing is recorded about skipped messages; when the hold is lifted or
+  expires, the next run deletes whatever is then past the retention. A held person's old messages also keep the whole
+  conversation alive (the empty-conversation step is unchanged and only removes conversations left with no messages).
+  This supersedes the earlier "no exemption" wording of B-287: before it, a legal hold did not stop this job.
 - **Side effects worth knowing.** A `message` Notification for a deleted thread degrades to `data: null` (the existing
   stale-reference rule). An adult can start a conversation with a minor only if no thread exists; after the old thread is
   deleted that exemption is gone (rule #347 unchanged). `Message.sender` and `Conversation.participantIds` are classed as

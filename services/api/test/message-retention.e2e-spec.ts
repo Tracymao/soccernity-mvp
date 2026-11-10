@@ -11,6 +11,8 @@ import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from '
 // report guards (a Report pointing at the message, and a ReportContextMessage row -- a RESTRICT foreign key),
 // MessageHide going by cascade, the empty-conversation clean-up (and never an empty thread that never had a
 // message), and the per-run cap. The clock is the `now` argument, never the wall clock.
+// Decision Log #482: an ACTIVE legal hold (AccountHold.type 'legal_hold', not lifted, not expired) on the sender
+// or on any other participant of the conversation keeps a message out of the sweep.
 describe('Message retention e2e (b287-message-retention)', () => {
   let app: INestApplication;
   let retention: MessageRetentionService;
@@ -281,5 +283,156 @@ describe('Message retention e2e (b287-message-retention)', () => {
     expect(left.map((m) => m.contentText)).toEqual([`m${total - 3}`, `m${total - 2}`, `m${total - 1}`]);
     const second = await retention.purgeExpired(NOW);
     expect(second).toEqual({ deletedMessageCount: 3, deletedConversationCount: 0, capped: false });
+  });
+
+  // ---- Decision Log #482: active legal hold on the sender or another participant ----
+  describe('legal-hold exemption', () => {
+    let admin: { id: string };
+    beforeEach(async () => {
+      admin = await prisma().adminUser.create({
+        data: {
+          email: `e2e-msgret-admin-${Date.now()}-${rand()}@example.com`,
+          passwordHash: 'unused',
+          fullName: 'Admin',
+          role: 'superadmin',
+        },
+      });
+    });
+
+    const hold = (
+      userId: string,
+      over: { type?: string; liftedAt?: Date | null; expiresAt?: Date | null; reportId?: string | null } = {},
+    ) =>
+      prisma().accountHold.create({
+        data: {
+          userId,
+          type: over.type ?? 'legal_hold',
+          placedByAdminId: admin.id,
+          placeReason: 'e2e hold',
+          placedAt: new Date('2026-10-01T00:00:00.000Z'),
+          liftedAt: over.liftedAt ?? null,
+          expiresAt: over.expiresAt ?? null,
+          reportId: over.reportId ?? null,
+        },
+      });
+
+    async function pair() {
+      const sender = await user('sender');
+      const other = await user('other');
+      const c = await conversation(sender.id, other.id);
+      const old = await message(c.id, sender.id, OLD);
+      const oldFromOther = await message(c.id, other.id, OLD);
+      return { sender, other, c, old, oldFromOther };
+    }
+
+    it("a legal hold on the SENDER keeps their old messages (and the other person's old messages in that thread)", async () => {
+      const { sender, c, old, oldFromOther } = await pair();
+      await hold(sender.id);
+      const r = await retention.purgeExpired(NOW);
+      expect(r).toEqual({ deletedMessageCount: 0, deletedConversationCount: 0, capped: false });
+      expect(await exists(old.id)).toBe(true);
+      expect(await exists(oldFromOther.id)).toBe(true);
+      expect(await prisma().conversation.count({ where: { id: c.id } })).toBe(1);
+    });
+
+    it("a legal hold on the OTHER participant keeps the sender's old messages too", async () => {
+      const { other, old, oldFromOther } = await pair();
+      await hold(other.id);
+      await retention.purgeExpired(NOW);
+      expect(await exists(old.id)).toBe(true);
+      expect(await exists(oldFromOther.id)).toBe(true);
+    });
+
+    it('only the held person\'s conversations are kept: a thread between two unheld people still purges', async () => {
+      const { sender, old } = await pair();
+      const c2 = await user('c2');
+      const d2 = await user('d2');
+      const thread2 = await conversation(c2.id, d2.id);
+      const gone = await message(thread2.id, c2.id, OLD);
+      await hold(sender.id);
+      const r = await retention.purgeExpired(NOW);
+      expect(await exists(old.id)).toBe(true);
+      expect(await exists(gone.id)).toBe(false);
+      expect(r.deletedMessageCount).toBe(1);
+      expect(r.deletedConversationCount).toBe(1);
+    });
+
+    it('when the hold is LIFTED, the next run deletes whatever is past the retention (no catch-up, no marker)', async () => {
+      const { sender, c, old, oldFromOther } = await pair();
+      const h = await hold(sender.id);
+      await retention.purgeExpired(NOW);
+      expect(await exists(old.id)).toBe(true);
+      await prisma().accountHold.update({
+        where: { id: h.id },
+        data: { liftedAt: new Date('2026-11-09T12:30:00.000Z'), liftedByAdminId: admin.id, liftReason: 'e2e lift' },
+      });
+      const r = await retention.purgeExpired(new Date('2026-11-09T13:00:00.000Z'));
+      expect(await exists(old.id)).toBe(false);
+      expect(await exists(oldFromOther.id)).toBe(false);
+      expect(r.deletedMessageCount).toBe(2);
+      expect(r.deletedConversationCount).toBe(1);
+      expect(await prisma().conversation.count({ where: { id: c.id } })).toBe(0);
+    });
+
+    it('a legal hold cannot carry an expiry (AccountHold_type_shape_check), so a lift is the only way one ends; the expiresAt half of the predicate is exercised by the unit spec', async () => {
+      const { sender } = await pair();
+      await expect(hold(sender.id, { expiresAt: new Date('2027-01-01T00:00:00.000Z') })).rejects.toThrow(/AccountHold_type_shape_check/);
+    });
+
+    it('a bad_faith hold does NOT exempt (legal_hold only)', async () => {
+      const { sender, other, old, oldFromOther } = await pair();
+      const report = await prisma().report.create({
+        data: { reporterId: sender.id, targetType: 'user', targetId: other.id, reason: 'x', reasonCategory: 'other' },
+      });
+      await hold(sender.id, { type: 'bad_faith', reportId: report.id, expiresAt: new Date('2027-05-09T12:00:00.000Z') });
+      await retention.purgeExpired(NOW);
+      expect(await exists(old.id)).toBe(false);
+      expect(await exists(oldFromOther.id)).toBe(false);
+    });
+
+    it('a REPORT-DERIVED hold (open report about the sender, no AccountHold) does NOT exempt unrelated messages', async () => {
+      const { sender, other, old, oldFromOther } = await pair();
+      await prisma().report.create({
+        data: { reporterId: other.id, targetType: 'user', targetId: sender.id, reason: 'x', reasonCategory: 'other', status: 'open' },
+      });
+      await retention.purgeExpired(NOW);
+      expect(await exists(old.id)).toBe(false);
+      expect(await exists(oldFromOther.id)).toBe(false);
+    });
+
+    it('a legal hold placed BETWEEN the SELECT and the DELETE still protects the message (the test is repeated in the DELETE)', async () => {
+      const { sender, c, old } = await pair();
+      await message(c.id, sender.id, RECENT);
+      const prismaService = (retention as unknown as { prisma: { $transaction: (cb: (tx: any) => Promise<unknown>) => Promise<unknown> } }).prisma;
+      const original = prismaService.$transaction.bind(prismaService);
+      let injected = false;
+      prismaService.$transaction = (cb) =>
+        original(async (tx) => {
+          const wrapped = new Proxy(tx, {
+            get(target, prop, receiver) {
+              if (prop === '$queryRaw') {
+                return async (...args: unknown[]) => {
+                  const sql = String((args[0] as TemplateStringsArray).join('?'));
+                  if (sql.includes('DELETE FROM "Message"') && !injected) {
+                    injected = true;
+                    await hold(sender.id);
+                  }
+                  return (target.$queryRaw as (...a: unknown[]) => unknown)(...args);
+                };
+              }
+              return Reflect.get(target, prop, receiver);
+            },
+          });
+          return cb(wrapped);
+        });
+      try {
+        const r = await retention.purgeExpired(NOW);
+        expect(injected).toBe(true);
+        expect(await exists(old.id)).toBe(true);
+        expect(r.deletedMessageCount).toBe(0);
+      } finally {
+        prismaService.$transaction = original;
+      }
+    });
   });
 });

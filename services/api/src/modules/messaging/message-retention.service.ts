@@ -20,9 +20,17 @@ export interface PurgeMessagesResult {
 //   - a Report with targetType 'message' points at it (Report.targetId is a bare string, no foreign key), or
 //   - a ReportContextMessage row attached it to a report as surrounding context (a RESTRICT foreign key: the
 //     database itself would refuse that delete).
-// The test is in the SELECT and repeated, in full, in the DELETE statement, so a report filed between the two
-// protects the message. The message stays for as long as the report does (a report is only removed by its own
-// retention, which is not built here).
+//   - an ACTIVE LEGAL HOLD (AccountHold.type = 'legal_hold') exists for the message's sender OR for any other
+//     participant of its conversation (Conversation.participantIds). Decision Log #482 (founder, 2026-11-10).
+//     "Active" is exactly the predicate findActiveAccountHold (account-hold.rules.ts, used by resolveAccountHold)
+//     applies: liftedAt IS NULL AND (expiresAt IS NULL OR expiresAt > now), with `now` the same instant the
+//     cutoff is derived from. ONLY legal_hold: a bad_faith hold and a report-derived hold (open report, appeal
+//     window, post-closure) do NOT exempt a message here; a report-derived hold already protects the specific
+//     reported message through the Report guard above and nothing else. There is no catch-up logic: when the
+//     hold is lifted or expires, the next run deletes whatever is then past the retention.
+// The test is in the SELECT and repeated, in full, in the DELETE statement, so a report filed, or a legal hold
+// placed, between the two protects the message. The message stays for as long as the report / hold does (a
+// report is only removed by its own retention, which is not built here).
 //
 // What goes with a message: MessageHide rows (ON DELETE CASCADE). What does not exist: a stored media object.
 // A DM carries no media since B-259 (the send DTO refuses mediaUrl) and the messaging module has no storage, so
@@ -75,6 +83,13 @@ export class MessageRetentionService {
         WHERE m."sentAt" < ${cutoff}
           AND NOT EXISTS (SELECT 1 FROM "Report" r WHERE r."targetType" = 'message' AND r."targetId" = m."id")
           AND NOT EXISTS (SELECT 1 FROM "ReportContextMessage" c WHERE c."messageId" = m."id")
+          AND NOT EXISTS (
+            SELECT 1 FROM "AccountHold" h
+            WHERE h."type" = 'legal_hold' AND h."liftedAt" IS NULL
+              AND (h."expiresAt" IS NULL OR h."expiresAt" > ${now})
+              AND (h."userId" = m."senderId"
+                   OR EXISTS (SELECT 1 FROM "Conversation" cv
+                              WHERE cv."id" = m."conversationId" AND h."userId" = ANY(cv."participantIds"))))
         ORDER BY m."sentAt" ASC, m."id" ASC
         LIMIT ${MESSAGE_RETENTION_MAX_PER_RUN + 1}`;
       const capped = due.length > MESSAGE_RETENTION_MAX_PER_RUN;
@@ -92,6 +107,13 @@ export class MessageRetentionService {
           AND m."sentAt" < ${cutoff}
           AND NOT EXISTS (SELECT 1 FROM "Report" r WHERE r."targetType" = 'message' AND r."targetId" = m."id")
           AND NOT EXISTS (SELECT 1 FROM "ReportContextMessage" c WHERE c."messageId" = m."id")
+          AND NOT EXISTS (
+            SELECT 1 FROM "AccountHold" h
+            WHERE h."type" = 'legal_hold' AND h."liftedAt" IS NULL
+              AND (h."expiresAt" IS NULL OR h."expiresAt" > ${now})
+              AND (h."userId" = m."senderId"
+                   OR EXISTS (SELECT 1 FROM "Conversation" cv
+                              WHERE cv."id" = m."conversationId" AND h."userId" = ANY(cv."participantIds"))))
         RETURNING m."conversationId"`;
       const touched = [...new Set(deleted.map((d) => d.conversationId))];
 
