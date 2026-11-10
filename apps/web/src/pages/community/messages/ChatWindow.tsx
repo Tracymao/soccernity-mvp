@@ -115,7 +115,14 @@ export default function ChatWindow({
   const onPreviewRef = useRef(onPreviewChange);
   onPreviewRef.current = onPreviewChange;
 
-  const messageActions = useMessageActions({ accessToken, conversationId, currentUserId, otherName, setMessages });
+  const messageActions = useMessageActions({
+    accessToken,
+    conversationId,
+    currentUserId,
+    otherName,
+    messages,
+    setMessages,
+  });
   const conversationActions = useConversationActions({
     accessToken,
     conversationId,

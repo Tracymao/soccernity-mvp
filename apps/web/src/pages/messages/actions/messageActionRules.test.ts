@@ -1,7 +1,7 @@
 // B-067: the client-side rules and error mapping. The server decides all of
 // them; these only decide what the screen says.
 import { describe, it, expect } from "vitest";
-import { MessagingApiError, type DeletedMessage, type Message } from "../../../api/messaging";
+import { MessagingApiError, type DeletedMessage, type Message, type ThreadMessage } from "../../../api/messaging";
 import {
   EDIT_WINDOW_MS,
   WORDING,
@@ -10,6 +10,8 @@ import {
   deleteFailure,
   editFailure,
   firstNameOf,
+  REPORT_CONTEXT_WINDOW,
+  reportContextRows,
   seenLabelMessageId,
 } from "./messageActionRules";
 
@@ -131,5 +133,88 @@ describe("seenLabelMessageId (the Seen label goes under one message only)", () =
   it("returns null for an empty thread or one with no message of mine", () => {
     expect(seenLabelMessageId([], ME)).toBeNull();
     expect(seenLabelMessageId([m("a", OTHER, null)], ME)).toBeNull();
+  });
+});
+
+// B-286: the rows of the "Add messages for context" step.
+describe("reportContextRows", () => {
+  const ME = "me";
+  const OTHER = "other";
+  function m(i: number, senderId = i % 2 === 0 ? ME : OTHER): Message {
+    return {
+      id: `m${i}`,
+      conversationId: "c",
+      senderId,
+      contentText: `text ${i}`,
+      sentAt: new Date(Date.UTC(2026, 10, 2, 8, i)).toISOString(),
+      readAt: null,
+    };
+  }
+  function gone(i: number): DeletedMessage {
+    return {
+      id: `m${i}`,
+      conversationId: "c",
+      senderId: OTHER,
+      sentAt: new Date(Date.UTC(2026, 10, 2, 8, i)).toISOString(),
+      editedAt: null,
+      deletedForEveryone: true,
+      contentText: null,
+    };
+  }
+  const thread = (n: number) => Array.from({ length: n }, (_, i) => m(i));
+
+  it("uses a window of 10", () => {
+    expect(REPORT_CONTEXT_WINDOW).toBe(10);
+  });
+
+  it("returns the reported message with up to 10 before and 10 after, oldest first", () => {
+    const rows = reportContextRows(thread(40), "m20", ME, "Matthew Amuloko");
+    expect(rows.map((r) => r.id)).toEqual(Array.from({ length: 21 }, (_, i) => `m${10 + i}`));
+    expect(rows.filter((r) => r.reported).map((r) => r.id)).toEqual(["m20"]);
+  });
+
+  it("stops at the ends of the loaded thread", () => {
+    expect(reportContextRows(thread(8), "m2", ME, null).map((r) => r.id)).toEqual(
+      ["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7"],
+    );
+    const last = reportContextRows(thread(30), "m29", ME, null);
+    expect(last).toHaveLength(11);
+    expect(last[last.length - 1].id).toBe("m29");
+  });
+
+  it("is empty when the reported message is not in the list", () => {
+    expect(reportContextRows(thread(5), "nope", ME, null)).toEqual([]);
+  });
+
+  it("labels the reporter's own messages You and the other person with their name, or 'The other person'", () => {
+    const named = reportContextRows(thread(3), "m1", ME, "  Matthew Amuloko ");
+    expect(named.map((r) => r.senderLabel)).toEqual(["You", "Matthew Amuloko", "You"]);
+    expect(named.map((r) => r.mine)).toEqual([true, false, true]);
+    expect(reportContextRows(thread(3), "m1", ME, null)[1].senderLabel).toBe("The other person");
+    expect(reportContextRows(thread(3), "m1", ME, "   ")[1].senderLabel).toBe("The other person");
+  });
+
+  it("carries the text and the time as the thread has them", () => {
+    const row = reportContextRows(thread(3), "m1", ME, null)[1];
+    expect(row.text).toBe("text 1");
+    expect(row.sentAt).toBe(new Date(Date.UTC(2026, 10, 2, 8, 1)).toISOString());
+  });
+
+  it("a message deleted for everyone is not offered but still takes its place in the count", () => {
+    // 12 before the reported one; the 3rd before it is a placeholder. The window still starts at m(12-10)=m2.
+    const items: ThreadMessage[] = [...thread(12)];
+    items[9] = gone(9);
+    items.push(m(12, OTHER));
+    const rows = reportContextRows(items, "m12", ME, null);
+    expect(rows.map((r) => r.id)).toEqual(["m2", "m3", "m4", "m5", "m6", "m7", "m8", "m10", "m11", "m12"]);
+    expect(rows.some((r) => r.id === "m9")).toBe(false);
+    // Nothing earlier than 10 positions back, so m0 and m1 are outside.
+    expect(rows.some((r) => r.id === "m1")).toBe(false);
+  });
+
+  it("an edited message is offered with its current text", () => {
+    const items = thread(3);
+    items[0] = { ...items[0], contentText: "edited text", editedAt: "2026-11-02T08:30:00.000Z" };
+    expect(reportContextRows(items, "m1", ME, null)[0].text).toBe("edited text");
   });
 });

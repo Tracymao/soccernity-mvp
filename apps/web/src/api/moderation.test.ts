@@ -37,6 +37,31 @@ describe("createReport", () => {
     });
   });
 
+  it("sends the context message ids on a message report, in order, and omits the key when there are none (B-286)", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse(201, { id: "r1" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await createReport("tok", {
+      targetType: "message",
+      targetId: "m1",
+      reasonCategory: "harassment_or_bullying",
+      contextMessageIds: ["m0", "m2"],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      targetType: "message",
+      targetId: "m1",
+      reasonCategory: "harassment_or_bullying",
+      contextMessageIds: ["m0", "m2"],
+    });
+    await createReport("tok", {
+      targetType: "message",
+      targetId: "m1",
+      reasonCategory: "harassment_or_bullying",
+      contextMessageIds: undefined,
+    });
+    // JSON drops an undefined value, so the server never sees the field (it refuses it even as []).
+    expect(Object.keys(JSON.parse(fetchMock.mock.calls[1][1].body))).not.toContain("contextMessageIds");
+  });
+
   it("carries the server's status, message and code on the error", async () => {
     vi.stubGlobal(
       "fetch",

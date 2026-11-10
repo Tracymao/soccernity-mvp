@@ -11,7 +11,13 @@ import {
   type Message,
   type ThreadMessage,
 } from "../../../api/messaging";
-import { deleteFailure, editFailure, firstNameOf, type EditFailureStatus } from "./messageActionRules";
+import {
+  deleteFailure,
+  editFailure,
+  firstNameOf,
+  reportContextRows,
+  type EditFailureStatus,
+} from "./messageActionRules";
 
 export interface EditState {
   id: string;
@@ -36,6 +42,8 @@ export interface UseMessageActionsArgs {
   conversationId: string;
   currentUserId: string;
   otherName: string | null | undefined;
+  /** The thread as the surface holds it now, oldest first: the source of the report's context rows. */
+  messages: readonly ThreadMessage[];
   setMessages: Dispatch<SetStateAction<ThreadMessage[]>>;
 }
 
@@ -44,6 +52,7 @@ export function useMessageActions({
   conversationId,
   currentUserId,
   otherName,
+  messages,
   setMessages,
 }: UseMessageActionsArgs) {
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -154,9 +163,13 @@ export function useMessageActions({
     }
   }
 
+  // The messages offered as context when this message is reported (B-286). Read from the loaded thread.
+  const contextRowsFor = (id: string) => reportContextRows(messages, id, currentUserId, otherName);
+
   return {
     accessToken,
     reportId,
+    contextRowsFor,
     startReport,
     closeReport,
     menuId,

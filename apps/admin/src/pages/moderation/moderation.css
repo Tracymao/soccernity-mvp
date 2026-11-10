@@ -280,6 +280,116 @@
   word-break: break-word;
 }
 
+/* Messages around the reported one (ContextMessagesCard.tsx). */
+
+.mod-context__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-context__row {
+  display: grid;
+  grid-template-columns: 56px 220px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.mod-context__row--reported {
+  border: 2px solid var(--sn-brand-navy);
+}
+
+.mod-context__time {
+  color: var(--sn-text-secondary);
+}
+
+.mod-context__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mod-context__name {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.mod-context__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mod-context__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mod-context__original {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mod-context__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mod-context__pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.mod-context__pill--reporter {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.mod-context__pill--reported {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-context__pill--edited {
+  background-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.mod-context__pill--deleted {
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+@media (max-width: 900px) {
+  .mod-context__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .mod-context__marks {
+    justify-content: flex-start;
+  }
+}
+
 /* Escalate card + the child-safety-vetting restricted state
  * (schema/report-severity-escalation-admin-vetting-application). */
 

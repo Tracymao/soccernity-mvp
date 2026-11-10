@@ -594,7 +594,9 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       expect(document.activeElement && dialog.contains(document.activeElement)).toBe(true);
       expect(within(dialog).getAllByRole("radio")).toHaveLength(9);
       expect(dialog.textContent).not.toContain("Their message");
-      expect((within(dialog).getByRole("button", { name: "Submit report" }) as HTMLButtonElement).disabled).toBe(true);
+      // The thread has other messages, so the first step moves on to the optional context step.
+      expect((within(dialog).getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(within(dialog).queryByRole("button", { name: "Submit report" })).toBeNull();
     });
 
     it("sends targetType message with the message id and the category, then closes the dialog and leaves no menu", async () => {
@@ -602,6 +604,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       await surface.open();
       const dialog = openReport();
       fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
       expect(await screen.findByText("Reported — thanks")).toBeTruthy();
       expect(vi.mocked(createReport)).toHaveBeenCalledWith(TOKEN, {
@@ -609,6 +612,8 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
         targetId: "m-theirs",
         reasonCategory: "spam_or_scam",
       });
+      // Nothing was chosen on the context step, so no ids go with it.
+      expect(vi.mocked(createReport).mock.calls[0][1].contextMessageIds).toBeUndefined();
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(screen.queryByRole("menu")).toBeNull();
@@ -620,10 +625,13 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       await surface.open();
       const dialog = openReport();
       fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
       const alert = await within(dialog).findByRole("alert");
       expect(alert.textContent).toBe("Couldn't submit that report. Please try again.");
       expect(dialog.textContent).not.toMatch(/not found/i);
+      // Back goes to the first step, which still has what was chosen.
+      fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
       expect((within(dialog).getByRole("radio", { name: "Spam or scam" }) as HTMLInputElement).checked).toBe(true);
     });
 
@@ -633,6 +641,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       for (let round = 0; round < 2; round += 1) {
         const dialog = openReport();
         fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+        fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
         fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
         expect(await screen.findByText("Reported — thanks")).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -657,6 +666,199 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
         vi.advanceTimersByTime(800);
       });
       expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
+  describe("report a message: add messages for context (B-286)", () => {
+    // 12 messages before the reported one, 11 after it, then MINE last (the text the surfaces wait for).
+    // Window: 10 before (b3..b12) and 10 after (a1..a10); b1, b2, a11 and MINE are outside it.
+    const BEFORE = Array.from({ length: 12 }, (_, i) =>
+      msg({
+        id: `b${i + 1}`,
+        senderId: i % 2 === 0 ? ME : OTHER,
+        contentText: `before-${i + 1}`,
+        sentAt: ago(100 - i),
+      }),
+    );
+    const AFTER = Array.from({ length: 11 }, (_, i) =>
+      msg({
+        id: `a${i + 1}`,
+        senderId: i % 2 === 0 ? OTHER : ME,
+        contentText: `after-${i + 1}`,
+        sentAt: ago(60 - i),
+      }),
+    );
+    const REPORTED = msg({ id: "m-theirs", senderId: OTHER, contentText: "Their message", sentAt: ago(80) });
+    const LAST = msg({ id: "m-mine", senderId: ME, contentText: "My recent message", sentAt: ago(2) });
+    const WINDOW_IDS = [...BEFORE.slice(2).map((m) => m.id), ...AFTER.slice(0, 10).map((m) => m.id)];
+
+    const filed = {
+      id: "r1",
+      targetType: "message",
+      targetId: "m-theirs",
+      reason: "",
+      status: "open",
+      createdAt: "2026-11-08T10:00:00.000Z",
+    };
+
+    beforeEach(() => {
+      serve([...BEFORE, REPORTED, ...AFTER, LAST]);
+    });
+
+    async function toContextStep() {
+      await surface.open();
+      fireEvent.click(within(openMenuFor("Their message")).getByRole("menuitem", { name: "Report" }));
+      const dialog = screen.getByRole("dialog", { name: "Report this message" });
+      fireEvent.click(within(dialog).getByRole("radio", { name: "Harassment or bullying" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
+      return screen.getByRole("dialog", { name: "Add messages for context" });
+    }
+
+    function checkboxes(dialog: HTMLElement) {
+      return within(dialog).getAllByRole("checkbox") as HTMLInputElement[];
+    }
+
+    it("the first step moves on with Next, and the context step offers 10 before and 10 after, none chosen", async () => {
+      const dialog = await toContextStep();
+      expect(dialog.textContent).toContain("Optional. Pick messages from this chat that help our team understand what happened.");
+      expect(dialog.textContent).toContain(
+        "Our safeguarding team will see the messages you choose, and the message you are reporting. [COPY PENDING LEGAL REVIEW]",
+      );
+      const boxes = checkboxes(dialog);
+      expect(boxes).toHaveLength(20);
+      expect(boxes.every((b) => !b.checked)).toBe(true);
+      expect(within(dialog).getByText("0 of 20 selected")).toBeTruthy();
+      expect(within(dialog).getByRole("button", { name: "Submit report" })).toBeTruthy();
+      expect(within(dialog).queryByRole("button", { name: "Clear selection" })).toBeNull();
+      // b1, b2, a11 and the last message are outside the window.
+      expect(within(dialog).queryByText("before-1")).toBeNull();
+      expect(within(dialog).queryByText("before-2")).toBeNull();
+      expect(within(dialog).getByText("before-3")).toBeTruthy();
+      expect(within(dialog).getByText("after-10")).toBeTruthy();
+      expect(within(dialog).queryByText("after-11")).toBeNull();
+      expect(within(dialog).queryByText("My recent message")).toBeNull();
+      expect(vi.mocked(createReport)).not.toHaveBeenCalled();
+    });
+
+    it("the reported message is in the list, highlighted, with no checkbox, and is not selectable", async () => {
+      const dialog = await toContextStep();
+      const pill = within(dialog).getByText("Reported message");
+      const row = pill.closest(".report-context__row") as HTMLElement;
+      expect(row.textContent).toContain("Their message");
+      expect(within(row).queryByRole("checkbox")).toBeNull();
+      // The ids offered are exactly the window, never the reported message itself.
+      fireEvent.click(within(dialog).getByRole("button", { name: "Include the messages shown" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "All shown messages included" }));
+      expect(checkboxes(dialog)).toHaveLength(20);
+    });
+
+    it("the reporter's own messages read You and the other person's carry their public name", async () => {
+      const dialog = await toContextStep();
+      const mineRow = within(dialog).getByText("before-3").closest(".report-context__row") as HTMLElement; // b3 sent by ME (index 2)
+      expect(within(mineRow).getByText("You")).toBeTruthy();
+      const theirsRow = within(dialog).getByText("before-4").closest(".report-context__row") as HTMLElement; // b4 sent by OTHER
+      expect(within(theirsRow).getByText("Matthew Amuloko")).toBeTruthy();
+    });
+
+    it("choosing messages updates the counter and the button; the ids go with the report", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByText("before-12"));
+      fireEvent.click(within(dialog).getByText("after-1"));
+      expect(within(dialog).getByText("2 of 20 selected")).toBeTruthy();
+      expect(within(dialog).getByRole("button", { name: "Clear selection" })).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 2 messages" }));
+      expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+      expect(vi.mocked(createReport)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(createReport).mock.calls[0][1]).toEqual({
+        targetType: "message",
+        targetId: "m-theirs",
+        reasonCategory: "harassment_or_bullying",
+        contextMessageIds: ["b12", "a1"],
+      });
+      // The confirmation says how many went with it.
+      expect(screen.getByText("2 messages from the chat were included with your report.")).toBeTruthy();
+    });
+
+    it("one message reads '1 message' on the button and in the confirmation", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByText("after-2"));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 message" }));
+      expect(await screen.findByText("1 message from the chat was included with your report.")).toBeTruthy();
+    });
+
+    it("Include the messages shown chooses all 20, then reads All shown messages included and says that is the most", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Include the messages shown" }));
+      expect(within(dialog).getByText("20 of 20 selected")).toBeTruthy();
+      expect(within(dialog).getByText("That’s the most we can include.")).toBeTruthy();
+      expect(checkboxes(dialog).every((b) => b.checked)).toBe(true);
+      expect(
+        (within(dialog).getByRole("button", { name: "All shown messages included" }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 20 messages" }));
+      await screen.findByText("Reported — thanks");
+      const sent = vi.mocked(createReport).mock.calls[0][1].contextMessageIds ?? [];
+      expect(sent).toHaveLength(20);
+      expect([...sent].sort()).toEqual([...WINDOW_IDS].sort());
+      expect(sent).not.toContain("m-theirs");
+    });
+
+    it("Clear selection empties the choice and the next submit sends no ids", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Include the messages shown" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Clear selection" }));
+      expect(within(dialog).getByText("0 of 20 selected")).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
+      await screen.findByText("Reported — thanks");
+      expect(vi.mocked(createReport).mock.calls[0][1].contextMessageIds).toBeUndefined();
+      expect(screen.queryByText(/included with your report/)).toBeNull();
+    });
+
+    it("Back returns to the first step with the category kept, and the choice is still there on the way forward", async () => {
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByText("before-12"));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+      const first = screen.getByRole("dialog", { name: "Report this message" });
+      expect((within(first).getByRole("radio", { name: "Harassment or bullying" }) as HTMLInputElement).checked).toBe(true);
+      fireEvent.click(within(first).getByRole("button", { name: "Next" }));
+      const again = screen.getByRole("dialog", { name: "Add messages for context" });
+      expect(within(again).getByText("1 of 20 selected")).toBeTruthy();
+    });
+
+    it("a refusal keeps the person on the step with their choice, shows the plain error, and sends nothing extra", async () => {
+      vi.mocked(createReport).mockRejectedValueOnce(new ModerationApiError("Message not found", { status: 404 }));
+      const dialog = await toContextStep();
+      fireEvent.click(within(dialog).getByText("before-12"));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 message" }));
+      const alert = await within(dialog).findByRole("alert");
+      expect(alert.textContent).toBe("Couldn't submit that report. Please try again.");
+      expect(within(dialog).getByText("1 of 20 selected")).toBeTruthy();
+      expect(vi.mocked(createReport)).toHaveBeenCalledTimes(1);
+    });
+
+    it("focus stays inside the dialog on every step: Next and Back do not drop it to the page, so Escape still cancels", async () => {
+      const dialog = await toContextStep();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+      const first = screen.getByRole("dialog", { name: "Report this message" });
+      expect(first.contains(document.activeElement)).toBe(true);
+      expect((document.activeElement as HTMLInputElement).checked).toBe(true); // the chosen category
+      fireEvent.click(within(first).getByRole("button", { name: "Next" }));
+      // Escape from wherever focus is now (not from the dialog element itself).
+      fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(vi.mocked(createReport)).not.toHaveBeenCalled();
+    });
+
+    it("Cancel on the context step closes the dialog without sending", async () => {
+      const dialog = await toContextStep();
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(vi.mocked(createReport)).not.toHaveBeenCalled();
     });
   });
 

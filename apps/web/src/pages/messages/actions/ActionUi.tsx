@@ -339,6 +339,7 @@ export function MessageHost({ message, mine, actions, children }: MessageHostPro
       <ReportAction
         accessToken={actions.accessToken}
         targets={[{ label: "Report message", targetType: "message", targetId: message.id }]}
+        contextRows={actions.contextRowsFor(message.id)}
         startOpen
         onCancel={() => {
           actions.closeReport();
