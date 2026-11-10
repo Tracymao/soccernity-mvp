@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
@@ -16,6 +17,16 @@ import { DirectUploadStorageService } from '../../storage/direct-upload-storage.
 //   WITHDRAW public -> private. Fails SAFE the other way round: the database gate (the post-media
 //            visibility fragment) already hides the item the moment its status changes, so a failed move
 //            only leaves an object lingering; publishedAt stays set and reconcile() retries it.
+//
+// backend/b290-removed-post-media (B-290, Decision Log #484): the invariant gains one more condition. A public
+// object exists iff the file is approved, not held by reports AND its post is not removed by moderation
+// (Post.removedByModerationAt). When Remove Content is recorded the public copy is withdrawn at once (withdrawForPost,
+// after the commit, best effort); the PRIVATE copy is kept as evidence. An approved file normally has NO private copy
+// (finishPublish deletes it after publishing), so withdraw() makes one first (copy public -> private, verify) -- the
+// same path a report-held file takes. An overturned appeal clears the removal and the same reconciler republishes
+// (republishForPost). The private object is deleted only when the removing report closes: that is the daily
+// RejectedMediaSweepService.confirmModerationRemovals, not this file. If the withdraw's copy fails, the public object
+// lingers but the post is already hidden by the database read gate, and reconcile() retries.
 //
 // Nothing IN HERE deletes a REJECTED file's private object: reconcile() selects only approved rows for deletion.
 // (B-283, Decision Log #464: the object IS deleted, by the lifecycle paths -- post deleted, upload deleted,
@@ -48,6 +59,8 @@ interface ObjectRow {
   privateKey: string | null;
   publicKey: string | null;
   publishedAt: Date | null;
+  /** The post the file is attached to (null while unattached). Selected so the moderation-removal condition is known. */
+  post?: { removedByModerationAt: Date | null } | null;
 }
 
 const OBJECT_SELECT = {
@@ -58,11 +71,24 @@ const OBJECT_SELECT = {
   privateKey: true,
   publicKey: true,
   publishedAt: true,
+  post: { select: { removedByModerationAt: true } },
 } as const;
 
+/** The Prisma condition for "this file's post is removed by moderation" (used in the withdraw queries). */
+export const POST_REMOVED_BY_MODERATION: Prisma.PostMediaWhereInput = { post: { is: { removedByModerationAt: { not: null } } } };
+
+/** The Prisma condition for "this file is not attached to a post removed by moderation". */
+export const POST_NOT_REMOVED_BY_MODERATION: Prisma.PostMediaWhereInput = {
+  OR: [{ postId: null }, { post: { is: { removedByModerationAt: null } } }],
+};
+
 /** True when the item should have an object in the public prefix. */
-export function shouldBePublic(row: { status: string; hiddenPendingReview: boolean }): boolean {
-  return row.status === 'approved' && !row.hiddenPendingReview;
+export function shouldBePublic(row: {
+  status: string;
+  hiddenPendingReview: boolean;
+  post?: { removedByModerationAt: Date | null } | null;
+}): boolean {
+  return row.status === 'approved' && !row.hiddenPendingReview && !row.post?.removedByModerationAt;
 }
 
 @Injectable()
@@ -160,7 +186,11 @@ export class PostMediaObjectsService {
 
     // Claim the withdrawal, recording where the file now lives, only while it still should not be public.
     const claimed = await this.prisma.postMedia.updateMany({
-      where: { id, publishedAt: { not: null }, OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }] },
+      where: {
+        id,
+        publishedAt: { not: null },
+        OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }, POST_REMOVED_BY_MODERATION],
+      },
       data: { privateKey, publishedAt: null },
     });
     if (claimed.count === 0) return 'noop'; // approved again in the meantime: leave the public file alone
@@ -193,7 +223,10 @@ export class PostMediaObjectsService {
     let cleaned = 0;
 
     const toWithdraw = await this.prisma.postMedia.findMany({
-      where: { publishedAt: { not: null }, OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }] },
+      where: {
+        publishedAt: { not: null },
+        OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }, POST_REMOVED_BY_MODERATION],
+      },
       select: { id: true },
       take: 100,
       orderBy: { sequence: 'asc' },
@@ -203,25 +236,21 @@ export class PostMediaObjectsService {
     }
 
     const toPublish = await this.prisma.postMedia.findMany({
-      where: { status: 'approved', hiddenPendingReview: false, publishedAt: null, privateKey: { not: null }, uploadState: 'ready' },
+      where: {
+        status: 'approved',
+        hiddenPendingReview: false,
+        publishedAt: null,
+        privateKey: { not: null },
+        uploadState: 'ready',
+        deletedByModerationAt: null,
+        ...POST_NOT_REMOVED_BY_MODERATION,
+      },
       select: OBJECT_SELECT,
       take: 100,
       orderBy: { sequence: 'asc' },
     });
     for (const row of toPublish) {
-      try {
-        await this.copyToPublic(row);
-        const r = await this.prisma.postMedia.updateMany({
-          where: { id: row.id, status: 'approved', hiddenPendingReview: false, publishedAt: null },
-          data: { publishedAt: this.clock.now() },
-        });
-        if (r.count === 1) {
-          published += 1;
-          await this.finishPublish(row.id);
-        }
-      } catch (err) {
-        this.logger.warn(`Reconcile: publish of media ${row.id} failed (${msg(err)}); will retry.`);
-      }
+      if (await this.publishRow(row)) published += 1;
     }
 
     const toClean = await this.prisma.postMedia.findMany({
@@ -235,6 +264,95 @@ export class PostMediaObjectsService {
       cleaned += 1;
     }
     return { withdrawn, published, cleaned };
+  }
+
+  // ---- MODERATION REMOVAL (B-290) -----------------------------------------------------------------------
+
+  /**
+   * Remove Content was just recorded for this post (called after the commit): withdraws the public copy of every
+   * file attached to it. Best effort and never throws; the database read gate already hides the post, and
+   * reconcile() repairs anything that fails here. Returns how many files it moved.
+   */
+  async withdrawForPost(postId: string): Promise<{ withdrawn: number; failed: number }> {
+    let withdrawn = 0;
+    let failed = 0;
+    try {
+      const rows = await this.prisma.postMedia.findMany({
+        where: { postId, publishedAt: { not: null } },
+        select: { id: true },
+        orderBy: { sequence: 'asc' },
+      });
+      for (const { id } of rows) {
+        const outcome = await this.withdraw(id);
+        if (outcome === 'withdrawn') withdrawn += 1;
+        else if (outcome === 'failed') failed += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      this.logger.warn(`Withdraw of the media of removed post ${postId} failed (${msg(err)}); reconcile will retry.`);
+    }
+    return { withdrawn, failed };
+  }
+
+  /**
+   * An appeal on a content_removed report was overturned and the post is back (called after the commit):
+   * republishes the files that are approved and not held, from the private copy withdraw kept. Best effort, never
+   * throws; reconcile() does the same on its next pass. A file whose private object was already deleted at
+   * closure (deletedByModerationAt) cannot come back; closure and an overturn cannot both happen.
+   */
+  async republishForPost(postId: string): Promise<{ published: number; failed: number }> {
+    let published = 0;
+    let failed = 0;
+    try {
+      const rows = await this.prisma.postMedia.findMany({
+        where: {
+          postId,
+          status: 'approved',
+          hiddenPendingReview: false,
+          publishedAt: null,
+          privateKey: { not: null },
+          uploadState: 'ready',
+          deletedByModerationAt: null,
+        },
+        select: OBJECT_SELECT,
+        orderBy: { sequence: 'asc' },
+      });
+      for (const row of rows) {
+        if (await this.publishRow(row)) published += 1;
+        else failed += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      this.logger.warn(`Republish of the media of restored post ${postId} failed (${msg(err)}); reconcile will retry.`);
+    }
+    return { published, failed };
+  }
+
+  /** Copy + verify + guarded 'published' write + drop the private original. False (and logged) if anything fails. */
+  private async publishRow(row: ObjectRow): Promise<boolean> {
+    try {
+      await this.copyToPublic(row);
+      const r = await this.prisma.postMedia.updateMany({
+        where: {
+          id: row.id,
+          status: 'approved',
+          hiddenPendingReview: false,
+          publishedAt: null,
+          ...POST_NOT_REMOVED_BY_MODERATION,
+        },
+        data: { publishedAt: this.clock.now() },
+      });
+      if (r.count !== 1) {
+        // Lost a race (the post was removed again, or the file was held): the copy is not live.
+        if (row.publicKey) await this.discardUnrecordedCopy(row.id, row.publicKey);
+        return false;
+      }
+      await this.finishPublish(row.id);
+      return true;
+    } catch (err) {
+      this.logger.warn(`Publish of media ${row.id} failed (${msg(err)}); will retry.`);
+      return false;
+    }
   }
 
   private async deleteQuietly(key: string, context: string): Promise<void> {

@@ -9,6 +9,7 @@ import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
 import { BanterModule } from '../banter/banter.module';
+import { PostMediaModule } from '../post-media/post-media.module';
 import { AdminModerationController } from './admin-moderation.controller';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
@@ -69,6 +70,8 @@ import { ReportsController } from './reports.controller';
     AccountHoldModule,
     // B-279 (Decision Log #456): GuardianSecurityNoticeService for the outcome notices to a minor's guardian.
     GuardianSecurityNoticeModule,
+    // B-290 (Decision Log #484): PostMediaObjectsService withdraws / republishes a removed post's media files.
+    PostMediaModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
   providers: [ModerationService, ModerationHoldsService, RegistrationEmailService],

@@ -14,6 +14,12 @@ Backend only: no frontend, no Figma, no Decision Log docx edit.
 > (B-283)". The rule from #430 item 2 that kept it is gone; evidence handling beyond an active hold and the
 > statutory-reporting question stay OPEN under counsel (B-206).
 
+> **Updated by `backend/b290-removed-post-media`** (build register B-290; Decision Log #484, on the content-removal
+> columns of #483). When a moderator records **Remove Content on a post**, the **public** copy of every file attached to
+> it is withdrawn at once and the **private** copy is kept as evidence until the removing report closes; see "Media of a
+> post removed by moderation (B-290)". The reconciler invariant is now: a public object exists iff the file is approved,
+> not held by reports **and its post is not removed by moderation**.
+
 A user's photo or video reaches a post (or a contest final entry) only through this pipeline. A free URL
 is no longer accepted from a user on any route.
 
@@ -68,6 +74,11 @@ prefix (`private-media/`). The private prefix name deliberately does **not** sta
 **A rejected file stays in the private prefix while its row exists** — none of the moves above (publish, withdraw, reconcile)
 deletes it, and a moderator Reject does not delete it either. It is deleted when its row is removed: see "Deleting a rejected
 file (B-283)" below. *(This replaces the earlier rule that no purge or cleanup path ever deleted it, #430 item 2.)*
+
+**An approved file has NO private copy** once it is published: `finishPublish` deletes the private original after publishing, and
+the reconciler removes any that is left (this is the B-257 design, and B-290 keeps it). Anything that needs a private copy of an
+approved file therefore **makes one at that moment** by `withdraw()` (copy public -> private, verify the size, only then delete
+the public object): a file held by reports, and a file whose post a moderator removed.
 
 **Known narrow race:** a moderator "keep" landing in the same instant as an automatic withdraw of the same item can leave an
 approved row whose public object was just removed; the reconciler heals it from the retained private copy.
@@ -159,6 +170,47 @@ fix and deletes nothing; `processDeferred` and every lifecycle path still work. 
 
 Logs carry counts and media ids only, never an uploader id, a key or any content.
 
+### Media of a post removed by moderation (B-290)
+
+`backend/b290-removed-post-media`; build register B-290; Decision Log #484, on the content-removal columns of #483
+(`Post.removedByModerationAt` / `removedByReportId`, set by `content_removed` on a **post** report). Contest-entry videos are
+ordinary `PostMedia` of the entry's post, so they follow exactly the same path.
+
+| Step | When | What happens |
+|---|---|---|
+| **Withdraw** | Remove Content recorded (`ModerationService.actionReport`, after the commit, in the background) | `PostMediaObjectsService.withdrawForPost(postId)` calls `withdraw()` for each published file: a private copy is made from the public object and verified, `publishedAt` is cleared, the **public** object is deleted. The post is already hidden by the database read gate, so a failure only leaves an object lingering; **the reconciler is the repair** (its withdraw query now also selects files whose post is removed). |
+| **Keep** | from then until closure | The **private** copy (`privateKey`) is kept as evidence. It is not reachable by any public URL. Nothing deletes it on its own. |
+| **Republish** | an appeal on the removing report is **overturned**, and that report was the one that removed the post | `restoreContentRemoval` clears the removal; `republishForPost` copies the private copy back to the public prefix and `finishPublish` drops it again (back to the normal approved state, public only). The reconciler's publish query does the same on its next pass if the immediate call missed. |
+| **Confirm (delete)** | the **removing report closes** | The private object is deleted, `privateKey` becomes `NULL`, and the row records `deletedByModerationAt`. **The `PostMedia` row and the `Post` stay.** |
+
+**Closure** is `reportClosedAt` (the one predicate of the hold rules): the appeal window lapsed (`REPORT_APPEAL_WINDOW_DAYS`, 30), or
+the appeal was upheld. A report that is open, has an appeal pending, or is back to open after an overturn is **not** closed.
+Because closure is always *after* a removal that was not overturned, a file whose private copy was deleted can never need to be
+republished (`deletedByModerationAt` is also in the republish queries' `WHERE`).
+
+**Confirm is step 4 of the daily sweep** (`RejectedMediaSweepService.confirmModerationRemovals`, 04:00, after the deferred
+deletions and before the stray sweep). It pages candidate rows (`post` removed by a report, `privateKey` set, not published, not yet
+deleted) and asks **one function** which may go: `removedMediaDeletableNow` in `rejected-media-evidence.util.ts`. That function is
+the existing protection rule **unchanged** (`partitionEvidence`: the uploader has an **active admin hold** -> keep and retry next
+run; the post has another **report not yet closed** -> keep) with one condition in front of it: the removing report must be closed.
+It is capped like the other steps (`POST_MEDIA_STRAY_SWEEP_MAX_DELETES`, deletions plus failures per run), logs **counts only**
+(deleted / waiting / failed / capped), and a delete that fails leaves the row untouched and is retried on the next run (the object
+is deleted first, then the row is updated, so a failure between the two is also retried and harmless).
+
+> **B-206 hook (OPEN under counsel):** the later evidence set-aside (statutory reporting, CSAM) is meant to plug into
+> `removedMediaDeletableNow` and nowhere else: one more reason to put an item in `waiting`. Nothing else in the sweep decides
+> whether a removed post's copy may be deleted.
+
+**The author deletes the removed post before it closes.** The private copy is then evidence that has lost its row, so it follows the
+B-283 rule: `evidenceKeyOf` treats it like a rejected file's private object (`post.removedByModerationAt` is set), the delete is
+**not** done with the row, a `PostMediaDeferredDeletion` record is written in the same transaction, and `processDeferred` deletes it
+once neither protection applies (the removing report included, because it is an unclosed report on the post until it closes).
+Account anonymisation takes the same path (an account with an unclosed report on its post is held, so this is a second line of defence).
+
+Defaults, founder-veto-able: only a **post** removal is handled (a removed comment or message has no media); the republish and the
+confirm use the existing 30-day window and the existing hold; a file still published when the sweep runs waits (the reconciler
+withdraws it first).
+
 ## What is stored, sent, retained and who can read it (for the DPIA drafter; NOT legal copy)
 
 ### Stored per upload (`PostMedia`, one row)
@@ -176,6 +228,7 @@ Logs carry counts and media ids only, never an uploader id, a key or any content
 | `checkLabels` | **moderation category NAMES only** (no confidence, no image) at or above the pass threshold | server/admin only; **never returned to the uploader** |
 | `checkState`, `checkAttempts`, `checkNextAt`, `checkLeaseUntil`, `checkedAt`, `checkError` | the check's bookkeeping; `checkError` is an error NAME, never content | server only |
 | `postId` | the post it is attached to | uploader |
+| `deletedByModerationAt` | when the private copy of a removed post's file was deleted at closure (B-290) | server only |
 | `processingUntil` | confirm-in-progress lease | server only |
 
 The processed **file itself** is also stored (object store: the private prefix until approved, the public prefix only while approved and not held) and, until it is deleted, the original in the quarantine prefix.
@@ -200,6 +253,7 @@ check with counsel/the founder** (not decided here): whether to opt out of AWS u
 | Processed file + `PostMedia` row | while the post exists | post deleted (objects removed by the app); uploader deletes it; account anonymised. A **rejected** file's private object goes too (B-283), unless the uploader is under an active hold or the post has an unclosed report: then it waits in `PostMediaDeferredDeletion` |
 | Confirmed upload never attached to a post | 7 days (`POST_MEDIA_UNATTACHED_MAX_AGE_DAYS`) | the hourly unattached purge (a rejected one too, unless the uploader is held) |
 | `checkLabels`, `rejectionReason`, decision fields | with the row | with the row. **No separate retention clock exists** (OPEN: see the report) |
+| A removed post's media (B-290) | public copy withdrawn at removal; the **private** copy is kept | when the removing report closes (appeal window lapsed or appeal upheld), unless the uploader is under an active hold or another report on the post is open: then it waits. The row and the post stay (`deletedByModerationAt`) |
 | A rejected file | stays in the **private** prefix while its row exists; deleted with its row / post / upload / account (B-283); a stray with no row is deleted by the daily sweep once older than `POST_MEDIA_STRAY_MIN_AGE_DAYS` (7) | protected by an active hold or an unclosed report on its post; statutory reporting / evidence beyond that is OPEN under counsel (B-206) |
 
 ### Who can read what

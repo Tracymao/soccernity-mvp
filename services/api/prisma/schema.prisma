@@ -2843,6 +2843,12 @@ model PostMedia {
   postId              String?
   post                Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
   confirmedAt         DateTime?
+  // backend/b290-removed-post-media (B-290, Decision Log #484). Set when the removing report CLOSED and the file's
+  // private object was deleted (privateKey is then NULL). The row stays (so does the post). While the post is
+  // removed by moderation and this is NULL, the private object is kept as evidence and the public copy is
+  // withdrawn: the reconciler invariant is 'a public object exists iff approved, not held and the post is not
+  // removed by moderation'.
+  deletedByModerationAt DateTime?
   createdAt           DateTime  @default(now())
 
   // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). The moderator review queue.
