@@ -83,6 +83,9 @@ columns all set or all null; a bad-faith hold has an expiry and a report; a lega
 evidence and **blocks the B-043 purge** of the user row (`AccountHold.user` is classed as content in
 `anonymized-row-purge.references.ts`; veto-able).
 
+An active `legal_hold` also keeps the held person's messages (and the other participant's messages in their conversations) out of
+the 12-month message retention sweep (`messaging/message-retention.service.ts`, Decision Log #482); `bad_faith` and report-derived holds do not.
+
 ## Not built / open
 
 * HTTP endpoints: built by `backend/w6-hold-admin-endpoints` (see `../moderation/README.md`, "Admin hold routes"). The notification is deliberately not built (#403 item 8); the `apps/admin` screens are the next PR.

@@ -50,6 +50,9 @@ show as an empty thread. So the sweep deletes a conversation that **lost message
 
 ## Account-hold rule (B-044): is an exemption needed?
 
+> **Superseded 2026-11-10 by Decision Log #482 (`backend/message-retention-legal-hold`).** The founder decided a legal hold
+> DOES exempt: see `docs/backend-message-retention-legal-hold-report.md`. The text below is the original finding, kept as written.
+
 Read `account-hold.rules.ts`, `hold.service.ts` and `account-deletion/README.md`. **I added no exemption and invented
 none.** Findings for the founder:
 
