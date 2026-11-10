@@ -1,4 +1,5 @@
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
@@ -138,7 +139,7 @@ export class ContestExposureService {
       where: {
         roundId: live.round4Id,
         // Revealed AND every uploaded file approved (Decision Log #419): an unapproved video is never exposed.
-        post: { is: { AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED] } },
+        post: { is: { AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED, POST_NOT_REMOVED] } },
         user: { is: CONTEST_ELIGIBLE_USER },
       },
       select: LIVE_ENTRY_SELECT,
@@ -228,7 +229,7 @@ export class ContestExposureService {
         id: entryId,
         roundId: live.round4Id,
         // Revealed AND every uploaded file approved (Decision Log #419): an unapproved video is never exposed.
-        post: { is: { AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED] } },
+        post: { is: { AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED, POST_NOT_REMOVED] } },
         user: { is: CONTEST_ELIGIBLE_USER },
       },
       select: { id: true, userId: true },

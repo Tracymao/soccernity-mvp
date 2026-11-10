@@ -20,6 +20,7 @@ import {
 import {
   MESSAGE_EDIT_WINDOW_MS,
   MESSAGE_NOT_EDITABLE_CODE,
+  MESSAGE_REMOVED_CODE,
   MESSAGE_EDIT_WINDOW_CLOSED_CODE,
   MESSAGE_EDIT_NOT_SENDER_CODE,
   MESSAGE_DELETE_NOT_SENDER_CODE,
@@ -68,6 +69,8 @@ const MESSAGE_SELECT = {
   readAt: true,
   editedAt: true,
   deletedForEveryoneAt: true,
+  // B-289 (Decision Log #483): selected only to turn the row into the removed stub below; never returned.
+  removedByModerationAt: true,
 } as const;
 
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
@@ -93,12 +96,24 @@ export interface DeletedMessageView {
   deletedForEveryone: true;
   contentText: null;
 }
-export type MessageView = LiveMessageView | DeletedMessageView;
+// B-289 (Decision Log #483): a message a moderator removed. It stays in the thread for BOTH people as exactly this
+// stub: no text, no original, no edit data, no read time. (Deliberately no senderId or conversationId either: the
+// thread's stub is { id, sentAt, removedByModeration } and nothing else.) The row and its text stay for staff.
+export interface RemovedMessageView {
+  id: string;
+  sentAt: Date;
+  removedByModeration: true;
+}
+export type MessageView = LiveMessageView | DeletedMessageView | RemovedMessageView;
 
 // `viewerId` is the caller and `discloseReadAt` the result of canDiscloseReadAt for the pair (see
 // read-receipt-disclosure.util.ts). A read time is returned ONLY on a message the viewer SENT and only when the
 // rule allows it; on a message the viewer received it is always null.
 function toMessageView(row: MessageRow, viewerId: string, discloseReadAt: boolean): MessageView {
+  // A moderator's removal wins over everything else (an edit, a delete for everyone): nothing of the message shows.
+  if (row.removedByModerationAt) {
+    return { id: row.id, sentAt: row.sentAt, removedByModeration: true };
+  }
   if (row.deletedForEveryoneAt) {
     return {
       id: row.id,
@@ -140,6 +155,13 @@ export interface MessagePreview {
   sentAt: Date;
 }
 
+// B-289: the conversation-list preview of a last message a moderator removed.
+export interface RemovedMessagePreview {
+  id: string;
+  sentAt: Date;
+  removedByModeration: true;
+}
+
 // What GET /conversations returns per row, and what POST /conversations
 // returns for the single conversation it found-or-created. `unreadCount`
 // and `lastMessage` are per-caller derived values (Section 4.7 doesn't
@@ -151,7 +173,7 @@ export interface ConversationView {
   otherParticipant: OtherParticipant | null;
   lastMessageAt: Date;
   createdAt: Date;
-  lastMessage: MessagePreview | null;
+  lastMessage: MessagePreview | RemovedMessagePreview | null;
   unreadCount: number;
 }
 
@@ -578,6 +600,7 @@ export class MessagingService {
         sentAt: true,
         originalContentText: true,
         deletedForEveryoneAt: true,
+        removedByModerationAt: true,
       },
     });
     if (!message) {
@@ -588,6 +611,10 @@ export class MessagingService {
         message: 'You can only edit your own messages',
         code: MESSAGE_EDIT_NOT_SENDER_CODE,
       });
+    }
+    // B-289: a message a moderator removed can no longer be edited (409), whatever its age.
+    if (message.removedByModerationAt) {
+      throw new ConflictException({ message: 'This message was removed', code: MESSAGE_REMOVED_CODE });
     }
     if (message.deletedForEveryoneAt || message.mediaUrl) {
       throw new ConflictException({
@@ -613,6 +640,7 @@ export class MessagingService {
         conversationId,
         senderId,
         deletedForEveryoneAt: null,
+        removedByModerationAt: null,
         sentAt: { gte: earliestSentAt },
       },
       data: {
@@ -652,10 +680,16 @@ export class MessagingService {
 
     const message = await this.prisma.message.findFirst({
       where: { id: messageId, conversationId },
-      select: { id: true, senderId: true },
+      select: { id: true, senderId: true, removedByModerationAt: true },
     });
     if (!message) {
       throw new NotFoundException('Message not found');
+    }
+    // B-289: the SENDER can no longer edit or delete a message a moderator removed, for everyone or for themselves
+    // (the removal is a moderation record, not theirs to hide). The other person may still hide it from their own
+    // view ("delete for me"), as with any message.
+    if (message.removedByModerationAt && message.senderId === callerId) {
+      throw new ConflictException({ message: 'This message was removed', code: MESSAGE_REMOVED_CODE });
     }
 
     if (scope === 'me') {
@@ -673,7 +707,7 @@ export class MessagingService {
       });
     }
     await this.prisma.message.updateMany({
-      where: { id: messageId, deletedForEveryoneAt: null },
+      where: { id: messageId, deletedForEveryoneAt: null, removedByModerationAt: null },
       data: { deletedForEveryoneAt: this.clock.now() },
     });
   }
@@ -922,7 +956,14 @@ export class MessagingService {
         where: visibleMessages,
         orderBy: [{ conversationId: 'asc' }, { sentAt: 'desc' }, { id: 'desc' }],
         distinct: ['conversationId'],
-        select: { conversationId: true, contentText: true, senderId: true, sentAt: true },
+        select: {
+          id: true,
+          conversationId: true,
+          contentText: true,
+          senderId: true,
+          sentAt: true,
+          removedByModerationAt: true,
+        },
       }),
     ]);
 
@@ -942,9 +983,11 @@ export class MessagingService {
           : null,
         lastMessageAt: c.lastMessageAt,
         createdAt: c.createdAt,
-        lastMessage: last
-          ? { contentText: last.contentText, senderId: last.senderId, sentAt: last.sentAt }
-          : null,
+        lastMessage: !last
+          ? null
+          : last.removedByModerationAt
+            ? { id: last.id, sentAt: last.sentAt, removedByModeration: true as const }
+            : { contentText: last.contentText, senderId: last.senderId, sentAt: last.sentAt },
         unreadCount: unreadByConversation.get(c.id) ?? 0,
       };
     });
@@ -956,12 +999,15 @@ export class MessagingService {
   private async shouldDiscloseReadAt(
     callerId: string,
     otherId: string | null,
-    rows: { senderId: string; readAt: Date | null; deletedForEveryoneAt: Date | null }[],
+    rows: { senderId: string; readAt: Date | null; deletedForEveryoneAt: Date | null; removedByModerationAt?: Date | null }[],
   ): Promise<boolean> {
     // A message deleted for everyone is returned as the placeholder (no readAt at all), so it needs no check.
     if (
       otherId === null ||
-      !rows.some((r) => r.senderId === callerId && r.readAt !== null && r.deletedForEveryoneAt === null)
+      !rows.some(
+        (r) =>
+          r.senderId === callerId && r.readAt !== null && r.deletedForEveryoneAt === null && !r.removedByModerationAt,
+      )
     ) {
       return false;
     }

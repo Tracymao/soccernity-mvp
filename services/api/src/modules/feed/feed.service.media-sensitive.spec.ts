@@ -1,5 +1,5 @@
 import { PrismaService } from '../../prisma/prisma.service';
-import { FeedService } from './feed.service';
+import { FeedPostWithViewerState, FeedService } from './feed.service';
 
 // B-061 (Decision Log #472 (d)): every read that returns a post's media carries `mediaSensitive`, taken
 // from the AUTHOR's CURRENT toggle at read time. A post with no media is always false. The author's own
@@ -71,39 +71,39 @@ describe('FeedService: mediaSensitive (B-061)', () => {
     it('is true for a post with media when the author has the toggle on, for any viewer', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow());
-      const post = await service.getPostById('post-1', 'viewer-1');
+      const post = (await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(post.mediaSensitive).toBe(true);
     });
 
     it('is also true for the AUTHOR viewing their own post', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow());
-      const post = await service.getPostById('post-1', 'author-1');
+      const post = (await service.getPostById('post-1', 'author-1')) as FeedPostWithViewerState;
       expect(post.mediaSensitive).toBe(true);
     });
 
     it('is false for a post with media when the author has the toggle off', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow({ author: author(false) }));
-      expect((await service.getPostById('post-1', 'viewer-1')).mediaSensitive).toBe(false);
+      expect(((await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState).mediaSensitive).toBe(false);
     });
 
     it('is false for a post with NO media even when the author has the toggle on', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow({ mediaUrls: [], media: [] }));
-      expect((await service.getPostById('post-1', 'viewer-1')).mediaSensitive).toBe(false);
+      expect(((await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState).mediaSensitive).toBe(false);
     });
 
     it('still counts a post with only legacy mediaUrls (no PostMedia rows) as having media', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow({ media: [] }));
-      expect((await service.getPostById('post-1', 'viewer-1')).mediaSensitive).toBe(true);
+      expect(((await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState).mediaSensitive).toBe(true);
     });
 
     it('never leaves the raw toggle on the author object', async () => {
       const { prisma, service } = build();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(postRow());
-      const post = await service.getPostById('post-1', 'viewer-1');
+      const post = (await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(post.author).toEqual(expect.not.objectContaining({ mediaSensitive: expect.anything() }));
       expect(Object.keys(post.author).sort()).toEqual(['id', 'isFollowing', 'publicName']);
     });

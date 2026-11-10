@@ -14,6 +14,7 @@ import { SearchQueryDto } from './dto/search-query.dto';
 import { SEARCH_DEFAULT_PAGE_SIZE, SEARCH_MAX_PAGE_SIZE } from './search.constants';
 import { PUBLIC_NAME_SELECT, publicNameContains, toPublicUser } from '../users/public-name.util';
 import { postProfileVisibleTo } from '../users/profile-visibility.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import {
   decodeUserNameCursor,
   USER_NAME_ORDER_BY,
@@ -341,6 +342,8 @@ export class SearchService {
       // B-060 (Public profile toggle): a private author's posts are not searchable by a non-follower (an anonymous
       // searcher is a stranger to every private profile). Banter Room posts and Contest entries are exempt.
       postProfileVisibleTo(viewerId),
+      // B-289 (Decision Log #483): a post a moderator removed is not searchable.
+      POST_NOT_REMOVED,
       { contentText: { contains: q, mode: 'insensitive' } },
     ];
     if (cursor) {

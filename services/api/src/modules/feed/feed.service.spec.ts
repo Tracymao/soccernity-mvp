@@ -8,7 +8,7 @@ import {
   revokeEngagementPoints,
   revokeEngagementPointsForPost,
 } from '../points/engagement-points.util';
-import { FeedService, visibleToViewer } from './feed.service';
+import { FeedPostWithViewerState, FeedService, visibleToViewer } from './feed.service';
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
 import { postProfileVisibleTo } from '../users/profile-visibility.util';
 
@@ -48,6 +48,8 @@ const visibleTo = (viewerId: string) => ({
     { OR: [{ authorId: viewerId }, POST_MEDIA_ALL_APPROVED] },
     // B-060 (Public profile toggle): the author's profile must be visible to the viewer (or the post is exempt).
     postProfileVisibleTo(viewerId),
+    // B-289 (Decision Log #483): a post a moderator removed is absent for everyone.
+    { removedByModerationAt: null },
   ],
 });
 // GET /posts/feed omits a final entry until the pin is removed (Post.communityFeedFrom).
@@ -938,7 +940,7 @@ describe('FeedService', () => {
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'follow-1' });
       const service = new FeedService(prisma, FIXED_CLOCK);
 
-      const result = await service.getPostById('post-1', 'viewer-1');
+      const result = (await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
 
       expect(result.isLiked).toBe(true);
       expect(result.isSaved).toBe(false);
@@ -960,7 +962,7 @@ describe('FeedService', () => {
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'should-not-be-read' });
       const service = new FeedService(prisma, FIXED_CLOCK);
 
-      const result = await service.getPostById('post-1', 'viewer-1');
+      const result = (await service.getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
 
       expect(result.author.isFollowing).toBe(false);
       expect(prisma.follow.findUnique).not.toHaveBeenCalled();
@@ -1763,7 +1765,7 @@ describe('FeedService', () => {
     it('lists each attached file as { id, kind } only, in the order of mediaUrls, and never the raw url or keys', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
-      const post = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9');
+      const post = (await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9')) as FeedPostWithViewerState;
       expect(post.media).toEqual([
         { id: 'b', kind: 'video' },
         { id: 'a', kind: 'image' },
@@ -1785,7 +1787,7 @@ describe('FeedService', () => {
     it('a post with no files has an empty media list', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
-      expect((await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9')).media).toEqual([]);
+      expect(((await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9')) as FeedPostWithViewerState).media).toEqual([]);
     });
 
     it('the AUTHOR gets a short-lived signed viewUrl for a file that is not public yet (the private object), not for an approved one', async () => {
@@ -1793,7 +1795,7 @@ describe('FeedService', () => {
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
       (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows());
       const ds = directStorage();
-      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      const post = (await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1')) as FeedPostWithViewerState;
       expect(post.media).toEqual([
         { id: 'b', kind: 'video' },
         { id: 'a', kind: 'image', viewUrl: 'https://view.test/private-media/author-1/a.jpg?ttl=300' },
@@ -1809,7 +1811,7 @@ describe('FeedService', () => {
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
       (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows({ status: 'rejected' }));
       const ds = directStorage();
-      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      const post = (await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1')) as FeedPostWithViewerState;
       expect(post.media.find((m) => m.id === 'a')?.viewUrl).toContain('private-media/author-1/a.jpg');
     });
 
@@ -1817,7 +1819,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
       const ds = directStorage();
-      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'viewer-9');
+      const post = (await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'viewer-9')) as FeedPostWithViewerState;
       expect(post.media.every((m) => !('viewUrl' in m))).toBe(true);
       expect(ds.createDownloadUrl).not.toHaveBeenCalled();
       expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
@@ -1843,14 +1845,14 @@ describe('FeedService', () => {
       (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows());
       const { ServiceUnavailableException } = jest.requireActual('@nestjs/common');
       const ds = { createDownloadUrl: jest.fn().mockRejectedValue(new ServiceUnavailableException('no store')) };
-      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      const post = (await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1')) as FeedPostWithViewerState;
       expect(post.media.every((m) => !('viewUrl' in m))).toBe(true);
     });
 
     it('is optional: without an object store the author still gets { id, kind }', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
-      const post = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'author-1');
+      const post = (await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'author-1')) as FeedPostWithViewerState;
       expect(post.media).toEqual([
         { id: 'b', kind: 'video' },
         { id: 'a', kind: 'image' },
@@ -2333,7 +2335,7 @@ describe('FeedService', () => {
     it('getPostById shows the username as the author publicName and never forwards the real displayName', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow({ author: withUsername }));
-      const result = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
+      const result = (await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(result.author.publicName).toBe('goalie_9');
       expect(result.author).not.toHaveProperty('displayName');
       expect(JSON.stringify(result)).not.toContain('Ada Obi');
@@ -2342,7 +2344,7 @@ describe('FeedService', () => {
     it('getPostById shows the placeholder, never the real name, when the author has no username', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
-      const result = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
+      const result = (await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(result.author.publicName).toBe('Soccernity member');
     });
 
@@ -2402,6 +2404,7 @@ describe('FeedService', () => {
           { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] },
           POST_MEDIA_ALL_APPROVED,
           postProfileVisibleTo(undefined),
+          { removedByModerationAt: null },
         ],
       });
     });
@@ -2416,6 +2419,7 @@ describe('FeedService', () => {
           { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] },
           POST_MEDIA_ALL_APPROVED,
           postProfileVisibleTo(undefined),
+          { removedByModerationAt: null },
         ],
       });
     });
@@ -2640,15 +2644,15 @@ describe('FeedService: contest entries (B-091)', () => {
         });
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({}));
-      const during = await new FeedService(prisma, clockAt('2026-08-20T00:00:00Z')).getPostById('post-1', 'viewer-1');
+      const during = (await new FeedService(prisma, clockAt('2026-08-20T00:00:00Z')).getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(during.contest).toEqual({ entryId: 'e', kind: 'weekly', weekNumber: 1, pinned: true, label: 'Contest post' });
 
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({}));
-      const after = await new FeedService(prisma, clockAt('2026-09-01T00:00:00Z')).getPostById('post-1', 'viewer-1');
+      const after = (await new FeedService(prisma, clockAt('2026-09-01T00:00:00Z')).getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(after.contest).toMatchObject({ pinned: false, label: 'Contest post' });
 
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({ pinRemovedAt: new Date('2026-08-31T23:00:00Z') }));
-      const removed = await new FeedService(prisma, clockAt('2026-08-31T23:30:00Z')).getPostById('post-1', 'viewer-1');
+      const removed = (await new FeedService(prisma, clockAt('2026-08-31T23:30:00Z')).getPostById('post-1', 'viewer-1')) as FeedPostWithViewerState;
       expect(removed.contest).toMatchObject({ pinned: false });
     });
   });
@@ -2809,6 +2813,7 @@ describe('visibleToViewer (post media gate)', () => {
         { OR: [{ visibleFrom: null }, { visibleFrom: { lte: NOW } }, { authorId: 'me' }] },
         { OR: [{ authorId: 'me' }, POST_MEDIA_ALL_APPROVED] },
         postProfileVisibleTo('me'),
+        { removedByModerationAt: null },
       ],
     });
   });

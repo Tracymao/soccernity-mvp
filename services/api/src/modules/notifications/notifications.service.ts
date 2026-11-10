@@ -315,7 +315,8 @@ export class NotificationsService {
     const [posts, conversations, fixtures, cycles, matches, standingCycleRows, mediaRows] = await Promise.all([
       postRefIds.length > 0
         ? this.prisma.post.findMany({
-            where: { id: { in: postRefIds } },
+            // B-289: a post a moderator removed is gone for a notification too (data: null, "no longer available").
+            where: { id: { in: postRefIds }, removedByModerationAt: null },
             select: { id: true, contentText: true, authorId: true },
           })
         : Promise.resolve([] as { id: string; contentText: string; authorId: string }[]),

@@ -157,7 +157,7 @@ describe('NotificationsService', () => {
       // One batched query for both rows, not one per row.
       expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
       expect(prisma.post.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: { in: ['post-1'] } } }),
+        expect.objectContaining({ where: { id: { in: ['post-1'] }, removedByModerationAt: null } }),
       );
       expect(page.items[0].data).toEqual({
         post: { id: 'post-1', contentText: 'hello world', authorId: CALLER },

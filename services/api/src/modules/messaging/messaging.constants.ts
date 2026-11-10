@@ -27,6 +27,8 @@ export const MESSAGE_EDIT_WINDOW_CLOSED_CODE = 'message_edit_window_closed';
 export const MESSAGE_NOT_EDITABLE_CODE = 'message_not_editable'; // deleted for everyone, or not a text message
 export const MESSAGE_EDIT_NOT_SENDER_CODE = 'message_edit_not_sender';
 export const MESSAGE_DELETE_NOT_SENDER_CODE = 'message_delete_not_sender';
+// B-289 (Decision Log #483): the sender tried to edit or delete a message a moderator removed.
+export const MESSAGE_REMOVED_CODE = 'message_removed';
 
 // backend/b287-message-retention (B-287, Decision Log #478, the founder's own decision like the Contact Us
 // figure of #440): a message is deleted this many calendar months after it was SENT, for everyone including

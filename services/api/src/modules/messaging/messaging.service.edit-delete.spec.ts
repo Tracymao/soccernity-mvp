@@ -102,6 +102,7 @@ describe('MessagingService: edit, delete and hide (B-067)', () => {
           conversationId: 'convo-1',
           senderId: ME,
           deletedForEveryoneAt: null,
+          removedByModerationAt: null,
           sentAt: { gte: new Date(now.getTime() - MESSAGE_EDIT_WINDOW_MS) },
         },
         data: { contentText: 'new text', editedAt: now, originalContentText: 'first text' },
@@ -243,7 +244,7 @@ describe('MessagingService: edit, delete and hide (B-067)', () => {
       now = new Date(SENT_AT.getTime() + 400 * 24 * 3600 * 1000);
       await service.deleteMessage('convo-1', 'm-1', ME, 'everyone');
       expect(p().message.updateMany).toHaveBeenCalledWith({
-        where: { id: 'm-1', deletedForEveryoneAt: null },
+        where: { id: 'm-1', deletedForEveryoneAt: null, removedByModerationAt: null },
         data: { deletedForEveryoneAt: now },
       });
     });

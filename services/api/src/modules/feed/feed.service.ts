@@ -14,6 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
 import { postProfileVisibleTo } from '../users/profile-visibility.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
 import { shouldCreateNotification } from '../notifications/notification-policy.util';
 import {
   assertFinalEntryUnlocked,
@@ -192,6 +193,9 @@ export function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereIn
       // B-060 (Public profile toggle): a post by an author whose profile is private to this viewer is a 404, like a
       // post that does not exist. Banter Room posts and Contest entries are exempt (profile-visibility.util.ts).
       postProfileVisibleTo(viewerId),
+      // B-289 (Decision Log #483): a post a moderator removed is absent for EVERYONE, its author included (the
+      // author only learns of it from the single-post stub, getPostById). Soft removal: the row stays for staff.
+      POST_NOT_REMOVED,
     ],
   };
 }
@@ -293,14 +297,39 @@ const COMMENT_SELECT = {
   // True when the POST's author hid this comment. Only the post's author
   // and the comment's own author ever receive a hidden row (getComments).
   hidden: true,
+  // B-289: read only to turn a removed comment into a stub (toCommentThreadItem); never part of FeedComment.
+  removedByModerationAt: true,
   createdAt: true,
 } as const;
 
 type RawFeedComment = Prisma.CommentGetPayload<{ select: typeof COMMENT_SELECT }>;
-export type FeedComment = Omit<RawFeedComment, 'author'> & { author: PublicAuthor };
+export type FeedComment = Omit<RawFeedComment, 'author' | 'removedByModerationAt'> & { author: PublicAuthor };
+
+// B-289 (Decision Log #483): what a comment a moderator removed looks like in the thread -- a stub with no text and
+// no author. It stays in place so replies and ordering still make sense, and is not counted toward commentCount.
+export interface RemovedPostStub {
+  id: string;
+  removedByModeration: true;
+}
+
+export interface RemovedFeedComment {
+  id: string;
+  createdAt: Date;
+  removedByModeration: true;
+}
 
 function toFeedComment(row: RawFeedComment): FeedComment {
-  return { ...row, author: toPublicUser(row.author) };
+  // removedByModerationAt is selected only for toCommentThreadItem; it is never part of FeedComment.
+  const rest: Partial<RawFeedComment> = { ...row };
+  delete rest.removedByModerationAt;
+  return { ...(rest as Omit<RawFeedComment, 'removedByModerationAt'>), author: toPublicUser(row.author) };
+}
+
+function toCommentThreadItem(row: RawFeedComment): FeedComment | RemovedFeedComment {
+  if (row.removedByModerationAt) {
+    return { id: row.id, createdAt: row.createdAt, removedByModeration: true };
+  }
+  return toFeedComment(row);
 }
 
 // Internal-only variant of COMMENT_SELECT that additionally pulls
@@ -314,7 +343,7 @@ const COMMENT_SELECT_WITH_SEQUENCE = {
 } as const;
 
 export interface CommentPage {
-  items: FeedComment[];
+  items: (FeedComment | RemovedFeedComment)[];
   nextCursor: string | null;
 }
 
@@ -741,7 +770,7 @@ export class FeedService {
   // unique-key existence checks — no batching needed. isFollowing is
   // forced false without a lookup for the caller's own post, same as
   // attachViewerState().
-  async getPostById(postId: string, userId: string): Promise<FeedPostWithViewerState> {
+  async getPostById(postId: string, userId: string): Promise<FeedPostWithViewerState | RemovedPostStub> {
     // findFirst (not findUnique) so ACTIVE_AUTHOR_POST_FILTER (Decision
     // Log #221) applies: a post whose author is deactivated /
     // pending_deletion is treated as not-found here, exactly as it's
@@ -760,6 +789,15 @@ export class FeedService {
       select: POST_SELECT,
     });
     if (!rawPost) {
+      // B-289 (Decision Log #483): for everyone but the AUTHOR a removed post is exactly a post that does not
+      // exist (this same 404). The author alone gets a stub that says it was removed, and nothing else.
+      const removed = await this.prisma.post.findFirst({
+        where: { id: postId, authorId: userId, removedByModerationAt: { not: null } },
+        select: { id: true },
+      });
+      if (removed) {
+        return { id: removed.id, removedByModeration: true };
+      }
       throw new NotFoundException('Post not found');
     }
     const post = toFeedPost(rawPost, now);
@@ -838,6 +876,8 @@ export class FeedService {
                 POST_MEDIA_ALL_APPROVED,
                 // B-060: an anonymous reader is a stranger to every private profile.
                 postProfileVisibleTo(undefined),
+                // B-289: a removed post is absent for an anonymous reader too.
+                POST_NOT_REMOVED,
               ],
             }
           : { id: postId },
@@ -1109,7 +1149,7 @@ export class FeedService {
 
     // Strip `sequence` back off — see COMMENT_SELECT_WITH_SEQUENCE's own
     // comment; it was never part of the public FeedComment shape.
-    const items: FeedComment[] = rowsWithSequence.map((row) => toFeedComment(stripSequence(row)));
+    const items = rowsWithSequence.map((row) => toCommentThreadItem(stripSequence(row)));
 
     return { items, nextCursor };
   }
@@ -1171,7 +1211,14 @@ export class FeedService {
   async deleteComment(postId: string, commentId: string, requestingUserId: string): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, postId: true, authorId: true, hidden: true, post: { select: { authorId: true } } },
+      select: {
+        id: true,
+        postId: true,
+        authorId: true,
+        hidden: true,
+        removedByModerationAt: true,
+        post: { select: { authorId: true } },
+      },
     });
 
     if (!comment || comment.postId !== postId) {
@@ -1186,8 +1233,9 @@ export class FeedService {
     await this.prisma.$transaction(async (tx) => {
       await tx.comment.delete({ where: { id: commentId } });
       // A hidden comment was already subtracted from commentCount when it
-      // was hidden, so deleting it must not subtract it a second time.
-      if (!comment.hidden) {
+      // was hidden, and a comment a moderator removed (B-289) when it was
+      // removed, so deleting either must not subtract it a second time.
+      if (!comment.hidden && !comment.removedByModerationAt) {
         await tx.post.updateMany({
           where: { id: postId, commentCount: { gt: 0 } },
           data: { commentCount: { decrement: 1 } },
@@ -1280,7 +1328,7 @@ export class FeedService {
     const post = await this.assertPostExists(postId);
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, postId: true, authorId: true, contentText: true },
+      select: { id: true, postId: true, authorId: true, contentText: true, removedByModerationAt: true },
     });
     if (!comment || comment.postId !== postId) {
       throw new NotFoundException('Comment not found');
@@ -1295,6 +1343,9 @@ export class FeedService {
         data: { hidden },
       });
       if (flipped.count === 0) return;
+      // B-289: a comment a moderator removed is already out of commentCount (and shown only as a stub), so flipping
+      // its hidden flag changes no counter and no points.
+      if (comment.removedByModerationAt) return;
       if (hidden) {
         await tx.post.updateMany({
           where: { id: postId, commentCount: { gt: 0 } },

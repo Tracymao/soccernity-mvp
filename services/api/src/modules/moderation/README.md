@@ -442,24 +442,42 @@ describes.
 
 ---
 
-## `actionTaken` is a recorded decision, not an enforced one (disclosed limitation)
+## `actionTaken`: `content_removed` is enforced, `user_suspended` is not (B-289, Decision Log #483)
 
-`PATCH /admin/moderation/reports/:id` records one of `content_removed` |
-`warning_issued` | `user_suspended` | `dismissed` — but recording it does
-**not** itself enforce it. Confirmed by reading the schema directly
-before building anything: there is no soft-delete/hidden flag on `Post`
-or `Comment` anywhere in this codebase, and no admin-triggered
-"suspend this user" endpoint on `User` (only the existing *self-service*
-`deactivate-account`/`reactivate-account`/`delete-account` flow,
-Decision Log #221, which an admin cannot call on someone else's behalf).
-So `content_removed` does not hide the post; `user_suspended` does not
-touch `User.accountStatus`. This PR builds the review/record-keeping/
-notification workflow Section 4.8/8.4 describe, not the separate
-content-moderation *enforcement* mechanisms that would need their own
-schema/endpoint work (a `Post.isRemoved` flag + read-side filtering the
-way `ACTIVE_AUTHOR_POST_FILTER` already filters deactivated authors; an
-admin-triggered suspend path on `User.accountStatus`). Flagged, not
-silently treated as "the action value alone is enough."
+`PATCH /admin/moderation/reports/:id` records one of `content_removed` | `warning_issued` | `user_suspended` |
+`dismissed` | `room_deactivated`. **`content_removed` is now ENFORCED, for exactly three target types: `post`,
+`comment` and `message`.** `user_suspended` and `warning_issued` are still only recorded (the older text of this
+section, which said none of them are enforced, is superseded for `content_removed` only).
+
+- **Soft removal.** `Post`, `Comment` and `Message` each carry `removedByModerationAt` and `removedByReportId` (FK to
+  `Report`, RESTRICT, indexed; migration `20261125090000_add_content_removal`). The row, its text, its media and its
+  engagement rows STAY (evidence; the retention job's report exception and the account hold depend on them). Every
+  user-facing read treats the item as removed; only staff reads (the reported item and the report detail) still return
+  the full item, plus `removedByModerationAt`.
+- **Same step as recording the action.** `actionReport` removes the ONE reported target in the SAME transaction that
+  records the action (`content-removal.util.ts`, `applyContentRemoval`). A context message attached to a message report
+  is never touched. If another report already removed the item, it is left (that report keeps the claim) and the
+  response carries `contentRemoval: 'already_removed'`; `'removed'` is the normal outcome and `'target_not_found'`
+  means the row is gone (the action is still recorded). The key is absent for every other action.
+- **Offered only for those three targets.** `content_removed` on any other target type (user, banter_room,
+  grassroots_team, fixture, enquiry) is a 400 with the stable code `content_removal_not_applicable`.
+- **Counts.** A removed comment, like a hidden one, is not counted in `Post.commentCount` (removal decrements it,
+  guarded so a hidden or already-removed comment is not subtracted twice; deleting a removed comment does not
+  subtract again). A removed post is excluded from every count and from trending hashtags.
+- **Overturned appeal restores.** `decideAppeal` with `overturned` on a `content_removed` report clears both columns
+  in the same transaction, but only if `removedByReportId` is THIS report; a restored comment is counted again unless
+  it is hidden. An upheld appeal changes nothing.
+- **Reads** (full inventory and the test covering each in `docs/backend-content-removal-report.md`): a removed post is
+  absent from feeds (own, club, Banter room), search, saved items, comments, reactions, views, the media report,
+  the contest entry lists, the Final-week carousel, the dashboard's latest posts and trending counts, and a direct
+  `GET /posts/:id` answers exactly like a post that does not exist, except to its AUTHOR, who gets
+  `200 { id, removedByModeration: true }` and nothing else. A removed comment stays in the thread as
+  `{ id, createdAt, removedByModeration: true }`. A removed message stays in the thread and in the conversation
+  preview as `{ id, sentAt, removedByModeration: true }` (messaging/README.md).
+- The guardian notice for `content_removed` (B-279) still fires after commit, as before, and is now literally true.
+- **Not changed:** contest ranking and points (a removed entry is hidden from lists only), engagement points for
+  likes and comments on removed content, the data export (it still lists a user's own removed posts, comments and sent
+  messages, as stored), and `user_suspended` / `warning_issued` / holds / escalation.
 
 ---
 
@@ -667,7 +685,8 @@ Resolves Decision Log #143. Two plain, functional templates on the existing
 - **`appeal-decision`** — to the appellant (the reported user), when `decideAppeal`
   commits. `overturned` is worded as "the report has been returned to our review
   queue" and deliberately does NOT claim an enforced reversal, because `actionTaken`
-  is a recorded decision, not an enforced one (see the disclosed limitation above).
+  is a recorded decision, not an enforced one for `user_suspended` / `warning_issued`; for `content_removed` the content IS
+  restored in the same step (B-289), the wording of the email was not changed.
 
 Both are fire-and-forget after the state change commits (`void` + an internal
 try/catch), so a lookup or Postmark failure can never fail the admin action. A
@@ -861,8 +880,9 @@ skip them on purpose. The account-deletion purge needs no entry of its own: the 
 already covered by `Message.sender` and `Conversation.participantIds`, and the model is listed in
 `REPORT_EVIDENCE_MODELS` (`anonymized-row-purge.references.ts`) so the decision is explicit.
 
-**Moderator actions.** `content_removed` records the action only, exactly as for a post or comment (it is not
-enforced). Moderators cannot delete a message: that is a known gap (DEFAULT, founder-veto-able), not built here.
+**Moderator actions.** `content_removed` is ENFORCED for a message since B-289 (Decision Log #483): it soft-removes the
+ONE reported message (never a context message), which then reads as a text-less stub for both people. The row and its
+text stay for staff. There is still no moderator hard-delete of a message.
 
 **Purge.** Nothing deletes a `Message` row: `Message.sender` is RESTRICT, the account-deletion sweep removes only the
 user's `MessageHide` rows, and the anonymised-row purge treats `Message.sender` and `Conversation.participantIds` as

@@ -247,6 +247,7 @@ DTO bounds (1 to 3000 characters, no extra fields). The first edit stores the te
 | 403 | `message_edit_not_sender` | the caller did not send the message |
 | 409 | `message_not_editable` | deleted for everyone, or not a text message (a legacy row with `mediaUrl`) |
 | 409 | `message_edit_window_closed` | more than 15 minutes after `sentAt` |
+| 409 | `message_removed` | a moderator removed the message (B-289); also returned by delete (`me` and `everyone`) when the SENDER tries |
 
 **Delete rules.** `me`: any message in a conversation the caller is in, including the other person's. Inserts a
 `MessageHide` row; idempotent (a second call is a no-op 204). `everyone`: the sender only (403
@@ -338,7 +339,13 @@ but they read this module's state, so they are listed:
 - Nothing purges a message while a report against it exists. The anonymiser deletes only `MessageHide`/`ConversationHide`
   rows (`Message.sender` is RESTRICT), and the 12-month retention job (B-287) skips any message a `Report` with
   `targetType: 'message'` points at, in the SELECT and again in the DELETE (see "Retention").
-- Moderators can record `content_removed` against a message report but cannot delete a message (known gap).
+- A moderator's `content_removed` against a message report SOFT-REMOVES that one message (B-289, Decision Log #483;
+  see moderation/README.md). It stays in the thread for BOTH people, and as the last-message preview of
+  `GET /conversations`, as `{ id, sentAt, removedByModeration: true }`: no text, no original, no edit data, no read time
+  (and, as briefed, no `senderId` or `conversationId`). The sender can no longer edit it or delete it (409
+  `message_removed`, edit, delete for me and delete for everyone); the other person may still hide it from their own
+  view. Unread counts are unchanged. The row and its text stay for staff and for the retention job's report exception.
+  There is still no moderator hard-delete of a message.
 
 ## Retention (`backend/b287-message-retention`, B-287, Decision Log #478)
 

@@ -244,8 +244,12 @@ export class ContestService {
     });
     if (!round) throw conflict(CONTEST_ENTRIES_CLOSED_CODE, 'No contest round is currently open for entries');
 
-    const post = await this.prisma.post.findUnique({ where: { id: postId }, select: { id: true, authorId: true } });
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, authorId: true, removedByModerationAt: true },
+    });
+    // B-289: a post a moderator removed cannot be submitted as an entry (it is gone, like a deleted one).
+    if (!post || post.removedByModerationAt) throw new NotFoundException('Post not found');
     if (post.authorId !== userId) {
       throw new ForbiddenException('You can only submit your own post as a contest entry');
     }
