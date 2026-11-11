@@ -1906,7 +1906,8 @@ model Report {
 // appeal window, 6 months after closure) are NOT rows here: they are derived from Report, see
 // modules/account-hold/account-hold.rules.ts. userId is a real FK (RESTRICT, like every other reference to
 // User, #341): an anonymised user's row survives, so this record does too -- it is audit evidence.
-// reportId is nullable only for a legal hold placed with no report (the service has no such path yet).
+// reportId is always set when a hold is placed; it becomes NULL only when the report retention job deletes the
+// report (B-299), which detaches the hold and keeps the row.
 // CHECK constraints in the migration keep type, the lifted-together columns and the type/expiry/report
 // combinations coherent.
 model AccountHold {
