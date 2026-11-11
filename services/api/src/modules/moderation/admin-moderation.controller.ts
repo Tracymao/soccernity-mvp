@@ -6,6 +6,7 @@ import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
+import { AppealReportDto } from './dto/appeal-report.dto';
 import { EscalateReportDto } from './dto/escalate-report.dto';
 import { HoldReasonDto } from './dto/hold-reason.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
@@ -69,6 +70,18 @@ export class AdminModerationController {
     @Body() dto: AppealDecisionDto,
   ) {
     return this.moderationService.decideAppeal(id, admin.sub, dto);
+  }
+
+  // backend/b292-staff-recorded-appeal (B-292, Decision Log #485 (f), #492): record an appeal on the reported
+  // person's behalf (a suspended person cannot sign in). Same body as POST /reports/:id/appeal. See
+  // ModerationService.recordAppealOnBehalf for the rules and their order.
+  @Post('reports/:id/appeal')
+  async recordAppeal(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: AppealReportDto,
+  ) {
+    return this.moderationService.recordAppealOnBehalf(id, admin.sub, dto);
   }
 
   // Restricted to child-safety-vetted admins — see

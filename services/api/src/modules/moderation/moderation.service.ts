@@ -43,8 +43,11 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { EscalateReportDto } from './dto/escalate-report.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
 import {
+  APPEAL_RECORDER_CANNOT_DECIDE_CODE,
   APPEAL_WINDOW_CLOSED_CODE,
   CHILD_SAFETY_VETTING_REQUIRED_CODE,
+  REPORTED_ACCOUNT_UNAVAILABLE_CODE,
+  STAFF_APPEAL_NOT_APPLICABLE_CODE,
   DEFAULT_REPORT_SEVERITY,
   ENQUIRY_REPORT_TARGET_TYPE,
   MODERATION_DEFAULT_PAGE_SIZE,
@@ -64,7 +67,11 @@ import {
 
 // B-046 part B: a report made from a Contact Us enquiry carries `source: 'contact_enquiry'` (the key is ABSENT on
 // every other report, so existing response shapes are unchanged).
-export type ReportWithSource = Report & { source?: typeof REPORT_SOURCE_CONTACT_ENQUIRY };
+export type ReportWithSource = Report & {
+  source?: typeof REPORT_SOURCE_CONTACT_ENQUIRY;
+  // B-292: true when staff recorded the appeal on the reported person's behalf (appealRecordedByAdminId set).
+  appealRecordedByStaff?: boolean;
+};
 
 // B-289 (Decision Log #483): what actionReport returns. `contentRemoval` is present ONLY when the action was
 // content_removed, and says what happened to the one reported item: 'removed', 'already_removed' (another report
@@ -132,6 +139,8 @@ export type ReportDetail = ReportWithSource & {
   // the conversation is under 18 AND the viewing admin is not child-safety-vetted: contextMessages is then [] and
   // reportedMessage.originalContentText is null. Never carries a count.
   contextHidden?: boolean;
+  // B-292: the admin who recorded the appeal on the person's behalf (id and full name), null when nobody did.
+  appealRecordedBy?: { id: string; fullName: string } | null;
 };
 
 // What assertMessageReportable learned about the reported message, for the context check.
@@ -156,10 +165,13 @@ const GUARDIAN_NOTICE_FOR_REPORT_ACTION: Partial<Record<ReportAction, GuardianSe
   room_deactivated: 'room_deactivated',
 };
 
+// B-292: every queue row and the report detail say whether the pending (or decided) appeal was recorded by staff on
+// the reported person's behalf. false when the person appealed themselves, or when there is no appeal.
 function withSourceHint(report: Report): ReportWithSource {
+  const appealRecordedByStaff = report.appealRecordedByAdminId != null;
   return report.targetType === ENQUIRY_REPORT_TARGET_TYPE
-    ? { ...report, source: REPORT_SOURCE_CONTACT_ENQUIRY }
-    : report;
+    ? { ...report, source: REPORT_SOURCE_CONTACT_ENQUIRY, appealRecordedByStaff }
+    : { ...report, appealRecordedByStaff };
 }
 
 // Build Plan Section 4.8 (Admin Service) + Section 8.4 (Moderation &
@@ -706,6 +718,90 @@ export class ModerationService {
   }
 
   // -------------------------------------------------------------------
+  // POST /admin/moderation/reports/:id/appeal (backend/b292-staff-recorded-appeal, B-292; Decision Log #485 (f),
+  // #492). A suspended person cannot sign in, so cannot call POST /reports/:id/appeal; staff record the appeal on
+  // their behalf (the person asked through the public Contact Us page). Same rules as appealReport, plus: only a
+  // user_suspended action can be appealed this way, the reported account must still exist and not be anonymised,
+  // and the recording admin is stored so they cannot also decide it (decideAppeal). The reported person is sent
+  // nothing. The pending appeal pauses the closure clock exactly as a self-filed one does (reportClosedAt returns
+  // null while appealStatus is 'pending'), so the report also stays out of the retention sweep.
+  // -------------------------------------------------------------------
+  async recordAppealOnBehalf(reportId: string, adminId: string, dto: AppealReportDto): Promise<ReportWithSource> {
+    const report = await this.assertReportExists(reportId);
+
+    // The same vetting gate as acting on the report (a concernsMinor report, or a message report whose thread
+    // involves a child, needs a child-safety-vetted admin).
+    await this.assertVettedToActOn(report, adminId);
+
+    if (report.status !== 'actioned') {
+      throw new ForbiddenException('Only an actioned report may be appealed');
+    }
+
+    if (report.actionTaken !== 'user_suspended') {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: STAFF_APPEAL_NOT_APPLICABLE_CODE,
+        message: 'Staff can only record an appeal against a suspension.',
+      });
+    }
+
+    if (report.appealStatus) {
+      throw new ConflictException('This report has already been appealed');
+    }
+
+    const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
+    const reportedUser = reportedUserId
+      ? await this.prisma.user.findUnique({ where: { id: reportedUserId }, select: { accountStatus: true } })
+      : null;
+    if (!reportedUser || reportedUser.accountStatus === 'deleted') {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        code: REPORTED_ACCOUNT_UNAVAILABLE_CODE,
+        message: 'The reported account no longer exists, so there is nobody to record an appeal for.',
+      });
+    }
+
+    // Same window as a self-filed appeal (REPORT_APPEAL_WINDOW_DAYS from the decision), same code and message.
+    if (report.reviewedAt && appealWindowLapsed(report.reviewedAt, resolveReportAppealWindowDays(), new Date())) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: APPEAL_WINDOW_CLOSED_CODE,
+        message: 'The time allowed for appealing this report has passed.',
+      });
+    }
+
+    // One update. appealStatus null is repeated in the WHERE so two admins recording at once cannot both win; the
+    // loser gets the same 409 as an already-appealed report.
+    const written = await this.prisma.report.updateMany({
+      where: { id: reportId, status: 'actioned', appealStatus: null },
+      data: {
+        appealStatus: 'pending',
+        appealReason: dto.reason,
+        appealedAt: new Date(),
+        appealRecordedByAdminId: adminId,
+      },
+    });
+    if (written.count === 0) {
+      throw new ConflictException('This report has already been appealed');
+    }
+
+    // Recorded as REPORT_APPEAL_DECIDED records its detail: the status only, never the reason text.
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.REPORT_APPEAL_RECORDED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.REPORT,
+      reportId,
+      'pending',
+    );
+
+    const updated = await this.assertReportExists(reportId);
+    return withSourceHint(updated);
+  }
+
+  // -------------------------------------------------------------------
   // GET /admin/moderation/reports (AdminJwtAuthGuard + AdminRolesGuard,
   // moderator/superadmin only). Keyset-paginated, newest-first, optional
   // exact-match `status` filter.
@@ -774,6 +870,22 @@ export class ModerationService {
   // reasoning.
   // -------------------------------------------------------------------
   async getReportById(reportId: string, adminId: string): Promise<ReportDetail> {
+    const detail = await this.buildReportDetail(reportId, adminId);
+    // B-292: who recorded the appeal on the person's behalf, as the detail's other admin ids are shown, plus a name.
+    const appealRecordedBy = detail.appealRecordedByAdminId
+      ? await this.prisma.adminUser.findUnique({
+          where: { id: detail.appealRecordedByAdminId },
+          select: { id: true, fullName: true },
+        })
+      : null;
+    return {
+      ...detail,
+      appealRecordedByStaff: detail.appealRecordedByAdminId != null,
+      appealRecordedBy,
+    };
+  }
+
+  private async buildReportDetail(reportId: string, adminId: string): Promise<ReportDetail> {
     const report = await this.assertReportExists(reportId);
 
     if (report.concernsMinor) {
@@ -1047,6 +1159,17 @@ export class ModerationService {
 
     if (report.reviewedByAdminId === adminId) {
       throw new ForbiddenException('The admin who actioned this report may not also review its appeal');
+    }
+
+    // B-292 (Decision Log #485 (f), #492): the admin who recorded the appeal on the person's behalf may not decide it
+    // either, in addition to #138 above. So a staff-recorded appeal needs a third admin.
+    if (report.appealRecordedByAdminId && report.appealRecordedByAdminId === adminId) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: APPEAL_RECORDER_CANNOT_DECIDE_CODE,
+        message: 'The admin who recorded this appeal may not also decide it.',
+      });
     }
 
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);

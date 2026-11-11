@@ -1868,6 +1868,12 @@ model Report {
   appealReviewedByAdminId String?
   appealReviewedByAdmin   AdminUser? @relation("reportAppealReviewedBy", fields: [appealReviewedByAdminId], references: [id])
   appealReviewedAt        DateTime?
+  // backend/b292-staff-recorded-appeal (B-292, Decision Log #485 (f), #492): the admin who RECORDED the appeal on the
+  // reported person's behalf (POST /admin/moderation/reports/:id/appeal; a suspended person cannot sign in to appeal).
+  // NULL = the person appealed themselves. The recorder may not also decide the appeal. A genuine addition beyond
+  // Section 3's Report list (Decision Log candidate).
+  appealRecordedByAdminId String?
+  appealRecordedByAdmin   AdminUser? @relation("reportAppealRecordedBy", fields: [appealRecordedByAdminId], references: [id])
 
   // backend/b286-message-report-context (Decision Log #477): messages the reporter attached as context to a
   // 'message' report. See ReportContextMessage.
@@ -1884,6 +1890,8 @@ model Report {
   removedMessages  Message[] @relation("MessageRemovedByReport")
   // backend/b291-suspension-on-report (B-291): accounts this report suspended (user_suspended). Relation only.
   suspendedUsers   User[]    @relation("UserSuspendedByReport")
+
+  @@index([appealRecordedByAdminId])
 }
 
 // backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and
@@ -2113,6 +2121,8 @@ model AdminUser {
   // collide on the same generated field name.
   reviewedReports       Report[]  @relation("reportReviewedBy")
   appealReviewedReports Report[]  @relation("reportAppealReviewedBy")
+  // backend/b292-staff-recorded-appeal -- reverse relation for Report.appealRecordedByAdmin.
+  appealRecordedReports Report[]  @relation("reportAppealRecordedBy")
   // schema/report-severity-escalation-admin-vetting -- reverse relation
   // for Report.escalatedByAdmin (see Report's own comment on the
   // escalation trail fields). No application code sets this yet.
