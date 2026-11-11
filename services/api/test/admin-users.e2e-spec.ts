@@ -116,7 +116,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     await request(server())
       .patch(`/admin/users/${target.userId}`)
       .set(auth(editor.accessToken))
-      .send({ status: 'suspended' })
+      .send({ status: 'suspended', reasonCategory: 'other' })
       .expect(403);
 
     const prisma = getTestPrismaClient();
@@ -148,7 +148,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     const res = await request(server())
       .patch(`/admin/users/${target.userId}`)
       .set(auth(moderator.accessToken))
-      .send({ status: 'suspended' })
+      .send({ status: 'suspended', reasonCategory: 'other' })
       .expect(200);
     expect(res.body.user.accountStatus).toBe('suspended');
 
@@ -216,7 +216,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     await request(server())
       .patch('/admin/users/11111111-1111-4111-8111-111111111111')
       .set(auth(moderator.accessToken))
-      .send({ status: 'suspended' })
+      .send({ status: 'suspended', reasonCategory: 'other' })
       .expect(404);
   });
 
@@ -230,7 +230,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     await request(server())
       .patch(`/admin/users/${target.userId}`)
       .set(auth(moderator.accessToken))
-      .send({ status: 'suspended' })
+      .send({ status: 'suspended', reasonCategory: 'other' })
       .expect(200);
 
     const loginRes = await request(server())
@@ -247,7 +247,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     await request(server())
       .patch(`/admin/users/${target.userId}`)
       .set(auth(moderator.accessToken))
-      .send({ status: 'suspended' })
+      .send({ status: 'suspended', reasonCategory: 'other' })
       .expect(200);
 
     await request(server())

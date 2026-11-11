@@ -60,6 +60,7 @@ function build(reportRow: Record<string, unknown>) {
     { record: jest.fn().mockResolvedValue(undefined) } as never,
     { setRoomStatus: jest.fn() } as never,
     guardianNotices as never,
+    { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never,
     postMediaObjects as never,
   );
   return { prisma, service, guardianNotices, postMediaObjects };
@@ -219,6 +220,7 @@ describe('ModerationService: removed-post media wiring (B-290)', () => {
       { record: jest.fn().mockResolvedValue(undefined) } as never,
       { setRoomStatus: jest.fn() } as never,
       { notifyInBackground: jest.fn() } as never,
+      { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never,
     );
     await expect(service.actionReport('report-1', 'admin-1', { action: 'content_removed' })).resolves.toBeDefined();
   });

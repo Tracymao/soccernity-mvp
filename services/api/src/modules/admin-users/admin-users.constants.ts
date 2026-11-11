@@ -47,3 +47,10 @@ export const ADMIN_USERS_MAX_PAGE_SIZE = 50;
 // B-044 (Decision Log #376): the 409 code PATCH /admin/users/:id { status: 'deleted' } returns while the user has
 // an active legal_hold or bad_faith AccountHold. The response also carries `holdType`.
 export const ACCOUNT_HOLD_ACTIVE_CODE = 'account_hold_active';
+
+// B-291 (Decision Log #485, founder decision of 2026-11-11): PATCH /admin/users/:id with status 'suspended' now
+// requires `reasonCategory`, one of REPORT_REASON_CATEGORIES. It chooses the fixed plain-words line in the
+// suspension email and is recorded in the admin action log. The API refuses a suspension without it (400, first
+// code). Sending it with any OTHER status is also a 400 (second code), so a stray field never looks accepted.
+export const SUSPENSION_REASON_CATEGORY_REQUIRED_CODE = 'suspension_reason_category_required';
+export const SUSPENSION_REASON_CATEGORY_NOT_APPLICABLE_CODE = 'suspension_reason_category_not_applicable';

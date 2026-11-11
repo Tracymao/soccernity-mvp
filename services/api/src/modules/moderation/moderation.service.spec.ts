@@ -119,6 +119,7 @@ function buildService(
     adminActionLogService as never,
     banterService as never,
     guardianNotices as never,
+    { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never,
   );
 }
 
@@ -912,8 +913,9 @@ describe('ModerationService', () => {
     });
 
     it('sends NO outcome email for a report made from a Contact Us enquiry, whatever the action (Decision Log #445)', async () => {
-      // room_deactivated is refused (400) on any non-Banter-room report before a send could happen; covered below.
-      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated' && a !== 'content_removed')) {
+      // room_deactivated and user_suspended are refused (400) on an enquiry report before a send could happen (the
+      // latter: B-291, an enquiry has no single account behind it; covered in moderation.user-suspension.spec.ts).
+      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated' && a !== 'content_removed' && a !== 'user_suspended')) {
         const prisma = buildPrismaMock();
         (prisma.report.findUnique as jest.Mock).mockResolvedValue(
           report({

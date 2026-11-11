@@ -376,3 +376,16 @@ and the admin login response (it was not there before), so the console knows whe
 also review it; the review basis is the later of set time and last review; when the minor turns 18 the flag is inert
 and the row stays until anonymisation (clear still works); only the latest review is returned; the flag may be set on a
 minor with no confirmed guardian (no effect until one is confirmed).
+
+## Suspension needs a reason category; shared suspend path (B-291, Decision Log #485)
+
+`PATCH /admin/users/:id { status: 'suspended' }` now REQUIRES `reasonCategory` (one of `REPORT_REASON_CATEGORIES`):
+missing is `400 suspension_reason_category_required`. A `reasonCategory` sent with any other status is rejected with
+`400 suspension_reason_category_not_applicable` (rejected rather than ignored, so a client mistake is visible). The
+category is recorded in the existing audit-log detail string (`status=suspended; reasonCategory=<key>`, notes are
+passed through by the action-log reader unchanged) and picks the fixed reason line in the suspension email.
+
+Suspend and reinstate now run through the shared `AccountSuspensionService` (also used when a moderator records
+`user_suspended` on a report), so session revocation, points revocation, the guardian notice and the two emails are
+one code path. Every suspension emails the person; a reinstatement from suspended emails them too. The user page
+never sets `suspendedByReportId`; a manual reinstatement clears it. The `deleted` route is unchanged.

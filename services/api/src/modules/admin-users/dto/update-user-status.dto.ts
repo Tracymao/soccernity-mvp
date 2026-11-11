@@ -1,4 +1,5 @@
-import { IsIn } from 'class-validator';
+import { IsIn, IsOptional } from 'class-validator';
+import { REPORT_REASON_CATEGORIES, ReportReasonCategory } from '../../moderation/moderation.constants';
 import { ADMIN_USER_ACTIONS, AdminUserAction } from '../admin-users.constants';
 
 // PATCH /admin/users/:id — a genuine addition beyond Section 4.8's
@@ -11,4 +12,10 @@ import { ADMIN_USER_ACTIONS, AdminUserAction } from '../admin-users.constants';
 export class UpdateUserStatusDto {
   @IsIn(ADMIN_USER_ACTIONS)
   status!: AdminUserAction;
+
+  // B-291 (Decision Log #485): REQUIRED when status is 'suspended', refused for any other status. Both rules are
+  // enforced in AdminUsersService (stable error codes); the DTO only checks the value is a known category.
+  @IsOptional()
+  @IsIn(REPORT_REASON_CATEGORIES)
+  reasonCategory?: ReportReasonCategory;
 }
