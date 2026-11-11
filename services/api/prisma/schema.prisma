@@ -1950,8 +1950,9 @@ model ContactEnquiry {
   id                String     @id @default(uuid())
   name              String
   email             String
-  // technical_issues | editorial_complaints | data | suggestions | enquiries | feedback
-  // (the six Contact Us categories, founder decision 2026-10-30). CHECK-constrained in the migration.
+  // technical_issues | editorial_complaints | data | suggestions | enquiries | feedback | suspension_appeal
+  // (the six Contact Us categories of the founder decision 2026-10-30, plus suspension_appeal, Decision Log #492,
+  // B-298). CHECK-constrained in the migration.
   category          String
   subject           String
   message           String

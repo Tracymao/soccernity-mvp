@@ -25,6 +25,15 @@ and `enquiries_feedback` was split into `enquiries` and `feedback`. Migration
 `20261104090000_contact_enquiry_categories` maps old rows (`livescores_issues` -> `data`, `enquiries_feedback` ->
 `enquiries`) before it replaces the CHECK.
 
+A **seventh category, `suspension_appeal`** (label "Appeal a suspension", **last** in the list), was added by
+`backend/b298-contact-appeal-category` (B-298, Decision Log #492 (b), (e)): the way a suspended person asks for the
+decision to be looked at again. The label is new user-facing wording, `[COPY PENDING LEGAL REVIEW]` (a code
+comment in `contact.constants.ts`). Migration `20261128100000_add_contact_suspension_appeal_category` replaces the
+CHECK with the seven values; the six existing ones are kept and no row is touched. Nothing else about the enquiry
+changes: escalation to a report, retention and the rate limits are as before. The DTO `@IsIn` lists and the
+support-mailbox label all read the one constant. The support notification carries the label only (never the
+message text), so "Appeal a suspension" appears in its subject and nothing more.
+
 ## `POST /contact`
 
 Public. `OptionalJwtAuthGuard` (it never rejects; it fills `request.user` only when a valid bearer token came
@@ -129,7 +138,7 @@ token or a User token, 403 for an editor).
 
 | Route | Does |
 |---|---|
-| `GET /admin/contact-enquiries?status=&category=&cursor=&limit=` | newest first, keyset cursor, default 20 / max 50; `status` is `new` or `handled`, `category` one of the six; anything else is a 400. Items: `id, name, email, category, subject, status, createdAt, lastMessageAt, handledAt, handledByAdminId, submitter ('signed_in' or 'guest'), hasEscalation`. **No message text in the list.** |
+| `GET /admin/contact-enquiries?status=&category=&cursor=&limit=` | newest first, keyset cursor, default 20 / max 50; `status` is `new` or `handled`, `category` one of the seven; anything else is a 400. Items: `id, name, email, category, subject, status, createdAt, lastMessageAt, handledAt, handledByAdminId, submitter ('signed_in' or 'guest'), hasEscalation`. **No message text in the list.** |
 | `GET /admin/contact-enquiries/:id` | the list fields plus `message`, `userId`, `escalatedReportId`. 404 if unknown. |
 | `PATCH /admin/contact-enquiries/:id/handled` `{ handled }` | `true` = `status` handled, `handledAt` now, `handledByAdminId` the admin; `false` = reopen, all three cleared together (the CHECK needs that). **Idempotent**: setting the state it is already in writes and audits nothing. |
 | `POST /admin/contact-enquiries/:id/escalate` `{ severity, concernsMinor, reason }` | `201 { enquiry, report }`. See below. |

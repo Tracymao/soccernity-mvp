@@ -132,6 +132,17 @@ describe('ContactService.submit', () => {
       );
     });
 
+    it('a suspension appeal notifies support with the label "Appeal a suspension" and nothing from the message', async () => {
+      const { service, email } = build({ ADMIN_APP_BASE_URL: 'https://admin.soccernity.com' });
+      await service.submit({ ...dto, category: 'suspension_appeal' });
+      expect(email.sendContactEnquiryNotificationEmail).toHaveBeenCalledWith(
+        'support@soccernity.com',
+        'Appeal a suspension',
+        `https://admin.soccernity.com${ADMIN_CONTACT_INBOX_PATH}`,
+      );
+      expect(JSON.stringify(email.sendContactEnquiryNotificationEmail.mock.calls[0])).not.toContain(dto.message);
+    });
+
     it('SUPPORT_INBOX_EMAIL overrides the mailbox', async () => {
       const { service, email } = build({ SUPPORT_INBOX_EMAIL: 'help@soccernity.test' });
       await service.submit(dto);
