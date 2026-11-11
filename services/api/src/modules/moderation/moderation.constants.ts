@@ -165,6 +165,15 @@ export const CHILD_SAFETY_VETTING_REQUIRED_CODE = 'child_safety_vetting_required
 // account-hold.config.ts) has lapsed (backend/w6-hold-rule-extension, B-044, Decision Log #376).
 export const APPEAL_WINDOW_CLOSED_CODE = 'appeal_window_closed';
 
+// backend/b292-staff-recorded-appeal (B-292, Decision Log #485 (f), #492). POST /admin/moderation/reports/:id/appeal:
+// staff record an appeal on the reported person's behalf, only for a report whose action was user_suspended (a
+// suspended person cannot sign in to appeal); any other action is a 400 with this code.
+export const STAFF_APPEAL_NOT_APPLICABLE_CODE = 'staff_appeal_not_applicable';
+// The reported account is missing or anonymised ('deleted'): there is nobody to appeal for (409).
+export const REPORTED_ACCOUNT_UNAVAILABLE_CODE = 'reported_account_unavailable';
+// decideAppeal: the admin who recorded the appeal may not also decide it (403), in addition to #138.
+export const APPEAL_RECORDER_CANNOT_DECIDE_CODE = 'appeal_recorder_cannot_decide';
+
 // Section 5.5: every list endpoint is paginated. Same default 20 / max 50
 // every other list endpoint in this codebase uses.
 export const MODERATION_DEFAULT_PAGE_SIZE = 20;

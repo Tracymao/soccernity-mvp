@@ -10,6 +10,10 @@
 export const ADMIN_ACTION_LOG_ACTIONS = {
   REPORT_ACTIONED: 'report.actioned',
   REPORT_APPEAL_DECIDED: 'report.appeal_decided',
+  // POST /admin/moderation/reports/:id/appeal (backend/b292-staff-recorded-appeal, B-292). An admin recorded an
+  // appeal on the reported person's behalf. targetType 'report'; the recording admin is adminId; notes carry the
+  // appeal status only ('pending'), never the reason text.
+  REPORT_APPEAL_RECORDED: 'report.appeal_recorded',
   REPORT_ESCALATED: 'report.escalated',
   ADMIN_CHILD_SAFETY_VETTING_UPDATED: 'admin_user.child_safety_vetting_updated',
   USER_STATUS_UPDATED: 'user.status_updated',
