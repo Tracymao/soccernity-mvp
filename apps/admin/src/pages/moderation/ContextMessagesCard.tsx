@@ -82,9 +82,31 @@ function Pill({ children, tone }: { children: ReactNode; tone: "reporter" | "rep
 interface Props {
   reportedMessage: ReportedMessage | null | undefined;
   contextMessages: ReportContextMessage[] | undefined;
+  /** B-293 (Decision Log #486): the server withheld the context and any edited original from this admin. */
+  contextHidden?: boolean;
 }
 
-export default function ContextMessagesCard({ reportedMessage, contextMessages }: Props) {
+// [COPY PENDING LEGAL REVIEW] -- Figma 7045:62777. The tag is this comment, not rendered text (a literal tag in a
+// rendered string needs a docs/pending-copy-manifest.md row; this pass was told not to edit it).
+export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child";
+
+export default function ContextMessagesCard({ reportedMessage, contextMessages, contextHidden = false }: Props) {
+  // B-293: an admin who is not child-safety vetted, on a report whose chat involves a child. The server returned no
+  // context messages and no original text, so there is nothing to list and "the reporter added none" would be false.
+  // The reported message itself is shown by the Reported content card above.
+  if (contextHidden) {
+    return (
+      <div className="mod-card" aria-labelledby="mod-context-title">
+        <h2 className="mod-card__title" id="mod-context-title">
+          Messages around the reported one
+        </h2>
+        <div className="mod-callout" role="status">
+          <span className="mod-callout__bar" aria-hidden />
+          <p>{CONTEXT_HIDDEN_MESSAGE}</p>
+        </div>
+      </div>
+    );
+  }
   // Still loading (or the read that carries it failed): nothing to say yet.
   if (reportedMessage === undefined || contextMessages === undefined) return null;
   // The reported message is gone and nothing else was attached: the Reported content card already says so.
