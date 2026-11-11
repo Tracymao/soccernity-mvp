@@ -66,6 +66,7 @@ function build(opts: { vetted?: boolean; users?: Users; participants?: string[];
     { record: jest.fn() } as never,
     { setRoomStatus: jest.fn() } as never,
     { notifyInBackground: jest.fn() } as never,
+    { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never,
   );
   return { prisma, service };
 }
