@@ -17,13 +17,16 @@ function buildPrisma() {
   return {
     conversation: {
       findUnique: jest.fn().mockResolvedValue({ id: 'convo-1', participantIds: [ME, OTHER].sort() }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
+    conversationHide: { findMany: jest.fn().mockResolvedValue([]) },
     message: {
       findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
-    messageHide: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    messageHide: { createMany: jest.fn().mockResolvedValue({ count: 1 }), findMany: jest.fn().mockResolvedValue([]) },
     user: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
     block: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
@@ -76,28 +79,83 @@ describe('MessagingService: a message removed by moderation (B-289)', () => {
     expect(p().messageHide.createMany).toHaveBeenCalled();
   });
 
-  it('the thread returns { id, sentAt, removedByModeration: true } and NOTHING else for a removed message', async () => {
-    p().message.findMany.mockResolvedValue([
-      {
-        id: 'm-1',
-        conversationId: 'convo-1',
-        senderId: OTHER,
-        contentText: 'a hurtful thing',
-        sentAt: SENT_AT,
-        readAt: null,
-        editedAt: new Date('2026-11-15T10:05:00Z'),
-        originalContentText: 'the original',
-        deletedForEveryoneAt: null,
-        removedByModerationAt: REMOVED_AT,
-      },
-    ]);
+  const threadRow = (senderId: string) => ({
+    id: 'm-1',
+    conversationId: 'convo-1',
+    senderId,
+    contentText: 'a hurtful thing',
+    sentAt: SENT_AT,
+    readAt: null,
+    editedAt: new Date('2026-11-15T10:05:00Z'),
+    originalContentText: 'the original',
+    deletedForEveryoneAt: null,
+    removedByModerationAt: REMOVED_AT,
+  });
+
+  it('the thread returns { id, sentAt, removedByModeration: true, isMine } and NOTHING else for a removed message', async () => {
+    p().message.findMany.mockResolvedValue([threadRow(OTHER)]);
     const page = await service.getMessages('convo-1', ME, {});
     expect(page.items).toHaveLength(1);
-    expect(page.items[0]).toEqual({ id: 'm-1', sentAt: SENT_AT, removedByModeration: true });
+    expect(page.items[0]).toEqual({ id: 'm-1', sentAt: SENT_AT, removedByModeration: true, isMine: false });
     const json = JSON.stringify(page);
     expect(json).not.toContain('a hurtful thing');
     expect(json).not.toContain('the original');
     expect(json).not.toContain('editedAt');
     expect(json).not.toContain('senderId');
+    expect(json).not.toContain(OTHER);
+  });
+
+  // B-296 (Decision Log #489): the stub says whether the VIEWER sent it, never who did.
+  it('B-296: the SENDER sees isMine: true on the thread stub, and still no sender id', async () => {
+    p().message.findMany.mockResolvedValue([threadRow(ME)]);
+    const page = await service.getMessages('convo-1', ME, {});
+    expect(page.items[0]).toEqual({ id: 'm-1', sentAt: SENT_AT, removedByModeration: true, isMine: true });
+    expect(Object.keys(page.items[0]).sort()).toEqual(['id', 'isMine', 'removedByModeration', 'sentAt']);
+    expect(JSON.stringify(page)).not.toContain('senderId');
+  });
+
+  it('B-296: the RECIPIENT sees isMine: false on the same stub (the flag follows the viewer, not the row)', async () => {
+    p().message.findMany.mockResolvedValue([threadRow(ME)]);
+    const page = await service.getMessages('convo-1', OTHER, {});
+    expect(page.items[0]).toMatchObject({ removedByModeration: true, isMine: false });
+  });
+
+  it('B-296: a removal wins over an edit and a delete-for-everyone, and still carries isMine', async () => {
+    p().message.findMany.mockResolvedValue([{ ...threadRow(ME), deletedForEveryoneAt: new Date('2026-11-15T10:30:00Z') }]);
+    const page = await service.getMessages('convo-1', ME, {});
+    expect(page.items[0]).toEqual({ id: 'm-1', sentAt: SENT_AT, removedByModeration: true, isMine: true });
+  });
+
+  describe('B-296: the conversation-list preview is the same stub and carries isMine too', () => {
+    const lastMessageRow = (senderId: string) => ({
+      id: 'm-1',
+      conversationId: 'convo-1',
+      contentText: 'a hurtful thing',
+      senderId,
+      sentAt: SENT_AT,
+      removedByModerationAt: REMOVED_AT,
+    });
+    const conversationRow = {
+      id: 'convo-1',
+      participantIds: [ME, OTHER].sort(),
+      lastMessageAt: SENT_AT,
+      createdAt: SENT_AT,
+    };
+
+    it.each([
+      [ME, ME, true],
+      [OTHER, ME, false],
+      [ME, OTHER, false],
+      [OTHER, OTHER, true],
+    ])('message sent by %s, viewed by %s -> isMine %s', async (senderId, viewerId, isMine) => {
+      p().conversation.findMany.mockResolvedValue([conversationRow]);
+      // toConversationViews reads: other participants, unread groups, then the latest message per conversation.
+      p().message.findMany.mockResolvedValue([lastMessageRow(senderId)]);
+      const page = await service.listConversations(viewerId, {});
+      const preview = page.items[0].lastMessage;
+      expect(preview).toEqual({ id: 'm-1', sentAt: SENT_AT, removedByModeration: true, isMine });
+      expect(JSON.stringify(preview)).not.toContain('a hurtful thing');
+      expect(JSON.stringify(preview)).not.toContain('senderId');
+    });
   });
 });

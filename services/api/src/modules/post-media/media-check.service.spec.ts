@@ -5,7 +5,7 @@ import { DirectUploadStorageService } from '../../storage/direct-upload-storage.
 import { MediaModerationClient } from './media-moderation-client';
 import { MediaProcessor } from './media-processor';
 import { MediaCheckService, PostMediaSweepService } from './media-check.service';
-import { PostMediaObjectsService } from './post-media-objects.service';
+import { POST_NOT_REMOVED_BY_MODERATION, PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaConfig } from './post-media.config';
 import { PostMediaService } from './post-media.service';
 
@@ -184,7 +184,8 @@ describe('MediaCheckService.checkOne', () => {
     prisma.postMedia.findUnique.mockResolvedValue(imageRow());
     expect(await service.checkOne('m1', NOW)).toBe('approved');
     const write = prisma.postMedia.updateMany.mock.calls[1][0];
-    expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
+    // B-296: the write that records publication also requires that the post is not removed by moderation.
+    expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null, ...POST_NOT_REMOVED_BY_MODERATION });
     expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW, publishedAt: NOW, checkState: 'done', checkLabels: [] });
     // The uploader is told in the same transaction (B-037): the "approved" variant, naming the file.
     expect(prisma.notification.create).toHaveBeenCalledWith({
@@ -255,7 +256,8 @@ describe('MediaCheckService.checkOne', () => {
   it('an automatic approval that loses the race to a moderator cleans up its unrecorded public copy (and does not finish)', async () => {
     const { service, prisma, objects } = build();
     prisma.postMedia.findUnique.mockResolvedValue(imageRow());
-    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    // [0] the claim; then both approval writes (publishing, then the non-publishing fallback) match nothing.
+    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValue({ count: 0 });
     expect(await service.checkOne('m1', NOW)).toBe('skipped');
     expect(objects.discardUnrecordedCopy).toHaveBeenCalledWith('m1', 'post-media/u1/m1.jpg');
     expect(objects.finishPublish).not.toHaveBeenCalled();
@@ -287,9 +289,80 @@ describe('MediaCheckService.checkOne', () => {
   it('a moderator who decided first wins: the guarded write matches nothing and the outcome is "skipped"', async () => {
     const { service, prisma } = build();
     prisma.postMedia.findUnique.mockResolvedValue(imageRow());
-    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValue({ count: 0 });
     expect(await service.checkOne('m1', NOW)).toBe('skipped');
     expect(prisma.notification.create).not.toHaveBeenCalled(); // nothing decided by the check, nothing to announce
+  });
+
+  // ---- B-296 (Decision Log #484): an approval must not publish a file whose post is removed by moderation ----
+
+  describe('B-296: automatic approval and a post removed by moderation', () => {
+    const REMOVED = { removedByModerationAt: new Date('2026-11-04T09:00:00Z') };
+    const LIVE = { removedByModerationAt: null };
+
+    it('REMOVED post: the file is approved but NOT published: no public copy, no publishedAt, nothing finished, still private', async () => {
+      const { service, prisma, objects } = build();
+      prisma.postMedia.findUnique.mockResolvedValue(imageRow({ post: REMOVED }));
+      expect(await service.checkOne('m1', NOW)).toBe('approved');
+      expect(objects.copyToPublic).not.toHaveBeenCalled();
+      expect(objects.finishPublish).not.toHaveBeenCalled();
+      expect(objects.discardUnrecordedCopy).not.toHaveBeenCalled();
+      // [0] the claim, [1] the one approval write: without publishedAt and without the post condition.
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledTimes(2);
+      const write = prisma.postMedia.updateMany.mock.calls[1][0];
+      expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
+      expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW });
+      expect(write.data.publishedAt).toBeUndefined();
+      // The decision itself is unchanged: the uploader is told "approved".
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
+        select: { id: true },
+      });
+    });
+
+    it('LIVE post: published as before (copy, publishedAt written, private original removed)', async () => {
+      const { service, prisma, objects } = build();
+      prisma.postMedia.findUnique.mockResolvedValue(imageRow({ post: LIVE }));
+      expect(await service.checkOne('m1', NOW)).toBe('approved');
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+      expect(prisma.postMedia.updateMany.mock.calls[1][0].data.publishedAt).toEqual(NOW);
+      expect(objects.finishPublish).toHaveBeenCalledWith('m1');
+    });
+
+    it('an unattached file (no post yet) is published as before', async () => {
+      const { service, prisma, objects } = build();
+      prisma.postMedia.findUnique.mockResolvedValue(imageRow({ post: null }));
+      expect(await service.checkOne('m1', NOW)).toBe('approved');
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+      expect(prisma.postMedia.updateMany.mock.calls[1][0].data.publishedAt).toEqual(NOW);
+      expect(objects.finishPublish).toHaveBeenCalledWith('m1');
+    });
+
+    it('REMOVED between the check and the write: the publishing write matches nothing, the approval is written WITHOUT publishing, and the copy that was made is taken out again', async () => {
+      const { service, prisma, objects } = build();
+      prisma.postMedia.findUnique.mockResolvedValue(imageRow({ post: LIVE }));
+      // [0] the claim ok; [1] the publishing write matches nothing (post now removed); [2] the fallback write ok.
+      prisma.postMedia.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
+      expect(await service.checkOne('m1', NOW)).toBe('approved');
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+      expect(prisma.postMedia.updateMany.mock.calls[1][0].where).toEqual({ id: 'm1', status: 'pending', decisionSource: null, ...POST_NOT_REMOVED_BY_MODERATION });
+      expect(prisma.postMedia.updateMany.mock.calls[2][0].data.publishedAt).toBeUndefined();
+      expect(objects.finishPublish).not.toHaveBeenCalled();
+      expect(objects.discardUnrecordedCopy).toHaveBeenCalledWith('m1', 'post-media/u1/m1.jpg');
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('a rejection is untouched by the post state (no publishing write, no extra guard)', async () => {
+      const { service, prisma, moderation, objects } = build();
+      prisma.postMedia.findUnique.mockResolvedValue(imageRow({ post: REMOVED }));
+      moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: '', confidence: 99 }]);
+      expect(await service.checkOne('m1', NOW)).toBe('rejected');
+      expect(prisma.postMedia.updateMany.mock.calls[1][0].where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
+      expect(objects.copyToPublic).not.toHaveBeenCalled();
+    });
   });
 
   it('a video is sampled at the configured interval and every frame goes to Rekognition', async () => {

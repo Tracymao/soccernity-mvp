@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { APP_CLOCK } from '../src/clock/clock';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
+import { MediaCheckService } from '../src/modules/post-media/media-check.service';
 import { MediaModerationClient } from '../src/modules/post-media/media-moderation-client';
 import { MediaProcessor } from '../src/modules/post-media/media-processor';
 import { PostMediaObjectsService } from '../src/modules/post-media/post-media-objects.service';
@@ -191,6 +192,40 @@ describe('Removed post media e2e (B-290)', () => {
     });
   }
 
+  /**
+   * B-296: a PENDING file on a post (not yet approved), with its private object in storage. `inQueue` puts it in the
+   * moderator queue (as an uncertain automatic check does); otherwise it is waiting for the automatic check.
+   */
+  async function seedPendingFile(u: U, postId: string, inQueue: boolean) {
+    const id = `${rand()}${rand()}`;
+    const pub = `post-media/${u.id}/${id}.jpg`;
+    const priv = `private-media/${u.id}/${id}.jpg`;
+    await prisma().postMedia.create({
+      data: {
+        id,
+        uploaderId: u.id,
+        kind: 'image',
+        declaredContentType: 'image/jpeg',
+        declaredSize: 10,
+        uploadState: 'ready',
+        status: 'pending',
+        privateKey: priv,
+        publicKey: pub,
+        publicUrl: `https://cdn.test/${pub}`,
+        publishedAt: null,
+        contentType: 'image/jpeg',
+        byteSize: 10,
+        confirmedAt: new Date(NOW.getTime() - 2 * DAY),
+        postId,
+        checkState: inQueue ? 'done' : 'queued',
+        checkNextAt: new Date(NOW.getTime() - 1000),
+        ...(inQueue ? { reviewEnteredAt: new Date(NOW.getTime() - DAY), reviewEntrySource: 'auto_check' } : {}),
+      } as never,
+    });
+    storage.put(priv, Buffer.from('x'.repeat(10)), 'image/jpeg');
+    return { mediaId: id, pub, priv };
+  }
+
   const sweep = () => app.get(RejectedMediaSweepService);
   const objects = () => app.get(PostMediaObjectsService);
   const row = (id: string) => prisma().postMedia.findUniqueOrThrow({ where: { id } });
@@ -303,6 +338,71 @@ describe('Removed post media e2e (B-290)', () => {
       void reportId;
       expect(await objects().reconcile()).toMatchObject({ published: 1 });
       expect(storage.has(m.pub)).toBe(true);
+    });
+  });
+
+  // =================================================================================================
+  // B-296 (Decision Log #484): the approval paths must not publish a file whose post is removed by moderation.
+  describe('approving a file whose post is removed by moderation (B-296)', () => {
+    async function removedPostWithPendingFile(inQueue: boolean) {
+      const u = await seedUser('a');
+      const post = await prisma().post.create({ data: { authorId: u.id, contentText: `post ${rand()}` } });
+      const f = await seedPendingFile(u, post.id, inQueue);
+      const moderator = await seedAdmin('m');
+      await removeContent(post.id, moderator);
+      return { u, postId: post.id, moderator, ...f };
+    }
+
+    it('AUTOMATIC check: approved, but the file is NOT published: no public object, publishedAt null, the private file stays', async () => {
+      const f = await removedPostWithPendingFile(false);
+      expect(await app.get(MediaCheckService).checkOne(f.mediaId, NOW)).toBe('approved');
+      expect(await row(f.mediaId)).toMatchObject({ status: 'approved', decisionSource: 'auto', publishedAt: null, privateKey: f.priv });
+      expect(storage.has(f.pub)).toBe(false);
+      expect(storage.has(f.priv)).toBe(true);
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      // the uploader is still told it was approved
+      expect(await prisma().notification.count({ where: { userId: f.u.id, type: 'post_media_approved', payloadRefId: f.mediaId } })).toBe(1);
+      // and the reconciler does not publish it either
+      expect(await objects().reconcile()).toMatchObject({ published: 0 });
+      expect(storage.has(f.pub)).toBe(false);
+    });
+
+    it('MODERATOR approve: approved, but NOT published', async () => {
+      const f = await removedPostWithPendingFile(true);
+      await request(http()).post(`/admin/media-review/${f.mediaId}/approve`).set(f.moderator.auth).expect(200);
+      expect(await row(f.mediaId)).toMatchObject({ status: 'approved', decisionSource: 'moderator', publishedAt: null, privateKey: f.priv });
+      expect(storage.has(f.pub)).toBe(false);
+      expect(storage.has(f.priv)).toBe(true);
+      expect(storage.copies.filter(([from]) => from === f.priv)).toEqual([]); // no public copy was ever made
+    });
+
+    it('an overturned removal then publishes the approved file from its private copy', async () => {
+      const f = await removedPostWithPendingFile(true);
+      await request(http()).post(`/admin/media-review/${f.mediaId}/approve`).set(f.moderator.auth).expect(200);
+      expect(storage.has(f.pub)).toBe(false);
+
+      await prisma().post.update({ where: { id: f.postId }, data: { removedByModerationAt: null, removedByReportId: null } });
+      expect(await objects().republishForPost(f.postId)).toEqual({ published: 1, failed: 0 });
+      expect(storage.has(f.pub)).toBe(true);
+      expect(await row(f.mediaId)).toMatchObject({ status: 'approved', publishedAt: expect.any(Date) });
+    });
+
+    it('CONTROL, a live post: both paths publish exactly as before', async () => {
+      const u = await seedUser('a');
+      const post = await prisma().post.create({ data: { authorId: u.id, contentText: `post ${rand()}` } });
+      const auto = await seedPendingFile(u, post.id, false);
+      const manual = await seedPendingFile(u, post.id, true);
+      const moderator = await seedAdmin('m');
+
+      expect(await app.get(MediaCheckService).checkOne(auto.mediaId, NOW)).toBe('approved');
+      await request(http()).post(`/admin/media-review/${manual.mediaId}/approve`).set(moderator.auth).expect(200);
+
+      for (const f of [auto, manual]) {
+        await waitFor(async () => (await row(f.mediaId)).privateKey === null, 'the private original to be dropped');
+        expect(storage.has(f.pub)).toBe(true);
+        expect(storage.has(f.priv)).toBe(false);
+        expect(await row(f.mediaId)).toMatchObject({ status: 'approved', publishedAt: expect.any(Date) });
+      }
     });
   });
 

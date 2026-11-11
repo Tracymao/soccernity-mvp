@@ -1,6 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { PostMediaDecisionService } from './post-media-decision.service';
-import { PostMediaObjectsService } from './post-media-objects.service';
+import { POST_NOT_REMOVED_BY_MODERATION, PostMediaObjectsService } from './post-media-objects.service';
 
 const NOW = new Date('2026-11-05T10:00:00Z');
 
@@ -60,8 +60,9 @@ describe('PostMediaDecisionService.approve', () => {
   it('approves a pending item as a moderator, resolves reports, and tells the uploader "approved"', async () => {
     const { service, prisma } = build(row());
     expect(await service.approve('m1', 'admin-1')).toEqual({ id: 'm1', outcome: 'approved', status: 'approved' });
+    // B-296: the write that records publication also requires that the post is not removed by moderation.
     expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-      where: { id: 'm1', status: 'pending', decisionSource: null },
+      where: { id: 'm1', status: 'pending', decisionSource: null, ...POST_NOT_REMOVED_BY_MODERATION },
       data: {
         status: 'approved',
         decisionSource: 'moderator',
@@ -104,7 +105,7 @@ describe('PostMediaDecisionService.approve', () => {
     const { service, prisma } = build(row({ status: 'approved', reportCount: 3 }));
     expect(await service.approve('m1', 'admin-1')).toEqual({ id: 'm1', outcome: 'kept', status: 'approved' });
     expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-      where: { id: 'm1', status: 'approved', reportCount: { gt: 0 } },
+      where: { id: 'm1', status: 'approved', reportCount: { gt: 0 }, ...POST_NOT_REMOVED_BY_MODERATION },
       data: { reportCount: 0, hiddenPendingReview: false, publishedAt: NOW },
     });
     expect(prisma.notification.create).not.toHaveBeenCalled();
@@ -119,6 +120,92 @@ describe('PostMediaDecisionService.approve', () => {
     const visible = build(row({ status: 'approved', reportCount: 1, publishedAt: stillPublic }));
     await visible.service.approve('m1', 'admin-1');
     expect(visible.prisma.postMedia.updateMany.mock.calls[0][0].data.publishedAt).toEqual(stillPublic); // the original time is kept
+  });
+
+  // ---- B-296 (Decision Log #484): an approval must not publish a file whose post is removed by moderation ----
+
+  describe('B-296: approving a file whose post is removed by moderation', () => {
+    const REMOVED = { removedByModerationAt: new Date('2026-11-04T09:00:00Z') };
+    const LIVE = { removedByModerationAt: null };
+
+    it('pending file, REMOVED post: approved but NOT published: no public copy, no publishedAt, nothing finished', async () => {
+      const { service, prisma, objects, calls } = build(row({ post: REMOVED }));
+      expect(await service.approve('m1', 'admin-1')).toEqual({ id: 'm1', outcome: 'approved', status: 'approved' });
+      expect(objects.copyToPublic).not.toHaveBeenCalled();
+      expect(objects.finishPublish).not.toHaveBeenCalled();
+      expect(objects.discardUnrecordedCopy).not.toHaveBeenCalled();
+      expect(calls).toEqual(['write']);
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledTimes(1);
+      const write = prisma.postMedia.updateMany.mock.calls[0][0];
+      expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
+      expect(write.data).toEqual({
+        status: 'approved',
+        decisionSource: 'moderator',
+        decidedAt: NOW,
+        decidedBy: 'admin-1',
+        reportCount: 0,
+        hiddenPendingReview: false,
+      });
+      // Everything else about the decision is unchanged: reports resolved, the uploader told "approved".
+      expect(prisma.postMediaReport.updateMany).toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
+        select: { id: true },
+      });
+    });
+
+    it('pending file, LIVE post: published exactly as before', async () => {
+      const { service, prisma, objects, calls } = build(row({ post: LIVE }));
+      await service.approve('m1', 'admin-1');
+      expect(calls).toEqual(['copyToPublic', 'write', 'finishPublish']);
+      expect(prisma.postMedia.updateMany.mock.calls[0][0].data.publishedAt).toEqual(NOW);
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+    });
+
+    it('KEEP of a reported file, REMOVED post: hold lifted and reports resolved, but the file is NOT published and the uploader is not told', async () => {
+      const { service, prisma, objects } = build(row({ status: 'approved', reportCount: 3, post: REMOVED }));
+      expect(await service.approve('m1', 'admin-1')).toEqual({ id: 'm1', outcome: 'kept', status: 'approved' });
+      expect(objects.copyToPublic).not.toHaveBeenCalled();
+      expect(objects.finishPublish).not.toHaveBeenCalled();
+      const write = prisma.postMedia.updateMany.mock.calls[0][0];
+      expect(write.where).toEqual({ id: 'm1', status: 'approved', reportCount: { gt: 0 } });
+      expect(write.data).toEqual({ reportCount: 0, hiddenPendingReview: false });
+      expect(prisma.postMediaReport.updateMany).toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('KEEP, LIVE post: published as before', async () => {
+      const { service, prisma, objects } = build(row({ status: 'approved', reportCount: 3, post: LIVE }));
+      await service.approve('m1', 'admin-1');
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+      expect(prisma.postMedia.updateMany.mock.calls[0][0].data.publishedAt).toEqual(NOW);
+      expect(objects.finishPublish).toHaveBeenCalledWith('m1');
+    });
+
+    it('an unattached file (no post yet) is published as before', async () => {
+      const { service, objects } = build(row({ post: null }));
+      await service.approve('m1', 'admin-1');
+      expect(objects.copyToPublic).toHaveBeenCalledTimes(1);
+      expect(objects.finishPublish).toHaveBeenCalledWith('m1');
+    });
+
+    it('REMOVED between the check and the write: the publishing write matches nothing, the approval is written WITHOUT publishing, and the copy made is taken out again', async () => {
+      const { service, prisma, objects } = build(row({ post: LIVE }));
+      // [0] the publishing write matches nothing (the post is now removed); [1] the fallback write succeeds.
+      prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+      expect(await service.approve('m1', 'admin-1')).toEqual({ id: 'm1', outcome: 'approved', status: 'approved' });
+      expect(prisma.postMedia.updateMany.mock.calls[0][0].where).toEqual({ id: 'm1', status: 'pending', decisionSource: null, ...POST_NOT_REMOVED_BY_MODERATION });
+      expect(prisma.postMedia.updateMany.mock.calls[1][0].data.publishedAt).toBeUndefined();
+      expect(objects.finishPublish).not.toHaveBeenCalled();
+      expect(objects.discardUnrecordedCopy).toHaveBeenCalledWith('m1', 'post-media/u1/m1.jpg');
+    });
+
+    it('a REMOVED post does not make an already-decided item approvable: still 409, nothing written', async () => {
+      const { service, prisma, objects } = build(row({ status: 'approved', reportCount: 0, post: REMOVED }));
+      await expect(service.approve('m1', 'admin-1')).rejects.toMatchObject({ status: 409, response: { code: 'already_decided' } });
+      expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
+      expect(objects.copyToPublic).not.toHaveBeenCalled();
+    });
   });
 
   it.each([

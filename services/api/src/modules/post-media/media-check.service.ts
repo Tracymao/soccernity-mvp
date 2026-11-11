@@ -13,7 +13,7 @@ import { AUTO_REJECTION_REASON, ModerationLabel, decideModeration, sampleFrameTi
 import { POST_MEDIA_DEFAULTS, PostMediaConfig } from './post-media.config';
 import { writeDecisionNotification } from './post-media-decision.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
-import { PostMediaObjectsService } from './post-media-objects.service';
+import { POST_NOT_REMOVED_BY_MODERATION, PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaService } from './post-media.service';
 
 // backend/w14-post-media-pipeline (B-036; Decision Log #419 item 4). The automatic check, run in the
@@ -144,6 +144,8 @@ export class MediaCheckService {
         durationSeconds: true,
         checkAttempts: true,
         uploader: { select: { isMinor: true } },
+        // B-296: whether the post is removed by moderation decides whether an approved file may go public.
+        post: { select: { removedByModerationAt: true } },
       },
     });
 
@@ -236,6 +238,7 @@ export class MediaCheckService {
       privateKey: string | null;
       publicKey: string | null;
       publishedAt: Date | null;
+      post?: { removedByModerationAt: Date | null } | null;
     },
     decision: { outcome: 'approved' | 'rejected' | 'pending'; categories: string[] },
     now: Date,
@@ -249,28 +252,49 @@ export class MediaCheckService {
       const outcome = decision.outcome;
       // FAIL CLOSED: an approval publishes the file first. If the copy fails this throws, checkOne records
       // it as a check failure, and the item stays pending and private.
-      if (outcome === 'approved') await this.objects.copyToPublic(row);
+      // B-296 (Decision Log #484): a file whose post is removed by moderation is approved but NOT published: no
+      // public copy is made and it stays private (republishForPost / the reconciler publishes it if the removal is
+      // overturned). The write that records publication carries the post-not-removed condition IN ITS WHERE, so a
+      // removal landing after this check cannot be missed; that write then matches nothing and the approval is
+      // written without publishing.
+      const copied = outcome === 'approved' && !row.post?.removedByModerationAt;
+      if (copied) await this.objects.copyToPublic(row);
       let written: boolean;
+      let published = false;
       try {
         written = await this.prisma.$transaction(async (tx) => {
-          const r = await tx.postMedia.updateMany({
-            where: guard,
-            data:
-              outcome === 'approved'
-                ? { ...done, status: 'approved', decisionSource: 'auto', decidedAt: now, publishedAt: now }
-                : { ...done, status: 'rejected', decisionSource: 'auto', decidedAt: now, rejectionReason: AUTO_REJECTION_REASON },
-          });
-          if (r.count === 1) await writeDecisionNotification(tx, uploaderId, id, outcome);
-          return r.count === 1;
+          let count = 0;
+          if (outcome === 'rejected') {
+            count = (
+              await tx.postMedia.updateMany({
+                where: guard,
+                data: { ...done, status: 'rejected', decisionSource: 'auto', decidedAt: now, rejectionReason: AUTO_REJECTION_REASON },
+              })
+            ).count;
+          } else {
+            const approvedData = { ...done, status: 'approved', decisionSource: 'auto', decidedAt: now } as const;
+            if (copied) {
+              count = (
+                await tx.postMedia.updateMany({
+                  where: { ...guard, ...POST_NOT_REMOVED_BY_MODERATION },
+                  data: { ...approvedData, publishedAt: now },
+                })
+              ).count;
+              published = count === 1;
+            }
+            if (count === 0) count = (await tx.postMedia.updateMany({ where: guard, data: approvedData })).count;
+          }
+          if (count === 1) await writeDecisionNotification(tx, uploaderId, id, outcome);
+          return count === 1;
         });
       } catch (err) {
-        if (outcome === 'approved' && row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
+        if (copied && row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
         throw err;
       }
       if (outcome === 'rejected' && written) this.guardianNotices?.notifyInBackground(uploaderId, 'media_not_approved');
       if (outcome === 'approved') {
-        if (written) await this.objects.finishPublish(id);
-        else if (row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
+        if (written && published) await this.objects.finishPublish(id);
+        else if (copied && row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
       }
       return written ? outcome : 'skipped';
     }

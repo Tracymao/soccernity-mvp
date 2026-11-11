@@ -341,8 +341,9 @@ but they read this module's state, so they are listed:
   `targetType: 'message'` points at, in the SELECT and again in the DELETE (see "Retention").
 - A moderator's `content_removed` against a message report SOFT-REMOVES that one message (B-289, Decision Log #483;
   see moderation/README.md). It stays in the thread for BOTH people, and as the last-message preview of
-  `GET /conversations`, as `{ id, sentAt, removedByModeration: true }`: no text, no original, no edit data, no read time
-  (and, as briefed, no `senderId` or `conversationId`). The sender can no longer edit it or delete it (409
+  `GET /conversations`, as `{ id, sentAt, removedByModeration: true, isMine }`: no text, no original, no edit data, no read time
+  (and, as briefed, no `senderId` or `conversationId`). B-296 (Decision Log #489): `isMine` is true when the viewer sent the
+  removed message, so a client can place the stub on the right side without being told the sender's id. The sender can no longer edit it or delete it (409
   `message_removed`, edit, delete for me and delete for everyone); the other person may still hide it from their own
   view. Unread counts are unchanged. The row and its text stay for staff and for the retention job's report exception.
   There is still no moderator hard-delete of a message.

@@ -183,6 +183,17 @@ ordinary `PostMedia` of the entry's post, so they follow exactly the same path.
 | **Republish** | an appeal on the removing report is **overturned**, and that report was the one that removed the post | `restoreContentRemoval` clears the removal; `republishForPost` copies the private copy back to the public prefix and `finishPublish` drops it again (back to the normal approved state, public only). The reconciler's publish query does the same on its next pass if the immediate call missed. |
 | **Confirm (delete)** | the **removing report closes** | The private object is deleted, `privateKey` becomes `NULL`, and the row records `deletedByModerationAt`. **The `PostMedia` row and the `Post` stay.** |
 
+**Approving a file whose post is removed (B-296, Decision Log #484).** Every approval path that used to publish at once now first
+asks whether the post is removed (`Post.removedByModerationAt`): the **automatic check** (`MediaCheckService.apply`), a **moderator
+Approve** of a pending file and a moderator **Keep** of a reported file (`PostMediaDecisionService.approve`, both branches). If it is,
+the file is **approved but NOT published**: no public copy is made, `publishedAt` stays `NULL`, `finishPublish` is not called and the
+private file stays where it is. Everything else about the decision (status, reports resolved, the uploader's notification) is
+unchanged. The write that records publication also carries `POST_NOT_REMOVED_BY_MODERATION` **in its WHERE**, so a removal that lands
+between the check and the write cannot be missed: that write matches nothing, the same approval is written without publishing, and
+the copy that had been made is taken out again. When the removal is overturned `republishForPost` (or the reconciler) publishes the
+approved file from its private copy. (`publishRow`, used by those two, already carried the condition.) `finishPublish` and
+`reconcile` need no change. The evidence rules (`rejected-media-evidence.util.ts`) are untouched.
+
 **Closure** is `reportClosedAt` (the one predicate of the hold rules): the appeal window lapsed (`REPORT_APPEAL_WINDOW_DAYS`, 30), or
 the appeal was upheld. A report that is open, has an appeal pending, or is back to open after an overturn is **not** closed.
 Because closure is always *after* a removal that was not overturned, a file whose private copy was deleted can never need to be
