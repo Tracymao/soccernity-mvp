@@ -620,6 +620,32 @@ export class ModerationService {
     return users.length < ids.length || users.some((u) => u.isMinor);
   }
 
+  // B-297 (Decision Log #491): the gate for ACTING on a report (actionReport, decideAppeal; the staff-recorded appeal of
+  // B-292 reuses it). A concernsMinor report needs a vetted admin, exactly as before. A message report also needs one
+  // when the reported sender or any participant of the conversation is under 18, read with threadInvolvesMinor (the
+  // same fail-closed reading B-293 uses: a missing message row or a participant with no User row counts as a minor).
+  // A vetted admin is never blocked and the thread is not looked up for them. Viewing (getReportById) stays on the
+  // concernsMinor-only gate, so an unvetted admin can still open such a report with its context hidden.
+  async assertVettedToActOn(
+    report: Pick<Report, 'concernsMinor' | 'targetType' | 'targetId'>,
+    adminId: string,
+  ): Promise<void> {
+    if (report.concernsMinor) {
+      await this.assertChildSafetyVetted(adminId);
+      return;
+    }
+    if (report.targetType !== 'message') return;
+    if (await this.isChildSafetyVetted(adminId)) return;
+    if (await this.threadInvolvesMinor(report.targetId, true)) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: CHILD_SAFETY_VETTING_REQUIRED_CODE,
+        message: 'This action requires a child-safety-vetted admin.',
+      });
+    }
+  }
+
   private async assertChildSafetyVetted(adminId: string): Promise<void> {
     if (await this.isChildSafetyVetted(adminId)) {
       return;
@@ -865,9 +891,8 @@ export class ModerationService {
     // direct access" half of the concernsMinor gate (listReports is the
     // filtering half) — a non-vetted admin may not act on a report
     // concerning a minor, regardless of role.
-    if (report.concernsMinor) {
-      await this.assertChildSafetyVetted(adminId);
-    }
+    // B-297: also gates a message report whose thread involves a child (Decision Log #491).
+    await this.assertVettedToActOn(report, adminId);
 
     if (report.status !== 'open') {
       throw new ConflictException('This report has already been reviewed');
@@ -1013,9 +1038,8 @@ export class ModerationService {
     // child-safety vetting, on top of (not instead of) Decision Log
     // #138's separate same-admin-may-not-review-their-own-action rule
     // checked below.
-    if (report.concernsMinor) {
-      await this.assertChildSafetyVetted(adminId);
-    }
+    // B-297: also gates a message report whose thread involves a child (Decision Log #491).
+    await this.assertVettedToActOn(report, adminId);
 
     if (report.appealStatus !== 'pending') {
       throw new ConflictException('This report has no pending appeal to review');
