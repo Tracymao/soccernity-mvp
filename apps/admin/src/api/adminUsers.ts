@@ -66,8 +66,19 @@ export function listUsers(
 // return but its id). Never `deactivated`/`pending_deletion` — those are
 // self-service-only states this route cannot write (a real 400 if sent;
 // see admin-users.constants.ts's own comment on the codebase side).
-export function updateUserStatus(id: string, status: AdminUserAction): Promise<UpdateUserStatusResult> {
-  return adminFetch<UpdateUserStatusResult>(`/admin/users/${id}`, { method: "PATCH", body: { status } });
+//
+// B-291 (Decision Log #485): `reasonCategory` is REQUIRED when `status` is "suspended" (400
+// suspension_reason_category_required without it; it chooses the plain-words reason line of the suspension email) and
+// is refused for any other status (400 suspension_reason_category_not_applicable). So it is sent for a suspension and
+// never otherwise.
+export function updateUserStatus(
+  id: string,
+  status: AdminUserAction,
+  reasonCategory?: string,
+): Promise<UpdateUserStatusResult> {
+  const body: { status: AdminUserAction; reasonCategory?: string } = { status };
+  if (status === "suspended" && reasonCategory) body.reasonCategory = reasonCategory;
+  return adminFetch<UpdateUserStatusResult>(`/admin/users/${id}`, { method: "PATCH", body });
 }
 
 // --- B-109 / B-103: single-user read and audited date-of-birth correction ---

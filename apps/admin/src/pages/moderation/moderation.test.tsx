@@ -179,7 +179,7 @@ describe("ModerationQueuePage", () => {
     expect(await screen.findByText("No open reports")).not.toBeNull();
   });
 
-  it("shows the disclosed 'action does not enforce' limitation note", async () => {
+  it("says which actions are enforced and which only record the decision", async () => {
     vi.mocked(listReports).mockResolvedValueOnce({ items: [openReport()], nextCursor: null });
 
     render(
@@ -189,7 +189,7 @@ describe("ModerationQueuePage", () => {
     );
 
     expect(
-      await screen.findByText(/does not by itself enforce it/i),
+      await screen.findByText(/only record the decision/i),
     ).not.toBeNull();
   });
 

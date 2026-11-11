@@ -137,8 +137,11 @@ describe("UsersPage", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Block" }));
+    // B-295: blocking is a suspension and the API needs a reason category, so the dialog asks for one first.
+    fireEvent.click(await screen.findByRole("radio", { name: "Harassment or bullying" }));
+    fireEvent.click(screen.getByRole("button", { name: "Suspend account" }));
 
-    await waitFor(() => expect(updateUserStatus).toHaveBeenCalledWith("user-1", "suspended"));
+    await waitFor(() => expect(updateUserStatus).toHaveBeenCalledWith("user-1", "suspended", "harassment_or_bullying"));
     expect(await screen.findByText("suspended")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Unblock" })).not.toBeNull();
     expect(listUsers).toHaveBeenCalledTimes(1);
@@ -155,8 +158,11 @@ describe("UsersPage", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Block" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Harassment or bullying" }));
+    fireEvent.click(screen.getByRole("button", { name: "Suspend account" }));
 
-    expect(await screen.findByText("Server error")).not.toBeNull();
+    // A 500 shows the dialog's fixed line (only a 4xx shows the server's own message); the row is unchanged.
+    expect(await screen.findByText("Couldn’t suspend this account. Please try again.")).not.toBeNull();
     expect(screen.getByText("active")).not.toBeNull();
   });
 
@@ -230,5 +236,36 @@ describe("UsersPage", () => {
       expect(listUsers).toHaveBeenLastCalledWith({ status: undefined, cursor: "cursor-1", limit: 50 }),
     );
     expect(await screen.findByText("Second Player")).not.toBeNull();
+  });
+});
+
+describe("UsersPage: Block asks for a reason category (B-295)", () => {
+  it("opens the dialog, sends nothing until a category is chosen, and never sends one for Unblock", async () => {
+    vi.mocked(updateUserStatus).mockReset();
+    vi.mocked(listUsers).mockResolvedValue({
+      items: [user(), user({ id: "user-2", displayName: "Sam Blocked", accountStatus: "suspended" })],
+      nextCursor: null,
+    });
+    vi.mocked(updateUserStatus).mockResolvedValue({ deleted: false, user: user({ id: "user-2" }) });
+
+    render(
+      <MemoryRouter>
+        <UsersPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Block" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Suspend account" }));
+    expect(await screen.findByText("Choose a reason category.")).not.toBeNull();
+    expect(updateUserStatus).not.toHaveBeenCalled();
+
+    // Cancel leaves the row alone.
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(updateUserStatus).not.toHaveBeenCalled();
+
+    // Unblock needs no dialog and no category.
+    fireEvent.click(screen.getByRole("button", { name: "Unblock" }));
+    await waitFor(() => expect(updateUserStatus).toHaveBeenCalledWith("user-2", "active"));
   });
 });

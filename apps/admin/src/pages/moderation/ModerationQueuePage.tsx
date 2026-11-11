@@ -205,11 +205,10 @@ export default function ModerationQueuePage() {
         <div className="mod-callout">
           <span className="mod-callout__bar" aria-hidden />
           <p>
-            Recording an action on a report does not by itself enforce it, and content is not
-            removed automatically. Actioning a report as &ldquo;Suspend User&rdquo; does not
-            suspend the account: a moderator suspends a reported user separately, on the Users
-            screen, if the decision warrants it. Actioning a report only records the decision and
-            notifies both parties.
+            Actioning a report notifies both parties. Remove Content hides the reported post, comment
+            or message from everyone but the moderators. Suspend User suspends the account behind a
+            user, post, comment or message report, after you confirm. Warn User and Dismiss Report
+            only record the decision.
           </p>
         </div>
       </div>

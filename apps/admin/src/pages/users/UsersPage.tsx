@@ -22,7 +22,9 @@ import {
   type AdminUserFilterStatus,
 } from "../../api/adminUsers";
 import { StubButton } from "../../components/stub/AdminStub";
+import SuspendAccountDialog from "../moderation/SuspendAccountDialog";
 import { formatDate, useAsyncData } from "./usersShared";
+import "../moderation/moderation.css";
 import "./users.css";
 
 type Tab = "all" | "active" | "suspended";
@@ -39,19 +41,33 @@ function UserRow({
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
+  const [suspending, setSuspending] = useState(false);
   const isSuspended = user.accountStatus === "suspended";
 
+  // B-295 (Decision Log #485): blocking is a suspension, and the API now refuses one without a reason category, so
+  // Block opens the same dialog the user page uses (it asks for the category). Unblock needs nothing more.
   async function handleBlockToggle() {
+    if (!isSuspended) {
+      setRowError(null);
+      setSuspending(true);
+      return;
+    }
     setRowError(null);
     setBusy(true);
     try {
-      const result = await updateUserStatus(user.id, isSuspended ? "active" : "suspended");
+      const result = await updateUserStatus(user.id, "active");
       if (!result.deleted) onChanged(result.user);
     } catch (err) {
       setRowError(err instanceof AdminApiError ? err.message : "Couldn't update this user.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmSuspend(reasonCategory?: string) {
+    const result = await updateUserStatus(user.id, "suspended", reasonCategory);
+    setSuspending(false);
+    if (!result.deleted) onChanged(result.user);
   }
 
   async function handleDeleteConfirmed() {
@@ -118,6 +134,14 @@ function UserRow({
           <p className="us-error us-row-error" role="alert">
             {rowError}
           </p>
+        ) : null}
+        {suspending ? (
+          <SuspendAccountDialog
+            mode="user"
+            lead={`Suspend the account of ${user.displayName}? If you continue:`}
+            onSubmit={confirmSuspend}
+            onClose={() => setSuspending(false)}
+          />
         ) : null}
       </span>
     </div>
