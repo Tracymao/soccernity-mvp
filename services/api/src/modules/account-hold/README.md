@@ -77,9 +77,9 @@ refusal says only "The time allowed for appealing this report has passed.", code
 ## `AccountHold` table
 
 A genuine new model, flagged as a Decision Log candidate (the data model is a fixed spec). `userId` is a real RESTRICT
-FK to `User`; `reportId` is nullable only for a legal hold with no report (the service has no such path yet). CHECK
+FK to `User`; `reportId` is always set when a hold is placed and becomes NULL only when the report retention job deletes the report (B-299: the hold is detached and kept). CHECK
 constraints (migration `20261102090000_add_account_hold`): type in (`legal_hold`, `bad_faith`); the three lifted
-columns all set or all null; a bad-faith hold has an expiry and a report; a legal hold has no expiry. The row is audit
+columns all set or all null; a bad-faith hold has an expiry (it needed a report too until migration `20261129090000_account_hold_report_detachable`); a legal hold has no expiry. The row is audit
 evidence and **blocks the B-043 purge** of the user row (`AccountHold.user` is classed as content in
 `anonymized-row-purge.references.ts`; veto-able).
 

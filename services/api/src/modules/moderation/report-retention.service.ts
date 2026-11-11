@@ -26,13 +26,13 @@ import { resolveReportedUserId } from './report-target.util';
 
 // backend/b294-report-retention (B-294; Decision Log #487, founder decision of 2026-11-11).
 //
-// A daily sweep that deletes a report once it has been CLOSED for REPORT_RETENTION_MONTHS (default 12), or for
-// REPORT_RETENTION_CONCERNS_MINOR_YEARS (default 6) when Report.concernsMinor is true, together with the content
+// A daily sweep that deletes a report once it has been CLOSED for REPORT_RETENTION_YEARS (default 6), or for
+// REPORT_RETENTION_CONCERNS_MINOR_YEARS (default 7) when Report.concernsMinor is true (B-299; counsel's "6-7 years"), together with the content
 // the report removed (B-289). "Closed" is reportClosedAt (account-hold.rules.ts): the one computed closure moment
 // (there is no column and no event) -- dismissed: reviewedAt; actioned with no appeal: reviewedAt + the appeal
 // window; appeal upheld: appealReviewedAt. An open report (including one reopened by an overturned appeal) or one
 // with an appeal pending has no closure and is never due. The period is anchored to that result and measured in
-// calendar months (setUTCMonth, the convention of the other retention jobs); a report is due STRICTLY after
+// calendar months (setUTCMonth, the convention of the other retention jobs; years x 12); a report is due STRICTLY after
 // closure + period.
 //
 // A REPORT IS SKIPPED (kept, with its content, retried next run) while any of these holds:
@@ -47,11 +47,15 @@ import { resolveReportedUserId } from './report-target.util';
 //
 // A REPORT IS BLOCKED (kept; the finding is logged as a COUNT per kind and listed in the PR) when a record outside
 // the deletion list depends on it or on an item, and no rule says what to do with that record. Nothing is invented:
-//   - hold_record               an AccountHold row (lifted or expired) still references the report (a RESTRICT FK);
-//   - contact_enquiry           a ContactEnquiry was escalated into this report (a RESTRICT FK);
 //   - contest_entry             the removed post is a Contest entry (deleting it would delete votes, winners and
 //                               impressions with it);
 //   - context_of_other_report   a removed message is attached as context to a DIFFERENT report (a RESTRICT FK).
+//
+// TWO KINDS OF RECORD ARE DETACHED, NOT BLOCKING (B-299): an AccountHold row that points at the report gets
+// reportId = NULL and is otherwise untouched (a hold is audit evidence and outlives the report; the migration
+// 20261129090000 lets a bad_faith hold have no report), and a ContactEnquiry escalated into the report gets
+// escalatedReportId = NULL and nothing else (so ContactEnquiryRetentionService treats it as an ordinary enquiry
+// from its own lastMessageAt). Both are counted in the result, not treated as a reason to keep the report.
 //
 // WHEN A REPORT IS DUE AND NOT SKIPPED OR BLOCKED, in this order, in ONE Serializable transaction:
 //   1. the content the report removed (Post / Comment / Message rows with removedByReportId = this report) together
@@ -62,7 +66,8 @@ import { resolveReportedUserId } from './report-target.util';
 //      retention job does);
 //   2. the ReportContextMessage rows of this report (the context messages themselves STAY and fall to the normal
 //      message retention);
-//   3. the report.
+//   3. the AccountHold rows and the ContactEnquiry rows that point at the report are detached (see above);
+//   4. the report.
 // Everything is re-checked inside the transaction (a hold placed or a report filed since the scan stops it).
 // The stored objects are deleted only AFTER the commit, through the existing deferred-deletion pattern: the record is
 // written in the transaction, the object is deleted afterwards and the record removed on success, so a failed delete
@@ -90,8 +95,10 @@ export interface PurgeReportsResult {
   skippedHold: number;
   skippedMedia: number;
   skippedOtherReportOpen: number;
-  blockedHoldRecord: number;
-  blockedContactEnquiry: number;
+  /** AccountHold rows detached (reportId set to NULL) from a report that was then deleted. */
+  detachedHolds: number;
+  /** ContactEnquiry rows detached (escalatedReportId set to NULL) from a report that was then deleted. */
+  detachedEnquiries: number;
   blockedContestEntry: number;
   blockedContextOfOtherReport: number;
   /** A serialization conflict or a report that changed under us; retried next run. */
@@ -116,7 +123,7 @@ interface Candidate {
 }
 
 type SkipReason = 'escalated' | 'hold' | 'media' | 'other_report_open';
-type BlockReason = 'hold_record' | 'contact_enquiry' | 'contest_entry' | 'context_of_other_report';
+type BlockReason = 'contest_entry' | 'context_of_other_report';
 type Outcome =
   | { kind: 'delete' }
   | { kind: 'not_due' }
@@ -159,8 +166,8 @@ function emptyResult(): PurgeReportsResult {
     skippedHold: 0,
     skippedMedia: 0,
     skippedOtherReportOpen: 0,
-    blockedHoldRecord: 0,
-    blockedContactEnquiry: 0,
+    detachedHolds: 0,
+    detachedEnquiries: 0,
     blockedContestEntry: 0,
     blockedContextOfOtherReport: 0,
     retryLater: 0,
@@ -191,9 +198,8 @@ export class ReportRetentionService {
         `Report retention complete: examined=${r.examined} reports=${r.deletedReports} posts=${r.deletedPosts} ` +
           `comments=${r.deletedComments} messages=${r.deletedMessages} conversations=${r.deletedConversations} ` +
           `objectDeletesFailed=${r.objectDeletesFailed} skipped(escalated=${r.skippedEscalated} hold=${r.skippedHold} ` +
-          `media=${r.skippedMedia} otherReportOpen=${r.skippedOtherReportOpen}) blocked(holdRecord=${r.blockedHoldRecord} ` +
-          `contactEnquiry=${r.blockedContactEnquiry} contestEntry=${r.blockedContestEntry} ` +
-          `contextOfOtherReport=${r.blockedContextOfOtherReport}) retryLater=${r.retryLater} capped=${r.capped}`,
+          `media=${r.skippedMedia} otherReportOpen=${r.skippedOtherReportOpen}) detached(holds=${r.detachedHolds} enquiries=${r.detachedEnquiries}) ` +
+          `blocked(contestEntry=${r.blockedContestEntry} contextOfOtherReport=${r.blockedContextOfOtherReport}) retryLater=${r.retryLater} capped=${r.capped}`,
       );
     } catch (err) {
       this.logger.error(`Report retention failed (${msg(err)}); it will run again tomorrow.`);
@@ -205,7 +211,7 @@ export class ReportRetentionService {
     const appealWindowDays = resolveReportAppealWindowDays();
     // A report cannot be due before reviewedAt + the SHORTER of the two periods, so this is a safe SQL pre-filter.
     // The exact test (closure moment, own period) is applied per report below.
-    const shortest = Math.min(this.cfg.months, this.cfg.concernsMinorYears * 12);
+    const shortest = Math.min(this.cfg.years, this.cfg.concernsMinorYears) * 12;
     const prefilter = addUtcMonths(now, -shortest);
 
     let after: { reviewedAt: Date; id: string } | null = null;
@@ -251,9 +257,7 @@ export class ReportRetentionService {
       else if (outcome.reason === 'media') result.skippedMedia += 1;
       else result.skippedOtherReportOpen += 1;
     } else if (outcome.kind === 'blocked') {
-      if (outcome.reason === 'hold_record') result.blockedHoldRecord += 1;
-      else if (outcome.reason === 'contact_enquiry') result.blockedContactEnquiry += 1;
-      else if (outcome.reason === 'contest_entry') result.blockedContestEntry += 1;
+      if (outcome.reason === 'contest_entry') result.blockedContestEntry += 1;
       else result.blockedContextOfOtherReport += 1;
     }
   }
@@ -292,13 +296,8 @@ export class ReportRetentionService {
       if (await findActiveAccountHold(db, userId, now)) return { outcome: { kind: 'skip', reason: 'hold' }, plan };
     }
 
-    // 5. records outside the deletion list that depend on the report or on an item: kept, counted, reported.
-    if ((await db.accountHold.count({ where: { reportId: r.id } })) > 0) {
-      return { outcome: { kind: 'blocked', reason: 'hold_record' }, plan };
-    }
-    if ((await db.contactEnquiry.count({ where: { escalatedReportId: r.id } })) > 0) {
-      return { outcome: { kind: 'blocked', reason: 'contact_enquiry' }, plan };
-    }
+    // 5. records outside the deletion list that depend on an item: kept, counted, reported. (Holds and escalated
+    // enquiries are not here: they are detached on deletion.)
     if (plan.postIds.length > 0 && (await db.contestEntry.count({ where: { postId: { in: plan.postIds } } })) > 0) {
       return { outcome: { kind: 'blocked', reason: 'contest_entry' }, plan };
     }
@@ -400,7 +399,7 @@ export class ReportRetentionService {
     result: PurgeReportsResult,
   ): Promise<boolean> {
     let objectKeys: string[] = [];
-    let counts = { posts: 0, comments: 0, messages: 0, conversations: 0 };
+    let counts = { posts: 0, comments: 0, messages: 0, conversations: 0, holds: 0, enquiries: 0 };
     try {
       const outcome = await this.prisma.$transaction(
         async (tx) => {
@@ -439,6 +438,8 @@ export class ReportRetentionService {
     result.deletedComments += counts.comments;
     result.deletedMessages += counts.messages;
     result.deletedConversations += counts.conversations;
+    result.detachedHolds += counts.holds;
+    result.detachedEnquiries += counts.enquiries;
     result.objectDeletesFailed += await this.deleteObjectsAfterCommit(objectKeys);
     return true;
   }
@@ -447,8 +448,11 @@ export class ReportRetentionService {
     tx: Db,
     reportId: string,
     plan: Plan,
-  ): Promise<{ keys: string[]; counts: { posts: number; comments: number; messages: number; conversations: number } }> {
-    const counts = { posts: 0, comments: 0, messages: 0, conversations: 0 };
+  ): Promise<{
+    keys: string[];
+    counts: { posts: number; comments: number; messages: number; conversations: number; holds: number; enquiries: number };
+  }> {
+    const counts = { posts: 0, comments: 0, messages: 0, conversations: 0, holds: 0, enquiries: 0 };
     const keys: string[] = [];
 
     // 1a. posts (media rows first: a deferral record per stored object is written in this transaction).
@@ -514,7 +518,14 @@ export class ReportRetentionService {
       counts.conversations = res.count;
     }
 
-    // 3. the report.
+    // 3. detach what points at the report but must outlive it (both foreign keys are RESTRICT, so this has to
+    // come first). The rows are otherwise untouched.
+    counts.holds = (await tx.accountHold.updateMany({ where: { reportId }, data: { reportId: null } })).count;
+    counts.enquiries = (
+      await tx.contactEnquiry.updateMany({ where: { escalatedReportId: reportId }, data: { escalatedReportId: null } })
+    ).count;
+
+    // 4. the report.
     await tx.report.delete({ where: { id: reportId } });
     return { keys, counts };
   }
