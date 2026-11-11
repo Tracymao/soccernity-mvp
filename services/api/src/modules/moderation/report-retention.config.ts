@@ -1,13 +1,14 @@
-// backend/b294-report-retention (B-294; Decision Log #487, founder decision of 2026-11-11).
+// backend/b299-report-retention-6-7-years (B-299; Decision Log #490, #493). Replaces the 12 months / 6 years of
+// backend/b294-report-retention (PR #725) with counsel's approved "6-7 years".
 //
 // How long a CLOSED report is kept before the daily sweep deletes it (together with the content it removed):
-//   REPORT_RETENTION_MONTHS               a report that does not concern a minor: months after it CLOSED (default 12).
-//   REPORT_RETENTION_CONCERNS_MINOR_YEARS a report flagged concernsMinor: years after it CLOSED (default 6).
+//   REPORT_RETENTION_YEARS                a report that does not concern a minor: years after it CLOSED (default 6).
+//   REPORT_RETENTION_CONCERNS_MINOR_YEARS a report flagged concernsMinor: years after it CLOSED (default 7).
 // "Closed" is reportClosedAt (account-hold.rules.ts), the one computed closure moment. Both numbers are
-// configuration; the 6-year figure is unverified for UK law and counsel may confirm it (it does not hold the build).
+// configuration; the range is counsel's, so there is no "unverified" caveat on either.
 
-export const DEFAULT_REPORT_RETENTION_MONTHS = 12;
-export const DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS = 6;
+export const DEFAULT_REPORT_RETENTION_YEARS = 6;
+export const DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS = 7;
 
 /**
  * Most reports DELETED in one run (a deleted report is the unit: it may take a post, its media and its
@@ -25,7 +26,7 @@ export interface ConfigReader {
 }
 
 export interface ReportRetentionConfig {
-  months: number;
+  years: number;
   concernsMinorYears: number;
 }
 
@@ -39,7 +40,7 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 // The names are spelled out as literals so src/env-completeness.spec.ts (B-018) can see them.
 export function readReportRetentionConfig(config: ConfigReader): ReportRetentionConfig {
   return {
-    months: positiveInt(config.get('REPORT_RETENTION_MONTHS'), DEFAULT_REPORT_RETENTION_MONTHS),
+    years: positiveInt(config.get('REPORT_RETENTION_YEARS'), DEFAULT_REPORT_RETENTION_YEARS),
     concernsMinorYears: positiveInt(
       config.get('REPORT_RETENTION_CONCERNS_MINOR_YEARS'),
       DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS,
@@ -49,5 +50,5 @@ export function readReportRetentionConfig(config: ConfigReader): ReportRetention
 
 /** Retention period in calendar months for one report. */
 export function retentionMonthsFor(report: { concernsMinor: boolean }, cfg: ReportRetentionConfig): number {
-  return report.concernsMinor ? cfg.concernsMinorYears * 12 : cfg.months;
+  return (report.concernsMinor ? cfg.concernsMinorYears : cfg.years) * 12;
 }
