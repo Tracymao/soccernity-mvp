@@ -54,7 +54,9 @@ export type RegistrationEmailTemplate =
   | 'password-reset-completed'
   | 'welcome'
   | 'staff-account-created'
-  | 'account-deletion-requested';
+  | 'account-deletion-requested'
+  | 'account-suspended'
+  | 'account-reinstated';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -81,6 +83,10 @@ const RECOVERY_TEMPLATES: ReadonlySet<RegistrationEmailTemplate> = new Set<Regis
   'email-change-notice',
   // Decision Log #476: goes to an address that belongs to SOMEONE ELSE, so it is quiet too.
   'email-change-unavailable',
+  // backend/b291-suspension-on-report (B-291): a safety action on a named person's account; the recipient and the
+  // reason line are not written to a log, live or not.
+  'account-suspended',
+  'account-reinstated',
 ]);
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
@@ -464,6 +470,36 @@ export class RegistrationEmailService {
       subject: 'Your appeal has been reviewed',
       template: 'appeal-decision',
       data: { decision },
+    });
+  }
+
+  // backend/b291-suspension-on-report (B-291; Decision Log #485, founder decision of 2026-11-11). To the person whose
+  // account was just suspended, at once, for EVERY suspension (a report's user_suspended action or the admin user
+  // page). The reason is a fixed plain-words line chosen from the report category (suspensionReasonLine), never free
+  // text, never who reported, never a duration. It says the person can appeal through the Contact Us page; the link is
+  // built from WEB_APP_BASE_URL, and when that is unusable the email is still sent, naming the page without a link
+  // (the notice matters more than its pointer, like the guardian safety notice).
+  // [COPY PENDING LEGAL REVIEW]: every new sentence in this email and in the reinstatement email below, and the
+  // reason lines in suspensionReasonLine (docs/pending-copy-manifest.md, services/api section).
+  async sendAccountSuspendedEmail(to: string, reasonCategory: string | null): Promise<void> {
+    const contactLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/contact', {}) ?? '';
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account has been suspended',
+      template: 'account-suspended',
+      data: { reasonLine: suspensionReasonLine(reasonCategory), contactLink },
+    });
+  }
+
+  // backend/b291-suspension-on-report (B-291): to the person whose suspension was lifted (a manual reinstatement from
+  // the admin user page, or the overturn of the appeal against the suspending report). Short, with no reason and no
+  // mention of any report. [COPY PENDING LEGAL REVIEW]
+  async sendAccountReinstatedEmail(to: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account has been reinstated',
+      template: 'account-reinstated',
+      data: {},
     });
   }
 
@@ -874,6 +910,15 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
           : '') +
         `Welcome to the team,\nThe Soccernity Team`
       );
+    case 'account-suspended':
+      return (
+        `Hi,\n\n` +
+        `Your Soccernity account has been suspended for ${data.reasonLine}.\n\n` +
+        `You can't sign in while your account is suspended.\n\n` +
+        `If you think this is a mistake, you can appeal by contacting us through the Contact Us page${data.contactLink ? `: ${data.contactLink}` : ' on Soccernity'}.`
+      );
+    case 'account-reinstated':
+      return `Hi,\n\nThe suspension on your Soccernity account has been lifted. You can sign in again.`;
     case 'account-deletion-requested':
       return (
         `Hi ${data.firstName},\n\n` +
@@ -1231,6 +1276,17 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
           : '') +
         `<p>Welcome to the team,<br>The Soccernity Team</p>`
       );
+    case 'account-suspended':
+      return (
+        `<p>Hi,</p>` +
+        `<p>Your Soccernity account has been suspended for ${escapeHtml(data.reasonLine)}.</p>` +
+        `<p>You can't sign in while your account is suspended.</p>` +
+        `<p>If you think this is a mistake, you can appeal by contacting us through the ${
+          data.contactLink ? `<a href="${escapeHtml(data.contactLink)}">Contact Us page</a>` : 'Contact Us page on Soccernity'
+        }.</p>`
+      );
+    case 'account-reinstated':
+      return `<p>Hi,</p><p>The suspension on your Soccernity account has been lifted. You can sign in again.</p>`;
     case 'account-deletion-requested':
       return (
         `<p>Hi ${escapeHtml(data.firstName)},</p>` +
@@ -1454,6 +1510,29 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
   }
+}
+
+// backend/b291-suspension-on-report (B-291; Decision Log #485). The ONE fixed map from a report reason category to
+// the plain-words line in the suspension email ("Your Soccernity account has been suspended for <line>."). Fixed text
+// only: never free text from a report, never who reported, never a duration. 'child_safety_concern', 'other', a
+// missing category and any category this map does not know all use the generic line, so the email never names a
+// child-safety matter. The lines are adopted defaults, veto-able. [COPY PENDING LEGAL REVIEW]
+export const SUSPENSION_GENERIC_REASON_LINE = 'breaching our community rules';
+const SUSPENSION_REASON_LINES: Readonly<Record<string, string>> = {
+  harassment_or_bullying: 'harassing or bullying other people',
+  hate_or_abusive_language: 'using hateful or abusive language',
+  threats_or_violence: 'making threats or encouraging violence',
+  sexual_or_inappropriate_content: 'sharing sexual or inappropriate content',
+  impersonation_or_fake_account: 'pretending to be someone else or running a fake account',
+  spam_or_scam: 'sending spam or running a scam',
+  privacy_or_image_misuse: "sharing other people's private information or images without permission",
+};
+
+export function suspensionReasonLine(category: string | null | undefined): string {
+  if (!category) return SUSPENSION_GENERIC_REASON_LINE;
+  return Object.prototype.hasOwnProperty.call(SUSPENSION_REASON_LINES, category)
+    ? SUSPENSION_REASON_LINES[category]
+    : SUSPENSION_GENERIC_REASON_LINE;
 }
 
 // feat/moderation-outcome-appeal-emails — plain, functional copy for the

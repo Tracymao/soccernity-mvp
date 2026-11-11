@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RegistrationEmailService } from './registration-email.service';
+import { RegistrationEmailService, SUSPENSION_GENERIC_REASON_LINE, suspensionReasonLine } from './registration-email.service';
 
 const mockSendEmail = jest.fn();
 
@@ -824,5 +824,110 @@ describe('RegistrationEmailService', () => {
       await expect(live().sendGuardianSafetyNoticeEmail('g@example.com', 's', 'summary', 'when')).resolves.toBeUndefined();
       errorSpy.mockRestore();
     });
+  });
+});
+
+// B-291 (Decision Log #485): the suspension and reinstatement emails. [COPY PENDING LEGAL REVIEW]
+describe('suspensionReasonLine (B-291)', () => {
+  it.each([
+    ['harassment_or_bullying', 'harassing or bullying other people'],
+    ['hate_or_abusive_language', 'using hateful or abusive language'],
+    ['threats_or_violence', 'making threats or encouraging violence'],
+    ['sexual_or_inappropriate_content', 'sharing sexual or inappropriate content'],
+    ['impersonation_or_fake_account', 'pretending to be someone else or running a fake account'],
+    ['spam_or_scam', 'sending spam or running a scam'],
+    ['privacy_or_image_misuse', "sharing other people's private information or images without permission"],
+  ])('%s gets its own plain-words line', (category, line) => {
+    expect(suspensionReasonLine(category)).toBe(line);
+  });
+
+  it.each([['child_safety_concern'], ['other'], [null], [undefined], [''], ['a_category_from_a_newer_server'], ['constructor'], ['__proto__']])(
+    '%s uses the generic line, so the email never names a child-safety matter or free text',
+    (category) => {
+      expect(suspensionReasonLine(category as string | null | undefined)).toBe(SUSPENSION_GENERIC_REASON_LINE);
+    },
+  );
+
+  it('the generic line is exactly "breaching our community rules"', () => {
+    expect(SUSPENSION_GENERIC_REASON_LINE).toBe('breaching our community rules');
+  });
+});
+
+describe('RegistrationEmailService: suspension emails (B-291)', () => {
+  const config = {
+    EMAIL_PROVIDER_API_KEY: 'a-real-key',
+    POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+    WEB_APP_BASE_URL: 'https://app.soccernity.com',
+  };
+
+  afterEach(() => jest.clearAllMocks());
+
+  it('the suspension email gives the fixed reason line, the Contact Us link, and nothing else about the report', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s1' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    await service.sendAccountSuspendedEmail('person@example.com', 'hate_or_abusive_language');
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.To).toBe('person@example.com');
+    expect(sent.Subject).toBe('Your Soccernity account has been suspended');
+    for (const body of [sent.TextBody, sent.HtmlBody]) {
+      expect(body).toContain('suspended for using hateful or abusive language');
+      expect(body).toContain('https://app.soccernity.com/contact');
+      expect(body).toMatch(/appeal/i);
+      // No duration, no reporter, no report.
+      expect(body).not.toMatch(/days|weeks|months|permanent|temporar|report|reporter|moderator/i);
+    }
+  });
+
+  it('a child-safety, other or missing category uses the generic line', async () => {
+    mockSendEmail.mockResolvedValue({ MessageID: 'm' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    for (const category of ['child_safety_concern', 'other', null]) {
+      mockSendEmail.mockClear();
+      await service.sendAccountSuspendedEmail('person@example.com', category);
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('suspended for breaching our community rules.');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).not.toMatch(/child/i);
+    }
+  });
+
+  it('is still sent, naming the Contact Us page without a link, when WEB_APP_BASE_URL is unusable', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s2' });
+    const service = new RegistrationEmailService(buildConfig({ ...config, WEB_APP_BASE_URL: undefined }));
+
+    await service.sendAccountSuspendedEmail('person@example.com', null);
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.TextBody).toContain('Contact Us page on Soccernity');
+    expect(sent.HtmlBody).toContain('Contact Us page on Soccernity');
+    expect(sent.TextBody).not.toContain('http');
+  });
+
+  it('the reinstatement email is short and says nothing about a reason or a report', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s3' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    await service.sendAccountReinstatedEmail('person@example.com');
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.Subject).toBe('Your Soccernity account has been reinstated');
+    expect(sent.TextBody).toContain('The suspension on your Soccernity account has been lifted. You can sign in again.');
+    expect(sent.TextBody).not.toMatch(/report|reason|appeal/i);
+  });
+
+  it('neither email writes the recipient or the reason line to the log, live or not (quiet templates)', async () => {
+    const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    mockSendEmail.mockResolvedValue({ MessageID: 'msg-q' });
+    const live = new RegistrationEmailService(buildConfig(config));
+    await live.sendAccountSuspendedEmail('person@example.com', 'spam_or_scam');
+    await live.sendAccountReinstatedEmail('person@example.com');
+    const dry = new RegistrationEmailService(buildConfig({ ...config, EMAIL_PROVIDER_API_KEY: undefined }));
+    await dry.sendAccountSuspendedEmail('person@example.com', 'spam_or_scam');
+
+    const logged = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).not.toContain('person@example.com');
+    expect(logged).not.toContain('sending spam');
+    log.mockRestore();
   });
 });

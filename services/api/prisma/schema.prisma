@@ -97,6 +97,14 @@ model User {
   // reasoning.
   accountStatus String @default("active")
 
+  // backend/b291-suspension-on-report (B-291, Decision Log #485) -- a genuine addition beyond Section 3's User field list,
+  // flagged as a Decision Log candidate. The report whose user_suspended action suspended this account. Set only when the
+  // suspension is CAUSED by a report and the account was not already suspended (never overwritten); cleared by a manual
+  // reinstatement and by the overturn of THIS report's appeal. Only that report's overturned appeal reinstates the
+  // account automatically. ON DELETE SET NULL: the report-retention sweep will later delete reports.
+  suspendedByReportId String?
+  suspendedByReport   Report? @relation("UserSuspendedByReport", fields: [suspendedByReportId], references: [id], onDelete: SetNull)
+
   // backend/b086-two-factor (B-086; Decision Log #446, #405 item 8, #404 item 7) -- genuine additions beyond Section
   // 3's User field list, flagged per CLAUDE.md's "fixed spec" rule (Decision Log candidates; see
   // modules/two-factor/README.md). Authenticator-app two-factor (TOTP), OPTIONAL for a user.
@@ -393,6 +401,7 @@ model User {
   // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
   // <= cutoff), so the daily sweep isn't a full table scan.
   @@index([accountStatus, pendingDeletionAt])
+  @@index([suspendedByReportId])
   // backend/w6-purge-anonymised-rows -- backs AnonymizedRowPurgeService's selection.
   @@index([accountStatus, anonymizedAt])
 }
@@ -1871,6 +1880,8 @@ model Report {
   removedPosts     Post[]    @relation("PostRemovedByReport")
   removedComments  Comment[] @relation("CommentRemovedByReport")
   removedMessages  Message[] @relation("MessageRemovedByReport")
+  // backend/b291-suspension-on-report (B-291): accounts this report suspended (user_suspended). Relation only.
+  suspendedUsers   User[]    @relation("UserSuspendedByReport")
 }
 
 // backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and

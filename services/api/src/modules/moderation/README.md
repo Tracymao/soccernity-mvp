@@ -892,3 +892,35 @@ was needed. The purge's own raw `Report` check also joins `Message.senderId` now
 **Not done.** Admin search does not match a report by the sender's username through a message target (it still
 covers user, post and comment targets). `apps/web` has no Report item on the other person's message yet (Figma frame
 A3 `6977:47201` draws it), and `apps/web`/`apps/admin` `ReportTargetType` types do not list `message` yet.
+
+## Recording `user_suspended` suspends the account (B-291, Decision Log #485)
+
+**This supersedes the "`user_suspended` is not enforced" statements earlier in this file** (the older text is history).
+
+`PATCH /admin/moderation/reports/:id` with `user_suspended` now suspends the account behind the target in the SAME
+transaction as the report update, through the shared `AccountSuspensionService` (`account-suspension/`), the same code
+`PATCH /admin/users/:id { status: 'suspended' }` uses. Who is suspended: `resolveReportedUserId` (the user, or the
+author of the post / comment, or the sender of the message).
+
+- **Offered only for `user`, `post`, `comment`, `message` targets.** Any other target type (`banter_room`,
+  `grassroots_team`, `fixture`, `enquiry`) is `400` code `user_suspension_not_applicable`, before anything is written.
+- **After the commit** (never inside the transaction): all sessions revoked, earned engagement points revoked, one
+  guardian `account_suspended` notice (the old `GUARDIAN_NOTICE_FOR_REPORT_ACTION` entry is removed so it is sent once),
+  and the suspension email with a fixed plain-words reason from the report's category. A failure in these steps is
+  logged, not thrown: the decision is already committed.
+- **`User.suspendedByReportId`** (FK `Report`, `ON DELETE SET NULL`; a column beyond Section 3's `User` list, flagged as
+  a Decision Log candidate) is set only when a report causes the suspension of an account that was not already
+  suspended; it is never overwritten; a manual reinstatement from the user page clears it.
+- **Edge cases:** already suspended: the action is recorded, nothing else (no second email, no second guardian notice,
+  link not overwritten). `deleted`: recorded, nothing else. `deactivated` / `pending_deletion`: suspended exactly as on
+  the user page (a pending deletion's `pendingDeletionAt` is cleared).
+- **Overturned appeal** (`decideAppeal`): if the action was `user_suspended` AND the account's `suspendedByReportId`
+  equals this report, the account becomes `active` and the link is cleared in the same transaction, then one guardian
+  `account_reinstated` and the reinstatement email. If the account is no longer suspended by this report (deleted,
+  reinstated by hand, suspended by another report) nothing is changed except clearing a link that still points here.
+  An upheld appeal changes nothing. Points are not restored. The second-reviewer rule (Decision Log #138) is unchanged.
+- **Emails** (`RegistrationEmailService`, queued in the background, tagged `[COPY PENDING LEGAL REVIEW]` in code): the
+  suspension email states a reason line from a single fixed map in code (`suspensionReasonLine`; `child_safety_concern`,
+  `other` and a missing category all give "breaching our community rules"), never free text, the reporter or a
+  duration, and says the person can appeal through the Contact Us page. The reinstatement email says only that the
+  suspension was lifted.

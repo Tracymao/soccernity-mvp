@@ -378,7 +378,7 @@ describe('Withhold guardian notices (B-280) -- real Postgres + real Redis', () =
       const admin = await seedAdmin('moderator', true);
       await withhold(minor.id, admin);
 
-      await http().patch(`/admin/users/${minor.id}`).set(admin.auth).send({ status: 'suspended' }).expect(200);
+      await http().patch(`/admin/users/${minor.id}`).set(admin.auth).send({ status: 'suspended', reasonCategory: 'other' }).expect(200);
       await settle();
       expect(calls('sendGuardianSafetyNoticeEmail')).toHaveLength(0);
 

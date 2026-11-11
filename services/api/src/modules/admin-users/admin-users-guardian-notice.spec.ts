@@ -1,4 +1,5 @@
 import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
+import { AccountSuspensionService } from '../account-suspension/account-suspension.service';
 import { AdminUsersService } from './admin-users.service';
 
 // backend/b279-guardian-safety-notices (B-279; Decision Log #456 A): the admin-users hooks. When Soccernity
@@ -14,6 +15,8 @@ function buildUsers(current: { isMinor: boolean; accountStatus: string }) {
     user: {
       findUnique: jest.fn().mockResolvedValue({ id: 'u-1', ...current }),
       update: jest.fn().mockResolvedValue(LISTED),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue(LISTED),
     },
     accountHold: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
     // A suspension revokes the account's baseline points (backend/w12-points).
@@ -33,14 +36,17 @@ function buildUsers(current: { isMinor: boolean; accountStatus: string }) {
     }),
     notifyInBackground: jest.fn(),
   };
-  const service = new AdminUsersService(prisma as never, tokenService as never, sweep as never, log as never, notices as never);
+  (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(prisma));
+  const email = { sendAccountSuspendedEmail: jest.fn().mockResolvedValue(undefined), sendAccountReinstatedEmail: jest.fn().mockResolvedValue(undefined) };
+  const suspension = new AccountSuspensionService(prisma as never, tokenService as never, notices as never, email as never);
+  const service = new AdminUsersService(prisma as never, tokenService as never, sweep as never, log as never, notices as never, suspension);
   return { service, prisma, sweep, notices, order };
 }
 
 describe('AdminUsersService: guardian notices (B-279)', () => {
   it('suspending a user asks for an account_suspended notice, once', async () => {
     const { service, notices } = buildUsers({ isMinor: true, accountStatus: 'active' });
-    await service.updateUserStatus('u-1', 'admin-1', { status: 'suspended' });
+    await service.updateUserStatus('u-1', 'admin-1', { status: 'suspended', reasonCategory: 'other' });
     expect(notices.notifyInBackground).toHaveBeenCalledTimes(1);
     expect(notices.notifyInBackground).toHaveBeenCalledWith('u-1', 'account_suspended');
   });
@@ -86,9 +92,9 @@ describe('AdminUsersService: guardian notices (B-279)', () => {
 
   it('a refused action sends nothing: an already-deleted user (409) and an unknown user (404)', async () => {
     const { service, notices, prisma } = buildUsers({ isMinor: true, accountStatus: 'deleted' });
-    await expect(service.updateUserStatus('u-1', 'admin-1', { status: 'suspended' })).rejects.toThrow();
+    await expect(service.updateUserStatus('u-1', 'admin-1', { status: 'suspended', reasonCategory: 'other' })).rejects.toThrow();
     prisma.user.findUnique.mockResolvedValue(null);
-    await expect(service.updateUserStatus('u-1', 'admin-1', { status: 'suspended' })).rejects.toThrow();
+    await expect(service.updateUserStatus('u-1', 'admin-1', { status: 'suspended', reasonCategory: 'other' })).rejects.toThrow();
     expect(notices.notifyInBackground).not.toHaveBeenCalled();
     expect(notices.prepare).not.toHaveBeenCalled();
   });
