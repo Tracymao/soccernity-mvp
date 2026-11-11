@@ -643,7 +643,8 @@ describe('ModerationService', () => {
       const { items } = await service.listReports({}, 'admin-1');
 
       expect(items[0]).toMatchObject({ id: 'enq', source: 'contact_enquiry' });
-      expect(items[1]).toBe(plain);
+      // B-292: every row now also carries appealRecordedByStaff (false here); nothing else about it changes.
+      expect(items[1]).toEqual({ ...plain, appealRecordedByStaff: false });
       expect(items[1]).not.toHaveProperty('source');
     });
 

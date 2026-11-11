@@ -977,3 +977,49 @@ back to the default). The 6-year figure is unverified for UK law; counsel may co
   only re-evaluated, not tracked, so a large permanently-kept set is re-read every night; "another report not yet closed" is
   judged on closure only, so a sibling report that closed recently but has a longer retention of its own does not hold this one
   back (its target is then gone when its own clock runs out).
+
+## Staff-recorded appeal (`backend/b292-staff-recorded-appeal`, B-292, Decision Log #485 (f), #492)
+
+A person suspended by a report cannot sign in, so they cannot call `POST /reports/:id/appeal`. They ask through the
+public Contact Us page and staff record the appeal on their behalf.
+
+**Route.** `POST /admin/moderation/reports/:id/appeal` (`AdminJwtAuthGuard` + `AdminRolesGuard('moderator',
+'superadmin')`, the class-level guards of this controller), body `{ reason }` with exactly `AppealReportDto`'s limits
+(string, 1 to 500 characters, required; any other key is a 400 from the global pipe). `ModerationService.recordAppealOnBehalf`.
+Rules, in this order:
+
+1. 404 `Report not found` if the report is missing.
+2. `assertVettedToActOn` (B-297): a `concernsMinor` report, or a `message` report whose thread involves a child,
+   needs a child-safety-vetted admin (403 `child_safety_vetting_required`).
+3. The report must be `actioned`: otherwise the same 403 `Only an actioned report may be appealed` as `appealReport`.
+4. `actionTaken` must be `user_suspended`: otherwise 400 `staff_appeal_not_applicable` (a person who is not suspended
+   can sign in and appeal themselves).
+5. No appeal yet: otherwise the same 409 `This report has already been appealed`.
+6. The reported account (`resolveReportedUserId`) must exist and not be `deleted` (anonymised): otherwise 409
+   `reported_account_unavailable`.
+7. The appeal window (`appealWindowLapsed` on `reviewedAt`, `REPORT_APPEAL_WINDOW_DAYS`): otherwise the same 403
+   `appeal_window_closed` and message as a self-filed appeal.
+
+On success ONE `updateMany` (guarded on `status: 'actioned'` and `appealStatus: null`, so two admins recording at once
+cannot both win; the loser gets the same 409) writes `appealStatus 'pending'`, `appealReason`, `appealedAt` and the new
+`Report.appealRecordedByAdminId` (migration `20261128090000_add_report_appeal_recorded_by`, additive, FK to `AdminUser`
+`ON DELETE SET NULL` like `reviewedByAdminId`, indexed; NULL means the person appealed themselves). The reported
+person is sent nothing (no email, no notification). An audit row `report.appeal_recorded` (targetType `report`, the
+recording admin as `adminId`, notes `pending`) is written after the update, the way `report.appeal_decided` is; the
+reason text is never in it.
+
+**Deciding.** `decideAppeal` keeps #138 (the admin who actioned the report may not decide) and adds: the admin who
+recorded the appeal may not decide it either (403 `appeal_recorder_cannot_decide`). A staff-recorded appeal therefore
+needs a third admin. Overturning it reinstates the account exactly as for a self-filed appeal (B-291).
+
+**Surfaced to the admin app.** Every queue row and the report detail carry `appealRecordedByStaff` (boolean, false when
+the person appealed themselves or there is no appeal); the detail also carries `appealRecordedBy: { id, fullName } |
+null` (the raw `appealRecordedByAdminId` is on every row, as `reviewedByAdminId` is). No other response changed.
+
+**Closure clock.** A pending appeal is a pending appeal whoever recorded it: `reportClosedAt` returns null while
+`appealStatus` is `pending`, so the report stays open for the hold rules and is never due for the retention sweep
+(B-294) until the appeal is decided. Pinned by a unit test.
+
+**Not built, flagged.** `apps/admin` screens (frames: Figma pass U, `docs/figma-pass-u-report.md`); the audit-log
+screen's client copy of the action list does not know `report.appeal_recorded` yet (it shows the raw key); there is no
+link from a Contact Us enquiry to the appeal it led to.
