@@ -1,10 +1,13 @@
 // backend/w7-contact-us-enquiry (B-046; Decision Log #440, #444, founder decisions 2026-10-30).
 
-// The six Contact Us categories, in the order the form draws them (founder decision 2026-10-30, superseding the
-// list of Decision Log #445 (g) as first built in PR #552). The stored value is the key; the label is what the
+// The seven Contact Us categories, in the order the form draws them. The first six are the founder decision of
+// 2026-10-30 (superseding the list of Decision Log #445 (g) as first built in PR #552); the seventh,
+// suspension_appeal, is Decision Log #492 (b), (e) (B-298). The stored value is the key; the label is what the
 // support email, the escalated Report's reason and the admin screens show.
 //   - livescores_issues is REMOVED: users cannot report on live scores, that data comes from a third-party service.
 //   - enquiries_feedback is SPLIT into enquiries and feedback.
+//   - suspension_appeal is LAST: a suspended person's way to ask for the decision to be looked at again. The
+//     label "Appeal a suspension" is new user-facing wording: [COPY PENDING LEGAL REVIEW].
 export const CONTACT_CATEGORIES = [
   'technical_issues',
   'editorial_complaints',
@@ -12,6 +15,7 @@ export const CONTACT_CATEGORIES = [
   'suggestions',
   'enquiries',
   'feedback',
+  'suspension_appeal',
 ] as const;
 
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
@@ -23,6 +27,8 @@ export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: 'Suggestions',
   enquiries: 'Enquiries',
   feedback: 'Feedback',
+  // [COPY PENDING LEGAL REVIEW]
+  suspension_appeal: 'Appeal a suspension',
 };
 
 export const CONTACT_ENQUIRY_STATUSES = ['new', 'handled'] as const;

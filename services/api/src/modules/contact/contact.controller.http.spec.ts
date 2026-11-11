@@ -12,7 +12,7 @@ import {
   CONTACT_SUBJECT_MAX_LENGTH,
 } from './contact.constants';
 
-// HTTP layer: routing, DTO validation (trim, limits, control characters, the six categories) and the
+// HTTP layer: routing, DTO validation (trim, limits, control characters, the seven categories) and the
 // optional-auth hand-off. The throttle and the guards are overridden; their real behaviour is covered by
 // auth-rate-limit.decorator.spec.ts, the e2e spec and write-route-guards.spec.ts.
 describe('ContactController (HTTP layer)', () => {
@@ -72,14 +72,14 @@ describe('ContactController (HTTP layer)', () => {
     expect(contact.submit).toHaveBeenCalledWith(valid, 'user-1');
   });
 
-  it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback'])(
+  it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback', 'suspension_appeal'])(
     'accepts category %s',
     async (category) => {
       await post({ ...valid, category }).expect(201);
     },
   );
 
-  it('rejects a category outside the six, the two retired keys, and a missing one', async () => {
+  it('rejects a category outside the seven, the two retired keys, and a missing one', async () => {
     await post({ ...valid, category: 'billing' }).expect(400);
     await post({ ...valid, category: 'livescores_issues' }).expect(400);
     await post({ ...valid, category: 'enquiries_feedback' }).expect(400);

@@ -144,6 +144,10 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await ids('status=handled')).toEqual([b.id]);
       expect(await ids('category=data')).toEqual([a.id, b.id].sort());
       expect(await ids('category=data&status=new')).toEqual([a.id]);
+      // the seventh category is a valid filter value (B-298)
+      const d = await seedEnquiry({ category: 'suspension_appeal' });
+      expect(await ids('category=suspension_appeal')).toEqual([d.id]);
+      expect(await ids('category=suspension_appeal&status=handled')).toEqual([]);
       await request(server()).get('/admin/contact-enquiries?status=archived').set(auth(mod.token)).expect(400);
       await request(server()).get('/admin/contact-enquiries?category=nope').set(auth(mod.token)).expect(400);
       // the two retired keys are no longer accepted as filters

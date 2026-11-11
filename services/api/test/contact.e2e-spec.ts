@@ -132,7 +132,7 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
       expect(rows.map((r) => r.userId)).toEqual([active.id, null, null]);
     });
 
-    it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback'])(
+    it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback', 'suspension_appeal'])(
       'accepts the category %s, and refuses anything else with nothing stored',
       async (category) => {
         await submit(body({ category })).expect(201);
@@ -185,6 +185,53 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
       expect(seen).toEqual({ 'mig-1': 'data', 'mig-2': 'enquiries', 'mig-3': 'technical_issues' });
     });
 
+    it('migration 20261128100000 adds suspension_appeal to the CHECK and leaves existing rows alone (rolled back afterwards)', async () => {
+      const sql = fs
+        .readFileSync(path.join(__dirname, '../prisma/migrations/20261128100000_add_contact_suspension_appeal_category/migration.sql'), 'utf8')
+        .split(String.fromCharCode(10))
+        .filter((l) => !l.trim().startsWith('--'))
+        .join(' ');
+      const statements = sql.split(';').map((x) => x.trim()).filter(Boolean);
+      const rollback = new Error('rollback');
+      const seen: Record<string, string> = {};
+      let refusedBefore = false;
+      await prisma()
+        .$transaction(async (tx) => {
+          // put the schema back to the pre-migration (six-value) state inside this transaction
+          await tx.$executeRawUnsafe('ALTER TABLE "ContactEnquiry" DROP CONSTRAINT "ContactEnquiry_category_check"');
+          await tx.$executeRawUnsafe(
+            `ALTER TABLE "ContactEnquiry" ADD CONSTRAINT "ContactEnquiry_category_check" CHECK ("category" IN ('technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback'))`,
+          );
+          for (const [id, category] of [['mig-a', 'enquiries'], ['mig-b', 'feedback']]) {
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "ContactEnquiry" ("id","name","email","category","subject","message") VALUES ('${id}','n','e@example.com','${category}','s','m')`,
+            );
+          }
+          // the old CHECK refuses the new value (savepoint so the failed statement does not abort the transaction)
+          await tx.$executeRawUnsafe('SAVEPOINT before_new_value');
+          try {
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "ContactEnquiry" ("id","name","email","category","subject","message") VALUES ('mig-x','n','e@example.com','suspension_appeal','s','m')`,
+            );
+          } catch {
+            refusedBefore = true;
+          }
+          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT before_new_value');
+          for (const statement of statements) await tx.$executeRawUnsafe(statement);
+          await tx.$executeRawUnsafe(
+            `INSERT INTO "ContactEnquiry" ("id","name","email","category","subject","message") VALUES ('mig-c','n','e@example.com','suspension_appeal','s','m')`,
+          );
+          const rows = await tx.contactEnquiry.findMany({ where: { id: { in: ['mig-a', 'mig-b', 'mig-c'] } } });
+          for (const r of rows) seen[r.id] = r.category;
+          throw rollback;
+        })
+        .catch((e) => {
+          if (e !== rollback) throw e;
+        });
+      expect(refusedBefore).toBe(true);
+      expect(seen).toEqual({ 'mig-a': 'enquiries', 'mig-b': 'feedback', 'mig-c': 'suspension_appeal' });
+    });
+
     it('stores a message of exactly 3000 characters whole, line breaks kept (the column has no length limit)', async () => {
       const message = `${'a'.repeat(1499)}
 ${'b'.repeat(1500)}`;
@@ -198,6 +245,8 @@ ${'b'.repeat(1500)}`;
     it('the database itself refuses an unknown category, an unknown status and a half-handled enquiry (CHECKs)', async () => {
       const base = { name: 'n', email: 'e@example.com', category: 'data', subject: 's', message: 'm' };
       await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'billing' } })).rejects.toThrow(/category_check/);
+      // the seventh value is accepted by the CHECK
+      await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'suspension_appeal' } })).resolves.toBeTruthy();
       // the two retired keys are refused by the CHECK as well
       await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'livescores_issues' } })).rejects.toThrow(/category_check/);
       await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'enquiries_feedback' } })).rejects.toThrow(/category_check/);
