@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService, resolveHeldInvestigationAlertDays } from '../account-deletion/account-deletion-sweep.service';
@@ -10,8 +10,14 @@ import {
 } from '../admin-action-log/admin-action-log.constants';
 import { TokenService } from '../auth/token/token.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
-import { revokeEngagementPointsForAccount } from '../points/engagement-points.util';
-import { ACCOUNT_HOLD_ACTIVE_CODE, ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
+import { AccountSuspensionService } from '../account-suspension/account-suspension.service';
+import {
+  ACCOUNT_HOLD_ACTIVE_CODE,
+  ADMIN_USERS_DEFAULT_PAGE_SIZE,
+  ADMIN_USERS_MAX_PAGE_SIZE,
+  SUSPENSION_REASON_CATEGORY_NOT_APPLICABLE_CODE,
+  SUSPENSION_REASON_CATEGORY_REQUIRED_CODE,
+} from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
@@ -73,6 +79,9 @@ export class AdminUsersService {
     // B-279 (Decision Log #456 A): the guardian of a MINOR is told when Soccernity suspends, reinstates or removes
     // the account. See modules/guardian-security-notice/README.md.
     private readonly guardianNotices: GuardianSecurityNoticeService,
+    // B-291 (Decision Log #485): the ONE suspend / reinstate path, shared with ModerationService (a report's
+    // user_suspended action and the overturn of its appeal) so the two routes cannot drift.
+    private readonly accountSuspension: AccountSuspensionService,
   ) {}
 
   // GET /admin/users/held-investigations -- accounts whose deletion has
@@ -207,6 +216,25 @@ export class AdminUsersService {
   // row up again.
   // -------------------------------------------------------------------
   async updateUserStatus(userId: string, adminId: string, dto: UpdateUserStatusDto): Promise<UpdateUserStatusResult> {
+    // B-291 (Decision Log #485): a suspension needs a reason category; any other status must not carry one. Checked
+    // before any database work, so the answer never depends on whether the user exists.
+    if (dto.status === 'suspended' && !dto.reasonCategory) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: SUSPENSION_REASON_CATEGORY_REQUIRED_CODE,
+        message: 'A reason category is required to suspend an account.',
+      });
+    }
+    if (dto.status !== 'suspended' && dto.reasonCategory !== undefined) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: SUSPENSION_REASON_CATEGORY_NOT_APPLICABLE_CODE,
+        message: 'A reason category can only be sent when suspending an account.',
+      });
+    }
+
     const user = await this.assertUserExists(userId);
 
     // 'deleted' is terminal: the row has been anonymized (Decision Log
@@ -255,28 +283,23 @@ export class AdminUsersService {
       return { deleted: true, id: userId };
     }
 
-    const data: Prisma.UserUpdateInput = { accountStatus: dto.status };
-    // Clear a stale pendingDeletionAt whenever a user is moved OUT of
-    // pending_deletion by this route (see this method's own header
-    // comment) — harmless either way for AccountDeletionSweepService's
-    // own query (which also checks accountStatus), but leaving a stale
-    // timestamp around is needless data hygiene debt.
-    if (user.accountStatus === 'pending_deletion') {
-      data.pendingDeletionAt = null;
-    }
-
-    const updated = await this.prisma.user.update({ where: { id: userId }, data, select: USER_LIST_SELECT });
-
+    // B-291: both moves go through AccountSuspensionService -- the same code a report's user_suspended action uses.
+    //   suspended -> the status write, then sessions ended, baseline points revoked, the guardian of a minor told
+    //                once, and the person emailed (a fixed plain-words reason from the category). An account that is
+    //                already suspended is not suspended, emailed or reported to its guardian again, but the admin's
+    //                action is still logged below.
+    //   active    -> the status write (clearing a stale pendingDeletionAt and the stored report link); a lifted
+    //                SUSPENSION also tells the guardian once and emails the person. Moving a deactivated or
+    //                pending_deletion account to active is not a safety action and sends nothing.
+    // The reasoning for an admin being able to move ANY non-deleted account into either state (including undoing an
+    // accidental self-deletion request within the grace window) is in this method's header comment.
     if (dto.status === 'suspended') {
-      // Blocking future logins is meaningless if the caller's current
-      // still-valid tokens keep working — the exact reasoning
-      // AuthService.deactivateAccount already documents for itself.
-      await this.tokenService.revokeAllSessionsForUser(userId);
-      // backend/w12-points (B-093, spec 9b): a suspended account is restricted, so its baseline points are
-      // revoked (what it earned, and what it earned others by engaging with them). Not undone if the
-      // suspension is lifted: engagement simply earns again from then on.
-      await revokeEngagementPointsForAccount(this.prisma, userId, new Date());
+      await this.accountSuspension.suspend(userId, { reasonCategory: dto.reasonCategory });
+    } else {
+      await this.accountSuspension.reinstate(userId);
     }
+
+    const updated = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: USER_LIST_SELECT });
 
     this.logger.log(`Admin ${adminId} set user ${userId}'s accountStatus to '${dto.status}'.`);
     await this.adminActionLogService.record(
@@ -284,16 +307,9 @@ export class AdminUsersService {
       ADMIN_ACTION_LOG_ACTIONS.USER_STATUS_UPDATED,
       ADMIN_ACTION_LOG_TARGET_TYPES.USER,
       userId,
-      `status=${dto.status}`,
+      dto.status === 'suspended' ? `status=suspended; reasonCategory=${dto.reasonCategory}` : `status=${dto.status}`,
     );
 
-    // B-279: a suspension, and the lifting of one, are platform actions on the account. Other moves (for example
-    // undoing a self-requested deletion) are not safety actions and send nothing.
-    if (dto.status === 'suspended') {
-      this.guardianNotices.notifyInBackground(userId, 'account_suspended');
-    } else if (dto.status === 'active' && user.accountStatus === 'suspended') {
-      this.guardianNotices.notifyInBackground(userId, 'account_reinstated');
-    }
     return { deleted: false, user: updated };
   }
 }

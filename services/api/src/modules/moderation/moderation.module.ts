@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AccountHoldModule } from '../account-hold/account-hold.module';
+import { AccountSuspensionModule } from '../account-suspension/account-suspension.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
@@ -72,6 +73,8 @@ import { ReportsController } from './reports.controller';
     GuardianSecurityNoticeModule,
     // B-290 (Decision Log #484): PostMediaObjectsService withdraws / republishes a removed post's media files.
     PostMediaModule,
+    // B-291 (Decision Log #485): the shared suspend / reinstate path (user_suspended, overturned appeal).
+    AccountSuspensionModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
   providers: [ModerationService, ModerationHoldsService, RegistrationEmailService],

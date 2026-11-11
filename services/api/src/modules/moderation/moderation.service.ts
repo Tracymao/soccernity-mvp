@@ -18,6 +18,11 @@ import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityEventKey } from '../guardian-security-notice/guardian-security-notice.constants';
 import { PostMediaObjectsService } from '../post-media/post-media-objects.service';
+import {
+  AccountSuspensionService,
+  ReinstatementApplied,
+  SuspensionApplied,
+} from '../account-suspension/account-suspension.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { resolveConcernsMinor } from './report-concerns-minor.util';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
@@ -53,6 +58,8 @@ import {
   REPORT_SOURCE_CONTACT_ENQUIRY,
   ROOM_DEACTIVATED_ACTION,
   ReportAction,
+  USER_SUSPENSION_NOT_APPLICABLE_CODE,
+  isUserSuspensionTarget,
 } from './moderation.constants';
 
 // B-046 part B: a report made from a Contact Us enquiry carries `source: 'contact_enquiry'` (the key is ABSENT on
@@ -139,10 +146,13 @@ interface ReportableMessage {
 // B-279 (Decision Log #456 A and C): the guardian of a MINOR who is the reported user is told the OUTCOME of an
 // actioned report, as the kind of action that was taken and nothing else. 'dismissed' took no action, so it has
 // no entry: a guardian is never told that a report exists. The reporter is never notified this way (B).
+//
+// user_suspended is DELIBERATELY NOT in this map (B-291, Decision Log #485): recording it now really suspends the
+// account, and the account_suspended notice is sent exactly once by AccountSuspensionService.completeSuspension
+// (and not at all when the account was already suspended or deleted). Listing it here too would tell the guardian twice.
 const GUARDIAN_NOTICE_FOR_REPORT_ACTION: Partial<Record<ReportAction, GuardianSecurityEventKey>> = {
   content_removed: 'content_removed',
   warning_issued: 'warning_issued',
-  user_suspended: 'account_suspended',
   room_deactivated: 'room_deactivated',
 };
 
@@ -176,6 +186,9 @@ export class ModerationService {
     private readonly guardianNotices: GuardianSecurityNoticeService,
     // B-290 (Decision Log #484): Remove Content on a post withdraws the public copy of its media (after the commit,
     // best effort); an overturned appeal republishes it. Optional so a unit test needs no object store.
+    // B-291 (Decision Log #485): user_suspended suspends the account behind the target, in the same step; an
+    // overturned appeal of that report reinstates it. The one path the admin user page also uses.
+    private readonly accountSuspension: AccountSuspensionService,
     @Optional() private readonly postMediaObjects?: PostMediaObjectsService,
   ) {}
 
@@ -875,9 +888,21 @@ export class ModerationService {
       });
     }
 
+    // B-291 (Decision Log #485): user_suspended is offered for a user, or the author / sender of a post, a comment or
+    // a message, and for nothing else (a room, a team, a fixture or an enquiry has no single account behind it).
+    if (dto.action === 'user_suspended' && !isUserSuspensionTarget(report.targetType)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: USER_SUSPENSION_NOT_APPLICABLE_CODE,
+        message: 'An account can only be suspended from a report about a user, a post, a comment or a message.',
+      });
+    }
+
     const newStatus = dto.action === 'dismissed' ? 'reviewed' : 'actioned';
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
     let contentRemoval: ContentRemovalOutcome | undefined;
+    let suspension: SuspensionApplied | undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // Decision Log #357 — the one action with a side effect beyond the
@@ -890,6 +915,14 @@ export class ModerationService {
       // touched; a context message attached to a message report never is.
       if (dto.action === 'content_removed') {
         contentRemoval = await applyContentRemoval(tx, report, new Date());
+      }
+      // B-291: the suspension itself, in the SAME transaction as recording the action, so a failed report update
+      // rolls the account status back too. Only the account behind the target is touched. The stored link to this
+      // report is set only when the account was not already suspended. A deleted account, or one already suspended,
+      // is left alone (the action is still recorded below). Sessions, points, the guardian notice and the email run
+      // after the commit.
+      if (dto.action === 'user_suspended' && reportedUserId) {
+        suspension = await this.accountSuspension.applySuspensionInTx(tx, reportedUserId, { reportId });
       }
 
       const updatedReport = await tx.report.update({
@@ -939,6 +972,21 @@ export class ModerationService {
       void this.postMediaObjects?.withdrawForPost(report.targetId);
     }
 
+    // B-291: everything that follows the committed suspension. A failure here (Redis down while ending sessions)
+    // is logged loudly but does not fail the request: the report is already actioned and cannot be actioned again, so
+    // a 500 would leave an admin unable to retry. completeSuspension throws before it notifies anyone, so a failed
+    // step means no guardian notice or email went out either.
+    if (suspension) {
+      try {
+        await this.accountSuspension.completeSuspension(suspension, { reasonCategory: report.reasonCategory });
+      } catch (err) {
+        this.logger.error(
+          `Report ${reportId} suspended user ${suspension.userId} but the follow-up failed (${(err as Error).message}). ` +
+            `Sessions and points for that account may need to be revoked by hand.`,
+        );
+      }
+    }
+
     void this.notifyReporterOfOutcome(report, dto.action);
 
     // B-279: tell the REPORTED minor's guardian the outcome (never the reporter's, and never on 'dismissed').
@@ -980,6 +1028,7 @@ export class ModerationService {
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
 
     let restoredPostId = null as string | null;
+    let reinstatement: ReinstatementApplied | undefined;
     const updated = await this.prisma.$transaction(async (tx) => {
       const data: Prisma.ReportUpdateInput = {
         appealStatus: dto.decision,
@@ -997,6 +1046,14 @@ export class ModerationService {
         if (report.actionTaken === 'content_removed') {
           const restored = await restoreContentRemoval(tx, report);
           if (restored && report.targetType === 'post') restoredPostId = report.targetId;
+        }
+        // B-291 (Decision Log #485): overturning an appeal on a user_suspended report reinstates the account,
+        // in the same transaction, but ONLY if this report is the one that suspended it (the stored link). If the
+        // account is no longer suspended (deleted, or reinstated by hand) only the link is cleared.
+        if (report.actionTaken === 'user_suspended' && reportedUserId) {
+          reinstatement = await this.accountSuspension.applyReinstatementInTx(tx, reportedUserId, {
+            onlyIfSuspendedByReportId: reportId,
+          });
         }
       }
 
@@ -1023,6 +1080,17 @@ export class ModerationService {
 
     // B-290: the post is back, so its media goes back to the public prefix (from the private copy kept at removal).
     if (restoredPostId) void this.postMediaObjects?.republishForPost(restoredPostId);
+
+    // B-291: the account is active again. The guardian of a minor hears account_reinstated once and the person gets
+    // the reinstatement email (completeReinstatement sends nothing unless a suspension was really lifted). Both are
+    // background; the appeal_overturned guardian notice below is a separate event and still goes.
+    if (reinstatement) {
+      try {
+        await this.accountSuspension.completeReinstatement(reinstatement);
+      } catch (err) {
+        this.logger.error(`Appeal on report ${reportId} reinstated user ${reinstatement.userId} but the follow-up failed: ${(err as Error).message}`);
+      }
+    }
 
     void this.notifyAppellantOfDecision(reportId, reportedUserId, dto.decision);
 

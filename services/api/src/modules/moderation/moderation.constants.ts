@@ -76,6 +76,18 @@ export type ReportAction = (typeof REPORT_ACTIONS)[number];
 // ModerationService rejects that combination with 400.
 export const ROOM_DEACTIVATED_ACTION = 'room_deactivated';
 
+// backend/b291-suspension-on-report (B-291; Decision Log #485, founder decision of 2026-11-11). user_suspended now
+// really suspends the account behind the target, in the same step as recording the action. It is offered for the
+// four target types that resolve to ONE person's account: a user, or the author / sender of a post, a comment or a
+// message. Any other target (a Banter Room, a team, a fixture, a contact enquiry) answers 400 with the stable code
+// below, modelled on content_removal_not_applicable.
+export const USER_SUSPENSION_TARGET_TYPES = ['user', 'post', 'comment', 'message'] as const;
+export const USER_SUSPENSION_NOT_APPLICABLE_CODE = 'user_suspension_not_applicable';
+
+export function isUserSuspensionTarget(targetType: string): boolean {
+  return (USER_SUSPENSION_TARGET_TYPES as readonly string[]).includes(targetType);
+}
+
 // The second-reviewer's decision on an appeal
 // (PATCH /admin/moderation/reports/:id/appeal). Decision Log #138: the
 // reviewing admin must be a DIFFERENT admin/moderator than the one who

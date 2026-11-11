@@ -478,14 +478,15 @@ describe('GET /admin/action-log (real Postgres)', () => {
       const mod = await admin('moderator', { vetted: false });
       const adult = await user();
       const minor = await minorUser();
-      await request(app.getHttpServer()).patch(`/admin/users/${adult.id}`).set(bearer(mod.token)).send({ status: 'suspended' }).expect(200);
-      await request(app.getHttpServer()).patch(`/admin/users/${minor.id}`).set(bearer(mod.token)).send({ status: 'suspended' }).expect(200);
+      await request(app.getHttpServer()).patch(`/admin/users/${adult.id}`).set(bearer(mod.token)).send({ status: 'suspended', reasonCategory: 'other' }).expect(200);
+      await request(app.getHttpServer()).patch(`/admin/users/${minor.id}`).set(bearer(mod.token)).send({ status: 'suspended', reasonCategory: 'other' }).expect(200);
       expect(await prisma().adminActionLog.count({ where: { adminId: mod.id, action: A.USER_STATUS_UPDATED } })).toBe(2);
 
       const res = await read(mod.token).expect(200);
       expect(res.body.items).toHaveLength(1);
       expect(res.body.items[0]).toMatchObject({ action: A.USER_STATUS_UPDATED, targetType: T.USER, targetId: adult.id, actor: { id: mod.id } });
-      expect(res.body.items[0].notes).toBe('status=suspended');
+      // B-291 (Decision Log #485): a suspension now records its reason category in the detail string; the reader passes notes through unchanged.
+      expect(res.body.items[0].notes).toBe('status=suspended; reasonCategory=other');
 
       await prisma().adminUser.update({ where: { id: mod.id }, data: { childSafetyVetted: true } });
       expect((await read(mod.token).expect(200)).body.items).toHaveLength(2);

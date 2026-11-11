@@ -362,11 +362,30 @@ describe('AdminUsersController (HTTP layer)', () => {
 
       const res = await request(app.getHttpServer())
         .patch('/admin/users/user-1')
-        .send({ status: 'suspended' })
+        .send({ status: 'suspended', reasonCategory: 'harassment_or_bullying' })
         .expect(200);
 
-      expect(adminUsersService.updateUserStatus).toHaveBeenCalledWith('user-1', 'admin-1', { status: 'suspended' });
+      expect(adminUsersService.updateUserStatus).toHaveBeenCalledWith('user-1', 'admin-1', {
+        status: 'suspended',
+        reasonCategory: 'harassment_or_bullying',
+      });
       expect(res.body.user.accountStatus).toBe('suspended');
+    });
+
+    // B-291 (Decision Log #485): the category is validated against REPORT_REASON_CATEGORIES here; that it is REQUIRED
+    // for a suspension (and refused for any other status) is the service's rule, with stable codes, tested there.
+    it('rejects a reasonCategory that is not one of the report categories, before the service is called', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/users/user-1')
+        .send({ status: 'suspended', reasonCategory: 'because_i_said_so' })
+        .expect(400);
+      expect(adminUsersService.updateUserStatus).not.toHaveBeenCalled();
+    });
+
+    it('passes a body with no reasonCategory through to the service, which owns the required-category rule', async () => {
+      adminUsersService.updateUserStatus.mockResolvedValue({ deleted: false, user: { id: 'user-1', accountStatus: 'suspended' } });
+      await request(app.getHttpServer()).patch('/admin/users/user-1').send({ status: 'suspended' }).expect(200);
+      expect(adminUsersService.updateUserStatus).toHaveBeenCalledWith('user-1', 'admin-1', { status: 'suspended' });
     });
 
     it('deletes a user immediately', async () => {

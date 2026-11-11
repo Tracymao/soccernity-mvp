@@ -441,7 +441,7 @@ describe('Points engine e2e: giver/receiver, caps, revocation, view heartbeats',
       await request(server())
         .patch(`/admin/users/${fan.userId}`)
         .set(auth(accessToken.token))
-        .send({ status: 'suspended' })
+        .send({ status: 'suspended', reasonCategory: 'other' })
         .expect(200);
       expect(await total(fan.userId)).toBe(0);
       expect(await total(author.userId)).toBe(0);
