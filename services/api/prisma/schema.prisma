@@ -1433,8 +1433,10 @@ model Message {
 
   // backend/b067-message-edit-delete-hide (B-067, Decision Log #472 (b)) -- additive.
   // editedAt: set on every edit. originalContentText: the text as first sent, written ONCE on the first edit
-  // and never overwritten; NO user-facing read returns it (it is kept under the existing message retention,
-  // there is no admin read of it yet). deletedForEveryoneAt: the sender deleted the message for both people;
+  // and never overwritten; NO user-facing read returns it (it is kept under the existing message retention).
+  // The only read is the admin report detail of a message report (ModerationService.getReportById), where it is
+  // returned to a child-safety-vetted admin always and to any other admin only when no participant is under 18
+  // (B-293, Decision Log #486). deletedForEveryoneAt: the sender deleted the message for both people;
   // the row, the text and any original STAY in the database until the retention job (below) removes them, reads
   // show a placeholder.
   //

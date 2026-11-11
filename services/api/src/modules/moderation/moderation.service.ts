@@ -121,6 +121,10 @@ export type ReportDetail = ReportWithSource & {
   reportedMessage?: ReportedMessageView | null;
   // Set only on a 'message' report: the attached context, oldest first, an empty array when none.
   contextMessages?: ReportContextMessageView[];
+  // B-293 (Decision Log #486): set only on a 'message' report. true when the reported sender or any participant of
+  // the conversation is under 18 AND the viewing admin is not child-safety-vetted: contextMessages is then [] and
+  // reportedMessage.originalContentText is null. Never carries a count.
+  contextHidden?: boolean;
 };
 
 // What assertMessageReportable learned about the reported message, for the context check.
@@ -588,6 +592,21 @@ export class ModerationService {
     return isAdminChildSafetyVetted(this.prisma, adminId);
   }
 
+  // B-293 (Decision Log #486): is the reported sender or any participant of the message's conversation under 18?
+  // Reads User.isMinor now (an anonymised participant keeps the value its row has). Fails closed: a message row that
+  // cannot be found, or a participant with no User row, counts as involving a minor. Only called for an unvetted admin.
+  private async threadInvolvesMinor(messageId: string, messageFound: boolean): Promise<boolean> {
+    if (!messageFound) return true;
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { senderId: true, conversation: { select: { participantIds: true } } },
+    });
+    if (!message) return true;
+    const ids = Array.from(new Set([message.senderId, ...message.conversation.participantIds]));
+    const users = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, isMinor: true } });
+    return users.length < ids.length || users.some((u) => u.isMinor);
+  }
+
   private async assertChildSafetyVetted(adminId: string): Promise<void> {
     if (await this.isChildSafetyVetted(adminId)) {
       return;
@@ -748,6 +767,9 @@ export class ModerationService {
     // the Report row alone (targetType + targetId), so this is the one place a reported target's content is read.
     // The vetting gate above has already applied when the report concerns a minor.
     if (report.targetType === MESSAGE_REPORT_TARGET_TYPE) {
+      // B-293: decided first, from a fresh vetting read (the same read every gate here uses). A vetted admin sees
+      // everything; an unvetted one sees the context and the edited original only when nobody in the thread is a minor.
+      const vetted = await this.isChildSafetyVetted(adminId);
       const row = await this.prisma.message.findUnique({
         where: { id: report.targetId },
         select: {
@@ -761,18 +783,23 @@ export class ModerationService {
           sender: { select: PUBLIC_NAME_SELECT },
         },
       });
+      const contextHidden = !vetted && (await this.threadInvolvesMinor(report.targetId, row !== null));
       const reportedMessage: ReportedMessageView | null = row
         ? {
             id: row.id,
             sentAt: row.sentAt,
             sender: { publicName: resolvePublicName(row.sender) },
             contentText: row.contentText,
-            originalContentText: row.originalContentText,
+            originalContentText: contextHidden ? null : row.originalContentText,
             editedAt: row.editedAt,
             deletedForEveryone: row.deletedForEveryoneAt !== null,
             removedByModerationAt: row.removedByModerationAt,
           }
         : null;
+      if (contextHidden) {
+        // No context query at all, so nothing about the attached messages (not even how many) can reach the response.
+        return { ...report, reportedMessage, contextMessages: [], contextHidden: true };
+      }
       // Decision Log #477: the context the reporter attached, oldest first. Only the fields below; no conversation
       // id, no recipient, no sender id, no other message of the thread.
       const contextRows = await this.prisma.reportContextMessage.findMany({
@@ -805,7 +832,7 @@ export class ModerationService {
         deletedForEveryone: m.deletedForEveryoneAt !== null,
         removedByModerationAt: m.removedByModerationAt,
       }));
-      return { ...report, reportedMessage, contextMessages };
+      return { ...report, reportedMessage, contextMessages, contextHidden: false };
     }
 
     return report;
