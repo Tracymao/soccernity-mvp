@@ -142,7 +142,12 @@ export default function ChatWindow({
     const last = [...messages].reverse().find((m) => !isDeletedMessage(m));
     if (last && isRemovedMessage(last)) {
       // B-289: the sidebar preview of a removed last message is the same stub the server sends.
-      onPreviewRef.current?.(conversationId, { id: last.id, sentAt: last.sentAt, removedByModeration: true });
+      onPreviewRef.current?.(conversationId, {
+        id: last.id,
+        sentAt: last.sentAt,
+        removedByModeration: true,
+        isMine: last.isMine,
+      });
     } else if (last && !isDeletedMessage(last)) {
       onPreviewRef.current?.(conversationId, {
         contentText: last.contentText,
@@ -310,13 +315,14 @@ export default function ChatWindow({
               const prev = messages[i - 1];
               const showTime =
                 !prev || new Date(m.sentAt).getTime() - new Date(prev.sentAt).getTime() >= TIME_LABEL_GAP_MS;
-              // B-289: a message a moderator removed has no sender, so it is drawn neutrally (left, no avatar
-              // run logic) with no menu, no edit, no delete and no report.
+              // B-289: a message a moderator removed has no menu, no edit, no delete and no report. B-295: it
+              // sits on the right when the viewer sent it (isMine) and on the left otherwise, including an
+              // older stub with no isMine; no avatar run logic.
               if (isRemovedMessage(m)) {
                 return (
                   <div key={m.id} className="chat-message-wrap">
                     {showTime && <p className="chat-message-time">{messageTimeLabel(m.sentAt)}</p>}
-                    <div className="chat-message">
+                    <div className={m.isMine === true ? "chat-message chat-message--mine" : "chat-message"}>
                       <RemovedPlaceholder text={REMOVED_MESSAGE_TEXT} variant="bubble" />
                     </div>
                   </div>
