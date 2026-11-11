@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AccountDeletionModule } from '../account-deletion/account-deletion.module';
+import { AccountSuspensionModule } from '../account-suspension/account-suspension.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
@@ -39,7 +40,7 @@ import { AdminUsersService } from './admin-users.service';
   // B-103/B-109: ConfigModule (consent-token TTL) and RegistrationEmailService
   // (the guardian consent email a DOB-correction restart sends). DobEncryptionService
   // comes from the global CryptoModule.
-  imports: [PrismaModule, AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule, GuardianSecurityNoticeModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule, GuardianSecurityNoticeModule, AccountSuspensionModule],
   controllers: [AdminUsersController, AdminGuardianNoticesController],
   providers: [
     AdminUsersService,

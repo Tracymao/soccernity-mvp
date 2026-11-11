@@ -84,7 +84,7 @@ function buildPrisma(opts: { window?: string[]; candidates?: CandidateRow[]; exi
 function build(prisma: PrismaService) {
   const email = { sendPublicReportAcknowledgementEmail: jest.fn(), sendReportActionedEmail: jest.fn(), sendAppealDecisionEmail: jest.fn() };
   const guardian = { notifyInBackground: jest.fn() };
-  const service = new ModerationService(prisma, email as never, { record: jest.fn() } as never, { setRoomStatus: jest.fn() } as never, guardian as never);
+  const service = new ModerationService(prisma, email as never, { record: jest.fn() } as never, { setRoomStatus: jest.fn() } as never, guardian as never, { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never);
   return { service, email, guardian };
 }
 

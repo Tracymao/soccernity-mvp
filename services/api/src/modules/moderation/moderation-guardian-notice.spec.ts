@@ -55,14 +55,23 @@ function build() {
   const adminLog = { record: jest.fn().mockResolvedValue(undefined) };
   const banter = { setRoomStatus: jest.fn().mockResolvedValue(undefined) };
   const guardianNotices = { notifyInBackground: jest.fn(), prepare: jest.fn() };
+  // B-291: the shared suspend / reinstate path. user_suspended is sent to the guardian BY this path, once, not by
+  // ModerationService, so these specs only check that moderation hands the work over.
+  const accountSuspension = {
+    applySuspensionInTx: jest.fn().mockResolvedValue({ userId: 'minor-1', outcome: 'suspended', previousStatus: 'active' }),
+    completeSuspension: jest.fn().mockResolvedValue(undefined),
+    applyReinstatementInTx: jest.fn(),
+    completeReinstatement: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new ModerationService(
     prisma as unknown as PrismaService,
     email as never,
     adminLog as never,
     banter as never,
     guardianNotices as never,
+    accountSuspension as never,
   );
-  return { service, prisma, guardianNotices, email };
+  return { service, prisma, guardianNotices, email, accountSuspension };
 }
 
 describe('ModerationService: guardian notices (B-279)', () => {
@@ -75,7 +84,6 @@ describe('ModerationService: guardian notices (B-279)', () => {
     it.each([
       ['content_removed', 'content_removed'],
       ['warning_issued', 'warning_issued'],
-      ['user_suspended', 'account_suspended'],
     ] as const)('action %s notifies the reported user\'s guardian with the %s event, once', async (action, event) => {
       const { service, prisma, guardianNotices } = build();
       prisma.report.findUnique.mockResolvedValue(report());
@@ -84,6 +92,17 @@ describe('ModerationService: guardian notices (B-279)', () => {
 
       expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
       expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith('minor-1', event);
+    });
+
+    it('user_suspended sends NO guardian notice from moderation (the shared suspension path sends it, once)', async () => {
+      const { service, prisma, guardianNotices, accountSuspension } = build();
+      prisma.report.findUnique.mockResolvedValue(report());
+
+      await service.actionReport('report-1', 'admin-1', { action: 'user_suspended' });
+
+      expect(accountSuspension.applySuspensionInTx).toHaveBeenCalledTimes(1);
+      expect(accountSuspension.completeSuspension).toHaveBeenCalledTimes(1);
+      expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
     });
 
     it('room_deactivated notifies the room creator\'s guardian with the room_deactivated event', async () => {

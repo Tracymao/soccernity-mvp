@@ -316,7 +316,7 @@ describe('Guardian safety notices (B-279) -- real Postgres + real Redis', () => 
       const minor = await seedUser();
       const admin = await seedAdmin();
 
-      const s = await http().patch(`/admin/users/${minor.id}`).set(admin.auth).send({ status: 'suspended' }).expect(200);
+      const s = await http().patch(`/admin/users/${minor.id}`).set(admin.auth).send({ status: 'suspended', reasonCategory: 'other' }).expect(200);
       expect(s.body.user).toMatchObject({ id: minor.id, accountStatus: 'suspended' });
       await waitForSafety(1);
       expect(noticeArgs(safetyNotices()[0])[2]).toBe("Sam Minor's Soccernity account was suspended.");
