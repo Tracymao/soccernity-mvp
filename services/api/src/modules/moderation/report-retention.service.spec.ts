@@ -3,8 +3,9 @@ import { removedMediaDeletableNow, recordDeferrals } from '../post-media/rejecte
 import { REPORT_RETENTION_MAX_PER_RUN } from './report-retention.config';
 import { ReportRetentionService } from './report-retention.service';
 
-// backend/b294-report-retention (B-294; Decision Log #487). Mocked-Prisma unit spec: the closure anchor, the two
-// periods, every skip rule, every blocked kind, the order of the deletion, the cap and the media step failing after
+// backend/b294-report-retention (B-294; Decision Log #487), periods changed by B-299 (Decision Log #490, #493).
+// Mocked-Prisma unit spec: the closure anchor, the two periods (6 and 7 years), every skip rule, every blocked
+// kind, the detaching of holds and escalated enquiries, the order of the deletion, the cap and the media step failing after
 // the commit. The real-Postgres counterpart is test/report-retention.e2e-spec.ts.
 
 jest.mock('../post-media/rejected-media-evidence.util', () => ({
@@ -43,7 +44,7 @@ function report(over: Partial<Row> = {}): Row {
     concernsMinor: false,
     status: 'reviewed',
     appealStatus: null,
-    reviewedAt: monthsAgo(13),
+    reviewedAt: monthsAgo(73),
     appealReviewedAt: null,
     escalatedAt: null,
     ...over,
@@ -145,9 +146,17 @@ function build(state: Partial<State> = {}) {
           ? [{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]
           : [];
       }),
-      count: jest.fn(async () => s.holdRecords),
+      updateMany: jest.fn(async () => {
+        calls.push('accountHold.updateMany');
+        return { count: s.holdRecords };
+      }),
     },
-    contactEnquiry: { count: jest.fn(async () => s.enquiries) },
+    contactEnquiry: {
+      updateMany: jest.fn(async () => {
+        calls.push('contactEnquiry.updateMany');
+        return { count: s.enquiries };
+      }),
+    },
     contestEntry: { count: jest.fn(async () => s.contestEntries) },
     reportContextMessage: {
       count: jest.fn(async () => s.contextOfOther),
@@ -203,44 +212,44 @@ beforeEach(() => {
 });
 
 describe('ReportRetentionService - the closure anchor', () => {
-  it('a dismissed report is due 12 months after reviewedAt, not before', async () => {
-    const due = build({ candidates: [report({ reviewedAt: monthsAgo(12, 1) })] });
+  it('a dismissed report is due 6 years after reviewedAt, not before', async () => {
+    const due = build({ candidates: [report({ reviewedAt: monthsAgo(72, 1) })] });
     expect((await due.service.purgeDue(NOW)).deletedReports).toBe(1);
-    const notDue = build({ candidates: [report({ reviewedAt: monthsAgo(12, -1) })] });
+    const notDue = build({ candidates: [report({ reviewedAt: monthsAgo(72, -1) })] });
     expect((await notDue.service.purgeDue(NOW)).deletedReports).toBe(0);
   });
 
-  it('exactly at closure + 12 months is kept (due strictly after)', async () => {
-    const { service } = build({ candidates: [report({ reviewedAt: monthsAgo(12) })] });
+  it('exactly at closure + 6 years is kept (due strictly after)', async () => {
+    const { service } = build({ candidates: [report({ reviewedAt: monthsAgo(72) })] });
     expect((await service.purgeDue(NOW)).deletedReports).toBe(0);
   });
 
   it('an actioned report with no appeal closes when the appeal window lapses (reviewedAt + 30 days)', async () => {
-    // closure = reviewedAt + 30d. reviewedAt 12 months + 10 days ago -> closure 12 months - 20 days ago -> not due.
-    const notDue = build({ candidates: [report({ status: 'actioned', reviewedAt: monthsAgo(12, 10) })] });
+    // closure = reviewedAt + 30d. reviewedAt 6 years + 10 days ago -> closure 6 years - 20 days ago -> not due.
+    const notDue = build({ candidates: [report({ status: 'actioned', reviewedAt: monthsAgo(72, 10) })] });
     expect((await notDue.service.purgeDue(NOW)).deletedReports).toBe(0);
-    // reviewedAt 12 months + 40 days ago -> closure 12 months + 10 days ago -> due.
-    const due = build({ candidates: [report({ status: 'actioned', reviewedAt: monthsAgo(12, 40) })] });
+    // reviewedAt 6 years + 40 days ago -> closure 6 years + 10 days ago -> due.
+    const due = build({ candidates: [report({ status: 'actioned', reviewedAt: monthsAgo(72, 40) })] });
     expect((await due.service.purgeDue(NOW)).deletedReports).toBe(1);
   });
 
   it('an appealed-and-upheld report is anchored to appealReviewedAt, not reviewedAt', async () => {
     const early = build({
-      candidates: [report({ status: 'actioned', appealStatus: 'upheld', reviewedAt: monthsAgo(24), appealReviewedAt: monthsAgo(6) })],
+      candidates: [report({ status: 'actioned', appealStatus: 'upheld', reviewedAt: monthsAgo(96), appealReviewedAt: monthsAgo(6) })],
     });
     expect((await early.service.purgeDue(NOW)).deletedReports).toBe(0);
     const late = build({
-      candidates: [report({ status: 'actioned', appealStatus: 'upheld', reviewedAt: monthsAgo(24), appealReviewedAt: monthsAgo(13) })],
+      candidates: [report({ status: 'actioned', appealStatus: 'upheld', reviewedAt: monthsAgo(96), appealReviewedAt: monthsAgo(73) })],
     });
     expect((await late.service.purgeDue(NOW)).deletedReports).toBe(1);
   });
 
   it('an overturned-and-reopened report (status open) and an appeal still pending are never due', async () => {
     const reopened = build({
-      candidates: [report({ status: 'open', appealStatus: 'overturned', reviewedAt: monthsAgo(40), appealReviewedAt: monthsAgo(39) })],
+      candidates: [report({ status: 'open', appealStatus: 'overturned', reviewedAt: monthsAgo(100), appealReviewedAt: monthsAgo(99) })],
     });
     expect((await reopened.service.purgeDue(NOW)).deletedReports).toBe(0);
-    const pending = build({ candidates: [report({ status: 'actioned', appealStatus: 'pending', reviewedAt: monthsAgo(40) })] });
+    const pending = build({ candidates: [report({ status: 'actioned', appealStatus: 'pending', reviewedAt: monthsAgo(100) })] });
     expect((await pending.service.purgeDue(NOW)).deletedReports).toBe(0);
     const open = build({ candidates: [report({ status: 'open', reviewedAt: null })] });
     expect((await open.service.purgeDue(NOW)).deletedReports).toBe(0);
@@ -252,19 +261,47 @@ describe('ReportRetentionService - the closure anchor', () => {
   });
 });
 
-describe('ReportRetentionService - 12 months versus 6 years', () => {
-  it('a report that concerns a minor is kept 6 years after it closed', async () => {
-    const at13m = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(13) })] });
-    expect((await at13m.service.purgeDue(NOW)).deletedReports).toBe(0);
-    const at5y = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(60) })] });
-    expect((await at5y.service.purgeDue(NOW)).deletedReports).toBe(0);
-    const over = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(72, 1) })] });
+describe('ReportRetentionService - 6 years versus 7 years', () => {
+  it('a report that concerns a minor is kept 7 years after it closed', async () => {
+    const at73m = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(73) })] });
+    expect((await at73m.service.purgeDue(NOW)).deletedReports).toBe(0);
+    const at83m = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(83) })] });
+    expect((await at83m.service.purgeDue(NOW)).deletedReports).toBe(0);
+    const exactly = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(84) })] });
+    expect((await exactly.service.purgeDue(NOW)).deletedReports).toBe(0);
+    const over = build({ candidates: [report({ concernsMinor: true, reviewedAt: monthsAgo(84, 1) })] });
     expect((await over.service.purgeDue(NOW)).deletedReports).toBe(1);
   });
 
-  it('the same report without the flag is already gone at 13 months', async () => {
-    const { service } = build({ candidates: [report({ concernsMinor: false, reviewedAt: monthsAgo(13) })] });
+  it('the same report without the flag is already gone just after 6 years', async () => {
+    const { service } = build({ candidates: [report({ concernsMinor: false, reviewedAt: monthsAgo(72, 1) })] });
     expect((await service.purgeDue(NOW)).deletedReports).toBe(1);
+  });
+
+  it('a report without the flag is not due before 6 years (71 months)', async () => {
+    const { service } = build({ candidates: [report({ concernsMinor: false, reviewedAt: monthsAgo(71) })] });
+    expect((await service.purgeDue(NOW)).deletedReports).toBe(0);
+  });
+
+  it('the periods come from REPORT_RETENTION_YEARS and REPORT_RETENTION_CONCERNS_MINOR_YEARS', async () => {
+    const env: Record<string, string> = { REPORT_RETENTION_YEARS: '2', REPORT_RETENTION_CONCERNS_MINOR_YEARS: '3' };
+    const asked: string[] = [];
+    const db: any = { report: { findMany: jest.fn(async () => []) } };
+    const config = {
+      get: (k: string) => {
+        asked.push(k);
+        return env[k];
+      },
+    };
+    const service = new ReportRetentionService(db, config as any, undefined, { now: () => NOW });
+    await service.purgeDue(NOW);
+    // exactly these two settings are read, and nothing else
+    expect([...new Set(asked)].sort()).toEqual(['REPORT_RETENTION_CONCERNS_MINOR_YEARS', 'REPORT_RETENTION_YEARS']);
+    // the pre-filter is "now - the SHORTER period" = 2 years
+    const where = db.report.findMany.mock.calls[0][0].where;
+    const cut = new Date(NOW);
+    cut.setUTCMonth(cut.getUTCMonth() - 24);
+    expect(where.reviewedAt.lt.getTime()).toBe(cut.getTime());
   });
 });
 
@@ -351,8 +388,6 @@ describe('ReportRetentionService - skip rules (the report and its content are ke
 
 describe('ReportRetentionService - blocked by a dependent record (kept, counted, a finding)', () => {
   it.each([
-    ['an AccountHold row still references the report', { holdRecords: 1 }, 'blockedHoldRecord'],
-    ['a contact enquiry was escalated into the report', { enquiries: 1 }, 'blockedContactEnquiry'],
     ['the removed post is a Contest entry', { contestEntries: 1, removedPosts: { r1: ['p1'] }, postAuthor: { p1: 'u' } }, 'blockedContestEntry'],
     [
       'the removed message is context in a different report',
@@ -362,13 +397,45 @@ describe('ReportRetentionService - blocked by a dependent record (kept, counted,
   ] as const)('%s', async (_label, patch, counter) => {
     const targetType = 'contestEntries' in patch ? 'post' : 'removedMessages' in patch ? 'message' : 'user';
     const targetId = targetType === 'post' ? 'p1' : targetType === 'message' ? 'm1' : 'u-target';
-    const { service, db } = build({ ...(patch as Partial<State>), candidates: [report({ targetType, targetId })] });
+    const { service, db } = build({ ...(patch as unknown as Partial<State>), candidates: [report({ targetType, targetId })] });
     const r = await service.purgeDue(NOW);
     expect(r[counter]).toBe(1);
     expect(r.deletedReports).toBe(0);
     expect(db.report.delete).not.toHaveBeenCalled();
     expect(db.post.delete).not.toHaveBeenCalled();
     expect(db.message.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReportRetentionService - holds and escalated enquiries are detached, not blocking (B-299)', () => {
+  it('a report with hold rows and an escalated enquiry is deleted; both are detached first and counted', async () => {
+    const { service, db, calls } = build({ holdRecords: 2, enquiries: 1 });
+    const r = await service.purgeDue(NOW);
+    expect(r.deletedReports).toBe(1);
+    expect(r.detachedHolds).toBe(2);
+    expect(r.detachedEnquiries).toBe(1);
+    expect(db.accountHold.updateMany).toHaveBeenCalledWith({ where: { reportId: 'r1' }, data: { reportId: null } });
+    expect(db.contactEnquiry.updateMany).toHaveBeenCalledWith({ where: { escalatedReportId: 'r1' }, data: { escalatedReportId: null } });
+    // only the link is written: nothing is deleted from the hold or enquiry tables
+    expect(calls.indexOf('accountHold.updateMany')).toBeLessThan(calls.indexOf('report.delete'));
+    expect(calls.indexOf('contactEnquiry.updateMany')).toBeLessThan(calls.indexOf('report.delete'));
+  });
+
+  it('the result no longer has a hold-record or contact-enquiry block reason', async () => {
+    const { service } = build({ holdRecords: 1, enquiries: 1 });
+    const r = (await service.purgeDue(NOW)) as unknown as Record<string, unknown>;
+    expect(r).not.toHaveProperty('blockedHoldRecord');
+    expect(r).not.toHaveProperty('blockedContactEnquiry');
+  });
+
+  it('a report that is skipped detaches nothing', async () => {
+    const escalated = build({ candidates: [report({ escalatedAt: monthsAgo(80) })], holdRecords: 1, enquiries: 1 });
+    await escalated.service.purgeDue(NOW);
+    expect(escalated.db.accountHold.updateMany).not.toHaveBeenCalled();
+    expect(escalated.db.contactEnquiry.updateMany).not.toHaveBeenCalled();
+    const held = build({ holdsByUser: { 'u-reporter': true }, holdRecords: 1, enquiries: 1 });
+    await held.service.purgeDue(NOW);
+    expect(held.db.accountHold.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -398,7 +465,8 @@ describe('ReportRetentionService - the order of the deletion', () => {
       'post.delete',
       'reportContextMessage.deleteMany',
     ]);
-    expect(calls[calls.indexOf('report.delete') - 1]).toBe('reportContextMessage.deleteMany');
+    expect(calls[calls.indexOf('report.delete') - 1]).toBe('contactEnquiry.updateMany');
+    expect(calls[calls.indexOf('report.delete') - 3]).toBe('reportContextMessage.deleteMany');
     // the public key of an UNPUBLISHED file is not a stored object; the others are
     const items = (recordDeferrals as jest.Mock).mock.calls[0][1] as { key: string }[];
     expect(items.map((i) => i.key).sort()).toEqual(['post-media/u/m1.jpg', 'private-media/u/m2.jpg', 'quarantine/u/m2']);
@@ -414,7 +482,14 @@ describe('ReportRetentionService - the order of the deletion', () => {
     const r = await service.purgeDue(NOW);
     expect(r.deletedMessages).toBe(1);
     expect(r.deletedConversations).toBe(1);
-    expect(calls).toEqual(['message.delete', 'reportContextMessage.deleteMany', 'conversation.deleteMany', 'report.delete']);
+    expect(calls).toEqual([
+      'message.delete',
+      'reportContextMessage.deleteMany',
+      'conversation.deleteMany',
+      'accountHold.updateMany',
+      'contactEnquiry.updateMany',
+      'report.delete',
+    ]);
     // exactly one message delete: the reported one (the context messages are rows of ReportContextMessage only)
     expect(db.message.delete).toHaveBeenCalledTimes(1);
     expect(db.conversation.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['c1'] }, messages: { none: {} } } });
@@ -427,7 +502,7 @@ describe('ReportRetentionService - the order of the deletion', () => {
     });
     const r = await service.purgeDue(NOW);
     expect(r.deletedComments).toBe(1);
-    expect(calls).toEqual(['comment.deleteMany', 'reportContextMessage.deleteMany', 'report.delete']);
+    expect(calls).toEqual(['comment.deleteMany', 'reportContextMessage.deleteMany', 'accountHold.updateMany', 'contactEnquiry.updateMany', 'report.delete']);
     expect(db.post.delete).not.toHaveBeenCalled();
   });
 
@@ -435,7 +510,7 @@ describe('ReportRetentionService - the order of the deletion', () => {
     const { service, calls } = build();
     const r = await service.purgeDue(NOW);
     expect(r.deletedReports).toBe(1);
-    expect(calls).toEqual(['reportContextMessage.deleteMany', 'report.delete']);
+    expect(calls).toEqual(['reportContextMessage.deleteMany', 'accountHold.updateMany', 'contactEnquiry.updateMany', 'report.delete']);
   });
 
   it('never reads or writes AdminActionLog (the fake database does not even have one)', async () => {

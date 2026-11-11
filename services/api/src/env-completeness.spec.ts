@@ -4,7 +4,7 @@ import { TEST_CLOCK_ENV_VARS } from './clock/clock';
 import { DEFAULT_MESSAGE_RETENTION_MONTHS } from './modules/messaging/messaging.constants';
 import {
   DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS,
-  DEFAULT_REPORT_RETENTION_MONTHS,
+  DEFAULT_REPORT_RETENTION_YEARS,
 } from './modules/moderation/report-retention.config';
 import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
@@ -334,10 +334,10 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
-  // Report retention (B-294, Decision Log #487): same guard as the message retention variable above.
-  describe('report retention variables (B-294)', () => {
+  // Report retention (B-294 / B-299, Decision Log #487, #490): same guard as the message retention variable above.
+  describe('report retention variables (B-294 / B-299)', () => {
     const DEFAULT_OF: Record<string, string> = {
-      REPORT_RETENTION_MONTHS: String(DEFAULT_REPORT_RETENTION_MONTHS),
+      REPORT_RETENTION_YEARS: String(DEFAULT_REPORT_RETENTION_YEARS),
       REPORT_RETENTION_CONCERNS_MINOR_YEARS: String(DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS),
     };
 
@@ -349,8 +349,8 @@ describe('environment completeness (B-018)', () => {
       }
     });
 
-    it('carry the decided defaults (12 months, 6 years) in render.yaml (both services) and .env.example', () => {
-      expect(DEFAULT_OF).toEqual({ REPORT_RETENTION_MONTHS: '12', REPORT_RETENTION_CONCERNS_MINOR_YEARS: '6' });
+    it('carry the decided defaults (6 years, 7 years) in render.yaml (both services) and .env.example', () => {
+      expect(DEFAULT_OF).toEqual({ REPORT_RETENTION_YEARS: '6', REPORT_RETENTION_CONCERNS_MINOR_YEARS: '7' });
       const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
       const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
       for (const [name, value] of Object.entries(DEFAULT_OF)) {

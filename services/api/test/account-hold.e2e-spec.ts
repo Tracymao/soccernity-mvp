@@ -454,12 +454,20 @@ describe('Account holds e2e: report-based hold + minimisation, legal hold, bad-f
       await expect(insert({ type: 'legal_hold', expiresAt: T0 })).rejects.toThrow();
     });
 
-    it('rejects a bad-faith hold with no report', async () => {
+    // B-299 (migration 20261129090000): the report retention job detaches a hold from a purged report (reportId NULL),
+    // so a bad-faith hold may have no report in the database. It still needs an expiry (checked above); the
+    // application still always sets the report when it places a hold.
+    it('accepts a bad-faith hold whose report was detached (reportId null) as long as it has an expiry', async () => {
       const a = await admin('noreport');
       const u = await activeUser('noreport');
       await expect(
         prisma().accountHold.create({
           data: { userId: u.id, placedByAdminId: a.id, placeReason: REASON, type: 'bad_faith', expiresAt: T0 } as never,
+        }),
+      ).resolves.toBeDefined();
+      await expect(
+        prisma().accountHold.create({
+          data: { userId: u.id, placedByAdminId: a.id, placeReason: REASON, type: 'bad_faith', expiresAt: null } as never,
         }),
       ).rejects.toThrow();
     });
