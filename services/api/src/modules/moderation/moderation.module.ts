@@ -11,10 +11,12 @@ import { RegistrationEmailService } from '../auth/registration/email/registratio
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
 import { BanterModule } from '../banter/banter.module';
 import { PostMediaModule } from '../post-media/post-media.module';
+import { StorageModule } from '../../storage/storage.module';
 import { AdminModerationController } from './admin-moderation.controller';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 import { PublicReportsController } from './public-reports.controller';
+import { ReportRetentionService } from './report-retention.service';
 import { ReportsController } from './reports.controller';
 
 // sprint-5/admin-moderation-queue-backend — Build Plan Section 4.8
@@ -75,8 +77,10 @@ import { ReportsController } from './reports.controller';
     PostMediaModule,
     // B-291 (Decision Log #485): the shared suspend / reinstate path (user_suspended, overturned appeal).
     AccountSuspensionModule,
+    // B-294 (Decision Log #487): ReportRetentionService deletes a removed post's stored objects after the commit.
+    StorageModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
-  providers: [ModerationService, ModerationHoldsService, RegistrationEmailService],
+  providers: [ModerationService, ModerationHoldsService, RegistrationEmailService, ReportRetentionService],
 })
 export class ModerationModule {}

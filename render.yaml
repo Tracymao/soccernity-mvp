@@ -368,6 +368,11 @@ services:
         value: "12"
       - key: MESSAGE_RETENTION_MONTHS
         value: "12"
+      # B-294 report retention (Decision Log #487). Both equal the code defaults.
+      - key: REPORT_RETENTION_MONTHS
+        value: "12"
+      - key: REPORT_RETENTION_CONCERNS_MINOR_YEARS
+        value: "6"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
         value: "3"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
@@ -702,6 +707,11 @@ services:
         value: "12"
       - key: MESSAGE_RETENTION_MONTHS
         value: "12"
+      # B-294 report retention (Decision Log #487). Both equal the code defaults.
+      - key: REPORT_RETENTION_MONTHS
+        value: "12"
+      - key: REPORT_RETENTION_CONCERNS_MINOR_YEARS
+        value: "6"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
         value: "3"
       - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
