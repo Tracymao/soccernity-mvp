@@ -5,7 +5,7 @@
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
-`docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post), which is the DPIA it would attach to, and it does not edit
+`docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post; **[CHANGED v0.3 — 2026-11-11]** v0.5 from 2026-11-11, which adds R35 and R36 and restates the hold rules side by side), which is the DPIA it would attach to, and it does not edit
 `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8) or `docs/dpia-addendum-contest-view-data-draft.md`. If counsel
 accepts it, folding it into the main DPIA (as proposed risks R23 to R31, a new §1.3 row group and new §5 items) is a
 separate step for whoever maintains that file.
@@ -22,12 +22,27 @@ counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to th
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2)
-- **Version:** 0.2 (draft, NOT APPROVED)
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3)
+- **Version:** 0.3 (draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
 
+
+### Changelog — v0.2 → v0.3 (2026-11-11) **[COPY PENDING LEGAL REVIEW]**
+
+**[CHANGED v0.3 — 2026-11-11]** **What this update is, stated plainly.** v0.3 changes only what the founder's decisions of 2026-11-11 and the code now on
+`origin/main` (`0e440bf`) require for **the files of a removed post** (§1.5), and nothing else: Decision Log #487 and B-294 (PR
+#725: a closed report is now deleted with the content it removed, so the post and its media rows are deleted too), Decision Log
+#484 and B-296 (PR #724: the two approval paths no longer publish a removed post's file), and the hold rules compared across
+features (Decision Log #482, #484, #487). Changed: this header, a new **"Update to §1.5 (v0.3)"** block at the end of §1.5, one
+marked paragraph in R30, §12 (question 23 extended, questions 24 and 25 added) and the closing statement. Every changed passage
+carries the marker **[CHANGED v0.3 — 2026-11-11]**. It does **not** complete or advance the addendum: the sign-off block (§13) is unchanged and empty; no
+option in §10 has been chosen; nothing here is a legal conclusion; nothing was run against a live service and no statute or
+regulator text was retrieved. **The stale body described in the v0.2 changelog (§1.1, R24, R30's first paragraph, §10.6) is
+still stale and is still not rewritten.** The matching DPIA changes are R35 and R36 in `docs/sprint-1-dpia-outline-draft.md` (v0.5).
+
+---
 
 ### Changelog — v0.1 → v0.2 (2026-11-10) **[COPY PENDING LEGAL REVIEW]**
 
@@ -192,6 +207,40 @@ no media, so the rule concerns posts only.
    `post-media/` and `profile-media/` only, or the private files sit in a separate bucket (build-register B-265, a founder-owned
    launch-gate step, not verified against a real bucket). Object versioning, lifecycle rules and provider backups at R2 were not
    examined; "deleted" here means deleted from the live bucket.
+
+**[CHANGED v0.3 — 2026-11-11]** **Update to §1.5 (v0.3).** *Sources: `modules/moderation/report-retention.service.ts`, `report-retention.config.ts`;
+`modules/post-media/media-check.service.ts` (lines around "B-296"), `post-media-decision.service.ts`,
+`rejected-media-evidence.util.ts`; `modules/account-hold/account-hold.rules.ts`; `modules/messaging/message-retention.service.ts`;
+Decision Log #482, #484, #487; build-register B-290, B-294, B-296, B-206; PR #724, #725. Nothing was run.*
+
+1. **Step 4 (closure) is now followed by a second deletion: the post itself.** The private copy is still deleted at closure of the
+   removing report (step 4, unchanged). New: a daily report sweep (04:15) deletes the **report** 12 months after closure (6 years if
+   it concerns a minor) and, in the same transaction, **the content the report removed**, which for a post means the post row and
+   its `PostMedia` rows. **This partly answers finding 4 above** ("the `PostMedia` row outlives its files with no clock"): for
+   the files of a **removed post**, the row, with its moderation category names, rejection reason and decision fields, is now
+   deleted with the post, once the report is deleted. It does **not** answer finding 4 for the `PostMedia` rows of files that were
+   never part of a removed post (R30's first paragraph stands for those). If any stored object is somehow still present, a
+   deferral record is written so it is deleted after the commit and retried until it succeeds.
+2. **The report sweep keeps the post (and so its media rows) in cases the closure step does not.** The report is skipped, and the
+   post stays, while an active **legal or bad-faith** hold is on the reporter, or on the account behind the target (for a post report, the author); while the report is **escalated** (until B-206); while the removed file is still not deletable under
+   the rule in step 5; while **another** report on the same post or its comments is not yet closed; and the post is **blocked**
+   (kept, counted in the log) if it is a **Contest entry**. These are open-ended. The B-206 hook is the same single function
+   (`removedMediaDeletableNow`) that step 5 describes; the sweep calls it and keeps the whole report if it says keep.
+3. **The gap in finding 1's last sentence is closed for the approval paths.** v0.2 recorded that "a file approved while its post
+   is removed is published until the next reconciler pass". As merged (B-296, PR #724), when the automatic check approves a file,
+   or a moderator approves one from the queue, and its post is **already removed by moderation**, the file is marked approved but
+   **no public copy is made**; it stays private, and the write that records publication carries the "post is not removed"
+   condition in its `WHERE`, so a removal landing after the check cannot be missed. An overturned appeal publishes it (step 3).
+   The window in finding 1 (a public object lingering after the post is hidden because the background withdrawal failed) is
+   **unchanged**.
+4. **Finding 3 (the hold rules differ) is restated with the report sweep added; the four rules side by side are in the DPIA, R36(e).**
+   For these files: the uploader's active **legal or bad-faith** hold, or another unclosed report on the post. For direct
+   messages: a **legal** hold only, on the sender or any other participant. For reports and the content they removed: a legal or
+   bad-faith hold on the reporter, the account behind the target and, for a message report, all participants. Account
+   anonymisation: any active admin hold. The differences remain a founder question.
+5. **Not changed by this update:** nothing sets a removed file aside for a statutory duty (B-206, finding 2); the 30-day appeal
+   window is still the only clock for the private copy (finding 5), now followed by the 12-month or 6-year report clock for the
+   post row; "private" still depends on the launch step in finding 6.
 
 ---
 
@@ -512,6 +561,11 @@ sentence of the paragraph above ("a reported post ... loses its evidence") **for
 help the post row itself (the author can still hard-delete a removed post, DPIA v0.4 R34(c)), a reported post that was never
 removed, the check labels or decision fields (still no clock), or any statutory evidence duty (B-206, undecided).
 
+**[CHANGED v0.3 — 2026-11-11]** **Further narrowed for removed posts only:** the `PostMedia` row of a removed post's file, including the category names,
+rejection reason and decision fields this risk says have no clock, is deleted together with the post when the report sweep deletes
+the report (12 months after closure, 6 years if the report concerns a minor; see §1.5 "Update to §1.5 (v0.3)"). Labels and
+decision fields of files that were **never** part of a removed post still have no clock.
+
 ### R31 — No notice to the uploader or the guardian about the check, the reviewers or the retention **[COPY PENDING LEGAL REVIEW]**
 
 The guardian consent screen does not mention uploads. The uploader is told only that a file did not meet the rules, in a
@@ -744,6 +798,16 @@ Added because R24 turns on it. Built today: the public prefix.
 23. Is it intended that either kind of admin hold keeps a removed post's files while only a legal hold keeps a direct message
     (DPIA v0.4 R33(c))?
 
+**[CHANGED v0.3 — 2026-11-11]** 23a. The report sweep adds a third rule (a legal or bad-faith hold on the reporter, the account behind the target and, for a
+    message report, all participants) and account anonymisation a fourth (any hold skips the account). Should one hold rule apply
+    to messages, files and reports alike? (DPIA v0.5 R36(e))
+24. **[CHANGED v0.3 — 2026-11-11]** After the report sweep deletes a removed post's report, the post row and its `PostMedia` rows go with it (12 months after
+    closure, 6 years if the report concerns a minor). Is that the right end for the record of **what the file was and why it was
+    rejected or removed**, or must some record of a removed child's file survive for a statutory duty (B-206)? Does the answer
+    depend on whether the report concerned a child? (§1.5 "Update", item 1)
+25. **[CHANGED v0.3 — 2026-11-11]** A post that is a Contest entry is never deleted by the report sweep ("blocked"), so its stored-file record stays for as long as
+    the entry does. Is an open-ended keep acceptable for a removed child's entry, or does it need an end date? (§1.5 "Update", item 2)
+
 ---
 
 ## 13. Sign-off **[COPY PENDING LEGAL REVIEW]**
@@ -780,6 +844,11 @@ This block is intentionally empty. A completed addendum requires a competent per
 ---
 
 ## Closing statement **[COPY PENDING LEGAL REVIEW]**
+
+**[CHANGED v0.3 — 2026-11-11]** *v0.3 note: this revision adds, to §1.5, the effect of the report retention sweep on a removed post's media rows, the two
+approval paths that no longer publish a removed post's file, and the hold rules compared, with questions 23a, 24 and 25. It does
+not complete or approve the addendum, it chooses no option, and it claims nothing as solved. The §13 sign-off block remains
+empty.*
 
 **[CHANGED v0.2 — 2026-11-10]** *v0.2 note: this revision adds the files of a post a moderator has removed (§1.5) and the matching amendments. It does not
 complete or approve the addendum, it chooses no option, and it claims nothing as solved. The §13 sign-off block remains empty.*
