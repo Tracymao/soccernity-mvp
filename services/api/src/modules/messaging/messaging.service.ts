@@ -98,11 +98,14 @@ export interface DeletedMessageView {
 }
 // B-289 (Decision Log #483): a message a moderator removed. It stays in the thread for BOTH people as exactly this
 // stub: no text, no original, no edit data, no read time. (Deliberately no senderId or conversationId either: the
-// thread's stub is { id, sentAt, removedByModeration } and nothing else.) The row and its text stay for staff.
+// thread's stub is { id, sentAt, removedByModeration, isMine } and nothing else.) The row and its text stay for staff.
+// B-296 (Decision Log #489): `isMine` is true when the VIEWER sent the removed message, so a client can place the
+// stub on the correct side without ever receiving the sender's id.
 export interface RemovedMessageView {
   id: string;
   sentAt: Date;
   removedByModeration: true;
+  isMine: boolean;
 }
 export type MessageView = LiveMessageView | DeletedMessageView | RemovedMessageView;
 
@@ -112,7 +115,7 @@ export type MessageView = LiveMessageView | DeletedMessageView | RemovedMessageV
 function toMessageView(row: MessageRow, viewerId: string, discloseReadAt: boolean): MessageView {
   // A moderator's removal wins over everything else (an edit, a delete for everyone): nothing of the message shows.
   if (row.removedByModerationAt) {
-    return { id: row.id, sentAt: row.sentAt, removedByModeration: true };
+    return { id: row.id, sentAt: row.sentAt, removedByModeration: true, isMine: row.senderId === viewerId };
   }
   if (row.deletedForEveryoneAt) {
     return {
@@ -156,10 +159,12 @@ export interface MessagePreview {
 }
 
 // B-289: the conversation-list preview of a last message a moderator removed.
+// B-296: carries the same `isMine` flag as the thread stub (the viewer sent the removed message).
 export interface RemovedMessagePreview {
   id: string;
   sentAt: Date;
   removedByModeration: true;
+  isMine: boolean;
 }
 
 // What GET /conversations returns per row, and what POST /conversations
@@ -986,7 +991,7 @@ export class MessagingService {
         lastMessage: !last
           ? null
           : last.removedByModerationAt
-            ? { id: last.id, sentAt: last.sentAt, removedByModeration: true as const }
+            ? { id: last.id, sentAt: last.sentAt, removedByModeration: true as const, isMine: last.senderId === callerId }
             : { contentText: last.contentText, senderId: last.senderId, sentAt: last.sentAt },
         unreadCount: unreadByConversation.get(c.id) ?? 0,
       };

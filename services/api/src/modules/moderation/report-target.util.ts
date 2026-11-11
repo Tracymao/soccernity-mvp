@@ -1,4 +1,11 @@
-import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+
+// A structural type, not PrismaService: the retention sweep (B-294) calls this inside a transaction, and both
+// PrismaService and a transaction client satisfy it.
+type TargetDb = Pick<
+  Prisma.TransactionClient,
+  'user' | 'post' | 'comment' | 'banterRoom' | 'grassrootsTeam' | 'fixture' | 'message'
+>;
 
 // Shared "who is the reported user" resolution -- used by ModerationService (appeal eligibility and both
 // parties' outcome notifications) and, since backend/w6-hold-rule-extension (B-044), by HoldService to find
@@ -16,7 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 // Returns null if the target has since been deleted or targetType is unrecognised. Every caller treats null
 // as "cannot determine the reported user", never as an error to surface.
 export async function resolveReportedUserId(
-  prisma: PrismaService,
+  prisma: TargetDb,
   targetType: string,
   targetId: string,
 ): Promise<string | null> {

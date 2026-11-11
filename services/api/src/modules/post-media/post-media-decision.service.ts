@@ -7,7 +7,7 @@ import {
   POST_MEDIA_REJECTED_NOTIFICATION_TYPE,
 } from './post-media-review.constants';
 import { MEDIA_REVIEW_CODES, postMediaError } from './post-media.errors';
-import { PostMediaObjectsService } from './post-media-objects.service';
+import { POST_NOT_REMOVED_BY_MODERATION, PostMediaObjectsService } from './post-media-objects.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 
 // backend/w15-media-review-queue (B-037; Decision Log #419 items 4 and 6). A MODERATOR's decision on one
@@ -88,7 +88,18 @@ export class PostMediaDecisionService {
     // Publish FIRST, outside any transaction (a storage copy must not hold a database transaction open).
     const before = await this.prisma.postMedia.findFirst({
       where: { id: mediaId, uploadState: 'ready' },
-      select: { id: true, status: true, reportCount: true, reviewEnteredAt: true, contentType: true, privateKey: true, publicKey: true, publishedAt: true },
+      select: {
+        id: true,
+        status: true,
+        reportCount: true,
+        reviewEnteredAt: true,
+        contentType: true,
+        privateKey: true,
+        publicKey: true,
+        publishedAt: true,
+        // B-296: whether the post is removed by moderation decides whether the file may go public at all.
+        post: { select: { removedByModerationAt: true } },
+      },
     });
     if (!before) throw postMediaError(404, 'media_not_found', 'Media not found');
     if (before.reviewEnteredAt === null) {
@@ -96,58 +107,93 @@ export class PostMediaDecisionService {
     }
     const willBeVisible = before.status === 'pending' || (before.status === 'approved' && before.reportCount > 0);
     if (!willBeVisible) throw alreadyDecided();
+    // B-296 (Decision Log #484): a file whose post is removed by moderation is approved but NOT published, so it
+    // stays private (republishForPost brings it back if the removal is overturned). No copy is made at all.
+    const copied = !before.post?.removedByModerationAt;
     try {
-      await this.objects.copyToPublic(before);
+      if (copied) await this.objects.copyToPublic(before);
     } catch (err) {
       // FAIL CLOSED: nothing was approved and nothing is public. The moderator can simply try again.
       this.logger.error(`Approval of media ${mediaId} not applied: publishing failed (${err instanceof Error ? err.message : String(err)}).`);
       throw postMediaError(503, MEDIA_REVIEW_CODES.publishFailed, "The file couldn't be published right now. It is still waiting for review; please try again.");
     }
 
-    let result: ModeratorDecisionResult;
+    let outcome: { result: ModeratorDecisionResult; published: boolean };
     try {
-      result = await this.approveInTransaction(mediaId, adminId);
+      outcome = await this.approveInTransaction(mediaId, adminId, copied);
     } catch (err) {
       // Lost a race (or the write failed): the public copy was never recorded.
-      if (before.publicKey && !before.publishedAt) await this.objects.discardUnrecordedCopy(mediaId, before.publicKey);
+      if (copied && before.publicKey && !before.publishedAt) await this.objects.discardUnrecordedCopy(mediaId, before.publicKey);
       throw err;
     }
-    await this.objects.finishPublish(mediaId);
-    return result;
+    if (outcome.published) {
+      await this.objects.finishPublish(mediaId);
+    } else if (copied && before.publicKey && !before.publishedAt) {
+      // The post was removed between the check above and the write: the copy made is not live. Take it out again.
+      await this.objects.discardUnrecordedCopy(mediaId, before.publicKey);
+    }
+    return outcome.result;
   }
 
-  private async approveInTransaction(mediaId: string, adminId: string): Promise<ModeratorDecisionResult> {
+  // `copied` is true when the public copy exists (it was just made, or the file was already published). The write that
+  // records publication carries the post-not-removed condition IN ITS WHERE, so a removal that lands after the
+  // check in approve() cannot be missed: that write then matches nothing, and the same approval is written without
+  // publishing (the file stays private; republishForPost or the reconciler publishes it when the post is restored).
+  private async approveInTransaction(
+    mediaId: string,
+    adminId: string,
+    copied: boolean,
+  ): Promise<{ result: ModeratorDecisionResult; published: boolean }> {
     return this.prisma.$transaction(async (tx) => {
       const row = await this.load(tx, mediaId);
       const now = this.clock.now();
 
       if (row.status === 'pending') {
-        const r = await tx.postMedia.updateMany({
-          where: { id: mediaId, status: 'pending', decisionSource: null },
-          data: {
-            status: 'approved',
-            decisionSource: 'moderator',
-            decidedAt: now,
-            decidedBy: adminId,
-            reportCount: 0,
-            hiddenPendingReview: false,
-            publishedAt: now,
-          },
-        });
-        if (r.count === 0) throw alreadyDecided();
+        const guard = { id: mediaId, status: 'pending', decisionSource: null } as const;
+        const base = {
+          status: 'approved',
+          decisionSource: 'moderator',
+          decidedAt: now,
+          decidedBy: adminId,
+          reportCount: 0,
+          hiddenPendingReview: false,
+        } as const;
+        let published = false;
+        let count = 0;
+        if (copied) {
+          count = (
+            await tx.postMedia.updateMany({
+              where: { ...guard, ...POST_NOT_REMOVED_BY_MODERATION },
+              data: { ...base, publishedAt: now },
+            })
+          ).count;
+          published = count === 1;
+        }
+        if (count === 0) count = (await tx.postMedia.updateMany({ where: guard, data: base })).count;
+        if (count === 0) throw alreadyDecided();
         await this.resolveReports(tx, mediaId, now);
         await writeDecisionNotification(tx, row.uploaderId, mediaId, 'approved');
-        return { id: mediaId, outcome: 'approved', status: 'approved' } as const;
+        return { result: { id: mediaId, outcome: 'approved', status: 'approved' } as const, published };
       }
 
       if (row.status === 'approved' && row.reportCount > 0) {
-        const r = await tx.postMedia.updateMany({
-          where: { id: mediaId, status: 'approved', reportCount: { gt: 0 } },
-          data: { reportCount: 0, hiddenPendingReview: false, publishedAt: row.publishedAt ?? now },
-        });
-        if (r.count === 0) throw alreadyDecided();
+        const guard = { id: mediaId, status: 'approved', reportCount: { gt: 0 } } as const;
+        const base = { reportCount: 0, hiddenPendingReview: false } as const;
+        let published = false;
+        let count = 0;
+        if (copied) {
+          count = (
+            await tx.postMedia.updateMany({
+              where: { ...guard, ...POST_NOT_REMOVED_BY_MODERATION },
+              data: { ...base, publishedAt: row.publishedAt ?? now },
+            })
+          ).count;
+          published = count === 1;
+        }
+        if (count === 0) count = (await tx.postMedia.updateMany({ where: guard, data: base })).count;
+        if (count === 0) throw alreadyDecided();
         await this.resolveReports(tx, mediaId, now);
-        return { id: mediaId, outcome: 'kept', status: 'approved' } as const;
+        return { result: { id: mediaId, outcome: 'kept', status: 'approved' } as const, published };
       }
 
       throw alreadyDecided();

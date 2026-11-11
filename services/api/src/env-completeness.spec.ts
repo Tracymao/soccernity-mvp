@@ -2,6 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
 import { DEFAULT_MESSAGE_RETENTION_MONTHS } from './modules/messaging/messaging.constants';
+import {
+  DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS,
+  DEFAULT_REPORT_RETENTION_MONTHS,
+} from './modules/moderation/report-retention.config';
 import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
@@ -327,6 +331,34 @@ describe('environment completeness (B-018)', () => {
       expect(inRender).toEqual(['12', '12']);
       const inExample = exampleText.match(new RegExp(`^${NAME}=(\\S+)\\s*$`, 'm'));
       expect(inExample && inExample[1]).toBe('12');
+    });
+  });
+
+  // Report retention (B-294, Decision Log #487): same guard as the message retention variable above.
+  describe('report retention variables (B-294)', () => {
+    const DEFAULT_OF: Record<string, string> = {
+      REPORT_RETENTION_MONTHS: String(DEFAULT_REPORT_RETENTION_MONTHS),
+      REPORT_RETENTION_CONCERNS_MINOR_YEARS: String(DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS),
+    };
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of Object.keys(DEFAULT_OF)) {
+        expect(read.has(name)).toBe(true);
+        for (const keys of services) expect(keys.has(name)).toBe(true);
+        expect(example.has(name)).toBe(true);
+      }
+    });
+
+    it('carry the decided defaults (12 months, 6 years) in render.yaml (both services) and .env.example', () => {
+      expect(DEFAULT_OF).toEqual({ REPORT_RETENTION_MONTHS: '12', REPORT_RETENTION_CONCERNS_MINOR_YEARS: '6' });
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const [name, value] of Object.entries(DEFAULT_OF)) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"?([^"\\r\\n]+)"?\\s*$`, 'gm'))].map((m) => m[1]);
+        expect(inRender).toEqual([value, value]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\S+)\\s*$`, 'm'));
+        expect(inExample && inExample[1]).toBe(value);
+      }
     });
   });
 
