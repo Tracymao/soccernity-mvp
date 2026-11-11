@@ -585,6 +585,56 @@ a.mod-tab {
   padding: 0 28px 24px;
 }
 
+/* B-295 suspension dialog (Figma 7042:61845, 7045:63231): the consequence list and the nine-category radio list. */
+
+.mod-dialog__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.mod-radio-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+}
+
+/* An unanswered required choice is marked with the alert border only, never with text colour. */
+.mod-radio-list--invalid {
+  border: 2px solid var(--sn-semantic-alert);
+}
+
+.mod-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+/* The explanatory line under the Take action buttons. */
+.mod-helper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
 /* held investigations */
 
 .hi-page-title {

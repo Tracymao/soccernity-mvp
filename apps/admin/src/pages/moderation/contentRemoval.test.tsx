@@ -104,10 +104,10 @@ describe("which targets offer Remove Content", () => {
       renderDetail(<ReportDetailPage />, report({ targetType }));
       await screen.findByText("Take action");
       expect(removeButton()).toBeNull();
-      // The other actions are unchanged.
+      // The other actions are unchanged. Suspend User is offered only where the server can suspend an account (B-295).
       expect(screen.getByRole("button", { name: REPORT_ACTION_LABELS.warning_issued })).toBeTruthy();
-      expect(screen.getByRole("button", { name: REPORT_ACTION_LABELS.user_suspended })).toBeTruthy();
       expect(screen.getByRole("button", { name: REPORT_ACTION_LABELS.dismissed })).toBeTruthy();
+      expect(!!screen.queryByRole("button", { name: REPORT_ACTION_LABELS.user_suspended })).toBe(targetType === "user");
     },
   );
 
@@ -133,7 +133,7 @@ describe("which targets offer Remove Content", () => {
     renderDetail(<ReportDetailPage />, report({ targetType: "user" }));
     await screen.findByText("Take action");
     expect(screen.queryByText(/Remove Content hides it/)).toBeNull();
-    expect(screen.getByText(/does not by itself remove content or suspend an account/)).toBeTruthy();
+    expect(screen.getByText(/does not by itself remove content/)).toBeTruthy();
   });
 });
 
