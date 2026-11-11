@@ -363,9 +363,12 @@ for everyone, minors and adults alike. This replaces the earlier "kept, no new p
 - **Never deleted: a message that is evidence** (and see "Held accounts" below for the legal-hold exemption). A message is skipped when a `Report` with `targetType: 'message'` has it
   as `targetId` (a bare string, no foreign key), or when a `ReportContextMessage` row attached it to a report. Both tests
   are in the SELECT and repeated in the DELETE statement, so a report filed between the two still protects the message.
-  The message then stays for as long as the report does; removing a report (its own retention) is not built, so a
-  reported message is kept until that exists. `ReportContextMessage.messageId` is a RESTRICT foreign key, so the database
-  would refuse the delete anyway.
+  The message then stays for as long as the report does. A report is removed by its own retention sweep
+  (`ReportRetentionService`, B-294, Decision Log #487: 12 months after it closed, 6 years if it concerns a minor, see
+  moderation/README.md "Report retention"): that sweep deletes a message the report REMOVED, and deletes the report's
+  `ReportContextMessage` rows, but leaves the context messages themselves, which then fall to this job. A message that
+  was only the (not removed) subject of a dismissed report becomes eligible here once its report is gone.
+  `ReportContextMessage.messageId` is a RESTRICT foreign key, so the database would refuse the delete anyway.
 - **What goes with a message.** `MessageHide` rows (ON DELETE CASCADE). There is no stored media object to delete: a DM has
   carried no media since B-259 (the send DTO refuses `mediaUrl`), this module has no storage, and no route has ever
   written `Message.mediaUrl`. If DM media is ever added, the sweep must delete the object too.

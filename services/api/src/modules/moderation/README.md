@@ -873,10 +873,10 @@ The text is kept after an edit or a delete-for-everyone, like `reportedMessage`.
 sender id, no other message. The child-safety-vetting gate applies first, as today. Filing a report (with or without
 context) notifies nobody.
 
-**Retention (for the later sweep).** The messages in `ReportContextMessage` are evidence. The retention sweep that is
-built later MUST NOT delete any message that has a row there (nor the reported message of an open or unretired
-report). `messageId` RESTRICT makes a naive DELETE fail loudly rather than silently drop evidence, but the sweep must
-skip them on purpose. The account-deletion purge needs no entry of its own: the sender of every such message is
+**Retention.** The messages in `ReportContextMessage` are evidence. The message retention job (B-287) skips any message
+that has a row there, and the report retention sweep (B-294, "Report retention" below) deletes the report's context ROWS
+but never the context messages. `messageId` RESTRICT makes a naive DELETE fail loudly rather than silently drop
+evidence, and both sweeps skip them on purpose. The account-deletion purge needs no entry of its own: the sender of every such message is
 already covered by `Message.sender` and `Conversation.participantIds`, and the model is listed in
 `REPORT_EVIDENCE_MODELS` (`anonymized-row-purge.references.ts`) so the decision is explicit.
 
@@ -926,3 +926,52 @@ author of the post / comment, or the sender of the message).
   `other` and a missing category all give "breaching our community rules"), never free text, the reporter or a
   duration, and says the person can appeal through the Contact Us page. The reinstatement email says only that the
   suspension was lifted.
+
+## Report retention (`backend/b294-report-retention`, B-294, Decision Log #487)
+
+`ReportRetentionService` (`report-retention.service.ts`, provided by `ModerationModule`) deletes a report once it has been
+**closed** for 12 months (`REPORT_RETENTION_MONTHS`), or for 6 years (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) when
+`Report.concernsMinor` is true, together with the content that report removed (B-289). Both figures are configuration
+(`.env.example`, both `render.yaml` services, guarded by `env-completeness.spec.ts`; a blank, zero or non-numeric value falls
+back to the default). The 6-year figure is unverified for UK law; counsel may confirm it and it does not hold the build.
+
+- **Schedule and size.** Daily at 04:15 (`@Cron('0 15 4 * * *')`, after the 04:00 message retention), oldest `reviewedAt` first,
+  at most `REPORT_RETENTION_MAX_PER_RUN` = 100 reports **deleted** per run (a constant I chose, founder-veto-able; the message
+  job uses 500 but a report may take a post, its media and its comments with it). Skipped and blocked reports do NOT count toward
+  the cap, so a pile of permanently kept reports cannot starve the ones that are due; the run reads candidates 200 at a time
+  until the cap is reached or they run out. `purgeDue(now)` takes an injectable clock. The log carries counts only.
+- **The anchor.** The closure moment is the existing computed predicate `reportClosedAt` (`account-hold.rules.ts`), reused,
+  not reimplemented: dismissed = `reviewedAt`; actioned with no appeal = `reviewedAt` + the appeal window; appeal upheld =
+  `appealReviewedAt`. An open report (including one reopened by an overturned appeal) or one with an appeal pending has no
+  closure and is never due; a closed state missing its timestamp counts as not closed (fail safe). Due = **strictly after**
+  closure + the period, in calendar months (`setUTCMonth`). The SQL pre-filter is only `reviewedAt < now - the shorter period`.
+- **Skipped (kept, with its content, retried next run):** an ACTIVE `legal_hold` or `bad_faith` hold (`findActiveAccountHold`)
+  on the reporter, on the account behind the target, or, for a message report, on the reported message's sender or any other
+  participant of the conversation; an ESCALATED report (`escalatedAt` set), until counsel answers B-206; a removed post whose
+  media is not deletable now (`removedMediaDeletableNow`, the B-206 hook: if it says keep, the WHOLE report is kept); another
+  report that is not yet closed on the removed item or, for a removed post, on a comment under it. A lifted or expired hold
+  does not skip.
+- **Blocked (kept, counted, a finding):** a record outside the deletion list depends on the report or the item and no rule
+  says what to do with it, so nothing is deleted: an `AccountHold` row still references the report (RESTRICT FK, even a lifted
+  one); a `ContactEnquiry` was escalated into it (RESTRICT FK, so an enquiry-origin report is never deleted today); the removed
+  post is a Contest entry (deleting it would cascade away votes, winners and impressions); a removed message is attached as
+  context to a DIFFERENT report (RESTRICT FK). The log line counts each kind.
+- **What is deleted, in this order, in one Serializable transaction** (re-checked inside it, so a hold placed or a report filed
+  since the scan stops it): (1) the content with `removedByReportId` = this report: for a post, a deferral record for every
+  stored object, the `Hashtag.postCount` decrements, the like/comment notifications that point at it and the notifications about
+  its files, then the post (cascade: comments under it, likes, saves, views, hashtag links, `PostMedia` rows and their media
+  reports); for a comment, the comment (`Post.commentCount` was already reduced at removal and is not touched again); for a
+  message, the message (`MessageHide` cascades) and then the conversation if it has no message left; (2) this report's
+  `ReportContextMessage` rows (the context messages STAY and fall to the message retention); (3) the report.
+- **Stored objects** are deleted only after the commit. Each has a `PostMediaDeferredDeletion` record written in the transaction;
+  it is removed when the object delete succeeds and otherwise left for `RejectedMediaSweepService.processDeferred`, so a failed
+  delete is retried and never lost.
+- **Never touched:** `AdminActionLog`; `PointsLedgerEntry` (earned points stay, Decision Log #483); the `moderation_decision`
+  notifications that point at the report (they already degrade to a generic row). `User.suspendedByReportId` is
+  `ON DELETE SET NULL`: a still-suspended account stays suspended and only loses the link (a manual reinstatement is then the
+  only way back; the appeal window has closed by definition).
+- **Known consequences / findings:** a report whose action was recorded with an unclosed sibling, a lifted hold record, an
+  escalated enquiry or a Contest entry is kept indefinitely until someone decides what to do with that dependency; a report is
+  only re-evaluated, not tracked, so a large permanently-kept set is re-read every night; "another report not yet closed" is
+  judged on closure only, so a sibling report that closed recently but has a longer retention of its own does not hold this one
+  back (its target is then gone when its own clock runs out).
