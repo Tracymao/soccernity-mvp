@@ -350,8 +350,10 @@ describe('Content removal e2e (b289-content-removal)', () => {
         const thread = await request(server()).get(`/conversations/${conversation.id}/messages`).set(auth(who.accessToken)).expect(200);
         expect(thread.body.items).toHaveLength(3);
         const stub = thread.body.items.find((i: { id: string }) => i.id === target.id);
-        expect(Object.keys(stub).sort()).toEqual(['id', 'removedByModeration', 'sentAt']);
+        // B-296: isMine says whether the VIEWER sent it; the sender's id is never returned.
+        expect(Object.keys(stub).sort()).toEqual(['id', 'isMine', 'removedByModeration', 'sentAt']);
         expect(stub.removedByModeration).toBe(true);
+        expect(stub.isMine).toBe(who === sender);
         expect(JSON.stringify(thread.body)).not.toContain('THE REPORTED TEXT');
         expect(thread.body.items.find((i: { id: string }) => i.id === before.id).contentText).toBe('CONTEXT BEFORE');
       }
@@ -365,7 +367,7 @@ describe('Content removal e2e (b289-content-removal)', () => {
       for (const who of [sender, recipient]) {
         const list = await request(server()).get('/conversations').set(auth(who.accessToken)).expect(200);
         const row = list.body.items.find((c: { id: string }) => c.id === conversation.id);
-        expect(row.lastMessage).toEqual({ id: target.id, sentAt: expect.any(String), removedByModeration: true });
+        expect(row.lastMessage).toEqual({ id: target.id, sentAt: expect.any(String), removedByModeration: true, isMine: who === sender });
         expect(JSON.stringify(list.body)).not.toContain('THE REPORTED TEXT');
       }
     });
