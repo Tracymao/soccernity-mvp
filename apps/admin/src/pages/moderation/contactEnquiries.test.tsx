@@ -184,6 +184,27 @@ describe("ContactEnquiriesPage", () => {
     expect(listContactEnquiries).toHaveBeenCalledWith({ limit: 50 });
   });
 
+  it("labels a suspension_appeal enquiry \"Appeal a suspension\" in the list", async () => {
+    vi.mocked(listContactEnquiries).mockResolvedValue({
+      items: [listItem({ id: "e9", name: "Tobi Adeyemi", category: "suspension_appeal", subject: "Please review" })],
+      nextCursor: null,
+    });
+    renderPage();
+    await screen.findByText("Tobi Adeyemi");
+    expect(within(screen.getByRole("table", { name: "Contact enquiries" })).getByText("Appeal a suspension")).not.toBeNull();
+  });
+
+  it("sends suspension_appeal to the server when that category is applied as the filter", async () => {
+    vi.mocked(listContactEnquiries).mockResolvedValue({ items: [listItem()], nextCursor: null });
+    renderPage();
+    await screen.findByText("Chioma Eze");
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "suspension_appeal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    await waitFor(() =>
+      expect(listContactEnquiries).toHaveBeenLastCalledWith({ category: "suspension_appeal", limit: 50 }),
+    );
+  });
+
   it("shows no message text and no count in the tab label (the list carries neither)", async () => {
     vi.mocked(listContactEnquiries).mockResolvedValue({ items: [listItem()], nextCursor: null });
     renderPage();
@@ -224,7 +245,7 @@ describe("ContactEnquiriesPage", () => {
     await waitFor(() => expect(listContactEnquiries).toHaveBeenLastCalledWith({ limit: 50 }));
   });
 
-  it("offers all six server categories and both statuses, with the drawn hints", async () => {
+  it("offers all seven server categories and both statuses, with the drawn hints", async () => {
     vi.mocked(listContactEnquiries).mockResolvedValue({ items: [], nextCursor: null });
     renderPage();
     await screen.findByText("No contact enquiries");
@@ -237,6 +258,7 @@ describe("ContactEnquiriesPage", () => {
       "Suggestions",
       "Enquiries",
       "Feedback",
+      "Appeal a suspension",
     ]);
     expect(within(screen.getByLabelText("Status")).getAllByRole("option").map((o) => o.textContent)).toEqual(["All", "New", "Handled"]);
     expect(screen.getByText("New, handled or all.")).not.toBeNull();

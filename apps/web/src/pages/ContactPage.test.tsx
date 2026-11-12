@@ -100,7 +100,7 @@ describe("ContactPage — the form as drawn", () => {
     expect(screen.getByText("Select Category")).toBeTruthy();
   });
 
-  it("the category dropdown lists the six options, in order", () => {
+  it("the category dropdown lists the seven options, in order, with Appeal a suspension last", () => {
     renderPage();
     fireEvent.click(categoryButton());
     const options = within(screen.getByRole("listbox", { name: "Category" })).getAllByRole("option");
@@ -111,6 +111,7 @@ describe("ContactPage — the form as drawn", () => {
       "Suggestions",
       "Enquiries",
       "Feedback",
+      "Appeal a suspension",
     ]);
   });
 
@@ -213,6 +214,71 @@ describe("ContactPage — validation", () => {
   });
 });
 
+describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", () => {
+  const HELPER = "Use the email address your Soccernity account is registered with so we can find it.";
+
+  it("is not shown before a category is chosen", () => {
+    renderPage();
+    expect(screen.queryByText(HELPER)).toBeNull();
+  });
+
+  it("appears under the message box, above Submit, only while Appeal a suspension is chosen", () => {
+    renderPage();
+    chooseCategory("Appeal a suspension");
+    const helper = screen.getByText(HELPER);
+    expect(helper).toBeTruthy();
+    // Placement: after the message box in document order, before the Submit button.
+    const submit = screen.getByRole("button", { name: "Submit" });
+    expect(messageField().compareDocumentPosition(helper) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(helper.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("disappears again when another category is chosen", () => {
+    renderPage();
+    chooseCategory("Appeal a suspension");
+    expect(screen.getByText(HELPER)).toBeTruthy();
+    chooseCategory("Feedback");
+    expect(screen.queryByText(HELPER)).toBeNull();
+    chooseCategory("Appeal a suspension");
+    expect(screen.getByText(HELPER)).toBeTruthy();
+  });
+
+  it("is not on any of the six other categories", () => {
+    for (const label of ["Technical issues", "Editorial Complaints", "Data", "Suggestions", "Enquiries", "Feedback"]) {
+      renderPage();
+      chooseCategory(label);
+      expect(screen.queryByText(HELPER), label).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("submits the suspension_appeal key with the other trimmed fields", async () => {
+    vi.mocked(submitContactEnquiry).mockResolvedValue(undefined);
+    renderPage();
+    fillValid();
+    chooseCategory("Appeal a suspension");
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await screen.findByText("Message sent");
+    expect(submitContactEnquiry).toHaveBeenCalledWith(
+      {
+        name: "Sam Guest",
+        email: "sam@example.com",
+        category: "suspension_appeal",
+        subject: "Live score not updating",
+        message: "The score stopped.",
+      },
+      null,
+    );
+  });
+
+  it("carries no literal tag in the rendered page (the tag is a code comment; no manifest row is added here)", () => {
+    renderPage();
+    chooseCategory("Appeal a suspension");
+    // Only the existing notice's chip is on the page.
+    expect(screen.getAllByText("[COPY PENDING LEGAL REVIEW]")).toHaveLength(1);
+  });
+});
+
 describe("ContactPage — submitting", () => {
   it("a guest submits trimmed values with no access token, then sees the success state", async () => {
     vi.mocked(submitContactEnquiry).mockResolvedValue(undefined);
@@ -246,6 +312,7 @@ describe("ContactPage — submitting", () => {
       ["Suggestions", "suggestions"],
       ["Enquiries", "enquiries"],
       ["Feedback", "feedback"],
+      ["Appeal a suspension", "suspension_appeal"],
     ];
     for (const [label, value] of expected) {
       vi.mocked(submitContactEnquiry).mockReset();

@@ -17,10 +17,12 @@ export const CONTACT_CATEGORIES = [
   "suggestions",
   "enquiries",
   "feedback",
+  "suspension_appeal",
 ] as const;
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 
-// The wording the Contact Us dropdown and the admin frames draw (the six of the Contact Category Dropdown).
+// The wording the Contact Us dropdown and the admin frames draw (the seven of the Contact Category Dropdown;
+// "Appeal a suspension" is the seventh, Decision Log #492, B-298, Figma pass V).
 export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: "Technical issues",
   editorial_complaints: "Editorial Complaints",
@@ -28,6 +30,7 @@ export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: "Suggestions",
   enquiries: "Enquiries",
   feedback: "Feedback",
+  suspension_appeal: "Appeal a suspension",
 };
 
 export function contactCategoryLabel(category: string): string {
