@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException, Optional } fr
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { ContestLifecycleService } from './contest-lifecycle.service';
 import { buildContestScheduleForKey, ContestWeekWindow, isWithinVotingWindow } from './contest-schedule.util';
@@ -68,6 +69,18 @@ export class ContestVotingService {
 
     try {
       await this.withRoundLocked(entry.roundId, async (tx) => {
+        // B-300 (Decision Log #488): an entry whose post a moderator removed cannot be voted on. Checked INSIDE
+        // the locked transaction: the removal reconcile takes this round row FOR UPDATE, so a vote either
+        // commits first (and the removal then frees it) or waits, then sees the removal here and is refused.
+        const stillThere = await tx.contestEntry.count({ where: { id: entryId, post: { is: POST_NOT_REMOVED } } });
+        if (stillThere === 0) {
+          throw new ConflictException({
+            statusCode: 409,
+            error: 'Conflict',
+            code: CONTEST_ENTRY_NOT_VOTABLE_CODE,
+            message: 'This entry cannot be voted on.',
+          });
+        }
         const existing = await tx.contestVote.findUnique({
           where: { roundId_voterId: { roundId: entry.roundId, voterId } },
         });
@@ -191,9 +204,11 @@ export class ContestVotingService {
   }
 
   private async stateFor(roundId: string, entryId: string, voterId: string): Promise<ContestVoteState> {
+    // A removed entry's votes are not counted and are not "the caller's vote" (B-300).
+    const live = { entry: { post: { is: POST_NOT_REMOVED } } };
     const [count, mine] = await Promise.all([
-      this.prisma.contestVote.count({ where: { entryId, voter: CONTEST_ELIGIBLE_USER } }),
-      this.prisma.contestVote.findUnique({ where: { roundId_voterId: { roundId, voterId } }, select: { entryId: true } }),
+      this.prisma.contestVote.count({ where: { entryId, voter: CONTEST_ELIGIBLE_USER, ...live } }),
+      this.prisma.contestVote.findFirst({ where: { roundId, voterId, ...live }, select: { entryId: true } }),
     ]);
     return {
       roundId,

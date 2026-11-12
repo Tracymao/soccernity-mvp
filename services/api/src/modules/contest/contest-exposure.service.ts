@@ -1,5 +1,5 @@
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
-import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
@@ -297,7 +297,8 @@ export class ContestExposureService {
     const completed = cycle.status === 'completed';
 
     const entries = await this.prisma.contestEntry.findMany({
-      where: { cycleId, round: { is: { weekNumber: 4 } } },
+      // B-300: a final entry a moderator removed is not part of the exposure distribution.
+      where: { cycleId, round: { is: { weekNumber: 4 } }, post: { is: POST_NOT_REMOVED } },
       select: {
         id: true,
         userId: true,

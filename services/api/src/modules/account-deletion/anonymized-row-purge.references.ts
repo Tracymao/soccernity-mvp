@@ -91,6 +91,7 @@ export const CONTENT_RELATIONS: readonly RelationKey[] = [
   'ContestVote.voter',
   'ContestEngagement.user',
   'ContestStanding.user', // CASCADE
+  'ContestFinalist.user', // CASCADE (B-300: the frozen finalist set)
   'PointsLedgerEntry.user', // CASCADE
   'PostMediaReport.reporter',
   // B-044: an admin legal / bad-faith hold is audit evidence of who held whom and why. It survives the

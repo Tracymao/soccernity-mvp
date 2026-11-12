@@ -102,6 +102,8 @@ export class ContestNotificationSweepService {
         startsAt: true,
         status: true,
         crownedAt: true,
+        finalistsFrozenAt: true,
+        finalists: { select: { userId: true } },
         rounds: {
           select: {
             id: true,
@@ -118,6 +120,8 @@ export class ContestNotificationSweepService {
       startsAt: c.startsAt,
       status: c.status,
       crownedAt: c.crownedAt,
+      // B-300: once the set is frozen it is the finalists, whatever the weekly podiums became afterwards.
+      ...(c.finalistsFrozenAt ? { finalistUserIds: [...new Set(c.finalists.map((f) => f.userId))] } : {}),
       rounds: c.rounds.map((r) => ({
         id: r.id,
         weekNumber: r.weekNumber,

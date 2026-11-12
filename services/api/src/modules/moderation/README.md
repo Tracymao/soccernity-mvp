@@ -475,7 +475,13 @@ section, which said none of them are enforced, is superseded for `content_remove
   `{ id, createdAt, removedByModeration: true }`. A removed message stays in the thread and in the conversation
   preview as `{ id, sentAt, removedByModeration: true }` (messaging/README.md).
 - The guardian notice for `content_removed` (B-279) still fires after commit, as before, and is now literally true.
-- **Not changed:** contest ranking and points (a removed entry is hidden from lists only), engagement points for
+- **Contest entries (B-300, Decision Log #488):** removing the post of a contest entry now also takes it out of the
+  contest (ranking, votes, podiums, points) in the same transaction, and an overturned appeal puts it all back.
+  `contest/README.md` ("Removed entries") has the rules; `contest/contest-entry-removal.util.ts` is the seam
+  (`onContestEntryPostRemoved` / `onContestEntryPostRestored`), called from `applyContentRemoval` /
+  `restoreContentRemoval`. `ModerationService` passes `APP_CLOCK` time to both so an injected test clock is honoured.
+  The baseline engagement points earned on a removed post are revoked too (`revokedForRemovalAt` marks exactly those).
+- **Not changed (older text; superseded for contest entries by the bullet above):** contest ranking and points (a removed entry is hidden from lists only), engagement points for
   likes and comments on removed content, the data export (it still lists a user's own removed posts, comments and sent
   messages, as stored), and `user_suspended` / `warning_issued` / holds / escalation.
 

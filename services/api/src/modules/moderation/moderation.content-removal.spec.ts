@@ -39,6 +39,7 @@ function build(reportRow: Record<string, unknown>) {
       findUnique: jest.fn().mockResolvedValue({ id: 'target-1', senderId: 'author-1' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
     user: { findUnique: jest.fn().mockResolvedValue({ id: 'author-1' }) },
     adminUser: { findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: true }) },
     notification: { create: jest.fn() },

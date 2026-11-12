@@ -36,6 +36,10 @@ Every boundary is **exclusive at its end, to the millisecond** (`contest-schedul
 | `contest-exposure.util.ts` | B-092: the impression thresholds, the London-day key, the seeded shuffle, the balanced-rotation ordering and the admin spread. Pure |
 | `contest-exposure.service.ts` | B-092: the Final-week carousel, the impression event, the admin distribution view |
 | `contest-read-model.service.ts` | The part of every response that is the same for users and admins |
+| `contest-derivation.ts` | B-300: THE ONE DERIVATION. The loaders that turn rows into the Phase 1 ranking, the weekly podium and the monthly crown; the lifecycle and the removal reconcile both call them, and every ranking leaves out an entry whose post a moderator removed |
+| `contest-removal.rules.ts` | B-300: the pure rules of a removal (backfill, forfeiture, returning freed votes, podium and prize diffs, the finalist set). No database, no clock |
+| `contest-entry-removal.util.ts` | B-300: the reconcile seam `content-removal.util.ts` calls in the removal's own transaction |
+| `contest-finalists.util.ts` | B-300: the finalist freeze (`ContestFinalist`, `ContestCycle.finalistsFrozenAt`) |
 
 ## Rules worth knowing
 
@@ -45,7 +49,28 @@ Every boundary is **exclusive at its end, to the millisecond** (`contest-schedul
 * **The final entry** (`Post.visibleFrom` / `Post.communityFeedFrom`): a 404 to everyone but its author until the reveal; engagement on it is refused (even the author's) with `403 contest_final_locked`; not in `GET /posts/feed` until the pin is removed. The post is created *inside* `POST /contest/final-entry`, so there is no window in which it is public.
 * **Idempotency**: every lifecycle step is a *claim* (a guarded `updateMany` on the status inside the transaction that does the work). Two sweeps, or a sweep and a late retry, cannot double-award. A late tick computes the same result as an on-time one: boundaries are calendar instants, never "now".
 * **Vote / entry vs the lock-time job**: both take a `FOR SHARE` lock on the round row; the job claims the round with an `UPDATE`, so it waits for in-flight writes and then sees them.
+* **A removed entry** (B-300) is out of every ranking and tally; see "Removed entries" below.
 * **Legacy cycles** (`monthKey` NULL, from the admin-judged model) are never touched by the lifecycle and cannot be edited.
+
+## Removed entries (B-300; Decision Log #488, extending #483)
+
+A moderator's `content_removed` on the post of a contest entry (soft, `Post.removedByModerationAt`) makes the contest treat the entry as removed. It is ONE seam: `applyContentRemoval` / `restoreContentRemoval` (modules/moderation) call `onContestEntryPostRemoved` / `onContestEntryPostRestored` in the SAME transaction, which DERIVES the desired state with the same loaders the lifecycle uses (removed entries filtered out) and writes only the difference, so the effect is idempotent and a lifecycle tick, a removal and a restore always agree. Lock order everywhere: the cycle row, then a round row (`FOR UPDATE`); the vote path takes the round `FOR SHARE` and refuses a removed entry inside that locked transaction, so a vote and a removal can never both win.
+
+| When the post is removed | What happens |
+|---|---|
+| Phase 1 still open | Nothing is stored yet. The end-of-Phase-1 ranking leaves the entry out: it counts toward neither the 10 nor the "fewer than 3 entries" test |
+| Voting, before the lock | The Phase 1 ranking is re-run over the remaining entries and the slate is **backfilled** to 10 (`qualified` is MONOTONE: removal never clears it, a restore never clears another entry's, so after a restore the slate can hold 11 or more). The entry's votes are **freed** (rows deleted, a `release` event in `ContestVoteEvent`), so those voters may vote again. If fewer than 3 eligible, non-removed entries remain the week is **forfeited** (`judgedAt` = the real instant of the removal) |
+| After the lock instant, lock job not yet run | Nothing is changed; the job derives the podium with removed entries left out |
+| After the lock (`judged`) | **No forfeiture.** The weekly podium is recomputed from the frozen tally without the entry; `ContestRoundWinner` rows and the placement points are rewritten. Everyone is paid for the place they end up in (a person who moves up gets the higher prize, one who no longer places has the ledger row revoked, never deleted). The `contest_win` notice goes only to a person who becomes a winner of that round for the first time (no placement-ledger row had ever existed for them) |
+| After the crown | The monthly podium is recomputed the same way: `ContestStanding`, `contest_monthly_crown` points, `ContestEntry.finalRank` / `finalTally` for the remaining entries, and `ContestCycle.noWinner` (true when nobody places). No notices |
+
+An **overturned appeal** (`restoreContentRemoval`) reverses all of it: the entry is ranked again; before the lock freed votes return (original `createdAt`) only for a voter whose latest event in the round is that `release` AND who holds no vote now, and a week forfeited by the removal is reinstated only before its lock instant; after the lock the podiums and prizes are recomputed again. The points the post earned (baseline engagement: the givers' and the author's) are revoked with it, stamped `PointsLedgerEntry.revokedForRemovalAt`, and a restore brings back exactly those rows (a row revoked for another reason is never restored; a row whose giver or author is no longer eligible stays revoked).
+
+**Finalists freeze.** From the instant Week 4 opens (`schedule.final.opensAt`) the finalist set is stored once (`ContestFinalist`, `ContestCycle.finalistsFrozenAt`, stamped with that calendar instant) under a lock on the cycle row, by whichever comes first: the lifecycle tick, a final-entry submission or a removal that is about to change a podium. From then on every reader (`ContestReadModel`, `POST /contest/final-entry`, the notification planner) uses the stored set: a person promoted to weekly winner afterwards gets the weekly points and notice but cannot enter the final, and a weekly winner who loses the win afterwards stays a finalist. Before the freeze the finalists are still derived from the weekly winners, so a changed podium corrects them by itself.
+
+**Reads.** `callerVote`, vote counts and the entry lists ignore removed entries; the admin cycle detail still lists the entry with `removedByModeration: true` and a vote count of 0; the admin exposure view excludes a removed final entry.
+
+**Hard delete changes nothing further.** The author may still `DELETE /posts/:id` on a removed entry's post: the removal's effects were already applied, and the cascade only drops the entry's own rows (`ContestEntry`, and through it `ContestVote`, `ContestEngagement`, `ContestImpression`, `ContestRoundWinner`). The report-retention sweep still keeps such a post (blocked, counted) and is unchanged.
 
 ## Admin form (spec 4, 4a)
 

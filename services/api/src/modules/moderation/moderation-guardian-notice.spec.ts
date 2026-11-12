@@ -37,6 +37,7 @@ function build() {
       findUnique: jest.fn().mockResolvedValue({ id: 'post-1', authorId: 'minor-1' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
     comment: { findUnique: jest.fn().mockResolvedValue({ id: 'c-1', authorId: 'minor-1' }) },
     user: { findUnique: jest.fn().mockResolvedValue({ id: 'minor-1', email: 'x@example.com', accountStatus: 'active' }) },
     banterRoom: { findUnique: jest.fn().mockResolvedValue({ id: 'room-1', createdBy: 'minor-1' }) },

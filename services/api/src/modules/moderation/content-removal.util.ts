@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { onContestEntryPostRemoved, onContestEntryPostRestored } from '../contest/contest-entry-removal.util';
 
 // backend/b289-content-removal (B-289, Decision Log #483). A moderator's `content_removed` is ENFORCED for exactly
 // three target types. It is a SOFT removal: the row, its text, its media and its engagement rows stay (evidence,
@@ -19,18 +20,9 @@ export const CONTENT_REMOVAL_NOT_APPLICABLE_CODE = 'content_removal_not_applicab
 /** What `actionReport` tells the admin about the removal it performed (key absent for every other action). */
 export type ContentRemovalOutcome = 'removed' | 'already_removed' | 'target_not_found';
 
-/**
- * Read fragment: a post a moderator has NOT removed. ANDed into every user-facing post read (feeds, search, saved
- * items, single post, comments, reactions, counts, contest lists, trending). One constant, so a new read path has
- * a single obvious thing to add.
- */
-export const POST_NOT_REMOVED: Prisma.PostWhereInput = { removedByModerationAt: null };
-
-/** Same for comments (used where a comment is counted or looked up for an action; the thread shows a stub). */
-export const COMMENT_NOT_REMOVED: Prisma.CommentWhereInput = { removedByModerationAt: null };
-
-/** Same for messages. */
-export const MESSAGE_NOT_REMOVED: Prisma.MessageWhereInput = { removedByModerationAt: null };
+// The three read fragments live in content-removal.filters.ts (no imports, so the contest removal seam below can
+// use them without an import cycle). Re-exported so every existing import from this file is unchanged.
+export { POST_NOT_REMOVED, COMMENT_NOT_REMOVED, MESSAGE_NOT_REMOVED } from './content-removal.filters';
 
 /** The text-less stand-in a client gets for a removed comment or message (no text, no author for a comment). */
 export const REMOVED_BY_MODERATION = true as const;
@@ -56,7 +48,12 @@ export async function applyContentRemoval(
   switch (report.targetType) {
     case 'post': {
       const claimed = await tx.post.updateMany({ where: { id: report.targetId, removedByModerationAt: null }, data: claim });
-      if (claimed.count === 1) return 'removed';
+      if (claimed.count === 1) {
+        // B-300 (Decision Log #488): if this post is a CONTEST ENTRY, the contest follows in the SAME transaction
+        // (ranking, votes, podiums, points). A post that is not an entry costs one indexed lookup.
+        await onContestEntryPostRemoved(tx, report.targetId, now);
+        return 'removed';
+      }
       const row = await tx.post.findUnique({ where: { id: report.targetId }, select: { id: true } });
       return row ? 'already_removed' : 'target_not_found';
     }
@@ -91,12 +88,19 @@ export async function applyContentRemoval(
  * report is the one that removed the target (another report's claim is never undone). Returns true if a row was
  * restored. A restored comment is counted again unless it is hidden.
  */
-export async function restoreContentRemoval(tx: Prisma.TransactionClient, report: ReportRef): Promise<boolean> {
+export async function restoreContentRemoval(
+  tx: Prisma.TransactionClient,
+  report: ReportRef,
+  now: Date = new Date(),
+): Promise<boolean> {
   const cleared = { removedByModerationAt: null, removedByReportId: null };
   switch (report.targetType) {
     case 'post': {
       const done = await tx.post.updateMany({ where: { id: report.targetId, removedByReportId: report.id }, data: cleared });
-      return done.count === 1;
+      if (done.count !== 1) return false;
+      // B-300: an overturned appeal brings a removed contest entry back with its points, in the same transaction.
+      await onContestEntryPostRestored(tx, report.targetId, now);
+      return true;
     }
     case 'message': {
       const done = await tx.message.updateMany({ where: { id: report.targetId, removedByReportId: report.id }, data: cleared });

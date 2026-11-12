@@ -2,12 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { Prisma, Report } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import { isAdminChildSafetyVetted } from './child-safety-vetting.util';
@@ -202,6 +204,9 @@ export class ModerationService {
     // overturned appeal of that report reinstates it. The one path the admin user page also uses.
     private readonly accountSuspension: AccountSuspensionService,
     @Optional() private readonly postMediaObjects?: PostMediaObjectsService,
+    // B-300: the contest effects of a removal / restore are dated by this clock (the real clock unless a test
+    // drives a fake one), because the contest calendar (lock instants, Week 4 opening) is compared against it.
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
   ) {}
 
   // -------------------------------------------------------------------
@@ -1051,7 +1056,7 @@ export class ModerationService {
       // B-289: the removal itself, in the SAME transaction as recording the action. Only the reported target is
       // touched; a context message attached to a message report never is.
       if (dto.action === 'content_removed') {
-        contentRemoval = await applyContentRemoval(tx, report, new Date());
+        contentRemoval = await applyContentRemoval(tx, report, this.clock.now());
       }
       // B-291: the suspension itself, in the SAME transaction as recording the action, so a failed report update
       // rolls the account status back too. Only the account behind the target is touched. The stored link to this
@@ -1191,7 +1196,7 @@ export class ModerationService {
         // B-289 (Decision Log #483): overturning an appeal on a content_removed report brings the content back,
         // in the same transaction, but only if THIS report is the one that removed it.
         if (report.actionTaken === 'content_removed') {
-          const restored = await restoreContentRemoval(tx, report);
+          const restored = await restoreContentRemoval(tx, report, this.clock.now());
           if (restored && report.targetType === 'post') restoredPostId = report.targetId;
         }
         // B-291 (Decision Log #485): overturning an appeal on a user_suspended report reinstates the account,
