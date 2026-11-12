@@ -72,6 +72,7 @@ export function actionLogErrorCode(body: unknown): string | null {
 export const ACTION_KINDS: { value: string; label: string }[] = [
   { value: "report.actioned", label: "Report actioned" },
   { value: "report.appeal_decided", label: "Appeal decided" },
+  { value: "report.appeal_recorded", label: "Appeal recorded" },
   { value: "report.escalated", label: "Report escalated" },
   { value: "admin_user.child_safety_vetting_updated", label: "Child-safety vetting changed" },
   { value: "user.status_updated", label: "User status changed" },
@@ -79,6 +80,7 @@ export const ACTION_KINDS: { value: string; label: string }[] = [
   { value: "user.dob_viewed", label: "Date of birth viewed" },
   { value: "user.dob_corrected", label: "Date of birth corrected" },
   { value: "user.username_revoked", label: "Username revoked" },
+  { value: "user.username_review_decided", label: "Username review decided" },
   { value: "user.guardian_notices_withheld", label: "Guardian notices withheld" },
   { value: "user.guardian_notices_cleared", label: "Guardian notices restored" },
   { value: "user.guardian_notices_reviewed", label: "Guardian notices reviewed" },

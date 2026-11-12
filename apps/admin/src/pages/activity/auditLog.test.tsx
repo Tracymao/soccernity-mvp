@@ -169,6 +169,48 @@ describe("Audit log (superadmin)", () => {
     expect(cells(3).slice(2)).toEqual(["Media rejected", "Media", "Media #dddd4444", "Off topic"]);
   });
 
+  it("an appeal recorded on someone's behalf and a username review decision read by label, with notes and links as stored", async () => {
+    list.mockResolvedValue(
+      page([
+        row({ id: "ar", action: "report.appeal_recorded", targetType: "report", targetId: "aaaa1111-0000", notes: "pending" }),
+        row({
+          id: "ud",
+          action: "user.username_review_decided",
+          targetType: "user",
+          targetId: "bbbb2222-0000",
+          notes: "decision=decline; username=adab; reason=Not enough detail.",
+        }),
+      ]),
+    );
+    renderPage();
+    await screen.findByRole("table");
+    const rows = screen.getAllByRole("row").slice(1);
+    const cells = (i: number) => within(rows[i]).getAllByRole("cell").map((c) => c.textContent);
+    // [time, actor, action, target type, target, notes]
+    expect(cells(0).slice(2)).toEqual(["Appeal recorded", "Report", "Report #aaaa1111", "pending"]);
+    expect(cells(1).slice(2)).toEqual([
+      "Username review decided",
+      "User",
+      "User #bbbb2222",
+      "decision=decline; username=adab; reason=Not enough detail.",
+    ]);
+    expect(within(rows[0]).getByRole("link").getAttribute("href")).toBe("/moderation/reports/aaaa1111-0000");
+    expect(within(rows[1]).getByRole("link").getAttribute("href")).toBe("/users/bbbb2222-0000");
+  });
+
+  it("the Action filter offers both new kinds and sends their key", async () => {
+    list.mockResolvedValue(page([row()]));
+    renderPage();
+    await screen.findByRole("table");
+    const select = screen.getByLabelText("Action kind") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => [o.value, o.textContent]);
+    expect(options).toContainEqual(["report.appeal_recorded", "Appeal recorded"]);
+    expect(options).toContainEqual(["user.username_review_decided", "Username review decided"]);
+    fireEvent.change(select, { target: { value: "report.appeal_recorded" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith({ limit: 20, action: "report.appeal_recorded" }));
+  });
+
   it("an action the app does not know is shown as its key, notes as stored, a missing note as a dash", async () => {
     list.mockResolvedValue(page([row({ action: "something.new", notes: null, targetType: "odd_type" })]));
     renderPage();
