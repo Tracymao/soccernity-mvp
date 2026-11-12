@@ -238,6 +238,16 @@
   color: var(--sn-brand-navy);
 }
 
+/* The helper and its tag chip (Figma pass V draws the chip beside the line; same stack as the notice below). */
+.contact-page__helper-block {
+  align-self: center;
+  max-width: 1030px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
 .contact-page__notice {
   align-self: center;
   max-width: 1030px;
