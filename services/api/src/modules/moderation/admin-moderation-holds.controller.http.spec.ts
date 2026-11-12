@@ -8,6 +8,7 @@ import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminModerationController } from './admin-moderation.controller';
 import { ModerationHoldsService } from './moderation-holds.service';
+import { CHILD_SAFETY_VETTING_REQUIRED_CODE } from './moderation.constants';
 import { ModerationService } from './moderation.service';
 
 // backend/w6-hold-admin-endpoints (B-045; Decision Log #376, #398 D1, #403 item 8). The three hold routes at the
@@ -15,6 +16,9 @@ import { ModerationService } from './moderation.service';
 // the REAL HoldService over a fake Prisma (the same shape hold.service.spec.ts uses). Only AdminJwtAuthGuard is
 // replaced, by a stand-in that refuses (401) when nobody is signed in, so "unauthenticated" is a real case here.
 // The real database constraints are proven in test/moderation-holds.e2e-spec.ts.
+// B-302 (Decision Log #498, #499): ModerationHoldsService reuses ModerationService.assertVettedToActOn. The stand-in
+// ModerationService below delegates THAT one method to a real ModerationService over the same fake Prisma, so the
+// message-thread rule (B-297) is exercised for real on the three hold routes; everything else on it stays a mock.
 
 const REASON = 'Evidence preserved for the regulator.';
 const HOLD_ROW = {
@@ -34,13 +38,14 @@ const HOLD_ROW = {
 function buildPrisma() {
   const prisma = {
     report: { findUnique: jest.fn() },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
     post: { findUnique: jest.fn() },
     comment: { findUnique: jest.fn() },
     banterRoom: { findUnique: jest.fn() },
     grassrootsTeam: { findUnique: jest.fn() },
     fixture: { findUnique: jest.fn() },
     adminUser: { findUnique: jest.fn() },
+    message: { findUnique: jest.fn() },
     accountHold: {
       findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn(),
@@ -60,12 +65,16 @@ describe('Admin hold routes (HTTP layer)', () => {
   let app: INestApplication;
   let prisma: ReturnType<typeof buildPrisma>;
   let currentAdmin: { sub: string; role: string; aud: string } | null;
-  const moderationService = { getReportById: jest.fn() };
+  const moderationService = { getReportById: jest.fn(), assertVettedToActOn: jest.fn() };
 
   const asModerator = () => (currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' });
 
   beforeEach(async () => {
     prisma = buildPrisma();
+    const realModeration = new ModerationService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    moderationService.assertVettedToActOn.mockImplementation((report: never, adminId: string) =>
+      realModeration.assertVettedToActOn(report, adminId),
+    );
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminModerationController],
       providers: [
@@ -410,6 +419,130 @@ describe('Admin hold routes (HTTP layer)', () => {
       prisma.report.findUnique.mockResolvedValue(null);
       await request(app.getHttpServer()).post('/admin/moderation/reports/nope/holds/legal').send({ reason: REASON }).expect(404);
       expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // B-302 (Decision Log #498, #499): the B-297 rule on the three hold routes. A MESSAGE report whose sender or any
+  // participant is under 18 needs a vetted admin even when the report itself is not flagged concernsMinor.
+  describe('child-safety vetting gate (a message report whose thread involves someone under 18)', () => {
+    const MESSAGE_ID = '11111111-1111-4111-8111-111111111111';
+
+    function seedMessageThread(minors: string[], participants = ['u-reporter', 'u-sender']) {
+      prisma.message.findUnique.mockResolvedValue({ senderId: 'u-sender', conversation: { participantIds: participants } });
+      prisma.user.findMany.mockResolvedValue(participants.map((id) => ({ id, isMinor: minors.includes(id) })));
+    }
+    function seedMessageReport(concernsMinor = false) {
+      seedReport({ targetType: 'message', targetId: MESSAGE_ID, concernsMinor });
+      prisma.accountHold.findUnique.mockImplementation(async ({ select }: { select?: unknown }) =>
+        select ? { id: 'hold-1', report: { concernsMinor, targetType: 'message', targetId: MESSAGE_ID } } : { ...HOLD_ROW },
+      );
+    }
+    function unvetted() {
+      prisma.adminUser.findUnique.mockResolvedValue({ childSafetyVetted: false });
+    }
+    function nothingWritten() {
+      expect(prisma.accountHold.create).not.toHaveBeenCalled();
+      expect(prisma.accountHold.updateMany).not.toHaveBeenCalled();
+      expect(prisma.adminActionLog.create).not.toHaveBeenCalled();
+    }
+    const okStatus = (method: 'post' | 'patch') => (method === 'post' ? 201 : 200);
+    // Placing a legal hold also reads the message once to find its sender; the VETTING lookup is the one that selects the conversation.
+    const threadLookups = () => prisma.message.findUnique.mock.calls.filter(([arg]: [{ select?: Record<string, unknown> }]) => arg.select && 'conversation' in arg.select).length;
+
+    it.each(routes)('$name: 403 for an unvetted admin when the sender is under 18, and nothing is written', async ({ method, url }) => {
+      seedMessageReport();
+      seedMessageThread(['u-sender']);
+      unvetted();
+      const res = await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(403);
+      expect(res.body.code).toBe(CHILD_SAFETY_VETTING_REQUIRED_CODE);
+      expect(res.body.message).toBe('This action requires a child-safety-vetted admin.');
+      nothingWritten();
+    });
+
+    it.each(routes)('$name: 403 for an unvetted admin when only the OTHER participant is under 18', async ({ method, url }) => {
+      seedMessageReport();
+      seedMessageThread(['u-reporter']);
+      unvetted();
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(403);
+      nothingWritten();
+    });
+
+    it.each(routes)('$name: an unvetted admin is allowed when everyone in the thread is an adult', async ({ method, url }) => {
+      seedMessageReport();
+      seedMessageThread([]);
+      unvetted();
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(okStatus(method));
+      expect(threadLookups()).toBe(1);
+    });
+
+    it.each(routes)('$name: a vetted admin is allowed on a child-involved thread and the thread is not looked up', async ({ method, url }) => {
+      seedMessageReport();
+      seedMessageThread(['u-sender']);
+      prisma.adminUser.findUnique.mockResolvedValue({ childSafetyVetted: true });
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(okStatus(method));
+      expect(threadLookups()).toBe(0);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each(routes)('$name: fails closed when the message row is gone (an unvetted admin is refused)', async ({ method, url }) => {
+      seedMessageReport();
+      prisma.message.findUnique.mockResolvedValue(null);
+      unvetted();
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(403);
+      nothingWritten();
+    });
+
+    it.each(routes)('$name: fails closed when a participant has no User row', async ({ method, url }) => {
+      seedMessageReport();
+      prisma.message.findUnique.mockResolvedValue({ senderId: 'u-sender', conversation: { participantIds: ['u-reporter', 'u-sender'] } });
+      prisma.user.findMany.mockResolvedValue([{ id: 'u-reporter', isMinor: false }]);
+      unvetted();
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(403);
+      nothingWritten();
+    });
+
+    it.each(routes)('$name: a non-message report that is not concernsMinor never looks at a thread or the vetting flag', async ({ method, url }) => {
+      seedReport({ targetType: 'post', concernsMinor: false });
+      prisma.accountHold.findUnique.mockImplementation(async ({ select }: { select?: unknown }) =>
+        select ? { id: 'hold-1', report: { concernsMinor: false, targetType: 'post', targetId: 'p1' } } : { ...HOLD_ROW },
+      );
+      await request(app.getHttpServer())[method](url).send({ reason: REASON }).expect(okStatus(method));
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+      expect(threadLookups()).toBe(0);
+    });
+
+    it('a concernsMinor message report still needs a vetted admin and does not read the thread', async () => {
+      seedMessageReport(true);
+      seedMessageThread([]);
+      unvetted();
+      await request(app.getHttpServer()).post('/admin/moderation/reports/r1/holds/legal').send({ reason: REASON }).expect(403);
+      expect(threadLookups()).toBe(0);
+      nothingWritten();
+    });
+
+    it('lift: 404 for a missing hold is settled before the gate', async () => {
+      prisma.accountHold.findUnique.mockResolvedValue(null);
+      unvetted();
+      const res = await request(app.getHttpServer()).patch('/admin/moderation/holds/nope/lift').send({ reason: REASON }).expect(404);
+      expect(res.body.code).toBe('hold_not_found');
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('lift: a hold whose report was purged (reportId NULL) may be lifted by an unvetted admin (Decision Log #499)', async () => {
+      prisma.accountHold.findUnique.mockImplementation(async ({ select }: { select?: unknown }) =>
+        select ? { id: 'hold-1', report: null } : { ...HOLD_ROW, reportId: null },
+      );
+      unvetted();
+      await request(app.getHttpServer()).patch('/admin/moderation/holds/hold-1/lift').send({ reason: REASON }).expect(200);
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+      expect(threadLookups()).toBe(0);
+    });
+
+    it('place: 404 for a missing report is settled before the gate', async () => {
+      prisma.report.findUnique.mockResolvedValue(null);
+      unvetted();
+      await request(app.getHttpServer()).post('/admin/moderation/reports/nope/holds/bad-faith').send({ reason: REASON }).expect(404);
+      expect(threadLookups()).toBe(0);
     });
   });
 });

@@ -1,9 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountHold } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { AccountHold, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HOLD_ERROR_CODES, HoldService } from '../account-hold/hold.service';
-import { isAdminChildSafetyVetted } from './child-safety-vetting.util';
-import { CHILD_SAFETY_VETTING_REQUIRED_CODE } from './moderation.constants';
+import { ModerationService } from './moderation.service';
 
 // backend/w6-hold-admin-endpoints (B-045; Decision Log #376, #398 D1, #403 item 8).
 //
@@ -12,8 +11,11 @@ import { CHILD_SAFETY_VETTING_REQUIRED_CODE } from './moderation.constants';
 // live in HoldService, and this class never creates a Notification or sends an email. What it adds is the
 // access shape of the moderation module:
 //   * 404 (the report / the hold does not exist) is settled FIRST;
-//   * then, if the report concerns a minor, the child-safety-vetting gate (a fresh read of
-//     AdminUser.childSafetyVetted, any role) -- the same 403 code actionReport and decideAppeal give;
+//   * then the child-safety-vetting gate, ModerationService.assertVettedToActOn (a fresh read of
+//     AdminUser.childSafetyVetted, any role) -- the same 403 code actionReport and decideAppeal give. Since B-302
+//     (Decision Log #498) that is the B-297 rule: a concernsMinor report, or a MESSAGE report whose sender or any
+//     participant is under 18 (fail closed), needs a vetted admin. A hold whose report was purged (reportId NULL)
+//     has nothing to vet against and any moderator may lift it (Decision Log #499);
 //   * only then is the hold touched.
 // Appeal Review reuses these routes as they are (#398 D1): they take a report id whatever its appeal state.
 
@@ -48,21 +50,15 @@ export class ModerationHoldsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly holdService: HoldService,
+    // B-302: the one implementation of the "vetted to act" rule (no second copy here).
+    private readonly moderationService: ModerationService,
   ) {}
 
-  private async assertVettedForMinorReport(concernsMinor: boolean, adminId: string): Promise<void> {
-    if (!concernsMinor) return;
-    if (await isAdminChildSafetyVetted(this.prisma, adminId)) return;
-    throw new ForbiddenException({
-      statusCode: 403,
-      error: 'Forbidden',
-      code: CHILD_SAFETY_VETTING_REQUIRED_CODE,
-      message: 'This action requires a child-safety-vetted admin.',
+  private async loadReportForGate(reportId: string): Promise<Pick<Report, 'concernsMinor' | 'targetType' | 'targetId'>> {
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+      select: { concernsMinor: true, targetType: true, targetId: true },
     });
-  }
-
-  private async loadReportForGate(reportId: string): Promise<{ concernsMinor: boolean }> {
-    const report = await this.prisma.report.findUnique({ where: { id: reportId }, select: { concernsMinor: true } });
     if (!report) throw new NotFoundException('Report not found');
     return report;
   }
@@ -70,7 +66,7 @@ export class ModerationHoldsService {
   /** POST /admin/moderation/reports/:id/holds/bad-faith -- hold the REPORTER's account for the bad-faith period. */
   async placeBadFaith(reportId: string, adminId: string, reason: string): Promise<{ holds: HoldView[] }> {
     const report = await this.loadReportForGate(reportId);
-    await this.assertVettedForMinorReport(report.concernsMinor, adminId);
+    await this.moderationService.assertVettedToActOn(report, adminId);
     const hold = await this.holdService.placeBadFaith(reportId, adminId, reason);
     return { holds: [toHoldView(hold)] };
   }
@@ -78,7 +74,7 @@ export class ModerationHoldsService {
   /** POST /admin/moderation/reports/:id/holds/legal -- hold every party of the report that has an account. */
   async placeLegal(reportId: string, adminId: string, reason: string): Promise<{ holds: HoldView[] }> {
     const report = await this.loadReportForGate(reportId);
-    await this.assertVettedForMinorReport(report.concernsMinor, adminId);
+    await this.moderationService.assertVettedToActOn(report, adminId);
     const holds = await this.holdService.placeLegalHold(reportId, adminId, reason);
     return { holds: holds.map(toHoldView) };
   }
@@ -87,12 +83,13 @@ export class ModerationHoldsService {
   async lift(holdId: string, adminId: string, reason: string): Promise<{ hold: HoldView }> {
     const existing = await this.prisma.accountHold.findUnique({
       where: { id: holdId },
-      select: { id: true, report: { select: { concernsMinor: true } } },
+      select: { id: true, report: { select: { concernsMinor: true, targetType: true, targetId: true } } },
     });
     if (!existing) {
       throw new NotFoundException({ statusCode: 404, code: HOLD_ERROR_CODES.HOLD_NOT_FOUND, message: 'Hold not found' });
     }
-    await this.assertVettedForMinorReport(existing.report?.concernsMinor ?? false, adminId);
+    // Decision Log #499: a hold whose report has been purged has no report to vet against, so the check is skipped.
+    if (existing.report) await this.moderationService.assertVettedToActOn(existing.report, adminId);
     const lifted = await this.holdService.liftHold(holdId, adminId, reason);
     return { hold: toHoldView(lifted) };
   }

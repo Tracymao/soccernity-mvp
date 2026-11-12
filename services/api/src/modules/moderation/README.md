@@ -770,10 +770,14 @@ shape. All three sit on `AdminModerationController`, so they are behind `AdminJw
   Detail (#398 D1). There is no separate route.
 * `HoldView` = `{ id, userId, type, reportId, placedBy (admin id), placedAt, expiresAt, liftedAt }`. Reasons and the
   lifting admin are not returned.
-* Order of checks: report (or hold) `404` → child-safety-vetting gate → the hold rules. A report that concerns a
-  minor needs a vetted admin (`403`, `code: child_safety_vetting_required`, the same as `PATCH reports/:id`, regardless
-  of role); a hold id is gated through the report it belongs to; a report that does not concern a minor never reads
-  `AdminUser`. A hold with no report has no gate.
+* Order of checks: report (or hold) `404` → child-safety-vetting gate → the hold rules. The gate is
+  `ModerationService.assertVettedToActOn` (B-297; since B-302, Decision Log #498): a report that concerns a minor, or a
+  MESSAGE report whose sender or any participant is under 18 (fail closed: a missing message row, or a participant with no
+  User row, counts as a minor), needs a vetted admin (`403`, `code: child_safety_vetting_required`, the same as
+  `PATCH reports/:id`, regardless of role). A vetted admin is never blocked and the thread is not looked up for them; a
+  report that is neither never reads `AdminUser` or the thread. A hold id is gated through the report it belongs to. The
+  refusal comes before anything is written (no `AccountHold` row created or lifted, no audit row). A hold with no report
+  (its report was purged, `reportId` NULL) has no gate: any moderator may lift it (Decision Log #499).
 * Coded errors: `404 hold_not_found`; `409` `hold_already_active`, `reporter_has_no_account`,
   `account_already_deleted`, `no_party_to_hold`, `hold_already_lifted`, `hold_expired`.
 * **Nobody is notified:** no `Notification` row and no email for either party. Each call writes one
@@ -901,7 +905,7 @@ was needed. The purge's own raw `Report` check also joins `Message.senderId` now
 covers user, post and comment targets). `apps/web` has no Report item on the other person's message yet (Figma frame
 A3 `6977:47201` draws it), and `apps/web`/`apps/admin` `ReportTargetType` types do not list `message` yet.
 
-**Vetting to act (`backend/b297-vetting-to-act-on-child-message-reports`, Decision Log #491, B-297).** Viewing stays as above, but ACTING now follows the same reading. `ModerationService.assertVettedToActOn(report, adminId)` (public, so the staff-recorded appeal of B-292 reuses it) is called by `actionReport` and `decideAppeal` after the 404 and before every status check, in place of their old `concernsMinor`-only gate: a `concernsMinor` report needs a vetted admin exactly as before; otherwise a `message` report needs one when `threadInvolvesMinor` is true (same fail-closed reading: no message row, or a participant with no User row, counts as a minor). The refusal is the same coded 403 `child_safety_vetting_required` with the same message. A vetted admin is never blocked and the thread is not looked up for them; a non-message report never looks it up. `getReportById` and `listReports` keep the `concernsMinor`-only gate, so an unvetted admin can still open such a report (context hidden) but cannot record an action or decide its appeal. `escalateReport` already requires vetting for every report. **Not covered, flagged:** the three hold routes (`POST .../holds/bad-faith`, `POST .../holds/legal`, `PATCH /admin/moderation/holds/:holdId/lift`, `ModerationHoldsService.assertVettedForMinorReport`) still gate on `concernsMinor` only, so an unvetted admin can place or lift a hold on a child-involved message report; left unchanged here.
+**Vetting to act (`backend/b297-vetting-to-act-on-child-message-reports`, Decision Log #491, B-297).** Viewing stays as above, but ACTING now follows the same reading. `ModerationService.assertVettedToActOn(report, adminId)` (public, so the staff-recorded appeal of B-292 reuses it) is called by `actionReport` and `decideAppeal` after the 404 and before every status check, in place of their old `concernsMinor`-only gate: a `concernsMinor` report needs a vetted admin exactly as before; otherwise a `message` report needs one when `threadInvolvesMinor` is true (same fail-closed reading: no message row, or a participant with no User row, counts as a minor). The refusal is the same coded 403 `child_safety_vetting_required` with the same message. A vetted admin is never blocked and the thread is not looked up for them; a non-message report never looks it up. `getReportById` and `listReports` keep the `concernsMinor`-only gate, so an unvetted admin can still open such a report (context hidden) but cannot record an action or decide its appeal. `escalateReport` already requires vetting for every report. **Hold routes (`backend/b302-vetting-on-hold-routes`, Decision Log #498, #499, B-302):** the three hold routes (`POST .../holds/bad-faith`, `POST .../holds/legal`, `PATCH /admin/moderation/holds/:holdId/lift`) now use this same method instead of their old `concernsMinor`-only check (`ModerationHoldsService` is given `ModerationService`; the old `assertVettedForMinorReport` is removed). Viewing, including the `holds` list on the report detail response, is unchanged (#486). **Left as it is, flagged:** the Report detail response still lists a child-involved message report's active holds to an unvetted admin, who now gets the restricted answer if they try to lift one.
 
 ## Recording `user_suspended` suspends the account (B-291, Decision Log #485)
 
