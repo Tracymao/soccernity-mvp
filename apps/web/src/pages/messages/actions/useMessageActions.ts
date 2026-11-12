@@ -70,11 +70,14 @@ export function useMessageActions({
   const [changeTick, setChangeTick] = useState(0);
 
   // The server refused an edit or delete with message_removed: a moderator removed it since the page loaded.
-  // Show the stub the next load would show, and close whatever was open for it.
+  // Show the stub the next load would show, and close whatever was open for it. Only the sender is
+  // refused with message_removed (the recipient may still delete for themselves), so it is the viewer's.
   const markRemoved = useCallback(
     (id: string) => {
       setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { id: m.id, sentAt: m.sentAt, removedByModeration: true as const } : m)),
+        prev.map((m) =>
+          m.id === id ? { id: m.id, sentAt: m.sentAt, removedByModeration: true as const, isMine: true } : m,
+        ),
       );
       setEdit((e) => (e && e.id === id ? null : e));
       setDel((d) => (d && d.id === id ? null : d));

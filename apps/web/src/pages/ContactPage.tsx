@@ -46,8 +46,9 @@ import { useIsMobile } from "../layout/useIsMobile";
 import chevronDown from "../assets/contact/contact-chevron-down.svg";
 import "./ContactPage.css";
 
-// The six categories and labels of the Figma "Contact Category Dropdown" (6130:14653 desktop /
-// 6130:14664 mobile), as drawn (founder decision 2026-10-30, recorded in the Decision Log).
+// The seven categories and labels of the Figma "Contact Category Dropdown" (6130:14653 desktop /
+// 6130:14664 mobile), as drawn: the six of the founder decision of 2026-10-30, plus "Appeal a suspension"
+// as the last (Decision Log #492, B-298, Figma pass V). The label is a label, not tagged (pass V report).
 const CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: "Technical issues",
   editorial_complaints: "Editorial Complaints",
@@ -55,7 +56,16 @@ const CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: "Suggestions",
   enquiries: "Enquiries",
   feedback: "Feedback",
+  suspension_appeal: "Appeal a suspension",
 };
+
+// The helper line under the message box, shown ONLY while "Appeal a suspension" is chosen (Figma pass V,
+// docs/figma-pass-v-report.md section 3, frames 7050:63556 / 7050:63739 / 7050:64028 / 7050:64123).
+// [COPY PENDING LEGAL REVIEW] -- new user-facing wording about how a suspension is looked up. It is tagged
+// here in a comment, NOT as a literal tag in the string, on instruction: a literal tag would need a row in
+// docs/pending-copy-manifest.md (which this PR does not edit), and the Figma frames' visible "Copy Tag" chip
+// is therefore not rendered. The tag and the manifest row come with counsel's review.
+const APPEAL_HELPER = "Use the email address your Soccernity account is registered with so we can find it.";
 
 const ERROR_NAME = "Enter your name.";
 const ERROR_EMAIL = "Enter a valid email address.";
@@ -304,6 +314,8 @@ export default function ContactPage() {
               {errors.message && <FieldError id="contact-message-error" text={errors.message} />}
             </div>
 
+            {category === "suspension_appeal" && <p className="contact-page__helper">{APPEAL_HELPER}</p>}
+
             {formAlert && (
               <p className="contact-page__alert" role="alert">
                 {formAlert === "rate_limited" ? ALERT_RATE_LIMITED : ALERT_SERVER_ERROR}
@@ -378,7 +390,7 @@ function TextField(props: {
 }
 
 // The Figma "Contact Category Dropdown": a closed field showing the placeholder or the chosen label, a
-// chevron, and an open list of the six options. Built as a button + listbox (not a native <select>) so the
+// chevron, and an open list of the seven options. Built as a button + listbox (not a native <select>) so the
 // open list matches the component; keyboard: Enter / Space / ArrowDown open, arrows move, Enter chooses,
 // Escape and a click outside close.
 function CategorySelect(props: {

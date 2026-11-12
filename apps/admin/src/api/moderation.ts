@@ -62,11 +62,24 @@ export function canRemoveContent(targetType: string): boolean {
   return (CONTENT_REMOVABLE_TARGET_TYPES as readonly string[]).includes(targetType);
 }
 
+// B-291 (Decision Log #485): "Suspend User" really suspends the account behind the report, and is offered for exactly
+// these four target types (a user, or the author / sender of a post, a comment or a message). On any other target the
+// server answers 400 with USER_SUSPENSION_NOT_APPLICABLE_CODE. Mirrors services/api moderation.constants.ts's
+// USER_SUSPENSION_TARGET_TYPES / isUserSuspensionTarget; the page never decides anything else, the server is the
+// authority.
+export const USER_SUSPENSION_TARGET_TYPES = ["user", "post", "comment", "message"] as const;
+export const USER_SUSPENSION_NOT_APPLICABLE_CODE = "user_suspension_not_applicable";
+
+export function isUserSuspensionTarget(targetType: string): boolean {
+  return (USER_SUSPENSION_TARGET_TYPES as readonly string[]).includes(targetType);
+}
+
 // The actions the Take action row offers for a report of this target type.
 export function actionsForTarget(targetType: string): ReportAction[] {
   return REPORT_ACTIONS.filter((action) => {
     if (action === "room_deactivated") return targetType === "banter_room";
     if (action === "content_removed") return canRemoveContent(targetType);
+    if (action === "user_suspended") return isUserSuspensionTarget(targetType);
     return true;
   });
 }
@@ -214,6 +227,9 @@ export interface Report {
   actionTaken: string | null; // one of REPORT_ACTIONS, or null
 
   appealStatus: string | null; // null | "pending" | "upheld" | "overturned"
+  // B-292 (Decision Log #485 (f), #492): true when staff recorded the appeal on the reported person's behalf (a
+  // suspended person cannot sign in). The server sets it on every report row it returns; absent on an older server.
+  appealRecordedByStaff?: boolean;
   appealReason: string | null;
   appealedAt: string | null;
   appealReviewedByAdminId: string | null;
@@ -249,6 +265,10 @@ export interface Report {
   // B-286: on the same read, the messages the reporter added as context, oldest first (empty when none).
   // Absent on the queue rows and on every other kind of report.
   contextMessages?: ReportContextMessage[];
+  // B-293 (Decision Log #486): true when the reported sender or any participant of the chat is under 18 and the
+  // admin is not child-safety vetted. The server then returns no context messages and no original text of an edited
+  // message; this only says why. Present only on the single-report read of a message report.
+  contextHidden?: boolean;
 }
 
 // The one message behind a "message" report (services/api ReportedMessageView). contentText is what is
@@ -342,6 +362,25 @@ export function decideAppeal(id: string, decision: AppealDecision): Promise<Repo
   return adminFetch<Report>(`/admin/moderation/reports/${id}/appeal`, {
     method: "PATCH",
     body: { decision },
+  });
+}
+
+// B-292 (Decision Log #485 (f), #492): the reason bound for a recorded appeal (services/api AppealReportDto: 1 to
+// 500 characters). Stable codes of the refusals the dialog tells apart, never by message text.
+export const APPEAL_REASON_MAX_LENGTH = 500;
+export const APPEAL_WINDOW_CLOSED_CODE = "appeal_window_closed";
+export const STAFF_APPEAL_NOT_APPLICABLE_CODE = "staff_appeal_not_applicable";
+export const REPORTED_ACCOUNT_UNAVAILABLE_CODE = "reported_account_unavailable";
+export const APPEAL_RECORDER_CANNOT_DECIDE_CODE = "appeal_recorder_cannot_decide";
+
+// POST /admin/moderation/reports/:id/appeal -- staff record an appeal on the reported person's behalf. Only for a
+// report whose action was user_suspended and that has no appeal yet, and only inside the appeal window (403
+// appeal_window_closed, with the server's own message). Same vetting gate as acting on the report (403
+// child_safety_vetting_required). Returns the updated report (appealStatus "pending", appealRecordedByStaff true).
+export function recordAppeal(id: string, reason: string): Promise<Report> {
+  return adminFetch<Report>(`/admin/moderation/reports/${id}/appeal`, {
+    method: "POST",
+    body: { reason },
   });
 }
 

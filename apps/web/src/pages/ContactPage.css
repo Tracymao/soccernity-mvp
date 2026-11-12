@@ -227,6 +227,17 @@
   cursor: default;
 }
 
+/* Appeal-a-suspension helper line (Figma pass V): centred under the message box, above Submit, the notice's
+   type pattern in the navy the pass V contrast table measures (11.42:1 on the form wash). */
+.contact-page__helper {
+  align-self: center;
+  max-width: 1030px;
+  margin: 0;
+  text-align: center;
+  font: 500 16px/normal "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
 .contact-page__notice {
   align-self: center;
   max-width: 1030px;
@@ -380,7 +391,8 @@
     font-size: 12px;
   }
 
-  .contact-page__notice-text {
+  .contact-page__notice-text,
+  .contact-page__helper {
     font-size: 11px;
   }
 

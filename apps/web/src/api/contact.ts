@@ -8,7 +8,8 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 // The stored values (services/api contact.constants.ts CONTACT_CATEGORIES), in the order the Figma
-// "Contact Category Dropdown" draws them. The six keys are the server's; the labels are the dropdown's.
+// "Contact Category Dropdown" draws them. The seven keys are the server's; the labels are the dropdown's.
+// suspension_appeal is the seventh and last (Decision Log #492, B-298, Figma pass V).
 export const CONTACT_CATEGORIES = [
   "technical_issues",
   "editorial_complaints",
@@ -16,6 +17,7 @@ export const CONTACT_CATEGORIES = [
   "suggestions",
   "enquiries",
   "feedback",
+  "suspension_appeal",
 ] as const;
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 

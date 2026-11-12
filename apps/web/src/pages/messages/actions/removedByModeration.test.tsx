@@ -310,3 +310,73 @@ describe("the conversation list preview of a removed last message", () => {
     expect(screen.getAllByText(REMOVED_LABEL, { exact: false }).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// B-295 (Decision Log #489): the stub carries isMine, so it sits on the viewer's side of the thread.
+describe.each([
+  { ...mobilePage, sideOf: (el: HTMLElement) => el.closest(".conversation-bubble--removed") as HTMLElement, mineClass: "conversation-bubble--removed-mine" },
+  { ...popUp, sideOf: (el: HTMLElement) => el.closest(".chat-message") as HTMLElement, mineClass: "chat-message--mine" },
+])("which side a removed message sits on, $name", (surface) => {
+  it("sits on the right when isMine is true", async () => {
+    serve([BEFORE, { ...REMOVED, isMine: true }, AFTER]);
+    await surface.open("After the removed one");
+    expect(surface.sideOf(removedPlaceholders()[0]).classList.contains(surface.mineClass)).toBe(true);
+  });
+
+  it("sits on the left when isMine is false", async () => {
+    serve([BEFORE, { ...REMOVED, isMine: false }, AFTER]);
+    await surface.open("After the removed one");
+    expect(surface.sideOf(removedPlaceholders()[0]).classList.contains(surface.mineClass)).toBe(false);
+  });
+
+  it("an older stub with no isMine is treated as the other person's and does not crash", async () => {
+    serve([BEFORE, REMOVED, AFTER]);
+    await surface.open("After the removed one");
+    expect(removedPlaceholders()).toHaveLength(1);
+    expect(surface.sideOf(removedPlaceholders()[0]).classList.contains(surface.mineClass)).toBe(false);
+  });
+
+  it("two removed messages on opposite sides each keep their own side", async () => {
+    serve([
+      { ...REMOVED, id: "r-theirs", sentAt: ago(10), isMine: false },
+      { ...REMOVED, id: "r-mine", sentAt: ago(5), isMine: true },
+    ]);
+    await surface.open(REMOVED_LABEL);
+    const sides = removedPlaceholders().map((p) => surface.sideOf(p).classList.contains(surface.mineClass));
+    expect(sides).toEqual([false, true]);
+  });
+
+  it("a message of mine refused with message_removed lands on the right", async () => {
+    serve([BEFORE, MINE_RECENT]);
+    await surface.open("My recent message");
+    const host = screen.getByText("My recent message").closest(".msg-host") as HTMLElement;
+    fireEvent.click(within(host).getByRole("button", { name: "Message options" }));
+    fireEvent.click(within(screen.getByRole("menu", { name: "Message actions" })).getByRole("menuitem", { name: /Edit/ }));
+    vi.mocked(editMessage).mockRejectedValueOnce(
+      new MessagingApiError("This message was removed", { status: 409, code: "message_removed" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit message text" }), { target: { value: "Changed my mind" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(removedPlaceholders()).toHaveLength(1));
+    expect(surface.sideOf(removedPlaceholders()[0]).classList.contains(surface.mineClass)).toBe(true);
+  });
+});
+
+describe("the conversation list preview of a removed last message is unchanged by isMine", () => {
+  it.each([true, false, undefined])("keeps the removed wording and no 'You:' prefix (isMine %s)", async (isMine) => {
+    seedSession(TOKEN);
+    vi.mocked(listConversations).mockResolvedValue({
+      items: [conversation({ id: "m-removed", sentAt: ago(10), removedByModeration: true as const, isMine })],
+      nextCursor: null,
+    });
+    render(
+      <MemoryRouter initialEntries={["/messages"]}>
+        <Routes>
+          <Route path="/messages" element={<MessagesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Matthew Amuloko");
+    expect(screen.getByText(REMOVED_MESSAGE_TEXT)).toBeTruthy();
+    expect(screen.queryByText(/You:/)).toBeNull();
+  });
+});

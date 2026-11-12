@@ -28,9 +28,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
-import { getUserSummary, revokeUsername, type AdminUserSummary } from "../../api/adminUsers";
+import { getUserSummary, revokeUsername, updateUserStatus, type AdminUserSummary } from "../../api/adminUsers";
 import { useOptionalAdminAuth } from "../../auth/AdminAuthContext";
 import { useDialogFocus } from "../moderation/HoldDialog";
+import SuspendAccountDialog from "../moderation/SuspendAccountDialog";
 import { VettingRestrictedNotice } from "../moderation/moderationShared";
 import GuardianNoticesSection from "./GuardianNoticesSection";
 import * as noticesCopy from "./guardianNoticesCopy";
@@ -183,6 +184,9 @@ export default function UserDetailPage() {
   const { data: user, loading, error, reload } = useAsyncData(() => getUserSummary(id), [id]);
   const [revoking, setRevoking] = useState(false);
   const [revoked, setRevoked] = useState(false);
+  // B-295 (Figma 7045:63053 to 7045:63452): the Suspend account row and its dialog.
+  const [suspending, setSuspending] = useState(false);
+  const [suspended, setSuspended] = useState(false);
 
   // B-282: the Guardian notices section is for a child-safety-vetted admin only. That state can change while a
   // session is open, so the admin's own profile is re-read when this screen opens, and the section waits for it.
@@ -218,6 +222,15 @@ export default function UserDetailPage() {
   }
 
   const hasUsername = Boolean(user?.username);
+
+  // PATCH /admin/users/:id { status: "suspended", reasonCategory }: the API refuses a suspension with no category.
+  async function confirmSuspend(reasonCategory?: string) {
+    if (!user) return;
+    await updateUserStatus(user.id, "suspended", reasonCategory);
+    setSuspending(false);
+    setSuspended(true);
+    reload();
+  }
 
   function handleRevoked() {
     setRevoking(false);
@@ -258,6 +271,12 @@ export default function UserDetailPage() {
         {revoked ? (
           <p className="ud-callout" role="status">
             Username revoked. The action was recorded. The username is held for 30 days.
+          </p>
+        ) : null}
+
+        {suspended ? (
+          <p className="ud-callout" role="status">
+            Account suspended. The account can no longer sign in and has been emailed.
           </p>
         ) : null}
 
@@ -322,7 +341,29 @@ export default function UserDetailPage() {
               <h2 className="us-card__title" id="ud-actions">
                 Support actions
               </h2>
-              <div className="ud-action">
+              {/* B-295: only an account that is neither suspended nor already removed can be suspended here. */}
+              {user.accountStatus !== "deleted" ? (
+                <div className="ud-action">
+                  <div>
+                    <p className="ud-action__title">Account</p>
+                    <p className="ud-action__body">
+                      {user.accountStatus === "suspended"
+                        ? "This account is suspended."
+                        : "Suspend this account. A reason category is required."}
+                    </p>
+                  </div>
+                  {user.accountStatus === "suspended" ? null : (
+                    <button
+                      type="button"
+                      className="us-btn us-btn--outline us-btn--lg"
+                      onClick={() => setSuspending(true)}
+                    >
+                      Suspend account
+                    </button>
+                  )}
+                </div>
+              ) : null}
+              <div className="ud-action ud-action--divided">
                 <div>
                   <p className="ud-action__title">Username</p>
                   <p className="ud-action__body">
@@ -363,6 +404,15 @@ export default function UserDetailPage() {
       </div>
 
       {restrictedTitle ? <RestrictedDialog title={restrictedTitle} onClose={() => setRestrictedTitle(null)} /> : null}
+
+      {user && suspending ? (
+        <SuspendAccountDialog
+          mode="user"
+          lead={`Suspend the account of ${user.displayName}? If you continue:`}
+          onSubmit={confirmSuspend}
+          onClose={() => setSuspending(false)}
+        />
+      ) : null}
 
       {user && revoking ? (
         <RevokeUsernameDialog user={user} onClose={() => setRevoking(false)} onRevoked={handleRevoked} />

@@ -301,11 +301,19 @@ export default function ConversationPage() {
         )}
 
         {messages.map((m) => {
-          // B-289: a message a moderator removed is the same stub for both people, with no sender, so it is
-          // drawn neutrally (left) and carries no menu, no time line, no edit or delete and no report.
+          // B-289: a message a moderator removed is the same stub for both people and carries no menu, no
+          // time line, no edit or delete and no report. B-295: it sits on the right when the viewer sent
+          // it (isMine) and on the left otherwise, including an older stub that has no isMine.
           if (isRemovedMessage(m)) {
             return (
-              <div key={m.id} className="conversation-bubble--removed">
+              <div
+                key={m.id}
+                className={
+                  m.isMine === true
+                    ? "conversation-bubble--removed conversation-bubble--removed-mine"
+                    : "conversation-bubble--removed"
+                }
+              >
                 <RemovedPlaceholder text={REMOVED_MESSAGE_TEXT} variant="bubble" meta={timeFor(m.sentAt)} />
               </div>
             );
