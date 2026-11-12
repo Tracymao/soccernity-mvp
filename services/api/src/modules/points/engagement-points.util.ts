@@ -262,6 +262,63 @@ export async function revokeEngagementPointsForPost(db: RevokeDb, postId: string
   return result.count;
 }
 
+// ---- contest-entry removal (B-300, Decision Log #488) -----------------------------------------------------------
+
+/**
+ * A moderator removed a CONTEST ENTRY's post: revokes every baseline row earned on it, exactly as
+ * revokeEngagementPointsForPost does, but ALSO stamps `revokedForRemovalAt` on the rows it revokes (only those
+ * that were not already revoked), so an overturned appeal can bring back exactly these rows and never one that
+ * was revoked for another reason (an unlike, a removed comment, a restricted account).
+ */
+export async function revokeEngagementPointsForRemoval(db: RevokeDb, postId: string, now: Date): Promise<number> {
+  const result = await db.pointsLedgerEntry.updateMany({
+    where: { postId, source: { in: [...BASELINE_ENGAGEMENT_SOURCES] }, revokedAt: null },
+    data: { revokedAt: now, revokedForRemovalAt: now },
+  });
+  return result.count;
+}
+
+const RESTORE_CHUNK = 1000;
+
+/**
+ * The removal was overturned: clears `revokedAt` and the marker on exactly the rows the removal revoked.
+ * A row is skipped (left revoked) when an account it needs is no longer eligible: a GIVEN row needs its giver
+ * (`userId`); a RECEIVED row needs its author (`userId`) AND its giver (`counterpartId`) -- the same rules
+ * awardEngagementPoints applies. DEFAULT, founder-veto-able: a restored row keeps its original `occurredAt` and
+ * is not re-checked against the daily caps (it was earned within them). Returns how many rows came back.
+ */
+export async function restoreEngagementPointsForRemoval(
+  db: Pick<Prisma.TransactionClient, 'pointsLedgerEntry' | 'user'>,
+  postId: string,
+): Promise<number> {
+  const rows = await db.pointsLedgerEntry.findMany({
+    where: { postId, source: { in: [...BASELINE_ENGAGEMENT_SOURCES] }, revokedForRemovalAt: { not: null }, revokedAt: { not: null } },
+    select: { id: true, userId: true, counterpartId: true, source: true },
+  });
+  if (rows.length === 0) return 0;
+  const userIds = new Set<string>();
+  for (const r of rows) {
+    userIds.add(r.userId);
+    if (r.counterpartId) userIds.add(r.counterpartId);
+  }
+  const eligible = new Set(
+    (await db.user.findMany({ where: { id: { in: [...userIds] }, ...CONTEST_ELIGIBLE_USER }, select: { id: true } })).map(
+      (u) => u.id,
+    ),
+  );
+  const restorable = rows.filter((r) => eligible.has(r.userId) && (!r.counterpartId || eligible.has(r.counterpartId)));
+  let restored = 0;
+  for (let i = 0; i < restorable.length; i += RESTORE_CHUNK) {
+    const ids = restorable.slice(i, i + RESTORE_CHUNK).map((r) => r.id);
+    const done = await db.pointsLedgerEntry.updateMany({
+      where: { id: { in: ids }, revokedForRemovalAt: { not: null } },
+      data: { revokedAt: null, revokedForRemovalAt: null },
+    });
+    restored += done.count;
+  }
+  return restored;
+}
+
 /**
  * The account was later restricted (consent refused or withdrawn, suspended): everything it earned, and
  * everything it earned OTHER accounts by engaging with them, is revoked. Placement prizes are not

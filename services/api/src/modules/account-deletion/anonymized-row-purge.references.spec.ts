@@ -58,6 +58,7 @@ describe('purge reference classification', () => {
         'CommunityGroup.createdBy',
         'CommunityGroupMember.user',
         'ContestEntry.user',
+        'ContestFinalist.user',
         'ContestRoundWinner.user',
         'ContestStanding.user',
         'EmailChangeRequest.user',

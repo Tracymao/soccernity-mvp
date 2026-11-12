@@ -292,6 +292,8 @@ export interface AdminContestEntry {
   finalTally: number | null;
   finalRank: number | null;
   position: number | null;
+  /** True when a moderator removed the entry's post (B-300): it is out of every ranking and tally. */
+  removedByModeration: boolean;
 }
 
 // For an admin, `task` is never hidden: they see a week that has not opened and the final's.

@@ -1,5 +1,5 @@
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
-import { POST_NOT_REMOVED } from '../moderation/content-removal.util';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,6 +7,7 @@ import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { groupEngagementRows } from './contest-engagement.util';
 import { EngagementEvent, rankFinal } from './contest-ranking.util';
+import { FORFEIT_REASON_TOO_FEW_ENTRIES, resolveFinalistUserIds } from './contest-removal.rules';
 import {
   buildContestScheduleForKey,
   ContestCalendarState,
@@ -38,7 +39,8 @@ export const WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER = 'Entry withdrawn — guardian
 export type ContestViewer = 'public' | 'admin';
 
 /** A short, factual reason, shown with the forfeit pop-up (spec section 7). [COPY PENDING LEGAL REVIEW: reaches minors.] */
-export const FORFEIT_REASON_TOO_FEW_ENTRIES = 'Fewer than 3 entries were submitted for this week.';
+// Defined in contest-removal.rules.ts (a leaf module) so the removal seam can use it without an import cycle.
+export { FORFEIT_REASON_TOO_FEW_ENTRIES };
 
 export const CYCLE_GRAPH_INCLUDE = {
   rounds: {
@@ -53,6 +55,8 @@ export const CYCLE_GRAPH_INCLUDE = {
     },
   },
   standings: { include: { user: { select: PUBLIC_NAME_SELECT } } },
+  // B-300: the frozen finalist set (used once Week 4 has opened).
+  finalists: { select: { userId: true } },
 } satisfies Prisma.ContestCycleInclude;
 
 export type CycleGraph = Prisma.ContestCycleGetPayload<{ include: typeof CYCLE_GRAPH_INCLUDE }>;
@@ -96,9 +100,8 @@ export class ContestReadModel {
     const decided = weekly.filter((r) => r.status === 'judged').length;
     const allWeeklyJudged = weekly.length === 3 && decided === 3;
 
-    const finalistUserIds = allWeeklyJudged
-      ? [...new Set(weekly.flatMap((r) => [...r.winners].sort((a, b) => a.position - b.position).map((w) => w.userId)))]
-      : [];
+    // B-300: the stored finalist set once Week 4 has opened, the derived one (distinct weekly winners) before.
+    const finalistUserIds = resolveFinalistUserIds(cycle);
 
     const calendarState = schedule
       ? deriveCalendarState(

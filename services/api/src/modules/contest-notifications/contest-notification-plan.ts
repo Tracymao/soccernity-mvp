@@ -59,6 +59,8 @@ export interface PlannerCycle {
   status: string; // active | final | completed
   crownedAt: Date | null;
   rounds: PlannerRound[];
+  /** B-300: the FROZEN finalist set (from the instant Week 4 opens). When present it is the finalists; when absent they are derived from the weekly winners. */
+  finalistUserIds?: string[];
 }
 
 export type NotificationAudience =
@@ -107,7 +109,7 @@ function planCycle(cycle: PlannerCycle): PlannedNotification[] {
   // "known" once week 3 has been judged (spec table row d: ASSUMED at the week-3 result), so
   // every final-week event keys off that, and a month with no weekly winners has no final.
   const week3 = roundByWeek.get(3);
-  const finalistIds = [...new Set(cycle.rounds.flatMap((r) => r.winnerUserIds))];
+  const finalistIds = cycle.finalistUserIds ?? [...new Set(cycle.rounds.flatMap((r) => r.winnerUserIds))];
   const finalistsKnown = week3?.status === 'judged' && finalistIds.length > 0;
 
   const out: PlannedNotification[] = [];

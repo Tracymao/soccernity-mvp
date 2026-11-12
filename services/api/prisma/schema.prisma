@@ -391,6 +391,7 @@ model User {
   contestRoundWins   ContestRoundWinner[]
   contestVotes       ContestVote[]
   contestStandings   ContestStanding[]
+  contestFinalists   ContestFinalist[]
   // backend/w7-contest (B-091): the engagement this account GAVE to contest entries.
   contestEngagements ContestEngagement[]
   // backend/w11-exposure (B-092): the Final-week carousel impressions this account generated as a VIEWER.
@@ -2437,6 +2438,12 @@ model ContestCycle {
   finalistsSelectedAt      DateTime?
   revealedAt               DateTime?
   pinsRemovedAt            DateTime?
+  // backend/b300-contest-entry-removal (Decision Log #488): the instant the FINALIST SET was frozen, taken
+  // at the first moment it is needed at or after Week 4 opens (schedule.final.opensAt). From then on the
+  // finalists are the ContestFinalist rows, no longer the distinct current weekly winners: a person promoted
+  // to weekly winner afterwards cannot enter the final, and a weekly winner who loses the win stays a
+  // finalist. NULL = not frozen yet, finalists are derived from ContestRoundWinner.
+  finalistsFrozenAt        DateTime?
   // true when the month ended with no final (no finalist) or with no finalist reaching the minimum
   // tally: the leaderboard shows "No winner this month" / no final.
   noWinner                 Boolean   @default(false)
@@ -2444,6 +2451,7 @@ model ContestCycle {
   rounds    ContestRound[]
   entries   ContestEntry[]
   standings ContestStanding[]
+  finalists ContestFinalist[]
 
   @@index([status])
 }
@@ -2582,7 +2590,10 @@ model ContestVoteEvent {
   roundId    String
   voterId    String
   entryId    String
-  // cast | retract
+  // cast | retract | release | restore
+  //   release: the vote was freed because the entry it was for was removed by a moderator (B-300, #488);
+  //            the ContestVote row is deleted, so the voter's slot is free again.
+  //   restore: the entry was restored before the lock and the freed vote came back (its original createdAt).
   action     String
   occurredAt DateTime
 
@@ -2670,6 +2681,20 @@ model ContestStanding {
   @@unique([cycleId, userId])
 }
 
+// backend/b300-contest-entry-removal (Decision Log #488): the frozen finalist set of a cycle. Written once,
+// at the first moment the set is needed at or after Week 4 opens, under a lock on the cycle row (see
+// contest-finalists.util.ts). Before that moment the finalists are derived from ContestRoundWinner.
+model ContestFinalist {
+  id        String       @id @default(uuid())
+  cycleId   String
+  cycle     ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([cycleId, userId])
+}
+
 // Append-only points ledger — one row per point-earning event.
 // sprint-2/contest-data-model-backend, Decision Log #219 (the scoring
 // weights the founder delegated to backend-api in Decision Log #130).
@@ -2712,6 +2737,10 @@ model PointsLedgerEntry {
   // ("revoking a point also reduces that day's cap counter"). A removed-then-restored engagement clears
   // it again, so the engagement earns its point once. The row itself is never deleted.
   revokedAt     DateTime?
+  // backend/b300-contest-entry-removal (Decision Log #488): set (with revokedAt) ONLY on a baseline row that a
+  // moderator's content_removed on a CONTEST ENTRY's post revoked, so an overturned appeal brings back exactly
+  // those rows and never one revoked for another reason (an unlike, a removed comment, a restricted account).
+  revokedForRemovalAt DateTime?
   // Snapshot of the user's represented club at award time (Decision Log
   // #128). Populated by awardPoints() from User.representedClubId, so a
   // later change of represented club never moves already-earned points.
