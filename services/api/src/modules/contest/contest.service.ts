@@ -13,8 +13,10 @@ import { hasBlockBetween, notBlockedWith } from '../block/block.util';
 import { decodeFeedCursor, encodeFeedCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { FeedPost, FeedService, visibleToViewer } from '../feed/feed.service';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
+import { freezeFinalistsIfDue, readFinalistUserIds } from './contest-finalists.util';
 import { CYCLE_GRAPH_INCLUDE, ContestReadModel, CycleGraph } from './contest-read-model.service';
 import {
   buildContestScheduleForKey,
@@ -136,8 +138,9 @@ export class ContestService {
           })
         : Promise.resolve(null),
       votingRound
-        ? this.prisma.contestVote.findUnique({
-            where: { roundId_voterId: { roundId: votingRound.id, voterId: userId } },
+        ? // A vote on an entry a moderator removed is not the caller's vote any more (B-300).
+          this.prisma.contestVote.findFirst({
+            where: { roundId: votingRound.id, voterId: userId, entry: { post: { is: POST_NOT_REMOVED } } },
             select: { roundId: true, entryId: true },
           })
         : Promise.resolve(null),
@@ -305,20 +308,20 @@ export class ContestService {
       throw conflict(CONTEST_FINAL_UPLOAD_CLOSED_CODE, 'The final upload window is not open.');
     }
 
-    const [rounds, winner, round4] = await Promise.all([
-      this.prisma.contestRound.findMany({ where: { cycleId: cycle.id, weekNumber: { lte: 3 } }, select: { status: true } }),
-      this.prisma.contestRoundWinner.findFirst({
-        where: { userId, round: { cycleId: cycle.id, weekNumber: { lte: 3 } } },
-        select: { id: true },
-      }),
+    // B-300 (Decision Log #488): from the instant Week 4 opens the finalist set is FROZEN. This submission is one of
+    // the moments that may need to freeze it (under a lock on the cycle row, shared with the lifecycle tick and a
+    // removal), so a person promoted to weekly winner after that moment cannot enter, and a weekly winner who
+    // loses the win after it stays a finalist.
+    await this.prisma.$transaction((tx) => freezeFinalistsIfDue(tx, cycle.id, schedule, now));
+    const [finalistUserIds, round4] = await Promise.all([
+      readFinalistUserIds(this.prisma, cycle.id),
       this.prisma.contestRound.findUnique({
         where: { cycleId_weekNumber: { cycleId: cycle.id, weekNumber: 4 } },
         select: { id: true, status: true },
       }),
     ]);
-    const finalistsKnown = rounds.length === 3 && rounds.every((r) => r.status === 'judged');
-    // Only the weekly winners can enter the final.
-    if (!finalistsKnown || !winner || !round4) {
+    // Only the finalists can enter the final.
+    if (!finalistUserIds.includes(userId) || !round4) {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'Forbidden',
@@ -452,8 +455,8 @@ export class ContestService {
           })
         : Promise.resolve([] as { entryId: string; _count: { _all: number } }[]),
       round.weekNumber <= 3
-        ? this.prisma.contestVote.findUnique({
-            where: { roundId_voterId: { roundId, voterId: userId } },
+        ? this.prisma.contestVote.findFirst({
+            where: { roundId, voterId: userId, entry: { post: { is: POST_NOT_REMOVED } } },
             select: { entryId: true },
           })
         : Promise.resolve(null),

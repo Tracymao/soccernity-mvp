@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { ContestLifecycleService } from './contest-lifecycle.service';
 import { ContestVotingService } from './contest-voting.service';
@@ -26,9 +27,10 @@ function entryRow(over: Record<string, unknown> = {}) {
 
 function build() {
   const prisma = {
-    contestEntry: { findUnique: jest.fn().mockResolvedValue(entryRow()) },
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(entryRow()), count: jest.fn().mockResolvedValue(1) },
     contestVote: {
       findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({}),
       count: jest.fn().mockResolvedValue(1),
@@ -51,9 +53,8 @@ function build() {
 describe('ContestVotingService.castVote', () => {
   it('casts a vote: one row, one event, and returns the live count and the toggle state', async () => {
     const { prisma, service } = build();
-    prisma.contestVote.findUnique
-      .mockResolvedValueOnce(null) // no existing vote
-      .mockResolvedValueOnce({ entryId: 'entry-1' }); // stateFor
+    prisma.contestVote.findUnique.mockResolvedValueOnce(null); // no existing vote
+    prisma.contestVote.findFirst.mockResolvedValue({ entryId: 'entry-1' }); // stateFor
     prisma.contestVote.count.mockResolvedValue(4);
 
     const state = await service.castVote('voter-1', 'entry-1');
@@ -70,7 +71,9 @@ describe('ContestVotingService.castVote', () => {
   it('the count only includes ELIGIBLE voters (the same filter the lock uses)', async () => {
     const { prisma, service } = build();
     await service.castVote('voter-1', 'entry-1');
-    expect(prisma.contestVote.count).toHaveBeenCalledWith({ where: { entryId: 'entry-1', voter: CONTEST_ELIGIBLE_USER } });
+    expect(prisma.contestVote.count).toHaveBeenCalledWith({
+      where: { entryId: 'entry-1', voter: CONTEST_ELIGIBLE_USER, entry: { post: { is: POST_NOT_REMOVED } } },
+    });
   });
 
   it('takes a share lock on the round and refuses if the round was decided meanwhile', async () => {
@@ -86,6 +89,7 @@ describe('ContestVotingService.castVote', () => {
   it('voting for the SAME entry again is an idempotent no-op (no second row, no second event)', async () => {
     const { prisma, service } = build();
     prisma.contestVote.findUnique.mockResolvedValue({ id: 'v', entryId: 'entry-1' });
+    prisma.contestVote.findFirst.mockResolvedValue({ entryId: 'entry-1' });
     const state = await service.castVote('voter-1', 'entry-1');
     expect(prisma.contestVote.create).not.toHaveBeenCalled();
     expect(prisma.contestVoteEvent.create).not.toHaveBeenCalled();
@@ -108,8 +112,8 @@ describe('ContestVotingService.castVote', () => {
     );
     prisma.contestVote.findUnique
       .mockResolvedValueOnce(null) // inside the transaction: nothing yet
-      .mockResolvedValueOnce({ entryId: 'entry-1' }) // after the abort: the winner voted for the same entry
-      .mockResolvedValueOnce({ entryId: 'entry-1' }); // stateFor
+      .mockResolvedValueOnce({ entryId: 'entry-1' }); // after the abort: the winner voted for the same entry
+    prisma.contestVote.findFirst.mockResolvedValue({ entryId: 'entry-1' }); // stateFor
     await expect(service.castVote('voter-1', 'entry-1')).resolves.toMatchObject({ voted: true });
   });
 
@@ -185,12 +189,35 @@ describe('ContestVotingService.castVote', () => {
   });
 });
 
+describe('ContestVotingService.castVote: a removed entry (B-300, Decision Log #488)', () => {
+  it('refuses a vote on an entry whose post a moderator removed, inside the locked transaction, writing nothing', async () => {
+    const { prisma, service } = build();
+    prisma.contestEntry.count.mockResolvedValue(0); // the post is removed by the time the round lock is held
+    await expect(service.castVote('voter-1', 'entry-1')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'contest_entry_not_votable' }),
+    });
+    expect(prisma.contestEntry.count).toHaveBeenCalledWith({
+      where: { id: 'entry-1', post: { is: POST_NOT_REMOVED } },
+    });
+    expect(prisma.$queryRaw).toHaveBeenCalled(); // the round FOR SHARE lock was taken first
+    expect(prisma.contestVote.create).not.toHaveBeenCalled();
+    expect(prisma.contestVoteEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('the caller’s vote and the count both ignore a removed entry', async () => {
+    const { prisma, service } = build();
+    await service.castVote('voter-1', 'entry-1');
+    expect(prisma.contestVote.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ entry: { post: { is: POST_NOT_REMOVED } } }) }),
+    );
+  });
+});
+
 describe('ContestVotingService.retractVote', () => {
   it('deletes the caller\'s vote on that entry, logs a retract, and reports voted:false with the lowered count', async () => {
     const { prisma, service } = build();
-    prisma.contestVote.findUnique
-      .mockResolvedValueOnce({ id: 'v1', entryId: 'entry-1' }) // existing
-      .mockResolvedValueOnce(null); // stateFor: no vote any more
+    prisma.contestVote.findUnique.mockResolvedValueOnce({ id: 'v1', entryId: 'entry-1' }); // existing
+    prisma.contestVote.findFirst.mockResolvedValue(null); // stateFor: no vote any more
     prisma.contestVote.count.mockResolvedValue(2);
 
     const state = await service.retractVote('voter-1', 'entry-1');
@@ -208,6 +235,7 @@ describe('ContestVotingService.retractVote', () => {
     expect(a.prisma.contestVote.delete).not.toHaveBeenCalled();
     const b = build();
     b.prisma.contestVote.findUnique.mockResolvedValue({ id: 'v1', entryId: 'entry-OTHER' });
+    b.prisma.contestVote.findFirst.mockResolvedValue({ entryId: 'entry-OTHER' });
     const state = await b.service.retractVote('voter-1', 'entry-1');
     expect(b.prisma.contestVote.delete).not.toHaveBeenCalled();
     expect(state).toMatchObject({ voted: false, callerVote: 'entry-OTHER' });

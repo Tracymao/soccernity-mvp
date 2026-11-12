@@ -4,6 +4,7 @@ import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
+import { POST_NOT_REMOVED } from '../moderation/content-removal.filters';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { computeEditability } from './contest-editability.util';
@@ -48,7 +49,15 @@ const ADMIN_ENTRY_SELECT = {
   round: { select: { weekNumber: true } },
   user: { select: PUBLIC_NAME_SELECT },
   post: {
-    select: { id: true, contentText: true, mediaUrls: true, createdAt: true, likeCount: true, commentCount: true },
+    select: {
+      id: true,
+      contentText: true,
+      mediaUrls: true,
+      createdAt: true,
+      likeCount: true,
+      commentCount: true,
+      removedByModerationAt: true,
+    },
   },
   winner: { select: { position: true } },
 } satisfies Prisma.ContestEntrySelect;
@@ -412,7 +421,8 @@ export class ContestAdminService {
     const counts = entries.length
       ? await this.prisma.contestVote.groupBy({
           by: ['entryId'],
-          where: { round: { cycleId: cycle.id }, voter: CONTEST_ELIGIBLE_USER },
+          // B-300: votes on an entry a moderator removed are not counted.
+          where: { round: { cycleId: cycle.id }, voter: CONTEST_ELIGIBLE_USER, entry: { post: { is: POST_NOT_REMOVED } } },
           _count: { _all: true },
         })
       : [];
@@ -516,6 +526,8 @@ export class ContestAdminService {
       finalTally: row.finalTally,
       finalRank: row.finalRank,
       position: row.winner?.position ?? null,
+      // B-300: staff still see the entry (and its post); this says a moderator removed it.
+      removedByModeration: row.post.removedByModerationAt !== null,
     };
   }
 }

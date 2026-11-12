@@ -14,6 +14,8 @@ function tx() {
     post: { updateMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     comment: { updateMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
     message: { updateMany: jest.fn(), findUnique: jest.fn() },
+    // B-300: a removed/restored POST asks whether it is a contest entry (null = it is not).
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
   };
 }
 type Tx = ReturnType<typeof tx>;
@@ -21,6 +23,40 @@ const asTx = (t: Tx) => t as never;
 const ref = (targetType: string) => ({ id: 'report-1', targetType, targetId: 'target-1' });
 
 describe('content-removal.util', () => {
+  describe('the contest seam (B-300)', () => {
+    it('a removed post looks up its contest entry in the same transaction; a comment or message never does', async () => {
+      const t = tx();
+      (t.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      await applyContentRemoval(asTx(t), ref('post'), NOW);
+      expect(t.contestEntry.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { postId: 'target-1' } }));
+
+      const u = tx();
+      (u.message.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      await applyContentRemoval(asTx(u), ref('message'), NOW);
+      expect(u.contestEntry.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('an already-removed post (claim lost) does not touch the contest', async () => {
+      const t = tx();
+      (t.post.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (t.post.findUnique as jest.Mock).mockResolvedValue({ id: 'target-1' });
+      await expect(applyContentRemoval(asTx(t), ref('post'), NOW)).resolves.toBe('already_removed');
+      expect(t.contestEntry.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('a restored post looks up its contest entry; a restore for a post another report removed does not', async () => {
+      const t = tx();
+      (t.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      await restoreContentRemoval(asTx(t), ref('post'), NOW);
+      expect(t.contestEntry.findUnique).toHaveBeenCalledTimes(1);
+
+      const u = tx();
+      (u.post.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+      await expect(restoreContentRemoval(asTx(u), ref('post'), NOW)).resolves.toBe(false);
+      expect(u.contestEntry.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   it('offers content_removed for exactly post, comment and message', () => {
     expect([...CONTENT_REMOVAL_TARGET_TYPES].sort()).toEqual(['comment', 'message', 'post']);
     for (const t of ['post', 'comment', 'message']) expect(isContentRemovalTarget(t)).toBe(true);

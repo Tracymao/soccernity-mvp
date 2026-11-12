@@ -604,7 +604,7 @@ describe('Points engine e2e: giver/receiver, caps, revocation, view heartbeats',
       await photoView(viewer, postId);
       const written = await rows();
       expect(Object.keys(written[0]).sort()).toEqual(
-        ['clubId', 'counterpartId', 'id', 'occurredAt', 'postId', 'quarterPoints', 'refId', 'revokedAt', 'source', 'userId'].sort(),
+        ['clubId', 'counterpartId', 'id', 'occurredAt', 'postId', 'quarterPoints', 'refId', 'revokedAt', 'revokedForRemovalAt', 'source', 'userId'].sort(),
       );
       // the session lives only in Redis, and expires
       const keys = await app.get(RedisService).keys('viewhb:s:*');

@@ -1,21 +1,18 @@
-import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { awardPoints } from '../points/points.util';
 import { pointsToQuarters } from '../points/quarter-points.util';
-import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
-import { groupEngagementRows } from './contest-engagement.util';
-import { FORFEIT_REASON_TOO_FEW_ENTRIES } from './contest-read-model.service';
 import {
-  MINIMUM_ENTRIES_FOR_A_WEEK,
-  pickMonthlyPodium,
-  rankFinal,
-  rankPhase1,
-  rankVotes,
-} from './contest-ranking.util';
+  bulkWritePhase1,
+  deriveMonthlyOutcome,
+  deriveWeeklyPodium,
+  loadRankableEntries,
+  rankPhase1Entries,
+} from './contest-derivation';
+import { freezeFinalistsIfDue, readFinalistUserIds } from './contest-finalists.util';
+import { FORFEIT_REASON_TOO_FEW_ENTRIES, weekHasTooFewEntries } from './contest-removal.rules';
 import { buildContestScheduleForKey, ContestSchedule, ContestWeekWindow } from './contest-schedule.util';
 
 // backend/w7-contest (B-091; Decision Log #381, #386, #387, #393, #400, #404-#406; docs/contest-spec.md
@@ -48,12 +45,15 @@ import { buildContestScheduleForKey, ContestSchedule, ContestWeekWindow } from '
 // does nothing. Two overlapping sweeps therefore cannot double-award points.
 //
 // Legacy admin-judged cycles (monthKey NULL) are never touched.
+//
+// REMOVED ENTRIES (B-300, Decision Log #488). Every ranking below is derived by contest-derivation.ts, which
+// leaves out an entry whose post a moderator removed; the removal itself (contest-entry-removal.util.ts)
+// uses the same loaders, so a tick, a removal and a restore always agree. The finalist set is FROZEN when
+// Week 4 opens (contest-finalists.util.ts).
 
 // A big week can have thousands of entries; the default 5-second interactive-transaction timeout is
 // far too short for ranking them.
 const TX_OPTIONS = { timeout: 120_000, maxWait: 10_000 } as const;
-// Postgres's bind-parameter ceiling is 32,767; four parameters a row.
-const BULK_UPDATE_CHUNK = 1000;
 
 export interface ContestLifecycleResult {
   cyclesProcessed: number;
@@ -179,6 +179,7 @@ export class ContestLifecycleService {
     }
 
     if (await this.selectFinalists(cycleId)) result.finalistsSelected++;
+    await this.freezeFinalists(cycleId, schedule, now);
     if (await this.reveal(cycleId, schedule, now)) result.revealed++;
     if (now.getTime() >= schedule.final.monthEndAt.getTime()) {
       if (await this.complete(cycleId, schedule, now)) result.completed++;
@@ -202,12 +203,11 @@ export class ContestLifecycleService {
       // and cannot be voted on. They are not counted toward "fewer than 3 entries" either.
       // ...and an entry whose uploaded media is not all approved is hidden from every voter (Decision
       // Log #419 item 5/7), so it cannot be ranked or voted on either.
-      const entries = await tx.contestEntry.findMany({
-        where: { roundId, user: CONTEST_ELIGIBLE_USER, post: { is: POST_MEDIA_ALL_APPROVED } },
-        select: { id: true, submittedAt: true },
-      });
+      // ...and neither can an entry whose post a moderator removed (B-300, Decision Log #488): it counts
+      // toward neither the 10 nor the "fewer than 3 entries" test.
+      const entries = await loadRankableEntries(tx, roundId);
 
-      if (entries.length < MINIMUM_ENTRIES_FOR_A_WEEK) {
+      if (weekHasTooFewEntries(entries.length)) {
         await tx.contestRound.update({
           where: { id: roundId },
           data: {
@@ -221,35 +221,10 @@ export class ContestLifecycleService {
         return 'forfeited';
       }
 
-      const rows = await tx.contestEngagement.findMany({
-        where: { entry: { roundId }, user: CONTEST_ELIGIBLE_USER, occurredAt: { lt: week.phase1EndsAt } },
-        select: { entryId: true, userId: true, kind: true, followedAtEngagement: true, occurredAt: true },
-      });
-      const events = groupEngagementRows(rows);
-      const ranked = rankPhase1(
-        entries.map((e) => ({ entryId: e.id, submittedAt: e.submittedAt, events: events.get(e.id) ?? [] })),
-        week.phase1EndsAt,
-      );
-      await this.bulkWritePhase1(tx, ranked);
+      const ranked = await rankPhase1Entries(tx, roundId, week, entries);
+      await bulkWritePhase1(tx, ranked);
       return 'ranked';
     }, TX_OPTIONS);
-  }
-
-  private async bulkWritePhase1(
-    tx: Prisma.TransactionClient,
-    ranked: { entryId: string; tally: number; rank: number; qualified: boolean }[],
-  ): Promise<void> {
-    for (let i = 0; i < ranked.length; i += BULK_UPDATE_CHUNK) {
-      const chunk = ranked.slice(i, i + BULK_UPDATE_CHUNK);
-      const values = chunk.map(
-        (r) => Prisma.sql`(${r.entryId}::text, ${r.tally}::int, ${r.rank}::int, ${r.qualified}::boolean)`,
-      );
-      await tx.$executeRaw`
-        UPDATE "ContestEntry" AS e
-        SET "phase1Tally" = v.tally, "phase1Rank" = v.rank, "qualified" = v.qualified
-        FROM (VALUES ${Prisma.join(values)}) AS v(id, tally, rank, qualified)
-        WHERE e."id" = v.id`;
-    }
   }
 
   // ---- the lock --------------------------------------------------------------------------------
@@ -273,57 +248,28 @@ export class ContestLifecycleService {
       });
       const points = [round.cycle.weeklyPoints1, round.cycle.weeklyPoints2, round.cycle.weeklyPoints3];
 
-      const entries = await tx.contestEntry.findMany({
-        where: { roundId, qualified: true, user: CONTEST_ELIGIBLE_USER },
-        select: { id: true, userId: true, submittedAt: true, phase1Rank: true },
-      });
-      // Only votes cast strictly before the lock, by accounts that are still eligible, count.
-      const votes = await tx.contestVote.findMany({
-        where: {
-          roundId,
-          entryId: { in: entries.map((e) => e.id) },
-          voter: CONTEST_ELIGIBLE_USER,
-          createdAt: { lt: week.votesLockAt },
-        },
-        select: { entryId: true, voterId: true, createdAt: true },
-      });
-      const votesByEntry = new Map<string, { voterId: string; createdAt: Date }[]>();
-      for (const v of votes) {
-        const list = votesByEntry.get(v.entryId) ?? [];
-        list.push({ voterId: v.voterId, createdAt: v.createdAt });
-        votesByEntry.set(v.entryId, list);
-      }
+      // The weekly top 3 from the frozen tally: qualified, NON-removed entries of eligible authors, ranked by
+      // votes cast strictly before the lock by eligible voters (the same derivation the removal reconcile uses).
+      const podium = await deriveWeeklyPodium(tx, roundId, week);
 
-      const ranked = rankVotes(
-        entries.map((e) => ({
-          entryId: e.id,
-          submittedAt: e.submittedAt,
-          phase1Rank: e.phase1Rank,
-          votes: votesByEntry.get(e.id) ?? [],
-        })),
-      );
-      const byEntry = new Map(entries.map((e) => [e.id, e]));
-
-      for (const [index, winner] of ranked.slice(0, 3).entries()) {
-        const entry = byEntry.get(winner.entryId)!;
-        const position = index + 1;
+      for (const winner of podium) {
         await tx.contestRoundWinner.create({
-          data: { roundId, entryId: entry.id, userId: entry.userId, position },
+          data: { roundId, entryId: winner.entryId, userId: winner.userId, position: winner.position },
         });
         await awardPoints(tx, {
-          userId: entry.userId,
+          userId: winner.userId,
           source: 'contest_weekly_win',
           // One win per user per round (ContestEntry @@unique([roundId, userId])), so the round id
           // alone keys the ledger uniquely per user.
           refId: roundId,
-          quarterPoints: pointsToQuarters(points[index]),
+          quarterPoints: pointsToQuarters(points[winner.position - 1]),
           occurredAt: week.votesLockAt,
         });
         // The personal winner notice (Decision Log #278, #405 item 3): the existing `contest_win`
         // row, one per weekly winner. payloadRefId is the cycle (the only single-resource read
         // endpoint that exists is GET /contest/cycles/:id).
         await tx.notification.create({
-          data: { userId: entry.userId, type: 'contest_win', payloadRefId: round.cycleId },
+          data: { userId: winner.userId, type: 'contest_win', payloadRefId: round.cycleId },
         });
       }
       return true;
@@ -357,13 +303,17 @@ export class ContestLifecycleService {
     return claimed.count > 0;
   }
 
+  // The frozen set once Week 4 has opened, else the distinct weekly winners (contest-finalists.util.ts).
   private async finalistCount(cycleId: string): Promise<number> {
-    const winners = await this.prisma.contestRoundWinner.findMany({
-      where: { round: { cycleId, weekNumber: { lte: 3 } } },
-      select: { userId: true },
-      distinct: ['userId'],
-    });
-    return winners.length;
+    return (await readFinalistUserIds(this.prisma, cycleId)).length;
+  }
+
+  /**
+   * From the instant Week 4 opens the finalist set is FROZEN (B-300): taken once, under a lock on the cycle
+   * row, by whichever of this tick, a final-entry submission or a removal needs it first.
+   */
+  private async freezeFinalists(cycleId: string, schedule: ContestSchedule, now: Date): Promise<void> {
+    await this.prisma.$transaction((tx) => freezeFinalistsIfDue(tx, cycleId, schedule, now));
   }
 
   // Week 4 only exists when finalists are known (no finalist, no final). At the reveal the cycle
@@ -419,47 +369,18 @@ export class ContestLifecycleService {
         where: { cycleId_weekNumber: { cycleId, weekNumber: 4 } },
         select: { id: true },
       });
-      const entries = round4
-        ? await tx.contestEntry.findMany({
-            // A final entry whose video is not approved by the reveal is not shown, so it is not ranked (#419 item 7).
-            where: { roundId: round4.id, post: { is: POST_MEDIA_ALL_APPROVED } },
-            select: { id: true, userId: true, submittedAt: true },
-          })
-        : [];
-
-      // The final ranking: likes + comments from eligible givers inside [reveal, month end).
-      const rows = entries.length
-        ? await tx.contestEngagement.findMany({
-            where: {
-              entryId: { in: entries.map((e) => e.id) },
-              user: CONTEST_ELIGIBLE_USER,
-              occurredAt: { gte: schedule.final.revealAt, lt: schedule.final.monthEndAt },
-            },
-            select: { entryId: true, userId: true, kind: true, followedAtEngagement: true, occurredAt: true },
-          })
-        : [];
-      const events = groupEngagementRows(rows);
-      const ranked = rankFinal(
-        entries.map((e) => ({ entryId: e.id, submittedAt: e.submittedAt, events: events.get(e.id) ?? [] })),
-        {
-          minimumTally: cycle.minimumTally ?? Number.MAX_SAFE_INTEGER,
-          excludeFollowers: cycle.followersExcludedWeek4,
-          from: schedule.final.revealAt,
-          before: schedule.final.monthEndAt,
-        },
-      );
-
+      // The final ranking: likes + comments from eligible givers inside [reveal, month end), over the final entries
+      // whose video is approved by the reveal (#419 item 7) and whose post a moderator has NOT removed (B-300).
       // A finalist whose account is no longer eligible cannot be crowned; the next one takes the place.
-      const eligibleAuthors = new Set(
-        (
-          await tx.user.findMany({
-            where: { id: { in: entries.map((e) => e.userId) }, ...CONTEST_ELIGIBLE_USER },
-            select: { id: true },
-          })
-        ).map((u) => u.id),
+      const { ranked, podium } = await deriveMonthlyOutcome(
+        tx,
+        {
+          round4Id: round4?.id ?? null,
+          minimumTally: cycle.minimumTally,
+          followersExcludedWeek4: cycle.followersExcludedWeek4,
+        },
+        schedule,
       );
-      const authorOf = new Map(entries.map((e) => [e.id, e.userId]));
-      const podium = pickMonthlyPodium(ranked.filter((r) => eligibleAuthors.has(authorOf.get(r.entryId)!)));
 
       const claimed = await tx.contestCycle.updateMany({
         where: { id: cycleId, status: { in: ['active', 'final'] } },
@@ -469,7 +390,7 @@ export class ContestLifecycleService {
 
       const monthly = [cycle.monthlyPoints1, cycle.monthlyPoints2, cycle.monthlyPoints3];
       for (const [index, placed] of podium.entries()) {
-        const userId = authorOf.get(placed.entryId)!;
+        const userId = placed.userId;
         await tx.contestStanding.create({ data: { cycleId, userId, position: index + 1 } });
         await awardPoints(tx, {
           userId,
@@ -498,7 +419,10 @@ export class ContestLifecycleService {
         _count: { _all: true },
       });
       const impressionOf = new Map(impressionCounts.map((c) => [c.entryId, c._count._all]));
-      for (const e of entries) {
+      const round4Entries = round4
+        ? await tx.contestEntry.findMany({ where: { roundId: round4.id }, select: { id: true } })
+        : [];
+      for (const e of round4Entries) {
         await tx.contestEntry.update({ where: { id: e.id }, data: { impressionTotal: impressionOf.get(e.id) ?? 0 } });
       }
       await tx.contestImpression.deleteMany({ where: { entry: { cycleId } } });

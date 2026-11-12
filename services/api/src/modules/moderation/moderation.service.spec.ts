@@ -18,6 +18,8 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
+    // B-300: a removed post asks whether it is a contest entry (null = it is not).
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
     // B-289: content_removed now removes the reported target in the action's own transaction.
     post: {
       findUnique: jest.fn(),
