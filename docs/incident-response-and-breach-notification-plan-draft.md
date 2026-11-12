@@ -1,13 +1,13 @@
-# Soccernity — incident-response and breach-notification plan (DRAFT v0.3)
+# Soccernity — incident-response and breach-notification plan (DRAFT v0.4)
 
 > **DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
 > v0.2 also reflects **#456**, **#458**, **#459**, **#477**, **#478** and **#479**;
-> **v0.3 also reflects #482, #483, #484, #485, #486 and #487**),
+> **v0.3 also reflects #482, #483, #484, #485, #486 and #487; v0.4 also reflects #490, #491, #492, #493 and #494**),
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 2026-11-11): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
@@ -16,7 +16,29 @@
 **`[v0.2 CHANGED — source]`** = a passage that differs from v0.1; the source is the repo file or Decision Log entry the change
 rests on. A reader can find every difference by searching for `v0.2 CHANGED`.
 **`[v0.3 CHANGED — source]`** = a passage added or changed in v0.3, with the same kind of source; search for `v0.3 CHANGED`.
-Everything not marked is v0.1 or v0.2 text, unchanged.
+**`[v0.4 CHANGED — source]`** = a passage added or changed in v0.4; search for `v0.4 CHANGED`.
+Everything not marked is v0.1 to v0.3 text, unchanged. Only a real legal question is marked for counsel; a question for the founder that is not a legal
+blocker is marked **[FOR FOUNDER — not a counsel blocker]**.
+
+---
+
+## v0.4 changes (what changed since v0.3, and why)
+
+*Draft for counsel review — not approved, not legal advice.* Refreshed 2026-11-11 against `origin/main` (`e6bcf0e`) for the founder decisions recorded as Decision
+Log #490 to #494. The item list with source files is in `docs/dpia-incident-retention-restored-2026-11-11-report.md`. **New wording in this file is tagged
+`[COPY PENDING LEGAL REVIEW]` where it is customer-facing; most of it is internal.** Nothing here approves, advances or closes anything; the DPIA's sign-off block
+and this plan's counsel questions are unchanged except where stated.
+
+| # | Fact | Where it changed in this file |
+|---|---|---|
+| 1 | Decision Log **#490**: a report is deleted, with the content it removed, **6 years** after it closes (**7 years** if it concerns a minor). This **replaces** the 12 months and 6 years of #487 in v0.3. The range is the "6–7 years" the legal draft records as counsel's approved retention for moderation cases (v0.7 resolved decision 10); this plan has not seen the advice. The settings are `REPORT_RETENTION_YEARS` and `REPORT_RETENTION_CONCERNS_MINOR_YEARS` (`REPORT_RETENTION_MONTHS` is gone). | §1 (the two reports rows), §4 (pause note), §8.2, §8.4, Q8, Q21 |
+| 2 | Decision Log **#493**: when a due report is purged, a hold record that points at it **stays** with its link cleared, and a Contact Us enquiry escalated into it is **detached** and returns to its 12-month clock. A report with an active hold or an escalation is still kept, and keeps its enquiry until it is purged. | §8.4, Q24 (new) |
+| 3 | Decision Log **#491**: where the reported sender or any participant of a message report is under 18, only a child-safety-vetted admin may **act** on it (record an action, record an appeal on someone's behalf, decide an appeal), as well as read its context. | §3, §4.10, Q23 |
+| 4 | Decision Log **#492**: a suspended person appeals through the public Contact Us page (seventh category "Appeal a suspension"); staff record the appeal on a report suspension; the staff member who records it, and the one who took the original action, may not decide it. | §4.10, Q24 (new) |
+| 5 | Decision Log **#494**: no legal-hold check on a suspension is a founder decision; the reinstatement email says nothing about points. | §4.10 |
+
+**Larger store, one honest line.** Because reports are now kept years longer, an incident that exposes the moderation store reaches further back and holds more records
+about and by children than v0.3 assumed (§8.4, Q21). Nothing was added to protect it beyond what exists (§1, the reports row).
 
 ---
 
@@ -108,7 +130,7 @@ whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **
 | **[v0.3 CHANGED — new row]** Content removed by a moderator (a post, a comment or a message) | Postgres `Post`, `Comment`, `Message`: `removedByModerationAt` and `removedByReportId`; the text, media rows, comments and engagement rows are **not** deleted | Plain columns. `moderation/README.md` "`actionTaken`: `content_removed` is enforced" (Decision Log #483, B-289). The removal is **soft**: every user-facing read treats the item as gone (a removed post disappears from lists, search and counts; a removed comment or message shows a "removed by Soccernity" stub), but **staff reads still return the full text**. Overturning the removing report's appeal restores it. | The content people believe is gone is **still in the database in clear text** until the report retention sweep removes it (§8.4). A database leak exposes it. |
 | **[v0.3 CHANGED — new row]** Media of a removed post | Cloudflare R2 `private-media/` (kept) and `post-media/` (public copy withdrawn) | `post-media/README.md` "Media of a post removed by moderation" (Decision Log #484, B-290, B-296): the public object is deleted at removal and a **private copy is kept as evidence** until the removing report **closes** (appeal window lapsed — `REPORT_APPEAL_WINDOW_DAYS`, default 30 — or appeal upheld); then it is deleted, the `PostMedia` row and the post staying. An uploader under an active admin hold, or another unclosed report on the post, keeps it. | Images of children that were taken down but still exist privately. The B-206 evidence rule for **rejected** files is separate and **open under counsel** — not touched here. |
 | **[v0.3 CHANGED — new row]** Suspension state | Postgres `User.accountStatus = 'suspended'`; `User.suspendedByReportId` (FK `Report`, `ON DELETE SET NULL`); the audit row | `account-suspension/account-suspension.service.ts`, `moderation/README.md` (B-291, Decision Log #485), `admin-users/README.md`. A suspended account cannot sign in (the generic "Invalid credentials"), its sessions and earned engagement points are revoked, a guardian of a minor is told once, and **the person is emailed** at once (§4.10). | Shows that an account was suspended and *for which report*. A leak of the audit log shows the reason category (`status=suspended; reasonCategory=<key>`). |
-| **[v0.3 CHANGED — new row]** Reports and their retention | Postgres `Report` (category, free-text reason, `concernsMinor`, review, appeal and escalation trail) | Plain columns. `moderation/README.md` "Report retention" (Decision Log #487, B-294): **deleted 12 months after it closes, 6 years if `concernsMinor`** (both configuration; the 6-year figure is unverified for UK law), together with the content it removed (rows and media), by a nightly job. Skipped: an active legal or bad-faith hold on the reporter, the target's account or (for a message) the sender or any other participant; an escalated report; a removed post whose media is not deletable (the B-206 hook). `AdminActionLog` is never touched. | A report can contain a safeguarding disclosure. Once deleted, the report and the removed content are gone from the platform (only the Neon snapshot or a backup would hold them). |
+| **[v0.3 CHANGED — new row]** Reports and their retention | Postgres `Report` (category, free-text reason, `concernsMinor`, review, appeal and escalation trail) | Plain columns. `moderation/README.md` "Report retention" (Decision Log #487, B-294; **[v0.4 CHANGED — Decision Log #490, B-299: now 6 years, 7 years if `concernsMinor`; v0.3 said 12 months and 6]**): **deleted 6 years after it closes, 7 years if `concernsMinor`** (both configuration, `REPORT_RETENTION_YEARS` and `REPORT_RETENTION_CONCERNS_MINOR_YEARS`; the range is the one recorded as counsel-approved in the legal draft), together with the content it removed (rows and media), by a nightly job. Skipped: an active legal or bad-faith hold on the reporter, the target's account or (for a message) the sender or any other participant; an escalated report; a removed post whose media is not deletable (the B-206 hook). `AdminActionLog` is never touched. **[v0.4 CHANGED — #493, B-299]** A hold record that references the report stays with its link cleared; an escalated Contact Us enquiry is detached. | A report can contain a safeguarding disclosure. Once deleted, the report and the removed content are gone from the platform (only the Neon snapshot or a backup would hold them). **[v0.4 CHANGED]** The store now reaches back 6 to 7 years, so an exposure of it affects far more records than the 12-month figure implied; reports are plain columns with no field-level encryption, and reading a report is not logged. |
 | A reported message, and the messages the reporter attached as context | Postgres `Report` (`targetType: 'message'`) and `ReportContextMessage` (`reportId`, `messageId`) | The message text is read from `Message` at the time. **[v0.2 CHANGED — `moderation/README.md` "Reporting a message" and "Context messages" (Decision Log #477, B-286): a reporter may attach up to 20 other messages of the same conversation (10 before, 10 after the reported one). Only staff see them, through `GET /admin/moderation/reports/:id` (moderator, superadmin); a report that concerns a minor is visible only to a child-safety-vetted admin, fresh-checked on every call. The view returns the reported message, its edit original and the chosen context messages, with the sender's public name only; no conversation id, no recipient, no other message.]** **[v0.3 CHANGED — `moderation/README.md` "Vetted-only context" (Decision Log #486, B-293): the gate no longer depends only on `concernsMinor`. For an admin who is **not** child-safety-vetted, the platform also reads `User.isMinor` now for the reported sender and every participant; if any is under 18 the response carries `contextHidden: true`, an **empty** context list and a **null** edit original (it fails closed if a participant has no row). A message report between two children is therefore no longer fully visible to an unvetted moderator. The context messages themselves are not touched by a removal and fall to the 12-month message deletion once no report holds them.]** | Exposes the chosen slice of a private conversation to whoever holds a moderator or superadmin session (and, for a minor's report, a vetted one). |
 | "Withhold guardian notices" flag and its reason | Postgres `GuardianNoticeWithhold` (one row per minor's account while ON) | Plain text; the reason is staff-written. **[v0.2 CHANGED — `admin-users/README.md` "Guardian notices" and `guardian-security-notice/README.md` (Decision Log #458): set, cleared and reviewed only by a child-safety-vetted admin (fresh-read, any role); the three changes are logged in `AdminActionLog`; no endpoint a minor, guardian or non-vetted admin can call returns the flag or its reason.]** | The reason may describe a concern about a guardian or household; proposed: treat a leak as S1 (it is a safeguarding record). |
 | Email-change requests | Postgres `EmailChangeRequest` (`newEmail` lower-cased, `tokenHash` SHA-256, expiry, `usedAt`) | Link token stored **hashed**, single use, 48 hours. **[v0.2 CHANGED — `email-change/README.md` (Decision Log #476).]** | A pending new address; the token itself is not recoverable from the row. |
@@ -190,7 +212,7 @@ retention clock appear among these roles (proposals for the founder and counsel)
 - **The vetting gate shapes who can do the work.** A report with `concernsMinor`, and a message report whose reported sender or
   any participant is under 18 (#486), shows its full content (including attached context and the edited original) **only to a
   child-safety-vetted admin**. If the safeguarding lead is not vetted they cannot assess a minor's message report, and must hand
-  the assessment to a vetted admin. `[OPEN — Q23]`
+  the assessment to a vetted admin. `[OPEN — Q23]` **[v0.4 CHANGED — #491, B-297]** The same rule now covers *acting* on such a report (recording an action, recording an appeal on someone's behalf, deciding an appeal): a non-vetted admin cannot do any of them on a message report where the reported sender or any participant is under 18, and the other admins still see the bare message with "Context hidden: this involves a child". It does **not** yet cover post, comment or user reports about a child outside the `child_safety_concern` category, the user-page suspension, or the hold routes (DPIA v0.6 R33(f) update). **[FOR FOUNDER — not a counsel blocker]**
 - **Evidence preservation belongs to the incident lead** and starts *before* any removal or suspension (§5 step 3, §8.4): the
   retention sweeps (§8.4) run nightly and no pause switch is known.
 
@@ -313,7 +335,7 @@ opened.
   modules having no admin route, never tried.
 - **[v0.3 CHANGED — `moderation/README.md`, `admin-users/README.md`, `account-hold/README.md`]** No **pause switch for the retention
   sweeps** (§8.4): the message job (04:00) and the report job (04:15) run every night; the only lever found is a very large
-  `MESSAGE_RETENTION_MONTHS` / `REPORT_RETENTION_MONTHS` and a redeploy, which has not been tried (`[UNVERIFIED]`). A **legal
+  `MESSAGE_RETENTION_MONTHS` / `REPORT_RETENTION_YEARS` and `REPORT_RETENTION_CONCERNS_MINOR_YEARS` **[v0.4 CHANGED — #490]** and a redeploy, which has not been tried (`[UNVERIFIED]`). A **legal
   hold** is the built way to keep a report, its removed content and a held account's messages, but it needs an existing report
   and a real account to attach to.
 - **[v0.3 CHANGED]** No **bulk or quiet suspension**: every suspension emails the person and tells a minor's guardian (§4.10). No
@@ -352,6 +374,16 @@ in Postgres) and it can **start the retention clock** on the report (§8.4). If 
 and preserve it (§8) before recording the removal.
 
 ---
+
+
+**[v0.4 CHANGED — #492, #494; B-292, B-298]** **Appeals of a suspension.** *Draft for counsel review — not approved, not legal advice.* A suspended person cannot sign in, so
+cannot use the in-app appeal. They write through the public Contact Us page (seventh category, "Appeal a suspension"; the API accepts it, the web page and the admin inbox
+do not offer it yet), and a moderator or superadmin records the appeal on a report suspension (only for a `user_suspended` action, only inside the 30-day window, a reason
+required). **The staff member who records the appeal, and the one who took the original action, may not decide it**, so a third admin is needed; for a message report
+involving a child, all of them must be child-safety-vetted. The recorded appeal pauses the report's retention clock. Two things for a responder to expect: the Contact Us
+enquiry may hold a child's account email and is readable by any moderator or superadmin (the inbox has no vetting gate; **[FOR FOUNDER — not a counsel blocker]**), and the
+suspension email still goes to the address on file, which an attacker may have changed (Q20; recorded, not decided). A suspension is applied even if an admin hold exists
+on the account (founder decision, #494; no counsel position). The reinstatement email says nothing about points.
 
 ## 5. The response process
 
@@ -578,7 +610,7 @@ account hold (#459).
 | Admin audit trail | `AdminActionLog` | SQL export (no read endpoint); includes `user.dob_viewed`, `admin_user.two_factor_reset`, hold, revoke and report actions. |
 | Redis state | Upstash | Note key names only (`auth:refresh:*`, `admin:refresh:*`, `auth-limit:*`); values are hashes or counters. Do **not** dump values into a ticket. |
 | Messages **[v0.2 CHANGED — `messaging/README.md` "Retention" (Decision Log #478)]** | Postgres `Message`, `ReportContextMessage` | A daily job (04:00) **deletes every direct message 12 months after it was sent**, minors and adults alike, with its edit original; it skips a message that a `Report` points at or a `ReportContextMessage` row attaches. It runs inside an incident like any other night. **Take the Neon snapshot first** (a message past 12 months may be gone by the next morning); there is no pause switch in the code (`[UNVERIFIED]` — a very large `MESSAGE_RETENTION_MONTHS` is the only lever and has not been tried). **[v0.3 CHANGED — v0.2 said a legal hold on an account does not stop the job; that was superseded by Decision Log #482 (`messaging/README.md` "Held accounts"): an active `legal_hold` on the message's sender or on any other participant of the conversation now keeps the message. A `bad_faith` hold and the report-derived holds do not. See Q19.]** |
-| **[v0.3 CHANGED — new row]** Reports and content removed by a report | Postgres `Report`, `Post`, `Comment`, `Message` (soft-removed), `ReportContextMessage` | A nightly job (04:15) deletes a report **12 months after it closes (6 years if it concerns a minor)** with the content it removed (rows and stored media) — see §8.4. **Take the Neon snapshot first, and note the closing date of every report that matters.** Context messages stay and fall to the message job. |
+| **[v0.3 CHANGED — new row]** Reports and content removed by a report | Postgres `Report`, `Post`, `Comment`, `Message` (soft-removed), `ReportContextMessage` | A nightly job (04:15) deletes a report **6 years after it closes (7 years if it concerns a minor)** **[v0.4 CHANGED — #490]** (v0.3: 12 months and 6) with the content it removed (rows and stored media) — see §8.4. **Take the Neon snapshot first, and note the closing date of every report that matters.** Context messages stay and fall to the message job. |
 | **[v0.3 CHANGED — new row]** Media of a removed post | R2 `private-media/` | The private copy is kept until the removing report closes, then deleted (`deletedByModerationAt`); a deferred-deletion record retries a failed delete. List the object keys before closure if the media is evidence. B-206 (evidence set-aside) is **not decided here**. |
 | **[v0.3 CHANGED — new row]** Suspension and removal decisions | `AdminActionLog` (scoped read via `GET /admin/action-log`; full export by SQL); `User.accountStatus`, `User.suspendedByReportId` | Export the rows for the incident window by SQL; the retention sweeps never delete them. `suspendedByReportId` becomes `NULL` if the suspending report is deleted — record it earlier. |
 | Email-change and recovery requests **[v0.2 CHANGED]** | Postgres `EmailChangeRequest`, `TwoFactorRecoveryRequest` | Note the rows and states for the affected accounts before cancelling or deleting anything. Ended recovery rows are removed 30 days after they end. |
@@ -610,7 +642,7 @@ conclusion; the figures are configuration and several are unverified for the jur
 | What | When | Anchor | Kept when |
 |---|---|---|---|
 | A direct message (and its edit original) | 12 months after it was sent, nightly at 04:00 | send time | Referenced by a report; attached as context to a report; an active **legal hold** on its sender or another participant |
-| A report, and the content it removed (rows and stored media, in one transaction) | `REPORT_RETENTION_MONTHS` (default 12) after the report **closes**, nightly at 04:15, at most 100 per run; **6 years** (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) if `concernsMinor` | the report's closing time (dismissed: its review; actioned with no appeal: review plus the appeal window, default 30 days; appeal upheld: that decision). An **open** report, or one with an appeal pending, is never due | An active legal or bad-faith hold on the reporter, on the target's account or (message) on the sender or another participant; an **escalated** report (until counsel answers B-206); a removed post whose media is not deletable; another unclosed report on the same item. **Blocked** (kept and counted): a hold record still references it, a Contact Us enquiry was escalated into it, the removed post is a Contest entry |
+| A report, and the content it removed (rows and stored media, in one transaction) | `REPORT_RETENTION_YEARS` (default **6**) after the report **closes** **[v0.4 CHANGED — #490]** (v0.3: 12 months), nightly at 04:15, at most 100 per run; **7 years** (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) if `concernsMinor` (v0.3: 6) | the report's closing time (dismissed: its review; actioned with no appeal: review plus the appeal window, default 30 days; appeal upheld: that decision). An **open** report, or one with an appeal pending, is never due | An active legal or bad-faith hold on the reporter, on the target's account or (message) on the sender or another participant; an **escalated** report (until counsel answers B-206); a removed post whose media is not deletable; another unclosed report on the same item. **Blocked** (kept and counted): the removed post is a Contest entry; a removed message is attached as context to a different report. **[v0.4 CHANGED — #493, B-299]** A hold record that references a due report no longer blocks it (the hold stays, its report link is cleared), and an escalated Contact Us enquiry no longer blocks it (it is detached and returns to its 12-month clock) |
 | A removed post's private media | When the removing report closes | as above | Uploader under an active admin hold, or another report on the post still open |
 | `AdminActionLog`, earned points | Never by these jobs | n/a | n/a |
 
@@ -626,6 +658,13 @@ conclusion; the figures are configuration and several are unverified for the jur
 - Because the retention clocks are configuration, a **very large value and a redeploy** is the only known way to pause them
   (`[UNVERIFIED]`, never tried). Use it only on counsel's advice: it keeps children's data longer than the legal draft's schedule.
 - The **incident log and the breach register** have their own retention (§8.3, Q8); they are not governed by these jobs.
+- **[v0.4 CHANGED — #490, #493, B-299]** **A longer window both ways.** Reports are kept 6 years after closure (7 if they concern a minor), so evidence of an older incident is more likely to
+  still be on the platform than v0.3 said, and so is more data to protect: a breach of the moderation store reaches further back (Q21). Reports are plain columns with no
+  field-level encryption and reads are not logged, so an incident lead should not assume the platform can say who looked at a report.
+- **[v0.4 CHANGED — #493]** **A held report keeps its enquiry.** While an active hold or an escalation keeps a report, the Contact Us enquiry escalated into it stays too (the 12-month
+  enquiry job never deletes an escalated enquiry); it returns to the 12-month clock only after the report is purged. A legal hold has no end date. The enquiry may hold a name, an
+  email and a message (and, for a suspension appeal, a child's account email). `[OPEN — Q24]`
+- **[v0.4 CHANGED — #493]** **A purge leaves the hold record.** A hold that pointed at a purged report stays, with its report link cleared; it is audit evidence and the sweep never deletes it.
 
 ---
 
@@ -796,7 +835,7 @@ trade-offs; the draft deliberately does not pick one.**
 | **Q5** | **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? **[v0.2 CHANGED — still open. #456 tells guardians of security actions, not of breaches; see §7.5.]** |
 | **Q6** | For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
 | **Q7** | Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
-| **Q8** | Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (12 months; 6 years for a minor), which run independently of any incident.]** |
+| **Q8** | Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (6 years; 7 years for a minor **[v0.4 CHANGED — #490]**; v0.3 said 12 months and 6), which run independently of any incident.]** |
 | **Q9** | Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
 | **Q10** | **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes** — the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged `[COPY PENDING LEGAL REVIEW]` in the platform's manifest, and no counsel position is recorded here. |
 | **Q11** | Who else is told: police, insurers, the platform's processors' own regulators? Obligations to report suspected child-safety crimes? |
@@ -830,9 +869,10 @@ purpose, and whether a stranger who can trigger a lock by guessing a password ca
 | # | Question |
 |---|---|
 | **Q20** | A suspension (user page or report) always emails the person at the address on file with a fixed reason line, and revokes earned points without restoring them (#485). When a suspension is used to contain an account takeover: may a different or no email be sent; may the address on file, which an attacker may have changed, be used; and is the §10.7 hand-sent note acceptable? Should points be restored when a suspension was precautionary? (§4.10) |
-| **Q21** | Reports are deleted 12 months after closure and 6 years for a minor (#487; the 6-year figure is unverified for UK law and not counsel-sourced). If an incident is discovered after a report has been deleted, the report and the content it removed are gone from the platform. Do those periods suit a safeguarding record that may be needed for a later inquiry, or for a statutory report; and does counsel want a legal hold placed automatically on any report linked to an open incident? (§8.4) |
+| **Q21** | **[v0.4 CHANGED — #490]** Reports are deleted 6 years after closure and 7 years for a minor (v0.3: 12 months and 6; the range is the one recorded as counsel-approved in the legal draft v0.7, not re-confirmed here). If an incident is discovered after a report has been deleted, the report and the content it removed are gone from the platform. Do those periods suit a safeguarding record that may be needed for a later inquiry, or for a statutory report; and does counsel want a legal hold placed automatically on any report linked to an open incident? (§8.4) |
 | **Q22** | Removed content is **soft-removed**: it stays in clear text in Postgres, and the private copy of a removed post's media stays until the report closes (#483, #484). Is that an acceptable position for a platform whose users and guardians are told the content has been taken down; is the Privacy Policy draft's retention text consistent with it; and how does it relate to the open B-206 question about rejected media and evidence? **This plan does not decide B-206.** (§1, §8.4) |
 | **Q23** | A message report whose reported sender or any participant is under 18 hides the attached context and the edit original from every admin who is not child-safety-vetted (#486). In a breach affecting messages, the people who must assess exposure may not be vetted. Who is allowed to read those messages for the purpose of the assessment, and is a vetted admin required on the incident team? (§3) |
+| **Q24** | **[v0.4 CHANGED — new; #493, #492, #494]** (a) A report that is held or escalated keeps the Contact Us enquiry escalated into it, with its name, email and message, until the report is purged; a legal hold has no end date. Is that acceptable, and who decides when a hold ends? (b) A suspension-appeal enquiry may hold a child's account email and sits in an inbox readable by any moderator or superadmin; does counsel want it limited to child-safety-vetted staff when the sender is a minor? **[FOR FOUNDER — not a counsel blocker]** for the design; counsel for whether the exposure is acceptable. (c) The suspension email goes to the address on file (recorded, not decided): if the incident was an account takeover, the attacker may receive it. (§4.10, §8.4) |
 
 ---
 
@@ -884,5 +924,5 @@ controller of major importance; everything for the US and EU.
 
 ---
 
-*End of draft v0.3. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
+*End of draft v0.4. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
 Log Book, the register and the Build Plan were not edited by this draft.*

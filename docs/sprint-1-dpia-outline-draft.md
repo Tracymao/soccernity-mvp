@@ -26,12 +26,61 @@ belonging to the founder and counsel, which this draft deliberately does not
 resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
-- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5)
+- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
-  Claude Code, from the merged code rather than from summaries; v0.3, v0.4 and v0.5 likewise
+  Claude Code, from the merged code rather than from summaries; v0.3 to v0.6 likewise
 - **Reviewed by counsel:** NOT YET — see Section 6
-- **Version:** 0.5 (draft — still NOT APPROVED)
+- **Version:** 0.6 (draft — still NOT APPROVED)
+
+### Changelog — v0.5 → v0.6 (2026-11-11)
+
+**What this update is, stated plainly.** v0.6 brings R33, R34, R35 and R36 and the matching §1.3, §2.4, §4 and §5 rows into line
+with the founder's decisions of 2026-11-11 recorded as Decision Log **#490 to #494** and with what is merged on `origin/main`
+(`e6bcf0e`: PRs #730, #731, #732, #735). **It does not itself constitute progress toward sign-off, and it closes no risk.** The
+Section 6 sign-off block is unchanged and empty ("Reviewed by counsel: NOT YET"); no lawful basis has been chosen; no residual
+risk has been rated; no [PROPOSAL] or [ACTION FOR REVIEW] from an earlier version has been accepted or closed. Every changed
+passage carries the marker **[CHANGED v0.6 — 2026-11-11]**. Facts were read from the merged code; **nothing was run against a
+live environment** and **no statute, regulator guidance or case law was retrieved** (the §0 item 5 limitation applies in full).
+
+**Who each new question goes to.** Only a real legal question is marked **[ACTION FOR REVIEW]** (for counsel). Product, access and
+design questions that need the founder, not a lawyer, are marked **[FOR FOUNDER — not a counsel blocker]** so they are not
+mistaken for legal blockers.
+
+Changed:
+
+1. **Report retention restored to counsel's approved range of 6 to 7 years** (Decision Log #490; B-299, PR #735). A closed report is
+   now deleted **6 years** after it closes, or **7 years** if it concerns a minor (`REPORT_RETENTION_YEARS`,
+   `REPORT_RETENTION_CONCERNS_MINOR_YEARS`; `REPORT_RETENTION_MONTHS` is gone). This **replaces** the 12 months and 6 years of v0.5
+   (Decision Log #487, figures only; the rest of #487 stands). The range comes from the legal draft's record of counsel's review
+   (`docs/legal-copy-draft-tos-privacy-policy.md`, v0.7 resolved decision 10: "6–7 years for data tied to a concluded
+   investigation or moderation case"); this DPIA has not seen counsel's advice itself. **The effect is a longer store:** the typical
+   report is kept six times as long as v0.5 said (6 years instead of 12 months), a child-safety report one year longer, and the chosen context messages of a
+   child's private chat that hang off a reported message go with them (R33(c), R36(h)). R36(b), (g), (h) and §5 items 39, 42, 43.
+2. **Two things no longer stop the sweep** (Decision Log #493; B-299). A hold record that points at a purged report stays and its
+   link is cleared; a Contact Us enquiry that was escalated into the report is detached and returns to its ordinary 12-month clock.
+   R36(d), R36(i), §5 item 47.
+3. **Who may act on a message report that involves a child** (Decision Log #491; B-297, PR #730). Recording an action, recording an
+   appeal on someone's behalf and deciding an appeal on a message report now need a child-safety-vetted admin where the reported
+   sender or any participant is under 18, in addition to the `concernsMinor` gate. This **narrows** the R33(f)(iii) and R35(c)(vi)
+   gap; it does not close it (R33(f) update, §5 item 45).
+4. **Appeals by a suspended person** (Decision Log #492; B-292, PR #731; B-298, PR #732). Staff can record an appeal on a suspended
+   person's behalf; the recorder, and the admin who took the original action, may not decide it; a seventh public Contact Us
+   category "Appeal a suspension" exists in the API. This **answers R35(c)(i) in code**; the web page and the admin inbox do not
+   offer the category yet. It also means a Contact Us enquiry may hold a child's account details (R35 update, §5 items 37, 44).
+5. **Smaller rulings** (Decision Log #494): no legal-hold check on a suspension is a founder decision, not an open point; the
+   reinstatement email says nothing about points; the emails as built are the source of truth (R35(b)(iii)).
+6. **Kept open, recorded not decided (register Section 85c):** the suspension email goes to the address on file (R35 update, item
+   6); a report that is held or escalated keeps its enquiry until the report is purged (R36(i), item 47).
+
+New risks: none (R35 and R36 revisited; R32 is still held). New §5 items 42 to 47. Items 37, 39, 40 and 36 are reworded in place.
+
+**Still visibly stale, not edited (noticed while reading):** the v0.5 list below ("What is not changed, and is still visibly
+stale") is unchanged. New in v0.6: the hold routes (place and lift a legal or bad-faith hold) are gated on `concernsMinor` only, not
+on the participants' ages (R33(f) update); this pass did not check whether Decision Log #488 (removed Contest entries) is built, so
+the "contest entry" block in R36(d) is stated as it was.
+
+---
 
 ### Changelog — v0.4 → v0.5 (2026-11-11)
 
@@ -361,6 +410,12 @@ report is now deleted by a retention sweep, together with the content it removed
 `modules/account-suspension/account-suspension.service.ts`, `modules/moderation/report-retention.service.ts`,
 `schema.prisma` (`User`, `Report`).
 
+**[CHANGED v0.6 — 2026-11-11]** Three more things hang off a report. (1) `Report.appealRecordedByAdminId` records which admin filed an appeal on a suspended person's behalf (migration
+`20261128090000_add_report_appeal_recorded_by`; B-292). (2) A report that is purged no longer takes its `AccountHold` rows or an escalated Contact Us
+enquiry with it: the hold row stays with `reportId` cleared, the enquiry is detached (migration `20261129090000_account_hold_report_detachable`; B-299). (3) A
+Contact Us enquiry may now carry the category `suspension_appeal` (the person's name, email, subject, message, and the email address on the account that the
+helper line asks for; migration `20261128100000_add_contact_suspension_appeal_category`; B-298). R35 update, R36(i).
+
 **Grassroots records:** `GrassrootsTeam` (name, city, league type, creator),
 `Fixture` (time, venue), `Result` (scores, who entered). **Note for counsel:**
 `Fixture` combines a **venue** and a **scheduled time** with team rosters that may
@@ -494,7 +549,7 @@ Assessed field by field against the built schema. **All conclusions provisional.
 | `Conversation` / `Message` content | Necessary to a messaging feature | **The harder question is not necessity but whether minors should have unrestricted DM access at all — see R2.** **[CHANGED v0.4 — 2026-11-10]** Retention is now 12 months from sending (founder decision, Decision Log #478), with exceptions; the stored original of an edited message and the reporter-chosen context messages are new data; see R33. No counsel position exists on the 12-month figure |
 | `Fixture.venue` + `scheduledAt` | Necessary to fixtures | **Proportionality turns on visibility, not collection — see R7** |
 | `LeaderboardEntry` (public rank) | Necessary to the feature | **[PROPOSAL]** Public ranking of identifiable minors is a design choice, not a technical necessity — counsel to consider whether minors should be excluded from public boards or shown pseudonymously |
-| `Report.reason` (free text) | Necessary to moderation | Free text will attract sensitive disclosures by design; handling needs care. **[CHANGED v0.5 — 2026-11-11]** A closed report is now deleted 12 months after closure (6 years if it concerns a minor); see R36. The 6-year figure is the founder's decision and is unverified for UK law |
+| `Report.reason` (free text) | Necessary to moderation | Free text will attract sensitive disclosures by design; handling needs care. **[CHANGED v0.5 — 2026-11-11]** A closed report is deleted 6 years after closure (7 years if it concerns a minor), inside counsel's approved "6–7 years"; see R36. **[CHANGED v0.6 — 2026-11-11]** (v0.5 said 12 months and 6 years) |
 | `MatchData` | Not personal data of users | Confirm vendor licence terms |
 
 ### 2.3 Proportionality observations
@@ -546,10 +601,12 @@ is present in the data model. Specifically:
   conversation, in which case it stays for as long as that report or hold does (R33). No retention clock exists for a
   report, so "as long as the report" is open-ended. A moderator's soft removal does not delete anything (R34).
   **[CHANGED v0.5 — 2026-11-11]** The sentence "No retention clock exists for a report" is **no longer true for a closed report**: a daily sweep now deletes a
-  closed report, and the content it removed, 12 months after closure (6 years if the report concerns a minor), and a deleted
+  closed report, and the content it removed, 6 years after closure (7 years if the report concerns a minor) **[CHANGED v0.6 — 2026-11-11]**, and a deleted
   report ends the exceptions above. It remains true for a report that is still open or awaiting an appeal, an escalated report, a
   report under an active admin hold, and the four "blocked" cases listed in R36(d). So the departed user's messages stay under the
   anonymous label for as long as the **later** of 12 months from sending and the life of any report that points at them (R36).
+  **[CHANGED v0.6 — 2026-11-11]** That life is now up to 6 years after closure, or 7 years if the report concerns a minor (R36(b)), so a departed user's messages that
+  a report points at can stay under the anonymous label for years longer than v0.5 said.
 - **`MediaAsset.uploaderId` is a plain `String` with no foreign-key relation to
   `User`.** Media therefore may not be reliably discoverable from a user record,
   which affects both erasure and access requests. **[PROPOSAL]** Flag as a
@@ -1310,10 +1367,19 @@ two statements cannot save a message the delete has already removed (a single-tr
 
 **[CHANGED v0.5 — 2026-11-11]** **Update to (c): "no retention clock exists for reports" is superseded for closed reports** (Decision Log #487, B-294,
 `ReportRetentionService`). A closed report, its context links and (if the message was removed) the removed message are deleted
-12 months after closure, or 6 years if the report concerns a minor; the context messages themselves are **not** deleted by that
+6 years after closure, or 7 years if the report concerns a minor **[CHANGED v0.6 — 2026-11-11]**; the context messages themselves are **not** deleted by that
 sweep and then fall to the normal 12-month message sweep. Exceptions (i) and (ii) therefore now last at most until the report is
 deleted, **except** where the report is open or awaiting an appeal, escalated (kept until counsel answers B-206), under an
 active admin hold, or blocked (R36(d)). The hold rule for messages is still legal hold only; the rule for reports differs (R36(e)).
+
+**[CHANGED v0.6 — 2026-11-11]** **Update to (c), v0.6: the exceptions now last up to 6 or 7 years.** Because exceptions (i) and (ii) last as long as the report, and a report is now kept
+6 years after closure (7 if it concerns a minor), a reported message, and the up to 20 context messages a reporter attached from a child's private chat,
+can stay in the database for years after the 12-month message rule would have deleted them. Context messages are protected while the report exists and
+fall to the 12-month sweep only after it is deleted. This is the largest increase in how long children's private messages can be kept; it comes from the
+reporting design (R33(d)) and the report clock (R36(b)), not from the 12-month message rule, which is unchanged. Mitigations that exist, none new: only
+a recipient can report; the reporter picks at most 20 messages in a 10-before, 10-after window, checked on the server; staff-only reading; vetted-only
+reading and acting when a child is involved (the (f) update); deletion at the end of the period. Not mitigated: nothing shortens the period for a message
+report. **[FOR FOUNDER — not a counsel blocker]** whether a message attached as context should be kept for the full report period.
 
 **(d) Reporter-added context (Decision Log #477, B-286).** A person who reports a message from a conversation they take
 part in may attach other messages of **that conversation**: up to 20 in total, each among the 10 messages immediately
@@ -1364,6 +1430,18 @@ that would show what happened; (iv) post, comment and user reports about a child
 shown); (v) only the admin report-detail read was checked in this pass, not every other place staff can see a message.
 **[ACTION FOR REVIEW]** whether (i) to (iv) are acceptable.
 
+**[CHANGED v0.6 — 2026-11-11]** **Update to (f), v0.6: acting on a message report now follows the children in the thread** (Decision Log #491, B-297, PR #730;
+`moderation.service.ts` `assertVettedToActOn`). Recording an action on a message report, recording an appeal on someone's behalf and deciding an appeal now
+need a child-safety-vetted admin when the reported sender or any participant of the conversation is under 18 (the same fail-closed reading as the read
+rule: a missing message row or a participant with no user row counts as a child), as well as when `Report.concernsMinor` is true. A vetted admin is never
+blocked and the thread is not looked up for them. Other admins can still open the report and see the bare message and "Context hidden: this involves a
+child". **This answers (iii) for message reports.** **What remains, read in the code:** (a) a post, comment or user report about a child under a category
+other than `child_safety_concern` can still be actioned, including suspended, by a non-vetted moderator; (b) the user-page suspension (`PATCH
+/admin/users/:id`) has no vetting call in `admin-users.service.ts` (found by search, not tested); (c) **the hold routes** (place a legal or bad-faith hold, lift a
+hold) in `moderation-holds.service.ts` are gated on `concernsMinor` only, so a non-vetted moderator can place or lift a hold on a message report between two
+children, and a hold keeps data longer (R36(e)); (d) `escalateReport` requires a vetted admin for every report, so it is unaffected. **[FOR FOUNDER — not a counsel blocker]** whether (a) to (c)
+should follow the same rule. Not a legal question; nothing is decided or changed by this draft.
+
 **(g) Right of access.** "Download my data" exports the account holder's **own sent messages** (current text of an edited
 message; never the original; not messages deleted for everyone; never other people's messages), so messages received, the
 stored originals and the context messages in a report are not in the export (`modules/data-export/data-export-file.builder.ts`).
@@ -1402,10 +1480,14 @@ window has closed; whether keeping the text of a removed item indefinitely meets
 how this interacts with Article 17 for the author.
 
 **[CHANGED v0.5 — 2026-11-11]** **Update to (b): a clock now exists, through the report.** The report sweep (R36) hard-deletes the content a closed report
-removed (the post with its comments, media rows and engagement rows; the comment; the message), then the report, 12 months after
-closure (6 years if the report concerns a minor). Until then the removed text stays, exactly as (b) describes, and it stays
+removed (the post with its comments, media rows and engagement rows; the comment; the message), then the report, 6 years after
+closure (7 years if the report concerns a minor) **[CHANGED v0.6 — 2026-11-11]**. Until then the removed text stays, exactly as (b) describes, and it stays
 longer where the report is open, escalated, under an active admin hold or blocked (R36(d)). **[ACTION FOR REVIEW]** the question
 in (b) stands for the period before the sweep.
+
+**[CHANGED v0.6 — 2026-11-11]** **Update, v0.6:** the period before the sweep is now 6 or 7 years after closure, not 12 months or 6 years. Removed text, and the stored copy of a removed
+item, therefore stays far longer than v0.5 said (the stored **files** of a removed post are unchanged: private copy deleted at closure, Decision Log #484).
+**[FOR FOUNDER — not a counsel blocker]** whether removed text should have a shorter clock than the report that removed it.
 
 **(c) The author can still delete a removed post.** `DELETE /posts/:id` is not blocked for the author of a removed post;
 the hard delete removes the post row and with it the item the removal rests on (the report keeps its own record). The
@@ -1466,7 +1548,7 @@ an adopted default. **Risks for counsel:** (i) the person learns they were repor
 two-person thread that may let them infer who reported them; (ii) for a serious matter that may be under investigation by an
 external authority, an automatic email to the account holder at the moment of suspension could prejudice that investigation, and
 **no switch withholds the email to the person for a given report** (the flag of Decision Log #458 withholds only notices to a
-guardian); (iii) suspension is not blocked by an active admin hold (the service contains no hold check); (iv) for a minor, the
+guardian); (iii) suspension is not blocked by an active admin hold (the service contains no hold check) **[CHANGED v0.6 — 2026-11-11]** (now a founder decision, Decision Log #494; no counsel position); (iv) for a minor, the
 email goes to the minor's own address and the guardian receives a separate notice of the kind of action, unless it is withheld.
 **[ACTION FOR REVIEW]** whether notice should ever be delayed or withheld, and who decides.
 
@@ -1485,6 +1567,40 @@ recorded but not decided (register Section 84b); (vi) a non-vetted moderator can
 context is hidden from them (R33(f)(iii)); (vii) whether suspending a **child's** account is proportionate for each reason
 category is a question for counsel. **[ACTION FOR REVIEW]** all of (i) to (vii).
 
+**[CHANGED v0.6 — 2026-11-11]** **Update to R35, v0.6.** *Sources: `modules/moderation/moderation.service.ts` (`recordAppealOnBehalf`, `decideAppeal`, `assertVettedToActOn`),
+`modules/contact/contact.constants.ts`, `modules/moderation/report-retention.service.ts`, `modules/account-suspension/account-suspension.service.ts`; Decision Log #138,
+#440, #460, #491, #492, #493, #494; build-register B-292, B-297, B-298, B-299; PRs #730, #731, #732, #735. Nothing was run.*
+
+1. **(c)(i) is answered in code, but only partly in the product.** A suspended person still cannot call `POST /reports/:id/appeal` (it needs a signed-in
+   user). What now exists: a seventh public Contact Us category, key `suspension_appeal`, label "Appeal a suspension" (the API accepts it and Figma draws it;
+   **the web Contact Us page and the admin inbox filter do not offer it yet**, found by search: the key appears only under `services/api`); and
+   `POST /admin/moderation/reports/:id/appeal`, which lets a moderator or superadmin record an appeal on the person's behalf. Rules as built: only for a report
+   whose action was `user_suspended`; the report must be actioned and not already appealed; the reported account must still exist and not be anonymised; the same
+   30-day window counted from the decision; a written reason is required; the same vetting gate as acting on the report (item 3); the recording admin is stored
+   and **may not decide the appeal**, and neither may the admin who took the original action (Decision Log #138 unchanged), so a staff-recorded appeal needs a
+   third admin; the reported person is sent nothing; the admin action log records the status only, never the reason text. A pending appeal pauses the closure
+   clock, so the report stays out of the retention sweep while it is pending. A suspension made from the user page has no report: a moderator reviews the
+   Contact Us enquiry and may reinstate from the user page (Decision Log #485(f)).
+2. **What an appeal puts in the database about a person who may be a child.** (a) The Contact Us enquiry holds the name, email, subject and message the person
+   typed; the helper line (B-298) asks for the email address on the account, so the enquiry can tie a child's account to an address. A suspended person cannot
+   sign in, so the enquiry is stored as a guest's. It is deleted 12 months after its last message (Decision Log #440 and #460, the founder's figure, not
+   counsel's) **unless it is escalated into a report**, when it follows the report (R36(i)). (b) The staff-typed appeal reason is stored in `Report.appealReason` and
+   lives as long as the report (R36(b)). (c) **The enquiry inbox (list and detail) has no child-safety-vetting gate**: any moderator or superadmin can read it;
+   the only vetting check on that route is when an admin escalates with the minor flag set. An enquiry from a child about their own suspension is therefore
+   readable by non-vetted staff, and the rules that protect a `concernsMinor` report do not reach it. **[FOR FOUNDER — not a counsel blocker]** whether the inbox should hide, from
+   non-vetted staff, an enquiry whose sender's account belongs to a minor. Not decided and not changed.
+3. **(c)(vi) is superseded for message reports** (Decision Log #491): recording an action (so also a suspension) on a message report needs a vetted admin where the
+   sender or any participant is under 18; see the R33(f) update for the exact rule and for what is still ungated (post, comment and user reports; the user-page
+   suspension; the hold routes).
+4. **(b)(iii) is a decision, not an open point.** The founder decided there is no legal-hold check on a suspension (Decision Log #494). It is not assessed by
+   counsel. The reinstatement email says nothing about points, and the emails as built are the source of truth (#494).
+5. **(c)(iv) changes shape.** When the sweep deletes a suspending report, `User.suspendedByReportId` is still emptied, the account stays suspended and can then be
+   reinstated only by hand. With the new clock that is 6 or 7 years after the report closed, so a suspension that nobody lifts outlives the evidence for it. **[FOR FOUNDER — not a counsel blocker]** no maximum duration or scheduled review of a suspension
+   exists (unchanged).
+6. **Recorded, not decided, stays open (register Section 85c): the suspension email goes to the address on file.** If someone changed the account's email address
+   before the suspension, the real owner is not told, and an email that names a reason category reaches the new address. Not tested. **[FOR FOUNDER — not a counsel blocker]** whether the
+   email should also go to a previous address or be held when the address changed recently. Nothing is decided.
+
 *Draft severity: high (a restriction on an account, sometimes a child's, decided by one person and communicated automatically).
 Draft likelihood: moderate. Placeholder ratings for counsel.*
 
@@ -1502,16 +1618,16 @@ whether an external authority was contacted; the action taken and the appeal fie
 the removed-content columns, the soft-removed post, comment or message (R34). Reports are the highest-sensitivity records in the
 system (§1.3).
 
-**(b) The clock (Decision Log #487, founder decision; B-294, PR #725).** A daily sweep (04:15) deletes a report when it has been
-**closed** for more than the period: **12 months**, or **6 years if `Report.concernsMinor` is true** (a report in the
+**(b) The clock (Decision Log #487 and #490, founder decisions; B-294, PR #725; B-299, PR #735).** A daily sweep (04:15) deletes a report when it has been
+**closed** for more than the period: **6 years**, or **7 years if `Report.concernsMinor` is true** **[CHANGED v0.6 — 2026-11-11]** (v0.5: 12 months and 6 years) (a report in the
 `child_safety_concern` category always is, Decision Log #466). Both periods are configuration
-(`REPORT_RETENTION_MONTHS`, `REPORT_RETENTION_CONCERNS_MINOR_YEARS`). "Closed" is the computed moment `reportClosedAt`: for a
+(`REPORT_RETENTION_YEARS`, `REPORT_RETENTION_CONCERNS_MINOR_YEARS`). "Closed" is the computed moment `reportClosedAt`: for a
 dismissed report, the review time; for an actioned report with no appeal, the review time plus the appeal window (30 days by
 default, Decision Log #442); after an upheld appeal, the time the appeal was decided. **A report that is still open, awaiting an
-appeal, or reopened by an overturned appeal has no closure and is never due.** At most 100 reports are deleted per run. **The
-6-year figure is unverified for UK law (and for Nigeria, the US and the EU); counsel may confirm it, and the build was not held
-for that. No counsel position on either period is recorded. [ACTION FOR REVIEW]** whether 12 months and 6 years are defensible,
-whether a different split is needed, and what happens to a report that is never closed.
+appeal, or reopened by an overturned appeal has no closure and is never due.** At most 100 reports are deleted per run. ****[CHANGED v0.6 — 2026-11-11]** The
+6 and 7 years sit inside the "6–7 years" that the legal draft records as counsel's approved retention for moderation cases (v0.7 resolved decision 10), so
+v0.5's "unverified for UK law" caveat on the old 6-year figure no longer applies to these figures; this DPIA has not seen counsel's advice itself, and the
+range was not checked for Nigeria, the US or the EU. See (g) for the two narrow legal questions that remain, and what happens to a report that is never closed.
 
 **(c) What goes with the report, in one transaction, in this order.** First, the content the report removed: the post (with its
 media rows, comments, likes, saves, views, hashtag links, media reports and the like and comment notifications that point at it;
@@ -1527,8 +1643,7 @@ reporter, on the account behind the target, or, for a message report, on the rep
 of its conversation; the report has been **escalated** (kept until counsel answers B-206, the statutory-preservation question);
 the removed post's stored file is not yet deletable under the removed-media rule; or another report that is not yet closed
 targets the removed item or the comments under a removed post. *Kept and counted in the log* ("blocked") when another record
-depends on it and no rule says what to do: an account-hold record still references the report; a Contact Us enquiry was escalated
-into it; the removed post is a **Contest entry** (deleting it would delete votes, winners and impressions); or a removed message
+depends on it and no rule says what to do: **[CHANGED v0.6 — 2026-11-11]** (v0.5 also listed an account-hold record and an escalated Contact Us enquiry here; both are now detached, see (i)) the removed post is a **Contest entry** (deleting it would delete votes, winners and impressions); or a removed message
 is attached as context to a **different** report. These cases are open-ended. **[ACTION FOR REVIEW]** whether any of them needs
 an end date.
 
@@ -1551,8 +1666,44 @@ open, appeal-pending, escalated, held and blocked reports. Deletion is a hard de
 versioning and the provider's own copies were not examined, and the sweep logs counts only (no record of which report was
 deleted other than the admin action log, which is never touched).
 
+**[CHANGED v0.6 — 2026-11-11]** **Update to R36, v0.6.** *Sources: `modules/moderation/report-retention.config.ts` and `report-retention.service.ts`; migration
+`20261129090000_account_hold_report_detachable`; `modules/account-hold/account-hold.rules.ts`; `modules/moderation/moderation.service.ts`; legal draft v0.7 resolved decision
+10; Decision Log #490, #493, #491, #492, #440; build-register B-299, B-297, B-292, B-206; PR #735. Nothing was run.*
+
+**(g) The figures, and the two narrow legal questions.** Decision Log #487 had set 12 months and 6 years, which is shorter than the range counsel is recorded
+as having approved; #490 restores it. The legal draft records "6–7 years for data tied to a concluded investigation or moderation case" as a counsel review
+outcome; this DPIA relies on that record and has not seen the advice. **[ACTION FOR REVIEW]** (1) whether a report that was **dismissed** (no action taken), or
+that was filed in bad faith, is "data tied to a concluded investigation or moderation case" and so inside the approved range, or needs a shorter period; (2)
+whether the split by `concernsMinor` (6 years, 7 years) is the split counsel meant, since the range was recorded as "6–7 years", not as a rule.
+
+**(h) A larger and older store: what that means, and what protects it.** Reports are the highest-sensitivity records in the system (§1.3). With the new clock the
+typical report is kept six times as long as v0.5 said (6 years instead of 12 months); a child-safety report one year longer; a message report carries up to 20 context messages of a child's
+private chat for the same period (R33(c)); an appeal adds the staff-typed reason (R35 update). More people's records are in the store at any moment, and a leak
+or a loss would reach further back. *Controls that exist, read from the code, none new:* the daily sweep (04:15, at most 100 per run, re-checked inside the
+transaction, counts-only log, nothing logged about which report went); access limited to the moderator and superadmin roles (editors have none) on a separate
+admin sign-in domain; the child-safety-vetting gate on `concernsMinor` reports and, now, on acting on a message report that involves a child (R33(f) update); the
+vetted-only reading of message context and edited originals (Decision Log #486); the admin action log, which records actions, an appeal being recorded and a
+hold being placed, and which the sweep never touches. *What is not there:* no field-level encryption of `Report` columns (they are plain columns, incident plan
+§1); **reading a report is not logged** (the action log has actions, not views); this pass found no step that redacts or minimises a report between its
+closure and its deletion; backups, R2 versioning and the provider's own copies were not examined. **[FOR FOUNDER — not a counsel blocker]** whether reads of child-flagged reports
+should be logged, and whether anything should be minimised at closure. Nothing is decided or invented here; for the breach side see the incident plan §8.4 and Q21.
+
+**(i) What no longer blocks the sweep, and what stays open** (Decision Log #493; B-299).
+1. **A hold record no longer blocks.** When a due report is purged, an `AccountHold` row that references it stays and its `reportId` is set to NULL; the hold is
+   otherwise unchanged (the migration relaxes the CHECK that required a bad-faith hold to keep a report). A detached hold is audit evidence that outlives the
+   report.
+2. **An escalated Contact Us enquiry no longer blocks.** It is detached (`escalatedReportId` set to NULL) and goes back to its normal 12-month clock from its
+   own last message, so for an old enquiry the next daily enquiry job (03:45) can delete it.
+3. **Still blocked and counted:** the removed post is a Contest entry (until Decision Log #488 is built; **this pass did not check whether it is**); a removed
+   message is attached as context to a different report. **Still skipped:** an active admin hold on an involved account, an escalated report, media not yet
+   deletable, another unclosed report on the same item.
+4. **Recorded, not decided, stays open (register Section 85c): a held report keeps its enquiry.** While an active hold or an escalation keeps a report, the
+   enquiry escalated into it (a name, an email, a message, and possibly a child's account email from a suspension appeal) is kept as well, because the 12-month
+   enquiry job never deletes an escalated enquiry. It returns to the 12-month clock only after the report is purged, and a legal hold has no end date.
+   **[FOR FOUNDER — not a counsel blocker]** whether a held report should detach its enquiry earlier. A pending appeal also keeps its report (the closure clock is paused), which is intended.
+
 *Draft severity: high (the records hold allegations about and by children). Draft likelihood: certain (it is how the product is
-built). Placeholder ratings for counsel.*
+built). Placeholder ratings for counsel. **[CHANGED v0.6 — 2026-11-11]** v0.6 changes no rating; a longer-kept store is a reason to revisit them, not a new rating.*
 
 ---
 
@@ -1585,9 +1736,9 @@ entry below should be read as a claim that the mitigation is adequate.*
 | **R15** EU GDPR | Decide whether EU users are intentionally served; if so appoint an Article 27 representative and name them in the privacy notice; confirm the lawful basis so it is clear whether Article 8 or national contract-capacity law governs; keep thresholds ≥ 16 | `computeIsMinor` (<18), `computeIsUnder16` (<16) — both ≥ the highest member-state floor. No country field, no geo-control. **Open:** representative not appointed; verification of parental authorisation (R16); no backend age floor | **Partially** — thresholds yes; representative, country awareness, verification no |
 | **R16** COPPA VPC | One of: (A) a recognised stronger consent method for under-13s; (B) no disclosure of under-13s' information + email-plus with a delayed confirming step; (C) do not accept under-13s; (D) rely on not serving US children. **None chosen** | Current control is the emailed consent link: `RegistrationService.register`, `GuardianConsentService.confirmConsent`. **No guardian≠child email check; no second step; single bundled consent; no parent data-review route** (§2.6.3, §2.6.4). Not COPPA-grade for under-13s in the drafter's reading | **No** — current mechanism very likely insufficient; stronger method not built |
 | **R33** Private messages | Messages are not E2E encrypted (stated, not mitigated); 12-month deletion of every message (minors and adults); exceptions only for reported messages, report context and active legal holds; a reporter's context is limited to 20 messages in a 10-before / 10-after window, checked server-side; only the recipient can report; staff-only read; filing notifies nobody; vetting gate for `concernsMinor` reports | `MessageRetentionService`; `MessagingService`; `ModerationService.createReport` / `resolveContextMessageIds` / admin report detail; `AdminUser.childSafetyVetted` (Decision Log #477, #478, #482, #466). **Open:** the 12-month figure has no counsel position; exceptions are open-ended because reports have no retention clock; the vetting gate keys off the report's category, not the participants' ages; other participants are not told their messages can be shown to staff; no at-rest encryption verified  **[CHANGED v0.5 — 2026-11-11]** Message context is now hidden from non-vetted staff when any participant is under 18 (R33(f) update); closed reports are deleted by a retention sweep (R36); the bare reported message and the vetting requirement to act are unchanged. | **Code merged** — partial; not verified live |
-| **R34** Soft removal | Moderator removal hides the item from users and keeps it for staff; reported item only, never context; appeal restores; stored files of a removed post follow a two-stage deletion (public copy withdrawn, private copy deleted when the report closes, unless an admin hold or another open report applies) | `content-removal.util.ts`; `ModerationService.actionReport` / `decideAppeal`; `PostMediaObjectsService.withdraw`; `RejectedMediaSweepService.confirmModerationRemovals` (Decision Log #483, #484). **Open:** no retention clock for removed text; author can still hard-delete a removed post; own-data export still includes removed items; Contest and points effects undecided; evidence set-aside for statutory reporting is B-206 (counsel)  **[CHANGED v0.5 — 2026-11-11]** The report sweep now hard-deletes removed content with its report, 12 months after closure (6 years if the report concerns a minor) (R36). | **Code merged** — partial; not verified live |
-| **R35** Suspension on a report | **[CHANGED v0.5 — 2026-11-11]** A moderator's `user_suspended` suspends the account in the same step; sessions ended, points revoked, guardian told the kind of action, the person emailed with a fixed plain-words reason; reinstatement email; automatic reinstatement on an overturned appeal of the suspending report; manual reinstatement from the user page | `AccountSuspensionService`; `ModerationService.actionReport` / `decideAppeal`; `RegistrationEmailService` (Decision Log #485, #458, #138). **Open:** no way for a suspended person to file an appeal (B-292 not built; Contact Us only); no withholding of the email to the person; points not restored; no maximum duration or review; pointer lost if the report is deleted; a non-vetted moderator can suspend a child on a message report; wording and the reason map not counsel-reviewed | **Code merged** (B-291) — partial; not verified live |
-| **R36** Report retention | **[CHANGED v0.5 — 2026-11-11]** Closed reports are deleted 12 months after closure (6 years if `concernsMinor`), with the content they removed; context links go, context messages fall to the 12-month message sweep; holds, escalation, open and appeal-pending reports, and four blocked cases keep a report | `ReportRetentionService` (04:15 daily, 100 per run); `reportClosedAt`; `findActiveAccountHold`; `removedMediaDeletableNow` (Decision Log #487, #482, #484). **Open:** the 6-year figure is unverified for UK law and has no counsel position; open-ended cases; the hold rules differ by feature; backups and R2 versioning not examined | **Code merged** (B-294) — partial; not verified live |
+| **R34** Soft removal | Moderator removal hides the item from users and keeps it for staff; reported item only, never context; appeal restores; stored files of a removed post follow a two-stage deletion (public copy withdrawn, private copy deleted when the report closes, unless an admin hold or another open report applies) | `content-removal.util.ts`; `ModerationService.actionReport` / `decideAppeal`; `PostMediaObjectsService.withdraw`; `RejectedMediaSweepService.confirmModerationRemovals` (Decision Log #483, #484). **Open:** no retention clock for removed text; author can still hard-delete a removed post; own-data export still includes removed items; Contest and points effects undecided; evidence set-aside for statutory reporting is B-206 (counsel)  **[CHANGED v0.5 — 2026-11-11]** The report sweep now hard-deletes removed content with its report, 6 years after closure (7 years if the report concerns a minor) **[CHANGED v0.6 — 2026-11-11]** (R36). | **Code merged** — partial; not verified live |
+| **R35** Suspension on a report | **[CHANGED v0.5 — 2026-11-11]** A moderator's `user_suspended` suspends the account in the same step; sessions ended, points revoked, guardian told the kind of action, the person emailed with a fixed plain-words reason; reinstatement email; automatic reinstatement on an overturned appeal of the suspending report; manual reinstatement from the user page | `AccountSuspensionService`; `ModerationService.actionReport` / `decideAppeal`; `RegistrationEmailService` (Decision Log #485, #458, #138). **Open:** **[CHANGED v0.6 — 2026-11-11]** a suspended person appeals through Contact Us and staff record the appeal (B-292 and B-298 merged in the API; web Contact Us page and admin inbox not built; the inbox has no child-safety gate; the suspension email goes to the address on file); no withholding of the email to the person; points not restored; no maximum duration or review; pointer lost if the report is deleted; a non-vetted moderator can still suspend a child on a post, comment or user report and from the user page (message reports now need a vetted admin, Decision Log #491); wording and the reason map not counsel-reviewed | **Code merged** (B-291) — partial; not verified live |
+| **R36** Report retention | **[CHANGED v0.5 — 2026-11-11]** Closed reports are deleted 6 years after closure (7 years if `concernsMinor`; **[CHANGED v0.6 — 2026-11-11]** v0.5 said 12 months and 6), with the content they removed; context links go, context messages fall to the 12-month message sweep; holds, escalation, open and appeal-pending reports, and four blocked cases keep a report | `ReportRetentionService` (04:15 daily, 100 per run); `reportClosedAt`; `findActiveAccountHold`; `removedMediaDeletableNow` (Decision Log #487, #482, #484). **Open:** **[CHANGED v0.6 — 2026-11-11]** the 6/7-year range is the one recorded as counsel-approved in legal draft v0.7 (not independently confirmed here) and whether a dismissed report fits it is a counsel question; a longer, older store with no field-level encryption and no logging of reads; held or escalated reports keep their enquiry until detached; open-ended cases; the hold rules differ by feature; backups and R2 versioning not examined | **Code merged** (B-294) — partial; not verified live |
 
 ### 4.1 The safeguarding fields are load-bearing
 
@@ -1658,12 +1809,18 @@ Restated in one place so nothing here is mistaken for settled.
 | 33 | **[CHANGED v0.4 — 2026-11-10]** **Soft removal (R34):** retention of removed text with no clock; author's ability to hard-delete a removed post; removed items in the author's own data export; Contest and points effects | Flagged for counsel; nothing decided | Counsel + founder |
 | 34 | **[CHANGED v0.4 — 2026-11-10]** **Media of a removed post (R34(g); addendum §1.5):** the window before the public object is withdrawn; the two-stage deletion; evidence set-aside is B-206 | Flagged for counsel; nothing decided | Counsel |
 | 35 | **[CHANGED v0.5 — 2026-11-11]** **Suspension on a report (R35):** lawfulness and proportionality of an account suspension recorded by one moderator and applied at once, for adults and for children; no second approval; points revoked and not restored | Flagged for counsel; nothing decided by this draft | Counsel + founder |
-| 36 | **[CHANGED v0.5 — 2026-11-11]** **Notice to the suspended person and tipping off (R35(b)):** automatic email at the moment of suspension, with a category-based reason; no switch to delay or withhold it for a serious or externally investigated matter; suspension is not blocked by an active hold | Flagged for counsel; nothing decided | Counsel + founder |
-| 37 | **[CHANGED v0.5 — 2026-11-11]** **Appeal route for a suspended person (R35(c)):** the product's appeal route needs a signed-in user; the staff-recorded appeal (B-292) is not built; Contact Us only; the 30-day window runs meanwhile | Gap flagged; build item B-292 | Founder + counsel |
+| 36 | **[CHANGED v0.5 — 2026-11-11]** **Notice to the suspended person and tipping off (R35(b)):** automatic email at the moment of suspension, with a category-based reason; no switch to delay or withhold it for a serious or externally investigated matter; suspension is not blocked by an active hold **[CHANGED v0.6 — 2026-11-11]** (founder decision, Decision Log #494; no counsel position) | Flagged for counsel; nothing decided | Counsel + founder |
+| 37 | **[CHANGED v0.5 — 2026-11-11]** **Appeal route for a suspended person (R35(c)):** the product's appeal route needs a signed-in user; the staff-recorded appeal (B-292) and the Contact Us "Appeal a suspension" category (B-298) are merged in the API; the web page and the admin inbox are not built; the 30-day window runs meanwhile **[CHANGED v0.6 — 2026-11-11]** | Gap flagged; build item B-292 | Founder + counsel |
 | 38 | **[CHANGED v0.5 — 2026-11-11]** **Suspension pointer and duration (R35(c)(iii)–(v)):** no maximum duration or review; the pointer to the suspending report is emptied when the report is deleted; overlapping suspensions undecided | Flagged; register Section 84b | Founder |
-| 39 | **[CHANGED v0.5 — 2026-11-11]** **Report retention periods (R36(b)):** 12 months, and 6 years if the report concerns a minor, after closure; the 6-year figure is unverified for UK law; a report that is never closed has no end | Flagged for counsel; counsel may confirm; the build was not held for it | Counsel + founder |
+| 39 | **[CHANGED v0.5 — 2026-11-11]** **Report retention periods (R36(b)):** 6 years, and 7 years if the report concerns a minor, after closure (counsel's recorded range, legal draft v0.7); whether a dismissed report fits the range; a report that is never closed has no end **[CHANGED v0.6 — 2026-11-11]** | Flagged for counsel; counsel may confirm; the build was not held for it | Counsel + founder |
 | 40 | **[CHANGED v0.5 — 2026-11-11]** **Open-ended report cases and hold rules (R36(d)–(e)):** escalated, held and blocked reports have no end date; messages follow a legal-hold-only rule while reports and removed files follow legal-or-bad-faith; what counts as "the accounts involved" | Flagged for counsel; nothing decided | Counsel + founder |
-| 41 | **[CHANGED v0.5 — 2026-11-11]** **Vetted-only message context, what remains (R33(f) update):** the bare reported message is visible to non-vetted staff when a child is involved; the vetting requirement to act still keys off `concernsMinor`; post, comment and user reports are not gated by participants' ages; "under 18" is a daily-updated flag | Gap narrowed, not closed; flagged for counsel | Counsel + founder |
+| 41 | **[CHANGED v0.5 — 2026-11-11]** **Vetted-only message context, what remains (R33(f) update):** the bare reported message is visible to non-vetted staff when a child is involved; the vetting requirement to act keys off `concernsMinor` and, for message reports, the participants' ages (#491, v0.6); post, comment and user reports are not gated by participants' ages; "under 18" is a daily-updated flag | Gap narrowed, not closed; flagged for counsel | Counsel + founder |
+| 42 | **[CHANGED v0.6 — 2026-11-11]** **Retention range fit (R36(g)):** whether a dismissed or bad-faith report is "data tied to a concluded investigation or moderation case"; whether the 6-year / 7-year split by `concernsMinor` is the split counsel meant | Flagged for counsel; counsel's advice not seen by this draft | Counsel |
+| 43 | **[CHANGED v0.6 — 2026-11-11]** **A larger, older store of reports about and by children (R36(h)):** no field-level encryption of `Report` columns; reading a report is not logged; nothing minimised at closure; backups not examined | Stated; nothing decided or built | Founder + `backend-api` |
+| 44 | **[CHANGED v0.6 — 2026-11-11]** **Contact Us "Appeal a suspension" enquiry (R35 update, items 1–2):** may hold a child's account email; the inbox has no child-safety-vetting gate; deleted 12 months after the last message unless escalated | Gap flagged; nothing decided | Founder |
+| 45 | **[CHANGED v0.6 — 2026-11-11]** **What still does not need a vetted admin to act (R33(f) update):** post, comment and user reports about a child outside `child_safety_concern`; the user-page suspension; the hold routes | Gap flagged; nothing decided | Founder |
+| 46 | **[CHANGED v0.6 — 2026-11-11]** **The suspension email goes to the address on file (R35 update, item 6)** — recorded, not decided (register Section 85c) | Open | Founder |
+| 47 | **[CHANGED v0.6 — 2026-11-11]** **A held or escalated report keeps its enquiry until the report is purged; a legal hold has no end date (R36(i)(4))** — recorded, not decided (register Section 85c) | Open | Founder |
 
 ---
 
@@ -1729,6 +1886,11 @@ Date: ______________________________________________
 ---
 
 ## Closing statement
+
+*v0.6 (2026-11-11) note: this revision restores report retention to 6 and 7 years, records who may act on a message report that involves a child, and records the
+appeal route for a suspended person and what it puts in the database, revisiting R33(f), R35 and R36; every changed passage is marked "CHANGED v0.6". It does not
+complete, advance or approve the DPIA, it closes no risk, no legal proposition in it was checked against a primary source, and the Section 6 sign-off block remains
+empty; "Reviewed by counsel: NOT YET."*
 
 *v0.5 (2026-11-11) note: this revision updates the DPIA for suspension of an account on a report, the vetted-only visibility
 of message context when a child is involved, report retention and the hold rules compared, and adds R35 and R36; every changed

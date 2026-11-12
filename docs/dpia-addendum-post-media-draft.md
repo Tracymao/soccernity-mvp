@@ -5,7 +5,7 @@
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
-`docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post; **[CHANGED v0.3 — 2026-11-11]** v0.5 from 2026-11-11, which adds R35 and R36 and restates the hold rules side by side), which is the DPIA it would attach to, and it does not edit
+`docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post; **[CHANGED v0.3 — 2026-11-11]** v0.5 from 2026-11-11, which adds R35 and R36 and restates the hold rules side by side; **[CHANGED v0.4 — 2026-11-11]** v0.6 from 2026-11-11, which restores report retention to 6 and 7 years), which is the DPIA it would attach to, and it does not edit
 `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8) or `docs/dpia-addendum-contest-view-data-draft.md`. If counsel
 accepts it, folding it into the main DPIA (as proposed risks R23 to R31, a new §1.3 row group and new §5 items) is a
 separate step for whoever maintains that file.
@@ -22,8 +22,8 @@ counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to th
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3)
-- **Version:** 0.3 (draft, NOT APPROVED)
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4)
+- **Version:** 0.4 (draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
@@ -214,7 +214,7 @@ no media, so the rule concerns posts only.
 Decision Log #482, #484, #487; build-register B-290, B-294, B-296, B-206; PR #724, #725. Nothing was run.*
 
 1. **Step 4 (closure) is now followed by a second deletion: the post itself.** The private copy is still deleted at closure of the
-   removing report (step 4, unchanged). New: a daily report sweep (04:15) deletes the **report** 12 months after closure (6 years if
+   removing report (step 4, unchanged). New: a daily report sweep (04:15) deletes the **report** **[CHANGED v0.4 — 2026-11-11]** 6 years after closure (7 years if
    it concerns a minor) and, in the same transaction, **the content the report removed**, which for a post means the post row and
    its `PostMedia` rows. **This partly answers finding 4 above** ("the `PostMedia` row outlives its files with no clock"): for
    the files of a **removed post**, the row, with its moderation category names, rejection reason and decision fields, is now
@@ -239,8 +239,26 @@ Decision Log #482, #484, #487; build-register B-290, B-294, B-296, B-206; PR #72
    bad-faith hold on the reporter, the account behind the target and, for a message report, all participants. Account
    anonymisation: any active admin hold. The differences remain a founder question.
 5. **Not changed by this update:** nothing sets a removed file aside for a statutory duty (B-206, finding 2); the 30-day appeal
-   window is still the only clock for the private copy (finding 5), now followed by the 12-month or 6-year report clock for the
+   window is still the only clock for the private copy (finding 5), now followed by the **[CHANGED v0.4 — 2026-11-11]** 6-year or 7-year report clock for the
    post row; "private" still depends on the launch step in finding 6.
+
+**[CHANGED v0.4 — 2026-11-11]** **Update to §1.5 (v0.4).** *Sources: `modules/moderation/report-retention.config.ts`, `report-retention.service.ts`; migration
+`20261129090000_account_hold_report_detachable`; `modules/post-media/rejected-media-evidence.util.ts`; Decision Log #490, #493, #484; build-register B-299, B-290, B-206;
+PR #735; DPIA v0.6 R36. Nothing was run.*
+
+1. **The report clock changed, so the clock on the post row and its `PostMedia` rows changed with it.** The report sweep (04:15) now deletes a report **6 years** after
+   closure, or **7 years** if the report concerns a minor, not 12 months or 6 years (Decision Log #490; the range is the "6–7 years" the legal draft records as counsel's
+   approved retention for moderation cases, v0.7 resolved decision 10; this addendum has not seen the advice itself). For a removed post that means the post row and its
+   `PostMedia` rows, with their moderation category names, rejection reason and decision fields, now stay up to **five years longer** than v0.3 said (one year longer
+   if the report concerns a minor). Finding 4 and R30 stand for files that were never part of a removed post.
+2. **The stored files are unaffected.** The two-stage deletion of Decision Log #484 is unchanged: the public copy is withdrawn at once; the private copy is deleted when the
+   removing report **closes** (the appeal window or an upheld appeal), not when it is purged, unless the uploader has an active admin hold or another unclosed report
+   covers the post (`removedMediaDeletableNow`, the one function the later B-206 evidence rule will change). So after closure the longer clock keeps **database rows
+   about** a removed child's file, not the file itself.
+3. **Two blocks are gone from the sweep:** a hold record that points at the report stays with its link cleared, and an escalated Contact Us enquiry is detached
+   (DPIA v0.6 R36(i)). **Still blocked and counted:** a removed post that is a Contest entry; a removed message attached as context to a different report.
+4. **[FOR FOUNDER — not a counsel blocker]** whether the labels and decision fields of a removed child's file need to survive 6 or 7 years once the file itself is gone.
+   The legal question that remains (what, if anything, must be set aside for a statutory duty) is B-206 and is unchanged.
 
 ---
 
@@ -563,7 +581,7 @@ removed, the check labels or decision fields (still no clock), or any statutory 
 
 **[CHANGED v0.3 — 2026-11-11]** **Further narrowed for removed posts only:** the `PostMedia` row of a removed post's file, including the category names,
 rejection reason and decision fields this risk says have no clock, is deleted together with the post when the report sweep deletes
-the report (12 months after closure, 6 years if the report concerns a minor; see §1.5 "Update to §1.5 (v0.3)"). Labels and
+the report (**[CHANGED v0.4 — 2026-11-11]** 6 years after closure, 7 years if the report concerns a minor; see §1.5 "Update to §1.5 (v0.3)" and "Update to §1.5 (v0.4)"). Labels and
 decision fields of files that were **never** part of a removed post still have no clock.
 
 ### R31 — No notice to the uploader or the guardian about the check, the reviewers or the retention **[COPY PENDING LEGAL REVIEW]**
@@ -800,9 +818,9 @@ Added because R24 turns on it. Built today: the public prefix.
 
 **[CHANGED v0.3 — 2026-11-11]** 23a. The report sweep adds a third rule (a legal or bad-faith hold on the reporter, the account behind the target and, for a
     message report, all participants) and account anonymisation a fourth (any hold skips the account). Should one hold rule apply
-    to messages, files and reports alike? (DPIA v0.5 R36(e))
-24. **[CHANGED v0.3 — 2026-11-11]** After the report sweep deletes a removed post's report, the post row and its `PostMedia` rows go with it (12 months after
-    closure, 6 years if the report concerns a minor). Is that the right end for the record of **what the file was and why it was
+    to messages, files and reports alike? (DPIA v0.5 R36(e); v0.6 R36(e) unchanged)
+24. **[CHANGED v0.3 — 2026-11-11]** After the report sweep deletes a removed post's report, the post row and its `PostMedia` rows go with it (**[CHANGED v0.4 — 2026-11-11]** 6 years after
+    closure, 7 years if the report concerns a minor). Is that the right end for the record of **what the file was and why it was
     rejected or removed**, or must some record of a removed child's file survive for a statutory duty (B-206)? Does the answer
     depend on whether the report concerned a child? (§1.5 "Update", item 1)
 25. **[CHANGED v0.3 — 2026-11-11]** A post that is a Contest entry is never deleted by the report sweep ("blocked"), so its stored-file record stays for as long as
