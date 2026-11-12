@@ -26,12 +26,20 @@ belonging to the founder and counsel, which this draft deliberately does not
 resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
-- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6)
+- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6); Contact Us appeal category now offered on the web page and in the admin inbox `docs/dpia-contactus-rollforward-2026-11-12` (v0.7)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6); revised 2026-11-12 (v0.7)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
   Claude Code, from the merged code rather than from summaries; v0.3 to v0.6 likewise
 - **Reviewed by counsel:** NOT YET — see Section 6
-- **Version:** 0.6 (draft — still NOT APPROVED)
+- **Version:** 0.7 (draft — still NOT APPROVED)
+
+### Changelog — v0.6 → v0.7 (2026-11-12)
+
+**What this update is, stated plainly.** A narrow correction against `origin/main` (`e2eac9a`). v0.6 said the seventh public Contact Us category
+"Appeal a suspension" (`suspension_appeal`) existed only in the API. That stopped being true when PR #739 (B-298) put the category in the public
+Contact Us form, with its helper line, and in the admin Contact enquiries filter, list and detail labels. Only the sentences that said so are changed
+(search for `[CHANGED v0.7`). **No new analysis, no new risk, no risk closed, and nothing here has been seen by counsel.** The sentences changed,
+and those checked and left alone, are listed in `docs/dpia-contactus-rollforward-2026-11-12-report.md`.
 
 ### Changelog — v0.5 → v0.6 (2026-11-11)
 
@@ -66,8 +74,8 @@ Changed:
    gap; it does not close it (R33(f) update, §5 item 45).
 4. **Appeals by a suspended person** (Decision Log #492; B-292, PR #731; B-298, PR #732). Staff can record an appeal on a suspended
    person's behalf; the recorder, and the admin who took the original action, may not decide it; a seventh public Contact Us
-   category "Appeal a suspension" exists in the API. This **answers R35(c)(i) in code**; the web page and the admin inbox do not
-   offer the category yet. It also means a Contact Us enquiry may hold a child's account details (R35 update, §5 items 37, 44).
+   category "Appeal a suspension" exists in the API. This **answers R35(c)(i) in code**; **[CHANGED v0.7 — 2026-11-12]** it is now also offered on
+   the public Contact Us page and in the admin inbox (PR #739; v0.6 said it was not). It also means a Contact Us enquiry may hold a child's account details (R35 update, §5 items 37, 44).
 5. **Smaller rulings** (Decision Log #494): no legal-hold check on a suspension is a founder decision, not an open point; the
    reinstatement email says nothing about points; the emails as built are the source of truth (R35(b)(iii)).
 6. **Kept open, recorded not decided (register Section 85c):** the suspension email goes to the address on file (R35 update, item
@@ -1573,7 +1581,8 @@ category is a question for counsel. **[ACTION FOR REVIEW]** all of (i) to (vii).
 
 1. **(c)(i) is answered in code, but only partly in the product.** A suspended person still cannot call `POST /reports/:id/appeal` (it needs a signed-in
    user). What now exists: a seventh public Contact Us category, key `suspension_appeal`, label "Appeal a suspension" (the API accepts it and Figma draws it;
-   **the web Contact Us page and the admin inbox filter do not offer it yet**, found by search: the key appears only under `services/api`); and
+   **[CHANGED v0.7 — 2026-11-12]** the public Contact Us page offers it in its category list and shows the helper line while it is chosen, and the admin Contact enquiries
+   filter, list and detail labels carry it: `apps/web/src/api/contact.ts`, `ContactPage.tsx`, `apps/admin/src/api/contactEnquiries.ts`, PR #739; v0.6 said these did not and that the key appeared only under `services/api`); and
    `POST /admin/moderation/reports/:id/appeal`, which lets a moderator or superadmin record an appeal on the person's behalf. Rules as built: only for a report
    whose action was `user_suspended`; the report must be actioned and not already appealed; the reported account must still exist and not be anonymised; the same
    30-day window counted from the decision; a written reason is required; the same vetting gate as acting on the report (item 3); the recording admin is stored
@@ -1810,7 +1819,7 @@ Restated in one place so nothing here is mistaken for settled.
 | 34 | **[CHANGED v0.4 — 2026-11-10]** **Media of a removed post (R34(g); addendum §1.5):** the window before the public object is withdrawn; the two-stage deletion; evidence set-aside is B-206 | Flagged for counsel; nothing decided | Counsel |
 | 35 | **[CHANGED v0.5 — 2026-11-11]** **Suspension on a report (R35):** lawfulness and proportionality of an account suspension recorded by one moderator and applied at once, for adults and for children; no second approval; points revoked and not restored | Flagged for counsel; nothing decided by this draft | Counsel + founder |
 | 36 | **[CHANGED v0.5 — 2026-11-11]** **Notice to the suspended person and tipping off (R35(b)):** automatic email at the moment of suspension, with a category-based reason; no switch to delay or withhold it for a serious or externally investigated matter; suspension is not blocked by an active hold **[CHANGED v0.6 — 2026-11-11]** (founder decision, Decision Log #494; no counsel position) | Flagged for counsel; nothing decided | Counsel + founder |
-| 37 | **[CHANGED v0.5 — 2026-11-11]** **Appeal route for a suspended person (R35(c)):** the product's appeal route needs a signed-in user; the staff-recorded appeal (B-292) and the Contact Us "Appeal a suspension" category (B-298) are merged in the API; the web page and the admin inbox are not built; the 30-day window runs meanwhile **[CHANGED v0.6 — 2026-11-11]** | Gap flagged; build item B-292 | Founder + counsel |
+| 37 | **[CHANGED v0.5 — 2026-11-11]** **Appeal route for a suspended person (R35(c)):** the product's appeal route needs a signed-in user; the staff-recorded appeal (B-292) and the Contact Us "Appeal a suspension" category (B-298) are merged in the API; **[CHANGED v0.7 — 2026-11-12]** the Contact Us category is now also offered on the web page and in the admin inbox (PR #739; v0.5 and v0.6 said these were not built); the in-app appeal still needs a sign-in; the 30-day window runs meanwhile **[CHANGED v0.6 — 2026-11-11]** | Gap flagged; build item B-292 | Founder + counsel |
 | 38 | **[CHANGED v0.5 — 2026-11-11]** **Suspension pointer and duration (R35(c)(iii)–(v)):** no maximum duration or review; the pointer to the suspending report is emptied when the report is deleted; overlapping suspensions undecided | Flagged; register Section 84b | Founder |
 | 39 | **[CHANGED v0.5 — 2026-11-11]** **Report retention periods (R36(b)):** 6 years, and 7 years if the report concerns a minor, after closure (counsel's recorded range, legal draft v0.7); whether a dismissed report fits the range; a report that is never closed has no end **[CHANGED v0.6 — 2026-11-11]** | Flagged for counsel; counsel may confirm; the build was not held for it | Counsel + founder |
 | 40 | **[CHANGED v0.5 — 2026-11-11]** **Open-ended report cases and hold rules (R36(d)–(e)):** escalated, held and blocked reports have no end date; messages follow a legal-hold-only rule while reports and removed files follow legal-or-bad-faith; what counts as "the accounts involved" | Flagged for counsel; nothing decided | Counsel + founder |

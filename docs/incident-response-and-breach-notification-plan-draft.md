@@ -1,4 +1,4 @@
-# Soccernity — incident-response and breach-notification plan (DRAFT v0.4)
+# Soccernity — incident-response and breach-notification plan (DRAFT v0.5)
 
 > **DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
@@ -17,6 +17,7 @@
 rests on. A reader can find every difference by searching for `v0.2 CHANGED`.
 **`[v0.3 CHANGED — source]`** = a passage added or changed in v0.3, with the same kind of source; search for `v0.3 CHANGED`.
 **`[v0.4 CHANGED — source]`** = a passage added or changed in v0.4; search for `v0.4 CHANGED`.
+**`[v0.5 CHANGED — source]`** = a passage changed in v0.5 (2026-11-12): one sentence in §4.10, corrected because the Contact Us "Appeal a suspension" category is now on the web page and in the admin inbox (PR #739). Nothing else changed; search for `v0.5 CHANGED`.
 Everything not marked is v0.1 to v0.3 text, unchanged. Only a real legal question is marked for counsel; a question for the founder that is not a legal
 blocker is marked **[FOR FOUNDER — not a counsel blocker]**.
 
@@ -377,8 +378,7 @@ and preserve it (§8) before recording the removal.
 
 
 **[v0.4 CHANGED — #492, #494; B-292, B-298]** **Appeals of a suspension.** *Draft for counsel review — not approved, not legal advice.* A suspended person cannot sign in, so
-cannot use the in-app appeal. They write through the public Contact Us page (seventh category, "Appeal a suspension"; the API accepts it, the web page and the admin inbox
-do not offer it yet), and a moderator or superadmin records the appeal on a report suspension (only for a `user_suspended` action, only inside the 30-day window, a reason
+cannot use the in-app appeal. They write through the public Contact Us page (seventh category, "Appeal a suspension"; **[v0.5 CHANGED — PR #739]** the API accepts it and the public Contact Us page and the admin inbox filter now offer it too; v0.4 said the web page and the admin inbox did not), and a moderator or superadmin records the appeal on a report suspension (only for a `user_suspended` action, only inside the 30-day window, a reason
 required). **The staff member who records the appeal, and the one who took the original action, may not decide it**, so a third admin is needed; for a message report
 involving a child, all of them must be child-safety-vetted. The recorded appeal pauses the report's retention clock. Two things for a responder to expect: the Contact Us
 enquiry may hold a child's account email and is readable by any moderator or superadmin (the inbox has no vetting gate; **[FOR FOUNDER — not a counsel blocker]**), and the
