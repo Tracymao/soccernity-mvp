@@ -17,9 +17,9 @@
 // after an error.
 //
 // WORDING. Every sentence in the consequence list and the category help line is the wording of the Figma frames and
-// is [COPY PENDING LEGAL REVIEW]. The tag is NOT rendered on screen: it is this comment. (The frames print the
-// literal tag; a literal tag in a rendered string needs a docs/pending-copy-manifest.md row, which this pass was told
-// not to edit. The sentences are listed in the PR description instead.)
+// carries the literal tag [COPY PENDING LEGAL REVIEW] in the rendered string, with one row per sentence in
+// docs/pending-copy-manifest.md (Decision Log #497, B-301). The tag is a suffix on the sentence, as in holdActions.tsx.
+// npm run check:pending-copy fails until counsel clears them.
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import {
@@ -31,19 +31,19 @@ import { useDialogFocus } from "./HoldDialog";
 
 const FALLBACK_ERROR = "Couldn’t suspend this account. Please try again.";
 
-// [COPY PENDING LEGAL REVIEW] -- Figma 7042:61915 (report) and 7045:63231 (user page).
-const BULLET_SIGN_IN = "They can’t sign in, and every session they have ends now.";
-const BULLET_POINTS = "Engagement points they earned from views, likes and comments are removed.";
-const BULLET_GUARDIAN = "If they are under 18, their guardian is told once.";
+// Tagged: each sentence ends with the literal tag. Figma 7042:61915 (report) and 7045:63231 (user page).
+const BULLET_SIGN_IN = "They can’t sign in, and every session they have ends now. [COPY PENDING LEGAL REVIEW]";
+const BULLET_POINTS = "Engagement points they earned from views, likes and comments are removed. [COPY PENDING LEGAL REVIEW]";
+const BULLET_GUARDIAN = "If they are under 18, their guardian is told once. [COPY PENDING LEGAL REVIEW]";
 const BULLET_EMAIL_REPORT =
-  "They are emailed straight away with a short reason based on this report’s category, and told how to appeal through the Contact Us page. For Child safety concern, Other, or no category the reason is “breaching our community rules”. The email names no reporter and no duration.";
+  "They are emailed straight away with a short reason based on this report’s category, and told how to appeal through the Contact Us page. For Child safety concern, Other, or no category the reason is “breaching our community rules”. The email names no reporter and no duration. [COPY PENDING LEGAL REVIEW]";
 const BULLET_EMAIL_USER =
-  "They are emailed straight away with a short reason based on the category you choose, and told how to appeal through the Contact Us page. The email names no reporter and no duration.";
-const BULLET_OVERTURNED = "If an appeal against this report is overturned, the account is reinstated automatically.";
+  "They are emailed straight away with a short reason based on the category you choose, and told how to appeal through the Contact Us page. The email names no reporter and no duration. [COPY PENDING LEGAL REVIEW]";
+const BULLET_OVERTURNED = "If an appeal against this report is overturned, the account is reinstated automatically. [COPY PENDING LEGAL REVIEW]";
 const BULLET_USER_APPEALS =
-  "A moderator reviews appeals sent through Contact Us and can reinstate the account from this page.";
+  "A moderator reviews appeals sent through Contact Us and can reinstate the account from this page. [COPY PENDING LEGAL REVIEW]";
 const CATEGORY_HELP =
-  "The email gives a short reason based on this choice. For Child safety concern and Other it says “breaching our community rules”.";
+  "The email gives a short reason based on this choice. For Child safety concern and Other it says “breaching our community rules”. [COPY PENDING LEGAL REVIEW]";
 
 export const SUSPEND_CATEGORY_REQUIRED_MESSAGE = "Choose a reason category.";
 

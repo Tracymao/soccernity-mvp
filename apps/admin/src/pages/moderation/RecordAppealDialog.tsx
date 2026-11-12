@@ -11,8 +11,9 @@
 //  * any other 4xx (already appealed, staff_appeal_not_applicable, reported_account_unavailable) -> the server's
 //    message; anything else a fixed line. The typed reason is kept after an error.
 //
-// WORDING. The two paragraphs and the audit-record line are the Figma wording and are [COPY PENDING LEGAL REVIEW];
-// the tag is this comment, not rendered text (see SuspendAccountDialog.tsx for why).
+// WORDING. The two paragraphs and the audit-record line are the Figma wording. Each carries the literal tag
+// [COPY PENDING LEGAL REVIEW] in the rendered text, with a row in docs/pending-copy-manifest.md (Decision Log #497,
+// B-301). The same audit-record sentence is already tagged in holdActions.tsx.
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import { APPEAL_REASON_MAX_LENGTH, isChildSafetyVettingRequiredError } from "../../api/moderation";
@@ -94,11 +95,11 @@ export default function RecordAppealDialog({
           ) : null}
           <p className="mod-dialog__text">
             Record an appeal for the suspended person against the decision on Report #{reportNumber}. They can’t sign
-            in, so staff record it for them.
+            in, so staff record it for them. [COPY PENDING LEGAL REVIEW]
           </p>
           <p className="mod-dialog__text">
             This is only possible inside the appeal window, counted from the decision. Recording it pauses closure of
-            this report until the appeal is decided.
+            this report until the appeal is decided. [COPY PENDING LEGAL REVIEW]
           </p>
           <div className="mod-field">
             <label className="mod-dialog__label" htmlFor={`${titleId}-reason`}>
@@ -122,7 +123,7 @@ export default function RecordAppealDialog({
             ) : null}
           </div>
           <p className="mod-note" id={helpId}>
-            The reason is saved to the audit record.
+            The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]
           </p>
         </div>
         <div className="mod-dialog__actions">

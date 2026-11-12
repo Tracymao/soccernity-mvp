@@ -48,7 +48,8 @@ import "./ContactPage.css";
 
 // The seven categories and labels of the Figma "Contact Category Dropdown" (6130:14653 desktop /
 // 6130:14664 mobile), as drawn: the six of the founder decision of 2026-10-30, plus "Appeal a suspension"
-// as the last (Decision Log #492, B-298, Figma pass V). The label is a label, not tagged (pass V report).
+// as the last (Decision Log #492, B-298, Figma pass V). Pass V decided the label is not tagged; Decision Log #497
+// (B-301) reversed that: the option label carries the literal tag as a plain suffix, with a manifest row.
 const CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: "Technical issues",
   editorial_complaints: "Editorial Complaints",
@@ -56,16 +57,15 @@ const CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: "Suggestions",
   enquiries: "Enquiries",
   feedback: "Feedback",
-  suspension_appeal: "Appeal a suspension",
+  suspension_appeal: "Appeal a suspension [COPY PENDING LEGAL REVIEW]",
 };
 
 // The helper line under the message box, shown ONLY while "Appeal a suspension" is chosen (Figma pass V,
 // docs/figma-pass-v-report.md section 3, frames 7050:63556 / 7050:63739 / 7050:64028 / 7050:64123).
-// [COPY PENDING LEGAL REVIEW] -- new user-facing wording about how a suspension is looked up. It is tagged
-// here in a comment, NOT as a literal tag in the string, on instruction: a literal tag would need a row in
-// docs/pending-copy-manifest.md (which this PR does not edit), and the Figma frames' visible "Copy Tag" chip
-// is therefore not rendered. The tag and the manifest row come with counsel's review.
-const APPEAL_HELPER = "Use the email address your Soccernity account is registered with so we can find it.";
+// New user-facing wording about how a suspension is looked up, so it is tagged [COPY PENDING LEGAL REVIEW]
+// (Decision Log #497, B-301): the page draws the same "Copy Tag" chip the frames draw beside it (the
+// contact-page__tag span the form notice also uses), and docs/pending-copy-manifest.md has a row for the pair.
+// The sentence is JSX text (not a constant) so the manifest scanner reads the sentence itself.
 
 const ERROR_NAME = "Enter your name.";
 const ERROR_EMAIL = "Enter a valid email address.";
@@ -314,7 +314,14 @@ export default function ContactPage() {
               {errors.message && <FieldError id="contact-message-error" text={errors.message} />}
             </div>
 
-            {category === "suspension_appeal" && <p className="contact-page__helper">{APPEAL_HELPER}</p>}
+            {category === "suspension_appeal" && (
+              <div className="contact-page__helper-block">
+                <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
+                <p className="contact-page__helper">
+                  Use the email address your Soccernity account is registered with so we can find it.
+                </p>
+              </div>
+            )}
 
             {formAlert && (
               <p className="contact-page__alert" role="alert">

@@ -376,14 +376,16 @@ export default function ReportDetailPage() {
         {suspendedByReport && !appealRecordedByStaff ? (
           <div className="mod-callout" role="status">
             <span className="mod-callout__bar" aria-hidden />
-            <p>Account suspended. The account can no longer sign in and has been emailed.</p>
+            <p>Account suspended. The account can no longer sign in and has been emailed. [COPY PENDING LEGAL REVIEW]</p>
           </div>
         ) : null}
 
         {appealRecordedByStaff && report.appealStatus === "pending" ? (
           <div className="mod-callout" role="status">
             <span className="mod-callout__bar" aria-hidden />
-            <p>Appeal recorded for the account. It is waiting for review, and closure of this report is paused.</p>
+            <p>
+              Appeal recorded for the account. It is waiting for review, and closure of this report is paused. [COPY PENDING LEGAL REVIEW]
+            </p>
           </div>
         ) : null}
 
