@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type Page } from '@playwright/test';
 import { ADMIN_CREDENTIALS, API_LOG, QA_REDIS_DB, REPO, URLS, USER_PASSWORD, qaDatabaseUrl } from './stack';
 
 const requireFromApi = createRequire(path.join(REPO, 'services', 'api', 'package.json'));
@@ -383,4 +383,122 @@ export async function expectVerifyScreen(
 ): Promise<void> {
   await expect(page.getByRole('heading', { name: verifiedHeading })).toBeVisible();
   await expect(page.getByRole('heading', { name: /no longer valid/ })).toHaveCount(0);
+}
+
+// ---------------------------------------------------------------------------
+// B-304 additions.
+// ---------------------------------------------------------------------------
+
+/**
+ * The pending-copy tag, kept in ONE place so removing it later (when counsel clears a string) is a one-line change
+ * here. Several strings in the apps end with this literal tag (docs/pending-copy-manifest.md); specs that assert such
+ * a string build the expected text with `tagged()`.
+ */
+export const COPY_TAG = '[COPY PENDING LEGAL REVIEW]';
+/** `text` followed by the tag, the way the apps render a tagged sentence. */
+export function tagged(text: string): string {
+  return COPY_TAG ? `${text} ${COPY_TAG}` : text;
+}
+
+function adminJwtSecret(): string {
+  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
+  const text = fs.readFileSync(path.join(REPO, '.env'), 'utf8');
+  const m = /^ADMIN_JWT_SECRET="?([^"\r\n]+)"?/m.exec(text);
+  if (!m) throw new Error('ADMIN_JWT_SECRET not found in root .env');
+  return m[1];
+}
+
+export interface QaAdmin {
+  id: string;
+  email: string;
+  fullName: string;
+  role: 'moderator' | 'editor' | 'superadmin';
+  token: string;
+}
+
+/**
+ * Creates an extra admin account in Postgres and returns a REAL access token for it, signed with the API's own
+ * ADMIN_JWT_SECRET (the payload the API's AdminTokenService signs: { sub, role, aud: 'admin-console' }). Why not
+ * sign in through POST /admin/auth/login: that route is limited to 5 per 15 minutes per IP (Decision Log #190) and
+ * the suite already spends most of that budget. The real admin sign-in (cookie, session) is covered by spec 08; every
+ * request made with this token goes through the API's real guards, which re-read the admin row and the child-safety
+ * vetting flag from Postgres on each call. `vetted` writes the same three columns the vetting route writes.
+ */
+export async function createQaAdmin(
+  role: 'moderator' | 'editor' | 'superadmin',
+  fullName: string,
+  opts: { vetted?: boolean } = {},
+): Promise<QaAdmin> {
+  const qa = await db().adminUser.findUnique({ where: { email: ADMIN_CREDENTIALS.email } });
+  const email = `qa-${role}-${RUN_ID}-${(counter += 1)}@soccernity.test`;
+  const row = await db().adminUser.create({
+    data: {
+      email,
+      fullName,
+      // Not a valid hash: this account is only ever used through the minted token below.
+      passwordHash: '!qa-minted-token-only',
+      role,
+      accountStatus: 'active',
+      ...(opts.vetted ? { childSafetyVetted: true, vettedAt: new Date(), vettedByAdminId: qa.id } : {}),
+    },
+  });
+  const jwt = requireFromApi('jsonwebtoken');
+  const token = jwt.sign({ sub: row.id, role, aud: 'admin-console' }, adminJwtSecret(), { expiresIn: 3600 });
+  return { id: row.id, email, fullName, role, token };
+}
+
+/**
+ * adminPage(), but the console's start-up refresh is answered with THIS admin's access token (the same stand-in
+ * support/admin-ui.ts uses for the QA superadmin).
+ */
+export async function adminPageAs(browser: Browser, token: string): Promise<Page> {
+  const ctx = await browser.newContext({ baseURL: URLS.admin });
+  const cors = {
+    'access-control-allow-origin': URLS.admin,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': 'content-type, authorization, x-auth-mode',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    vary: 'Origin',
+  };
+  await ctx.route(`${URLS.api}/admin/auth/refresh`, async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: token,
+        accessTokenExpiresIn: 900,
+        refreshTokenExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      }),
+    });
+  });
+  return ctx.newPage();
+}
+
+/** A verified adult with a username, ready to use the messaging and report routes. */
+export interface Verified extends Account {
+  token: string;
+  username: string;
+}
+export async function verifiedAccount(label: string, age = 30, opts: { guardianConfirms?: boolean } = {}): Promise<Verified> {
+  const a = await registerViaApi({ age, label });
+  await verifyEmailViaApi(a);
+  if (age < 18 && opts.guardianConfirms !== false) await guardianConfirmViaApi(a);
+  const { token } = await me(a);
+  // A generated handle can by chance contain something the personal-data rule refuses (for example the year of
+  // birth); a different counter gives a different handle, so try a few times.
+  // Digits are left out of the label: the username rules refuse a handle with too many digits in total
+  // (phone-like, username-rules.util.ts revealsOwnDetails), and the generated handle already carries several.
+  const letterLabel = label.replace(/\d/g, '');
+  let username = uniqueUsername(letterLabel);
+  let res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
+  for (let attempt = 0; attempt < 4 && res.status === 400 && res.body?.code === 'username_not_allowed'; attempt += 1) {
+    username = uniqueUsername(`${letterLabel}${'abcd'[attempt]}`);
+    res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
+  }
+  if (res.status !== 200) throw new Error(`username failed ${res.status} ${JSON.stringify(res.body)}`);
+  return { ...a, token, username };
 }

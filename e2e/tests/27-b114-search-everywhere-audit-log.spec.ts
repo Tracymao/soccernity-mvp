@@ -86,7 +86,7 @@ test.describe.serial('admin search everywhere and the audit log', () => {
     await db().user.update({ where: { id: target.userId }, data: { username: targetUsername } });
     const res = await api('POST', '/reports', {
       token: reporter.accessToken,
-      body: { targetType: 'user', targetId: target.userId, reason: REASON },
+      body: { targetType: 'user', targetId: target.userId, reasonCategory: 'harassment_or_bullying', reason: REASON },
     });
     if (res.status !== 201) throw new Error(`POST /reports failed ${res.status} ${JSON.stringify(res.body)}`);
     const report = await db().report.findFirst({ where: { targetId: target.userId }, orderBy: { createdAt: 'desc' } });
