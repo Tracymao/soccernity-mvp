@@ -383,6 +383,11 @@
   max-width: 100%;
 }
 
+/* B-295: the viewer sent it, so it sits on the right like their other bubbles. */
+.conversation-bubble--removed-mine {
+  align-self: flex-end;
+}
+
 .conversation-bubble__text {
   margin: 0;
   font: 400 15px/1.5 "Inter", sans-serif;

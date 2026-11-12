@@ -51,6 +51,7 @@ export interface RemovedMessagePreview {
   id: string;
   sentAt: string;
   removedByModeration: true;
+  isMine?: boolean;
 }
 
 export type LastMessage = MessagePreview | RemovedMessagePreview;
@@ -105,12 +106,16 @@ export interface DeletedMessage {
 
 // B-289 (Decision Log #483): a message a moderator removed. It stays in the
 // thread for BOTH people as exactly this: no text, no original, no edit data,
-// no read time, and deliberately no senderId or conversationId (so the client
-// cannot tell whose it was). The user cannot edit, delete or report it.
+// no read time, and deliberately no senderId or conversationId. B-295 (Decision
+// Log #489): it carries `isMine`, true when the viewer sent it, only so the stub
+// sits on the right side of the thread; it is optional so an older stub shape
+// (without it) still parses and is treated as the other person's. The user
+// cannot edit, delete or report it.
 export interface RemovedMessage {
   id: string;
   sentAt: string;
   removedByModeration: true;
+  isMine?: boolean;
 }
 
 export type ThreadMessage = Message | DeletedMessage | RemovedMessage;

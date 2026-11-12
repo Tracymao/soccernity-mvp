@@ -212,6 +212,8 @@ export default function AppealReviewPage() {
     );
   }
 
+  const recordedByStaff = report.appealRecordedByStaff === true;
+
   return (
     <>
       <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} />
@@ -225,6 +227,13 @@ export default function AppealReviewPage() {
           actioned the original report. If you were that reviewer, this decision is rejected. The
           outcome is final, and the reported user is notified.
         </p>
+        {/* B-292 (Decision Log #485 (f), #492): the server also refuses the admin who recorded the appeal on the person's
+            behalf (403 appeal_recorder_cannot_decide); its message is shown as it comes, in the decision card below. */}
+        {recordedByStaff ? (
+          <p className="mod-note">
+            Staff recorded this appeal on the person’s behalf. The staff member who recorded it cannot decide it.
+          </p>
+        ) : null}
 
         <div className="mod-card">
           <h2 className="mod-card__title">Original decision (read-only)</h2>
@@ -269,10 +278,21 @@ export default function AppealReviewPage() {
         </div>
 
         <div className="mod-card">
-          <h2 className="mod-card__title">Appeal submitted by the reported user</h2>
+          <h2 className="mod-card__title">
+            {recordedByStaff ? "Appeal recorded by staff" : "Appeal submitted by the reported user"}
+          </h2>
           <p className="mod-note">
             The reported user&rsquo;s identity is not shown here.
           </p>
+          {/* B-295 (Figma 7044:62498): the same pill the report detail shows for a staff-recorded appeal. */}
+          {recordedByStaff ? (
+            <div className="mod-field">
+              <span className="mod-field__label">Appeal</span>
+              <span className="mod-field__value">
+                <span className="mod-pill mod-pill--outline mod-pill--plain">Pending — recorded by staff</span>
+              </span>
+            </div>
+          ) : null}
           <div className="mod-field">
             <span className="mod-field__label">Appeal reason</span>
             <span className="mod-field__value">{report.appealReason ?? "—"}</span>
