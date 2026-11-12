@@ -64,6 +64,8 @@ const nameField = () => screen.getByLabelText("Name") as HTMLInputElement;
 const emailField = () => screen.getByLabelText("Email") as HTMLInputElement;
 const subjectField = () => screen.getByLabelText("Subject") as HTMLInputElement;
 const messageField = () => screen.getByLabelText("Message") as HTMLTextAreaElement;
+// Decision Log #497 (B-301): the option label carries the literal tag as a plain suffix.
+const APPEAL_LABEL = "Appeal a suspension [COPY PENDING LEGAL REVIEW]";
 const categoryButton = () => screen.getByRole("combobox", { name: "Category" });
 
 function chooseCategory(label: string) {
@@ -111,7 +113,7 @@ describe("ContactPage — the form as drawn", () => {
       "Suggestions",
       "Enquiries",
       "Feedback",
-      "Appeal a suspension",
+      APPEAL_LABEL,
     ]);
   });
 
@@ -224,7 +226,7 @@ describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", (
 
   it("appears under the message box, above Submit, only while Appeal a suspension is chosen", () => {
     renderPage();
-    chooseCategory("Appeal a suspension");
+    chooseCategory(APPEAL_LABEL);
     const helper = screen.getByText(HELPER);
     expect(helper).toBeTruthy();
     // Placement: after the message box in document order, before the Submit button.
@@ -235,11 +237,11 @@ describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", (
 
   it("disappears again when another category is chosen", () => {
     renderPage();
-    chooseCategory("Appeal a suspension");
+    chooseCategory(APPEAL_LABEL);
     expect(screen.getByText(HELPER)).toBeTruthy();
     chooseCategory("Feedback");
     expect(screen.queryByText(HELPER)).toBeNull();
-    chooseCategory("Appeal a suspension");
+    chooseCategory(APPEAL_LABEL);
     expect(screen.getByText(HELPER)).toBeTruthy();
   });
 
@@ -256,7 +258,7 @@ describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", (
     vi.mocked(submitContactEnquiry).mockResolvedValue(undefined);
     renderPage();
     fillValid();
-    chooseCategory("Appeal a suspension");
+    chooseCategory(APPEAL_LABEL);
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
     await screen.findByText("Message sent");
     expect(submitContactEnquiry).toHaveBeenCalledWith(
@@ -271,11 +273,22 @@ describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", (
     );
   });
 
-  it("carries no literal tag in the rendered page (the tag is a code comment; no manifest row is added here)", () => {
+  it("carries the literal tag: the option label, and a chip directly before the helper (Decision Log #497)", () => {
     renderPage();
-    chooseCategory("Appeal a suspension");
-    // Only the existing notice's chip is on the page.
+    // No chip beside a helper before the category is chosen: only the existing notice's chip.
     expect(screen.getAllByText("[COPY PENDING LEGAL REVIEW]")).toHaveLength(1);
+    chooseCategory(APPEAL_LABEL);
+    // The chosen option label shows its suffix tag in the closed select.
+    expect(categoryButton().textContent).toContain("Appeal a suspension [COPY PENDING LEGAL REVIEW]");
+    // The notice chip plus the helper chip.
+    const chips = screen.getAllByText("[COPY PENDING LEGAL REVIEW]");
+    expect(chips).toHaveLength(2);
+    const helper = screen.getByText(HELPER);
+    expect(helper.parentElement?.firstElementChild?.textContent).toBe("[COPY PENDING LEGAL REVIEW]");
+    // The other six options are not tagged.
+    fireEvent.click(categoryButton());
+    const options = within(screen.getByRole("listbox", { name: "Category" })).getAllByRole("option");
+    expect(options.filter((o) => /PENDING/.test(o.textContent ?? "")).map((o) => o.textContent)).toEqual([APPEAL_LABEL]);
   });
 });
 
@@ -312,7 +325,7 @@ describe("ContactPage — submitting", () => {
       ["Suggestions", "suggestions"],
       ["Enquiries", "enquiries"],
       ["Feedback", "feedback"],
-      ["Appeal a suspension", "suspension_appeal"],
+      [APPEAL_LABEL, "suspension_appeal"],
     ];
     for (const [label, value] of expected) {
       vi.mocked(submitContactEnquiry).mockReset();

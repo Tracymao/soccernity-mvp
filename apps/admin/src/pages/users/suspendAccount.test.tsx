@@ -88,6 +88,11 @@ describe("User page: Suspend account", () => {
     expect(radios).toHaveLength(9);
     expect(radios.every((r) => !(r as HTMLInputElement).checked)).toBe(true);
     expect(within(dialog).getByText(/For Child safety concern and Other it says/)).toBeTruthy();
+    // Decision Log #497 (B-301): the five consequence sentences and the category help carry the literal tag.
+    const items = within(dialog).getAllByRole("listitem");
+    expect(items).toHaveLength(5);
+    for (const item of items) expect(item.textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
+    expect(within(dialog).getByText(/For Child safety concern and Other it says/).textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
   });
 
   it("will not send without a category: shows the error and sends nothing", async () => {
@@ -114,6 +119,7 @@ describe("User page: Suspend account", () => {
     await waitFor(() => expect(updateUserStatus).toHaveBeenCalledWith("user-1", "suspended", "spam_or_scam"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByText(/Account suspended\. The account can no longer sign in/)).toBeTruthy();
+    expect(screen.getByText(/Account suspended\. The account can no longer sign in/).textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
     await waitFor(() => expect(screen.getByText("This account is suspended.")).toBeTruthy());
     expect(getUserSummary).toHaveBeenCalledTimes(2);
   });

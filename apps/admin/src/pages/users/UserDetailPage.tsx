@@ -276,7 +276,7 @@ export default function UserDetailPage() {
 
         {suspended ? (
           <p className="ud-callout" role="status">
-            Account suspended. The account can no longer sign in and has been emailed.
+            Account suspended. The account can no longer sign in and has been emailed. [COPY PENDING LEGAL REVIEW]
           </p>
         ) : null}
 

@@ -86,9 +86,9 @@ interface Props {
   contextHidden?: boolean;
 }
 
-// [COPY PENDING LEGAL REVIEW] -- Figma 7045:62777. The tag is this comment, not rendered text (a literal tag in a
-// rendered string needs a docs/pending-copy-manifest.md row; this pass was told not to edit it).
-export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child";
+// Figma 7045:62777. Tagged: the literal [COPY PENDING LEGAL REVIEW] ends the rendered string and the sentence has a
+// row in docs/pending-copy-manifest.md (Decision Log #497, B-301).
+export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child. [COPY PENDING LEGAL REVIEW]";
 
 export default function ContextMessagesCard({ reportedMessage, contextMessages, contextHidden = false }: Props) {
   // B-293: an admin who is not child-safety vetted, on a report whose chat involves a child. The server returned no
