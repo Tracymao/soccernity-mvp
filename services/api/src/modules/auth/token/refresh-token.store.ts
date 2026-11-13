@@ -153,6 +153,21 @@ export class RefreshTokenStore {
     };
   }
 
+  // B-310 (Decision Log #500 follow-up): READ-ONLY look at a refresh token's "Stay signed in" flag. It consumes and
+  // rotates nothing and writes nothing, so it is safe to call before a revocation that is about to delete the record.
+  // Returns false (never throws for a bad token) when the token is malformed, unknown, its secret does not match, or
+  // the record belongs to a different user: the caller then simply does not preserve a persistent session.
+  async peekPersistent(rawToken: string, userId: string): Promise<boolean> {
+    const parsed = parseRawToken(rawToken);
+    if (!parsed) return false;
+    const raw = await this.redis.get(tokenKey(parsed.id));
+    if (!raw) return false;
+    const record = JSON.parse(raw) as StoredRefreshToken;
+    if (record.userId !== userId) return false;
+    if (!secretMatchesHash(parsed.secret, record.secretHash)) return false;
+    return record.persistent === true;
+  }
+
   // Single-session logout.
   async revokeToken(rawToken: string): Promise<void> {
     const parsed = parseRawToken(rawToken);

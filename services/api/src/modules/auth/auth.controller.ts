@@ -164,16 +164,32 @@ export class AuthController {
   // auth/README.md for the full writeup): no change-password/deactivate/
   // delete-account capability existed anywhere in this codebase before
   // this PR (confirmed by grep across services/api/src).
+  //
+  // B-310: answers 200 with a FRESH session for the caller (the same shape POST /auth/refresh returns), because the
+  // change revokes every session including the caller's own. In cookie mode the new refresh token is set as the
+  // sn_rt cookie (the Origin check applies, as on refresh) and left out of the body; otherwise the full pair is in the
+  // body. "Stay signed in" carries over from the caller's current refresh cookie (read-only, before the revoke).
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: ChangePasswordDto,
-  ): Promise<void> {
-    await this.authService.changePassword(user.sub, dto.currentPassword, dto.newPassword);
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<TokenPairResponse | Omit<TokenPairResponse, 'refreshToken'>> {
+    const cookieMode = !!req && !!res && isCookieMode(req);
+    if (cookieMode) assertAllowedCookieOrigin(req);
+    const currentRefreshToken = cookieMode ? readRefreshCookie(req, USER_SESSION_COOKIE) : undefined;
+    const { response, persistent } = await this.authService.changePassword(
+      user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+      currentRefreshToken,
+    );
     // B-275: after the change has committed; never delays or fails the response (a minor's guardian is emailed).
     this.guardianNotices.notifyInBackground(user.sub, 'password_changed');
+    return applyCookieSession(USER_SESSION_COOKIE, req, res, response, persistent);
   }
 
   @UseGuards(JwtAuthGuard)

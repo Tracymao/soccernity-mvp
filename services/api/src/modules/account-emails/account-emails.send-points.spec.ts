@@ -143,7 +143,16 @@ describe('B-069 send points', () => {
         user: { findUnique: jest.fn().mockResolvedValue(user), update: jest.fn().mockResolvedValue({}) },
       };
       const passwordService = { verify: jest.fn().mockResolvedValue(true), hash: jest.fn().mockResolvedValue('h') };
-      const tokenService = { revokeAllSessionsForUser: jest.fn().mockResolvedValue(undefined) };
+      // B-310: changePassword also reads the caller's refresh-token flag (before the revoke) and issues a fresh pair after it.
+      const tokenService = {
+        revokeAllSessionsForUser: jest.fn().mockResolvedValue(undefined),
+        isRefreshTokenPersistent: jest.fn().mockResolvedValue(false),
+        issueTokenPair: jest.fn().mockResolvedValue({
+          accessToken: { token: 'a', expiresIn: 900 },
+          refreshToken: { token: 'r', expiresAt: new Date('2026-12-01T00:00:00Z'), familyId: 'f' },
+          persistent: false,
+        }),
+      };
       const accountEmails = emails();
       const svc = new AuthService(
         prisma as never,
@@ -208,12 +217,20 @@ describe('B-069 send points', () => {
       const svc = new AuthService(
         prisma as never,
         { verify: jest.fn().mockResolvedValue(true), hash: jest.fn().mockResolvedValue('h') } as never,
-        { revokeAllSessionsForUser: jest.fn() } as never,
+        {
+          revokeAllSessionsForUser: jest.fn(),
+          isRefreshTokenPersistent: jest.fn().mockResolvedValue(false),
+          issueTokenPair: jest.fn().mockResolvedValue({
+            accessToken: { token: 'a', expiresIn: 900 },
+            refreshToken: { token: 'r', expiresAt: new Date('2026-12-01T00:00:00Z'), familyId: 'f' },
+            persistent: false,
+          }),
+        } as never,
         {} as never,
         {} as never,
         {} as never,
       );
-      await expect(svc.changePassword('u1', 'old', 'newpassword')).resolves.toBeUndefined();
+      await expect(svc.changePassword('u1', 'old', 'newpassword')).resolves.toMatchObject({ persistent: false });
     });
   });
 

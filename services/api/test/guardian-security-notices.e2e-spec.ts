@@ -220,15 +220,17 @@ describe('Guardian security notices (B-275) -- real Postgres + real Redis', () =
   // ================================================================== passwords
 
   describe('password changes', () => {
-    it('change-password (signed in) emails the guardian once; the answer is still a bare 204', async () => {
+    it('change-password (signed in) emails the guardian once; the answer is the fresh session (B-310)', async () => {
       const minor = await seedUser();
 
       const res = await http()
         .post('/auth/change-password')
         .set(minor.auth)
         .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
-        .expect(204);
-      expect(res.text).toBe('');
+        .expect(200);
+      // The notice never touches the response: a fresh pair, nothing about guardians.
+      expect(typeof res.body.accessToken).toBe('string');
+      expect(res.body.guardian).toBeUndefined();
 
       await waitForNotices(1);
       await settle();
@@ -331,14 +333,14 @@ describe('Guardian security notices (B-275) -- real Postgres + real Redis', () =
         .post('/auth/change-password')
         .set(user.auth)
         .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
-        .expect(204);
+        .expect(200);
       await settle();
       expect(guardianNotices()).toHaveLength(0);
     });
 
     it('a confirmed guardian row WITHOUT an address sends nothing', async () => {
       const user = await seedUser({ guardianEmail: '' });
-      await http().post('/auth/change-password').set(user.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(204);
+      await http().post('/auth/change-password').set(user.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(200);
       await settle();
       expect(guardianNotices()).toHaveLength(0);
     });
@@ -354,7 +356,7 @@ describe('Guardian security notices (B-275) -- real Postgres + real Redis', () =
       .set('X-Forwarded-For', '203.0.113.77')
       .set('User-Agent', 'SecretBrowser/9.9')
       .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
-      .expect(204);
+      .expect(200);
     await waitForNotices(1);
 
     const call = guardianNotices()[0];
