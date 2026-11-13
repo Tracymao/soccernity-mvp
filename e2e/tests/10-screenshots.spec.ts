@@ -4,6 +4,7 @@ import { test, type Browser, type Page } from '@playwright/test';
 import {
   GUARDIAN,
   clearBrowserSession,
+  db,
   fillAgeGate,
   dobForAge,
   guardianConfirmViaApi,

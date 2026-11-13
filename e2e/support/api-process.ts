@@ -121,7 +121,16 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
   };
 }
 
-/** Starts `node dist/main.js` (already built) and records its pid. `truncateLog` is true only for the first start. */
+/**
+ * Starts `node dist/main.js` (already built) and records its pid. `truncateLog` is true only for the first start.
+ *
+ * The API runs DETACHED (its own process group; no console window on Windows) with its stdout and stderr going
+ * to the log file the tests read, and the child is unref'd so it never keeps the launching Playwright process
+ * alive. Without this, on Windows a Playwright worker that restarts the API (spec 17, 19) can have the old API
+ * take its console with it when the worker exits, and an API started by global setup can outlive a crashed run.
+ * It is still stopped the same way as before: stopApi() kills the pid in .run/api.pid, and global teardown also
+ * calls child.kill(), both of which work on a detached process.
+ */
 export function spawnApi(env: NodeJS.ProcessEnv, truncateLog: boolean): ChildProcess {
   fs.mkdirSync(RUN_DIR, { recursive: true });
   const log = fs.openSync(API_LOG, truncateLog ? 'w' : 'a');
@@ -129,7 +138,10 @@ export function spawnApi(env: NodeJS.ProcessEnv, truncateLog: boolean): ChildPro
     cwd: path.join(REPO, 'services', 'api'),
     env,
     stdio: ['ignore', log, log],
+    detached: true,
+    windowsHide: true,
   });
+  child.unref();
   if (child.pid) fs.writeFileSync(API_PID_FILE, String(child.pid));
   return child;
 }

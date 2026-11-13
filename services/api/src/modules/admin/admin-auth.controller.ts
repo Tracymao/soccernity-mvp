@@ -186,13 +186,34 @@ export class AdminAuthController {
     );
   }
 
+  // B-310: answers 200 with a FRESH session (the shape POST /admin/auth/refresh returns; cookie mode sets sn_admin_rt
+  // and leaves the token out of the body), because the change revokes every session including the caller's own.
+  // The one exception is an admin with no two-factor while ADMIN_2FA_ENFORCED is on: the password is saved, every
+  // session is revoked and nothing is issued, so the answer is 204 with no body (and in cookie mode the dead cookie
+  // is cleared).
   @UseGuards(AdminJwtAuthGuard)
   @Post('change-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentAdmin() admin: AdminAccessTokenPayload,
     @Body() dto: AdminChangePasswordDto,
-  ): Promise<void> {
-    await this.adminAuthService.changePassword(admin.sub, dto.currentPassword, dto.newPassword);
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminTokenPairResponse | Omit<AdminTokenPairResponse, 'refreshToken'> | void> {
+    const cookieMode = !!req && !!res && isCookieMode(req);
+    if (cookieMode) assertAllowedCookieOrigin(req);
+    const currentRefreshToken = cookieMode ? readRefreshCookie(req, ADMIN_SESSION_COOKIE) : undefined;
+    const result = await this.adminAuthService.changePassword(
+      admin.sub,
+      dto.currentPassword,
+      dto.newPassword,
+      currentRefreshToken,
+    );
+    if (!result) {
+      if (cookieMode) clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+      res?.status(HttpStatus.NO_CONTENT);
+      return;
+    }
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, result.response, result.persistent);
   }
 }

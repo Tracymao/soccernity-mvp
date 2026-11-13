@@ -19,10 +19,8 @@ const shot = (page: Page, name: string) => page.screenshot({ path: path.join(OUT
 
 const HOST = 'https://media.e2e.test';
 
-/** A 640 x 360 colour-blocked PNG, so a blur is visible in a screenshot. */
-function photo(): Buffer {
-  const w = 640;
-  const h = 360;
+/** A colour-blocked PNG (640 x 360 unless a size is given), so a blur is visible in a screenshot. */
+function photo(w = 640, h = 360): Buffer {
   const raw = Buffer.alloc(h * (1 + w * 3));
   for (let y = 0; y < h; y += 1) {
     const row = y * (1 + w * 3);
@@ -98,6 +96,7 @@ async function seedPost(author: Member, text: string, kind: 'image' | 'video', f
  *  anything named `slow` after a delay, anything named `broken` with a 404. */
 async function serveMedia(page: Page, mp4: string | null): Promise<void> {
   const png = photo();
+  const smallPng = photo(40, 40);
   await page.route(`${HOST}/**`, async (route: Route) => {
     const url = route.request().url();
     if (url.includes('broken')) return route.fulfill({ status: 404, body: 'no' });
@@ -117,7 +116,7 @@ async function serveMedia(page: Page, mp4: string | null): Promise<void> {
       }
       return route.fulfill({ status: 200, headers: { 'content-type': 'video/mp4', 'accept-ranges': 'bytes' }, body: bytes });
     }
-    return route.fulfill({ status: 200, headers: { 'content-type': 'image/png' }, body: png });
+    return route.fulfill({ status: 200, headers: { 'content-type': 'image/png' }, body: url.includes('small') ? smallPng : png });
   });
 }
 
@@ -125,6 +124,49 @@ async function signIn(page: Page, email: string): Promise<void> {
   await loginViaUi(page, email);
   await expect(page).not.toHaveURL(/\/login/);
 }
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The blurred or revealed box, the cover, the length chip and the Hide chip, as the browser laid them out, plus
+ *  whether the centre of the cover and of the Hide chip really hit-tests to that button. */
+async function geometry(page: Page) {
+  return page.evaluate(() => {
+    const rect = (el: Element | null): Rect | null => {
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.x, y: b.y, w: b.width, h: b.height };
+    };
+    const hits = (el: Element | null) => {
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+      return !!top && el.contains(top);
+    };
+    const cover = document.querySelector('.sensitive__cover');
+    const hide = document.querySelector('.sensitive__hide');
+    const media = document.querySelector('.sensitive__media img, .sensitive__media video');
+    return {
+      box: rect(document.querySelector('.sensitive')),
+      cover: rect(cover),
+      chip: rect(document.querySelector('.sensitive__duration')),
+      hide: rect(hide),
+      // Layout size, not the bounding box: the blurred media is scaled by 1.08 to hide the soft edge.
+      media: media instanceof HTMLElement ? { x: 0, y: 0, w: media.offsetWidth, h: media.offsetHeight } : null,
+      coverHits: hits(cover),
+      hideHits: hits(hide),
+    };
+  });
+}
+
+const inside = (inner: Rect, outer: Rect) =>
+  inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 && inner.x + inner.w <= outer.x + outer.w + 0.5 && inner.y + inner.h <= outer.y + outer.h + 0.5;
+
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 const cover = (page: Page, noun = 'picture') => page.getByRole('button', { name: `Sensitive ${noun} hidden. Tap to view.` });
 
@@ -137,6 +179,7 @@ test.describe.serial('Blurred media on post cards', () => {
   let plainPost = '';
   let brokenPost = '';
   let slowPost = '';
+  let smallPost = '';
   const mp4 = makeMp4();
 
   test.beforeAll(async () => {
@@ -149,6 +192,7 @@ test.describe.serial('Blurred media on post cards', () => {
     videoPost = await seedPost(sensitiveAuthor, 'Clip from Saturday’s match at Rowe Park.', 'video', 'clip.mp4');
     brokenPost = await seedPost(sensitiveAuthor, 'A picture that will not load', 'image', 'broken.png');
     slowPost = await seedPost(sensitiveAuthor, 'A picture that loads slowly', 'image', 'slow.png');
+    smallPost = await seedPost(sensitiveAuthor, 'A very small picture', 'image', 'small.png');
     plainPost = await seedPost(plainAuthor, 'Not sensitive: photos from the other pitch.', 'image', 'photo2.png');
   });
 
@@ -268,6 +312,85 @@ test.describe.serial('Blurred media on post cards', () => {
     await expect(savedCard.getByRole('button', { name: 'Sensitive picture hidden. Tap to view.' })).toBeVisible();
     await savedCard.getByRole('button', { name: 'Sensitive picture hidden. Tap to view.' }).click();
     await expect(savedCard.getByRole('button', { name: 'Hide' })).toBeVisible();
+  });
+
+  test('8. a very small picture (40 x 40) still has a pressable cover inside its box, and a Hide chip once revealed', async ({ page }, info) => {
+    await serveMedia(page, mp4);
+    await signIn(page, viewer.email);
+    for (const width of [1280, 820, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/posts/${smallPost}`);
+      await expect(cover(page)).toBeVisible();
+      const g = await geometry(page);
+      info.annotations.push({ type: `small picture @${width}`, description: JSON.stringify(g) });
+      expect(g.box && g.cover && g.media).toBeTruthy();
+      // The box is at least 200 x 120 (or the width of its container when that is narrower), the cover lies wholly
+      // inside it and really receives a press at its centre.
+      expect(g.box!.h).toBeGreaterThanOrEqual(119.5);
+      expect(g.box!.w).toBeGreaterThanOrEqual(Math.min(200, width - 40) - 0.5);
+      expect(inside(g.cover!, g.box!)).toBe(true);
+      expect(g.coverHits).toBe(true);
+      // The picture is centred at its natural size: no upscaling, no stretching.
+      expect(Math.round(g.media!.w)).toBe(40);
+      expect(Math.round(g.media!.h)).toBe(40);
+      await shot(page, `desktop-blurred-small-picture-${width}`);
+
+      await cover(page).click();
+      const hide = page.getByRole('button', { name: 'Hide' });
+      await expect(hide).toBeVisible();
+      const r = await geometry(page);
+      expect(inside(r.hide!, r.box!)).toBe(true);
+      expect(r.hideHits).toBe(true);
+      expect(Math.round(r.media!.w)).toBe(40);
+      await shot(page, `desktop-revealed-small-picture-${width}`);
+      await hide.click();
+      await expect(cover(page)).toBeVisible();
+    }
+  });
+
+  test('9. a small video: the cover lies inside its box, the length chip does not touch it, Hide lies inside after Tap to view', async ({ page }, info) => {
+    test.skip(!mp4, 'ffmpeg is not installed for the harness, so there is no real video to serve');
+    await serveMedia(page, mp4);
+    await signIn(page, viewer.email);
+    for (const width of [1280, 820, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/posts/${videoPost}`);
+      await expect(cover(page, 'video')).toBeVisible();
+      await expect(page.locator('.sensitive__duration')).toHaveText(/^0:0[0-9]$/);
+      const g = await geometry(page);
+      info.annotations.push({ type: `small video @${width}`, description: JSON.stringify(g) });
+      expect(g.box!.h).toBeGreaterThanOrEqual(167.5); // a video box leaves room for the length chip below the cover
+      expect(inside(g.cover!, g.box!)).toBe(true);
+      expect(g.coverHits).toBe(true);
+      expect(inside(g.chip!, g.box!)).toBe(true);
+      expect(overlaps(g.chip!, g.cover!)).toBe(false);
+      await shot(page, `desktop-blurred-small-video-${width}`);
+
+      await cover(page, 'video').click();
+      const hide = page.getByRole('button', { name: 'Hide' });
+      await expect(hide).toBeVisible();
+      const r = await geometry(page);
+      expect(inside(r.hide!, r.box!)).toBe(true);
+      expect(r.hideHits).toBe(true);
+      await expect(page.getByLabel('Video attached to this post')).toBeVisible();
+      await hide.click();
+      await expect(cover(page, 'video')).toBeVisible();
+    }
+  });
+
+  test('10. a normal-size picture keeps the box it always had (the minimum size does not touch it)', async ({ page }, info) => {
+    await serveMedia(page, mp4);
+    await signIn(page, viewer.email);
+    await page.goto(`/posts/${imagePost}`);
+    await expect(cover(page)).toBeVisible();
+    const g = await geometry(page);
+    info.annotations.push({ type: 'normal picture', description: JSON.stringify(g) });
+    // The box is exactly the picture, edge to edge: no wash or padding around it.
+    expect(Math.abs(g.box!.w - g.media!.w)).toBeLessThan(1);
+    expect(Math.abs(g.box!.h - g.media!.h)).toBeLessThan(1);
+    expect(g.box!.h).toBeGreaterThan(168);
+    expect(inside(g.cover!, g.box!)).toBe(true);
+    expect(g.coverHits).toBe(true);
   });
 
   test('7. at 390px the cover fits and the page does not scroll sideways', async ({ page }) => {

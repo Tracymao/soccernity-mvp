@@ -64,6 +64,11 @@ interface RequestOptions {
   auth?: boolean;
   /** Extra headers (e.g. an explicit bearer for logout-everywhere). */
   headers?: Record<string, string>;
+  /**
+   * fetch credentials. Only the calls that read or set the httpOnly refresh cookie need "include"
+   * (change-password, B-310); every other call authenticates with the bearer header alone.
+   */
+  credentials?: "include" | "omit" | "same-origin";
 }
 
 async function parseBody(res: Response): Promise<unknown> {
@@ -97,6 +102,7 @@ async function rawRequest(path: string, options: RequestOptions, accessToken: st
   return fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? (options.body !== undefined ? "POST" : "GET"),
     headers,
+    credentials: options.credentials,
     body: options.body !== undefined ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
   });
 }

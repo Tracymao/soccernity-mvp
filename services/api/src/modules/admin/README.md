@@ -124,7 +124,7 @@ token is rejected at `/auth/refresh`.
 | POST | `/admin/auth/login` | none (`@AuthRateLimit()`) | Admin/moderator login. Same non-enumeration / constant-time-dummy-hash posture as `POST /auth/login`. |
 | POST | `/admin/auth/refresh` | none | Rotates a refresh token, Section 5.7-style. |
 | POST | `/admin/auth/logout` | none (optional bearer header for `allSessions`) | Single-session logout; `allSessions: true` + a valid access token revokes every session. |
-| POST | `/admin/auth/change-password` | `AdminJwtAuthGuard` | Requires current password; revokes every other session on success. |
+| POST | `/admin/auth/change-password` | `AdminJwtAuthGuard` | Requires current password; revokes every session on success and answers `200` with a fresh pair for the caller (B-310; `204` when two-factor enrolment is required and missing). |
 | GET | `/admin/profile` | `AdminJwtAuthGuard` | Own profile — Full name, Email, Role, Phone, accountStatus, createdAt, updatedAt. |
 | PATCH | `/admin/profile` | `AdminJwtAuthGuard` | Edits `fullName`/`phone` only — `role`/`email`/`accountStatus` are never self-editable (rejected outright by the global `ValidationPipe`'s `forbidNonWhitelisted`). |
 
@@ -207,5 +207,10 @@ also holds the full description.
 Callers covered by the change in the revoke method: admin change-password, `logout` with all sessions, the
 two-factor enrolment refresh gate (`assertEnrolledWhenEnforced`), `admin-staff-roles` deactivation (the "remove
 account" action) and the superadmin two-factor reset. A removed or reset admin's earlier access token is now a 401
-immediately, not after up to 15 minutes. `POST /admin/auth/change-password` returns `204` with no new pair, so the
-admin's own access token for that call is refused afterwards and the admin signs in again.
+immediately, not after up to 15 minutes. `POST /admin/auth/change-password` used to return `204` with no new pair.
+**[Superseded by B-310 (2026-11-13): it now answers `200` with a fresh pair for the caller, issued after the revoke, with the
+admin's "session cookie" lifetime kept (`AdminRefreshTokenStore.peekPersistent`, read from `sn_admin_rt` in cookie mode before
+the revoke) and no admin summary in the body. The one exception: with `ADMIN_2FA_ENFORCED` on and no two-factor on the
+account, the password is saved, every session is revoked, nothing is issued, and the answer is `204` with no body, so the
+password change cannot be used to sidestep the enrolment gate; the admin app clears its local session and shows the existing
+"two-factor is now required" notice.]**

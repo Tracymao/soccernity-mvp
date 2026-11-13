@@ -341,7 +341,7 @@ describe('Withhold guardian notices (B-280) -- real Postgres + real Redis', () =
       const admin = await seedAdmin('moderator', true);
 
       // Control: before the flag, a password change DOES notify the guardian.
-      await http().post('/auth/change-password').set(minor.auth).send({ currentPassword: PASSWORD, newPassword: 'another-password-123' }).expect(204);
+      await http().post('/auth/change-password').set(minor.auth).send({ currentPassword: PASSWORD, newPassword: 'another-password-123' }).expect(200);
       await settle();
       expect(calls('sendGuardianSecurityNoticeEmail')).toHaveLength(1);
       expect(lastArgs('sendGuardianSecurityNoticeEmail')[0]).toBe(minor.guardianEmail);
@@ -351,7 +351,7 @@ describe('Withhold guardian notices (B-280) -- real Postgres + real Redis', () =
       // change-password revoked this user's other sessions; sign in again with the new password for a fresh token
       const login = await http().post('/auth/login').send({ email: minor.email, password: 'another-password-123' }).expect(200);
       const auth = { Authorization: `Bearer ${login.body.accessToken}` };
-      await http().post('/auth/change-password').set(auth).send({ currentPassword: 'another-password-123', newPassword: 'third-password-12345' }).expect(204);
+      await http().post('/auth/change-password').set(auth).send({ currentPassword: 'another-password-123', newPassword: 'third-password-12345' }).expect(200);
       await settle();
 
       expect(sent.filter((c) => c.method.startsWith('sendGuardian'))).toHaveLength(0);
@@ -368,7 +368,7 @@ describe('Withhold guardian notices (B-280) -- real Postgres + real Redis', () =
         .post('/auth/change-password')
         .set({ Authorization: `Bearer ${login2.body.accessToken}` })
         .send({ currentPassword: 'third-password-12345', newPassword: 'fourth-password-12345' })
-        .expect(204);
+        .expect(200);
       await settle();
       expect(calls('sendGuardianSecurityNoticeEmail')).toHaveLength(1);
     });

@@ -164,7 +164,7 @@ describe('Admin Console e2e: login round trip, profile, and change-password revo
       .post('/admin/auth/change-password')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ currentPassword: password, newPassword: 'a-brand-new-admin-password-456' })
-      .expect(204);
+      .expect(200); // B-310: a fresh session for the caller
 
     await request(app.getHttpServer())
       .post('/admin/auth/login')

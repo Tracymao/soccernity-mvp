@@ -483,6 +483,108 @@ describe('AuthService', () => {
       await expect(authService.refresh(sessionA.refreshToken)).rejects.toThrow(UnauthorizedException);
       await expect(authService.refresh(sessionB.refreshToken)).rejects.toThrow(UnauthorizedException);
     });
+
+    // B-310: the caller is issued a fresh session after the revoke, everything else stays revoked.
+    describe('fresh session for the caller (B-310)', () => {
+      async function seededUser() {
+        const harness = await buildHarness();
+        const passwordHash = await harness.passwordService.hash('old-password-123');
+        harness.prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+        return harness;
+      }
+
+      it('issues a usable access token and a refresh token that rotates, in a NEW family', async () => {
+        const { authService, tokenService } = await seededUser();
+        const current = await authService.login('a@example.com', 'old-password-123');
+
+        const { response } = await authService.changePassword(
+          'user-1', 'old-password-123', 'new-password-456', current.refreshToken,
+        );
+
+        expect(response.accessToken).toEqual(expect.any(String));
+        expect(response.refreshToken).toEqual(expect.any(String));
+        expect(response.refreshToken).not.toEqual(current.refreshToken);
+        // The new access token is accepted by the revocation-aware verifier (iat >= the marker second).
+        await expect(tokenService.verifyActiveAccessToken(response.accessToken)).resolves.toMatchObject({ sub: 'user-1' });
+        // ... and the new refresh token rotates normally.
+        await expect(authService.refresh(response.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+
+      it('leaves every OTHER session revoked', async () => {
+        const { authService } = await seededUser();
+        const current = await authService.login('a@example.com', 'old-password-123');
+        const other = await authService.login('a@example.com', 'old-password-123');
+
+        await authService.changePassword('user-1', 'old-password-123', 'new-password-456', current.refreshToken);
+
+        await expect(authService.refresh(current.refreshToken)).rejects.toThrow(UnauthorizedException);
+        await expect(authService.refresh(other.refreshToken)).rejects.toThrow(UnauthorizedException);
+      });
+
+      it('keeps "Stay signed in": a persistent refresh token yields a persistent new session', async () => {
+        const { authService } = await seededUser();
+        const current = await authService.login('a@example.com', 'old-password-123', true);
+
+        const { persistent } = await authService.changePassword(
+          'user-1', 'old-password-123', 'new-password-456', current.refreshToken,
+        );
+        expect(persistent).toBe(true);
+      });
+
+      it('a non-persistent current session stays non-persistent', async () => {
+        const { authService } = await seededUser();
+        const current = await authService.login('a@example.com', 'old-password-123', false);
+        const { persistent } = await authService.changePassword(
+          'user-1', 'old-password-123', 'new-password-456', current.refreshToken,
+        );
+        expect(persistent).toBe(false);
+      });
+
+      it.each([
+        ['no refresh token was supplied', undefined],
+        ['the refresh token is garbage', 'not-a-real-token'],
+      ])('falls back to non-persistent when %s', async (_label, token) => {
+        const { authService } = await seededUser();
+        await authService.login('a@example.com', 'old-password-123', true);
+        const { persistent, response } = await authService.changePassword(
+          'user-1', 'old-password-123', 'new-password-456', token,
+        );
+        expect(persistent).toBe(false);
+        expect(response.accessToken).toEqual(expect.any(String));
+      });
+
+      it("falls back to non-persistent when the refresh token belongs to a DIFFERENT user (and does not consume it)", async () => {
+        const { authService, prisma, passwordService } = await seededUser();
+        prisma.seed('b@example.com', {
+          id: 'user-2', role: 'fan', passwordHash: await passwordService.hash('other-password-123'),
+        });
+        const theirs = await authService.login('b@example.com', 'other-password-123', true);
+
+        const { persistent } = await authService.changePassword(
+          'user-1', 'old-password-123', 'new-password-456', theirs.refreshToken,
+        );
+        expect(persistent).toBe(false);
+        // The peek consumed nothing: the other user's refresh token is untouched and still rotates.
+        await expect(authService.refresh(theirs.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+
+      it('a wrong current password issues nothing and revokes nothing', async () => {
+        const { authService } = await seededUser();
+        const current = await authService.login('a@example.com', 'old-password-123');
+
+        await expect(
+          authService.changePassword('user-1', 'totally-wrong-password', 'new-password-456', current.refreshToken),
+        ).rejects.toThrow('Current password is incorrect');
+
+        await expect(authService.refresh(current.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+    });
   });
 
   describe('deactivateAccount / login interaction', () => {

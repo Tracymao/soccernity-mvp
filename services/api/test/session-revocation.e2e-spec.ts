@@ -62,18 +62,19 @@ describe('Session revocation marker e2e (B-305)', () => {
     return { userId: user.id, role: user.role, email: user.email, password, accessToken: accessToken.token };
   }
 
-  async function createAdmin(label: string, role: string) {
+  async function createAdmin(label: string, role: string, password?: string, totpEnabledAt?: Date) {
     const prisma = getTestPrismaClient();
     const admin = await prisma.adminUser.create({
       data: {
         email: `e2e-revoke-admin-${label}-${Date.now()}-${rand()}@example.com`,
-        passwordHash: 'unused-in-this-e2e-spec-file',
+        passwordHash: password ? await app.get(PasswordService).hash(password) : 'unused-in-this-e2e-spec-file',
         fullName: `E2E Revoke Admin ${label}`,
         role,
+        ...(totpEnabledAt ? { totpEnabledAt } : {}),
       },
     });
     const { accessToken } = await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role);
-    return { adminId: admin.id, accessToken: accessToken.token };
+    return { adminId: admin.id, email: admin.email, accessToken: accessToken.token };
   }
 
   const ownProfile = (userId: string, token: string) =>
@@ -110,26 +111,141 @@ describe('Session revocation marker e2e (B-305)', () => {
     await ownProfile(user.userId, login.body.accessToken).expect(200);
   });
 
-  it('changing the password: the access token used for the change is a 401 afterwards, and a new login with the new password works', async () => {
+  // B-310: a password change still revokes EVERY session of the account, the caller's own included, but the API
+  // now answers 200 with a FRESH session for the caller, issued after the revoke (so it passes the marker check).
+  it('changing the password: the old access token is a 401 afterwards, the response carries a FRESH working session, and a login with the new password works', async () => {
     const user = await createUser('pw-change', 'old-password-1');
     await ownProfile(user.userId, user.accessToken).expect(200);
 
     await nextSecond();
-    await request(server())
+    const change = await request(server())
       .post('/auth/change-password')
       .set(auth(user.accessToken))
       .send({ currentPassword: 'old-password-1', newPassword: 'new-password-2' })
-      .expect(204);
+      .expect(200);
 
+    // The token used for the change is dead...
     await ownProfile(user.userId, user.accessToken).expect(401);
+    // ...and the fresh one in the response works at once (it was issued after the marker was written).
+    expect(change.body.user).toBeUndefined();
+    await ownProfile(user.userId, change.body.accessToken).expect(200);
 
-    // POST /auth/change-password answers 204 with NO new token pair, so the client signs in again.
     await request(server()).post('/auth/login').send({ email: user.email, password: 'old-password-1' }).expect(401);
     const login = await request(server())
       .post('/auth/login')
       .send({ email: user.email, password: 'new-password-2' })
       .expect(200);
     await ownProfile(user.userId, login.body.accessToken).expect(200);
+  });
+
+  it('changing the password: the fresh refresh token rotates, the old one and a SECOND session are dead (user)', async () => {
+    const user = await createUser('pw-change-refresh', 'old-password-1');
+    const first = await request(server()).post('/auth/login').send({ email: user.email, password: 'old-password-1' }).expect(200);
+    const second = await request(server()).post('/auth/login').send({ email: user.email, password: 'old-password-1' }).expect(200);
+
+    await nextSecond();
+    const change = await request(server())
+      .post('/auth/change-password')
+      .set(auth(first.body.accessToken))
+      .send({ currentPassword: 'old-password-1', newPassword: 'new-password-2' })
+      .expect(200);
+
+    // Everything else is gone: the caller's OLD refresh token, the other session's refresh token and access token.
+    await request(server()).post('/auth/refresh').send({ refreshToken: first.body.refreshToken }).expect(401);
+    await request(server()).post('/auth/refresh').send({ refreshToken: second.body.refreshToken }).expect(401);
+    await ownProfile(user.userId, second.body.accessToken).expect(401);
+
+    // The fresh pair is real: its refresh token rotates and the new access token works.
+    expect(typeof change.body.refreshToken).toBe('string');
+    const rotated = await request(server()).post('/auth/refresh').send({ refreshToken: change.body.refreshToken }).expect(200);
+    await ownProfile(user.userId, rotated.body.accessToken).expect(200);
+  });
+
+  it('changing the password with the WRONG current password: 401, nothing revoked, nothing issued (user)', async () => {
+    const user = await createUser('pw-change-wrong', 'old-password-1');
+    await nextSecond();
+    const res = await request(server())
+      .post('/auth/change-password')
+      .set(auth(user.accessToken))
+      .send({ currentPassword: 'not-the-password', newPassword: 'new-password-2' })
+      .expect(401);
+    expect(res.body.accessToken).toBeUndefined();
+    await ownProfile(user.userId, user.accessToken).expect(200);
+  });
+
+  it("admin: changing the password issues the caller a FRESH session; the old access token, the old refresh token and another admin session are dead", async () => {
+    const admin = await createAdmin('pw-change', 'editor', 'old-admin-password-1');
+    const first = await request(server()).post('/admin/auth/login').send({ email: admin.email, password: 'old-admin-password-1' }).expect(200);
+    const second = await request(server()).post('/admin/auth/login').send({ email: admin.email, password: 'old-admin-password-1' }).expect(200);
+    await request(server()).get('/admin/profile').set(auth(first.body.accessToken)).expect(200);
+
+    await nextSecond();
+    const change = await request(server())
+      .post('/admin/auth/change-password')
+      .set(auth(first.body.accessToken))
+      .send({ currentPassword: 'old-admin-password-1', newPassword: 'new-admin-password-2' })
+      .expect(200);
+
+    // No admin summary in the answer: just the pair.
+    expect(change.body.admin).toBeUndefined();
+    await request(server()).get('/admin/profile').set(auth(first.body.accessToken)).expect(401);
+    await request(server()).get('/admin/profile').set(auth(second.body.accessToken)).expect(401);
+    await request(server()).post('/admin/auth/refresh').send({ refreshToken: first.body.refreshToken }).expect(401);
+    await request(server()).post('/admin/auth/refresh').send({ refreshToken: second.body.refreshToken }).expect(401);
+
+    await request(server()).get('/admin/profile').set(auth(change.body.accessToken)).expect(200);
+    const rotated = await request(server()).post('/admin/auth/refresh').send({ refreshToken: change.body.refreshToken }).expect(200);
+    await request(server()).get('/admin/profile').set(auth(rotated.body.accessToken)).expect(200);
+  });
+
+  it('admin: a WRONG current password is a 401 and revokes nothing', async () => {
+    const admin = await createAdmin('pw-change-wrong', 'editor', 'old-admin-password-1');
+    await nextSecond();
+    await request(server())
+      .post('/admin/auth/change-password')
+      .set(auth(admin.accessToken))
+      .send({ currentPassword: 'not-the-password', newPassword: 'new-admin-password-2' })
+      .expect(401);
+    await request(server()).get('/admin/profile').set(auth(admin.accessToken)).expect(200);
+  });
+
+  // The decided exception: with ADMIN_2FA_ENFORCED on, an admin without two-factor must not be handed a session by a
+  // password change (the refresh gate would otherwise be sidestepped). Password saved, everything revoked, 204 no body.
+  describe('admin: ADMIN_2FA_ENFORCED on and no two-factor', () => {
+    const previous = process.env.ADMIN_2FA_ENFORCED;
+    beforeEach(() => {
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+    });
+    afterEach(() => {
+      if (previous === undefined) delete process.env.ADMIN_2FA_ENFORCED;
+      else process.env.ADMIN_2FA_ENFORCED = previous;
+    });
+
+    it('204 with no body: password saved, all sessions revoked, NO session issued', async () => {
+      const admin = await createAdmin('pw-change-enforced', 'editor', 'old-admin-password-1');
+      await nextSecond();
+      const res = await request(server())
+        .post('/admin/auth/change-password')
+        .set(auth(admin.accessToken))
+        .send({ currentPassword: 'old-admin-password-1', newPassword: 'new-admin-password-2' })
+        .expect(204);
+      expect(res.text).toBe('');
+
+      await request(server()).get('/admin/profile').set(auth(admin.accessToken)).expect(401);
+      const stored = await getTestPrismaClient().adminUser.findUniqueOrThrow({ where: { id: admin.adminId } });
+      expect(await app.get(PasswordService).verify(stored.passwordHash, 'new-admin-password-2')).toBe(true);
+    });
+
+    it('with two-factor ON the same change issues a fresh session as usual', async () => {
+      const admin = await createAdmin('pw-change-enforced-2fa', 'editor', 'old-admin-password-1', new Date('2026-10-01T00:00:00Z'));
+      await nextSecond();
+      const res = await request(server())
+        .post('/admin/auth/change-password')
+        .set(auth(admin.accessToken))
+        .send({ currentPassword: 'old-admin-password-1', newPassword: 'new-admin-password-2' })
+        .expect(200);
+      await request(server()).get('/admin/profile').set(auth(res.body.accessToken)).expect(200);
+    });
   });
 
   it("removing an admin account (deactivating it) makes that admin's earlier access token a 401; other admins are unaffected", async () => {

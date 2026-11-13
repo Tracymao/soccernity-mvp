@@ -37,12 +37,14 @@ test.describe.serial('Privacy page and Download my data', () => {
     await verifyEmailViaApi(adult);
   });
 
-  test('Adult variant: Public profile and Marketing emails stay disabled; Download my data is a real row', async ({ page }) => {
+  test('Adult variant: Public profile is a live switch (On by default); Marketing emails stays disabled; Download my data is a real row', async ({ page }) => {
     await signIn(page, adult.email);
     await page.goto('/settings/privacy');
     await expect(page.getByText('Public profile')).toBeVisible();
     await expect(page.getByText('Guardian approval')).toHaveCount(0);
-    await expect(page.getByRole('img', { name: /public profile: on \(not adjustable yet\)/i })).toBeVisible();
+    // Public profile is a live switch since B-060 (default On); only Marketing emails is still the disabled image.
+    await expect(page.getByRole('switch', { name: 'Public profile' })).toBeEnabled();
+    await expect(page.getByRole('switch', { name: 'Public profile' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('img', { name: /marketing emails: off \(not adjustable yet\)/i })).toBeVisible();
     await expect(page.getByText('Download a copy of your profile, posts, comments, follows and the messages you sent.')).toBeVisible();
     await expect(page.getByRole('link', { name: /download my data/i })).toHaveAttribute(

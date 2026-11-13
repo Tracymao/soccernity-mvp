@@ -20,6 +20,34 @@
   min-height: 200px;
 }
 
+/* A very small picture or video (a 64 x 64 clip, a 40 x 40 picture) made a box smaller than the cover button, which the
+   box's overflow:hidden then clipped, so the button could not be pressed and the media could never be revealed.
+   The blurred and revealed box therefore has a minimum size (DEFAULTS, founder-veto-able): 200 px wide (never wider
+   than its container) and 120 px high for a picture. A video also carries the length chip in the bottom-left corner of
+   the blurred box, and the cover (about 90 px tall with its icon and two lines) is centred, so the video box is 168 px
+   high: 120 would put the chip under the cover button. Media larger than that keeps exactly the box it always had;
+   smaller media is centred at its natural size (no upscaling, no stretching) on the wash the loading and failed
+   states already use. */
+.sensitive[data-sensitive-state="blurred"],
+.sensitive[data-sensitive-state="revealed"] {
+  min-width: min(100%, 200px);
+  min-height: 120px;
+  background: var(--sn-green-tint-12);
+}
+
+.sensitive[data-kind="video"][data-sensitive-state="blurred"],
+.sensitive[data-kind="video"][data-sensitive-state="revealed"] {
+  min-height: 168px;
+}
+
+.sensitive[data-sensitive-state="blurred"] > .sensitive__media,
+.sensitive[data-sensitive-state="revealed"] > .sensitive__media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: inherit;
+}
+
 .sensitive__media--blurred {
   filter: blur(28px);
   /* The blur bleeds past the edge; the parent's overflow:hidden clips it. A touch of scale hides the soft edge. */

@@ -207,7 +207,19 @@ export class AdminAuthService implements OnModuleInit {
   // admin JWT (AdminJwtAuthGuard), never a request-body field. Revokes
   // every other active session on success, same "credential changed, kill
   // other sessions" reasoning AuthService.changePassword() uses.
-  async changePassword(adminId: string, currentPassword: string, newPassword: string): Promise<void> {
+  //
+  // B-310 (Decision Log #500 follow-up): the revoke also refuses the caller's own access token and kills their refresh
+  // token, which signed the admin out although the Admin Console promises they stay signed in on this device. After the
+  // revoke the caller is issued a FRESH session (same order and reasons as AuthService.changePassword: read the "Stay
+  // signed in" flag first, write, revoke and WAIT, then issue). ONE exception, decided: when ADMIN_2FA_ENFORCED is on and
+  // this admin has no two-factor, issuing a session would sidestep assertEnrolledWhenEnforced (the refresh gate), so
+  // nothing is issued, every session stays revoked and the result is null (the controller answers 204 with no body).
+  async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentRefreshToken?: string,
+  ): Promise<{ response: AdminTokenPairResponse; persistent: boolean } | null> {
     const admin = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
     if (!admin) {
       // Same rare-but-real "valid access token for a since-removed admin
@@ -220,8 +232,12 @@ export class AdminAuthService implements OnModuleInit {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
+    const persistent = await this.adminTokenService.isRefreshTokenPersistent(currentRefreshToken, adminId);
     const newPasswordHash = await this.passwordService.hash(newPassword);
     await this.prisma.adminUser.update({ where: { id: adminId }, data: { passwordHash: newPasswordHash } });
     await this.adminTokenService.revokeAllSessionsForAdmin(adminId);
+    if (this.twoFactor.isAdminEnforced() && !admin.totpEnabledAt) return null;
+    const tokenPair = await this.adminTokenService.issueTokenPair(admin.id, admin.role, persistent);
+    return { response: toAdminTokenPairResponse(tokenPair), persistent };
   }
 }

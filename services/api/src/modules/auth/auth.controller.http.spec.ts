@@ -225,19 +225,78 @@ describe('AuthController (HTTP layer)', () => {
   });
 
   describe('POST /auth/change-password', () => {
-    it('returns 204 and delegates to authService with the caller-from-JWT id, not a body field', async () => {
-      authService.changePassword.mockResolvedValueOnce(undefined);
+    // B-310: the change revokes every session including the caller's own, so it answers 200 with a FRESH session.
+    const FRESH_SESSION = { response: tokenPairResponse, persistent: false };
 
-      await request(app.getHttpServer())
+    it('returns 200 with a fresh token pair and delegates with the caller-from-JWT id, not a body field', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
         .post('/auth/change-password')
         .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
-        .expect(204);
+        .expect(200);
 
+      // Not cookie mode: the full pair is in the body, no Set-Cookie, no current refresh token to read.
+      expect(res.body).toEqual(tokenPairResponse);
+      expect(res.headers['set-cookie']).toBeUndefined();
       expect(authService.changePassword).toHaveBeenCalledWith(
         AUTHENTICATED_USER.sub,
         'old-password',
         'new-password-123',
+        undefined,
       );
+    });
+
+    it('cookie mode: sets the new sn_rt cookie, leaves the refresh token out of the body, reads the CURRENT cookie', async () => {
+      authService.changePassword.mockResolvedValueOnce({ response: tokenPairResponse, persistent: true });
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5173')
+        .set('Cookie', 'sn_rt=current-id.current-secret')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(res.body.accessToken).toBe('access-token');
+      expect(res.body.refreshToken).toBeUndefined();
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_rt=refresh-id.secret');
+      expect(cookie).toMatch(/HttpOnly/i);
+      expect(cookie).toMatch(/SameSite=Strict/i);
+      expect(cookie).toContain('Path=/auth');
+      expect(cookie).toMatch(/Max-Age=\d+/i); // persistent was carried over
+      expect(authService.changePassword).toHaveBeenCalledWith(
+        AUTHENTICATED_USER.sub,
+        'old-password',
+        'new-password-123',
+        'current-id.current-secret',
+      );
+    });
+
+    it('cookie mode without the current cookie still succeeds (no cookie to read -> undefined) with a session cookie', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5173')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(String(res.headers['set-cookie'])).not.toMatch(/Max-Age/i);
+      expect(authService.changePassword).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'old-password', 'new-password-123', undefined);
+    });
+
+    it('cookie mode from a foreign Origin is a 403 and the password is NOT changed', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'https://evil.example')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(403);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
     });
 
     it('rejects a newPassword shorter than 8 characters with 400', async () => {
@@ -273,12 +332,12 @@ describe('AuthController (HTTP layer)', () => {
     // hands the user id and the event key over; who is actually emailed is decided in the notice service.
     it('asks for a guardian security notice exactly once after a successful change, for the caller and no one else', async () => {
       guardianNotices.notifyInBackground.mockClear();
-      authService.changePassword.mockResolvedValueOnce(undefined);
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
 
       await request(app.getHttpServer())
         .post('/auth/change-password')
         .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
-        .expect(204);
+        .expect(200);
 
       expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
       expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'password_changed');
@@ -300,15 +359,15 @@ describe('AuthController (HTTP layer)', () => {
       expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
     });
 
-    it('does not change the response: still a bare 204, even if the notice call is a no-op', async () => {
-      authService.changePassword.mockResolvedValueOnce(undefined);
+    it('does not change the response: the notice call never touches the body, even if it is a no-op', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
 
       const res = await request(app.getHttpServer())
         .post('/auth/change-password')
         .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
-        .expect(204);
+        .expect(200);
 
-      expect(res.text).toBe('');
+      expect(res.body).toEqual(tokenPairResponse);
     });
   });
 

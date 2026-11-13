@@ -15,6 +15,10 @@ Prerequisites: Docker Postgres + Redis up (`docker compose up -d`), a root `.env
 ```
 cd e2e
 npm install
+# If you installed with `npm ci --ignore-scripts` (as the repo's other workspaces are), the ffmpeg-static binary is
+# NOT downloaded, because its download runs as an install script. Fetch it once by hand, or the video upload tests
+# (specs 18 and 17's final-entry upload) skip / fail closed:
+node node_modules/ffmpeg-static/install.js
 npm test                       # everything (~10 min)
 npx playwright test 04         # one spec
 E2E_KEEP_DB=1 npx playwright test 04   # keep the scratch database between runs

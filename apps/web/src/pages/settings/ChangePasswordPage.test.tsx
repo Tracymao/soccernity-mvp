@@ -14,7 +14,7 @@ vi.mock("../../api/auth", async () => {
 });
 
 import { changePassword } from "../../api/auth";
-import { seedSession, clearSession } from "../../test/session";
+import { seedSession, clearSession, heldAccessToken } from "../../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -141,7 +141,7 @@ describe("ChangePasswordPage", () => {
     });
 
     it("accepts exactly 8 characters (the server's minimum)", async () => {
-      vi.mocked(changePassword).mockResolvedValue(undefined);
+      vi.mocked(changePassword).mockResolvedValue({ accessToken: "fresh" });
       renderPage();
       fill("oldpass1", "12345678", "12345678");
       save();
@@ -168,7 +168,7 @@ describe("ChangePasswordPage", () => {
     it("clears the error on the next attempt", async () => {
       vi.mocked(changePassword)
         .mockRejectedValueOnce(new AuthApiError("x", { status: 401 }))
-        .mockResolvedValueOnce(undefined);
+        .mockResolvedValueOnce({ accessToken: "fresh" });
       renderPage();
       fill("wrongpass", "12345678", "12345678");
       save();
@@ -183,8 +183,8 @@ describe("ChangePasswordPage", () => {
     beforeEach(() => seedSession("tok"));
 
     it("disables the form while saving and ignores a second submit", async () => {
-      let resolve!: () => void;
-      vi.mocked(changePassword).mockReturnValue(new Promise<void>((r) => (resolve = r)));
+      let resolve!: (v: { accessToken: string } | null) => void;
+      vi.mocked(changePassword).mockReturnValue(new Promise<{ accessToken: string } | null>((r) => (resolve = r)));
       renderPage();
       fill("oldpass1", "12345678", "12345678");
       save();
@@ -193,7 +193,7 @@ describe("ChangePasswordPage", () => {
       expect((screen.getByLabelText("Current password") as HTMLInputElement).disabled).toBe(true);
       fireEvent.submit(busy.closest("form") as HTMLFormElement);
       expect(changePassword).toHaveBeenCalledTimes(1);
-      resolve();
+      resolve({ accessToken: "fresh" });
       await screen.findByText("Password changed");
     });
 
@@ -221,7 +221,7 @@ describe("ChangePasswordPage", () => {
     beforeEach(() => seedSession("tok"));
 
     it("shows the confirmation, the true sessions line and a way back, and clears the fields", async () => {
-      vi.mocked(changePassword).mockResolvedValue(undefined);
+      vi.mocked(changePassword).mockResolvedValue({ accessToken: "fresh" });
       renderPage();
       fill("oldpass1", "12345678", "12345678");
       save();
@@ -235,8 +235,36 @@ describe("ChangePasswordPage", () => {
       expect(changePassword).toHaveBeenCalledWith("tok", "oldpass1", "12345678");
     });
 
+    // B-310: the change revokes every session including this one; the API hands back a fresh session for THIS device.
+    // Storing it is what makes "You stay logged in on this device." true -- without it the in-memory token is dead.
+    it("stores the FRESH session the API issues, replacing the revoked one", async () => {
+      vi.mocked(changePassword).mockResolvedValue({ accessToken: "fresh-after-change" });
+      renderPage();
+      fill("oldpass1", "12345678", "12345678");
+      save();
+      await screen.findByText("Password changed");
+      expect(heldAccessToken()).toBe("fresh-after-change");
+    });
+
+    it("signs this device out locally when the server issued no session (204 -> null)", async () => {
+      vi.mocked(changePassword).mockResolvedValue(null);
+      renderPage();
+      fill("oldpass1", "12345678", "12345678");
+      save();
+      await waitFor(() => expect(heldAccessToken()).toBeNull());
+    });
+
+    it("a wrong current password leaves the existing session untouched", async () => {
+      vi.mocked(changePassword).mockRejectedValue(new AuthApiError("x", { status: 401 }));
+      renderPage();
+      fill("wrongpass", "12345678", "12345678");
+      save();
+      await screen.findByText(MESSAGES.currentWrong);
+      expect(heldAccessToken()).toBe("tok");
+    });
+
     it("does not log this device out", async () => {
-      vi.mocked(changePassword).mockResolvedValue(undefined);
+      vi.mocked(changePassword).mockResolvedValue({ accessToken: "fresh" });
       renderPage();
       fill("oldpass1", "12345678", "12345678");
       save();

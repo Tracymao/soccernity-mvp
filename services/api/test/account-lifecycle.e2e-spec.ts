@@ -157,7 +157,7 @@ describe('Account lifecycle e2e: deactivate -> login fails -> reactivate -> logi
       .post('/auth/change-password')
       .set('Authorization', `Bearer ${secondAccessToken}`)
       .send({ currentPassword: password, newPassword })
-      .expect(204);
+      .expect(200); // B-310: a fresh session for the caller
 
     const afterPasswordChange = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     expect(afterPasswordChange.passwordHash).not.toBe(afterReactivate.passwordHash);

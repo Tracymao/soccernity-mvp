@@ -58,7 +58,7 @@ export default function SensitiveMedia({ kind, src, playVideo, onLoadError }: Pr
   }
 
   return (
-    <div className="sensitive" data-sensitive-state={status === "ready" ? (revealed ? "revealed" : "blurred") : status}>
+    <div className="sensitive" data-kind={kind} data-sensitive-state={status === "ready" ? (revealed ? "revealed" : "blurred") : status}>
       <div
         className={`sensitive__media${blurred ? " sensitive__media--blurred" : ""}`}
         // A blurred file can't be played, focused or read out. React 19 supports the `inert` attribute.
