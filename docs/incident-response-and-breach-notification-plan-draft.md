@@ -1,13 +1,13 @@
-# Soccernity — incident-response and breach-notification plan (DRAFT v0.5)
+# Soccernity — incident-response and breach-notification plan (DRAFT v0.6)
 
 > **DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
 > v0.2 also reflects **#456**, **#458**, **#459**, **#477**, **#478** and **#479**;
-> **v0.3 also reflects #482, #483, #484, #485, #486 and #487; v0.4 also reflects #490, #491, #492, #493 and #494**),
+> **v0.3 also reflects #482, #483, #484, #485, #486 and #487; v0.4 also reflects #490, #491, #492, #493 and #494; v0.6 also reflects #495, #498, #499, #500, #501 and #503**),
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
@@ -18,10 +18,34 @@ rests on. A reader can find every difference by searching for `v0.2 CHANGED`.
 **`[v0.3 CHANGED — source]`** = a passage added or changed in v0.3, with the same kind of source; search for `v0.3 CHANGED`.
 **`[v0.4 CHANGED — source]`** = a passage added or changed in v0.4; search for `v0.4 CHANGED`.
 **`[v0.5 CHANGED — source]`** = a passage changed in v0.5 (2026-11-12): one sentence in §4.10, corrected because the Contact Us "Appeal a suspension" category is now on the web page and in the admin inbox (PR #739). Nothing else changed; search for `v0.5 CHANGED`.
+**`[v0.6 CHANGED — source]`** = a passage changed in v0.6 (2026-11-13) because built behaviour on `origin/main` contradicted it or newly requires it; the source is the Decision Log entry or build-register row. Search for `v0.6 CHANGED`.
 Everything not marked is v0.1 to v0.3 text, unchanged. Only a real legal question is marked for counsel; a question for the founder that is not a legal
 blocker is marked **[FOR FOUNDER — not a counsel blocker]**.
 
 ---
+
+## v0.6 changes (what changed since v0.5, and why)
+
+*Draft for counsel review — not approved, not legal advice.* Refreshed 2026-11-13 against `origin/main` (`d6138c8`, after PRs #755 to #758) for the founder decisions
+recorded as Decision Log #498 to #503 and the builds they cover (B-302, B-305, B-306, B-307, B-308). The item list with line numbers and sources is in
+`docs/dpia-v08-incident-v06-report.md`. Every changed passage is marked `[v0.6 CHANGED — …]`. **No new customer-facing wording was needed, so nothing is tagged
+`[COPY PENDING LEGAL REVIEW]`.** Nothing here approves, advances or closes anything; the DPIA's sign-off block and this plan's counsel questions are unchanged.
+Nothing was run, and CI cannot be read from here: what follows is read from the merged code and the merged builders' reports.
+
+1. **Ending a session now stops an already-issued access token** (Decision Log #500; B-305, PR #755). §4.1 and §4.2 said an access token stays valid for up to
+   15 minutes after a revocation. That is no longer true, with two stated limits: it **fails open when Redis is unreachable** and there is a **one-second edge**.
+   §4.1, §4.2, §4.6, §4.10.
+2. **User uploads have an off switch, off by default in production** (Decision Log #501; B-306, PR #756). §4.7 said there was no per-feature kill switch; there
+   is now one, for uploads. The founder turns uploads on only after counsel answers B-206. **This plan does not decide B-206.** §1, §4.7, §8.3.
+3. **The hold routes follow the vetting rule for message reports** (Decision Log #498, #499; B-302, PR #749; B-308, PR #757). §3 said they did not. §3, §4.10.
+4. **Rejected files are no longer "never deleted"** (B-283, PR #608). §1 and §8.3 said so; a rejected file's private object is now deleted on the paths that remove
+   its row, unless an active admin hold or an unclosed report applies. What counts as evidence stays open under counsel (B-206).
+5. **A removed Contest entry no longer blocks the report-retention sweep** in the ordinary case (Decision Log #493 (c), #495; B-300, PR #742; B-307, PR #758). §8.4.
+6. **A staff-recorded appeal exists** (B-292, PR #731). §4.9 said it was decided, not built.
+7. **The suspension email going to the address on file is a founder-accepted position** (Decision Log #503). §4.10, Q20 and Q24(c) now say so; their questions are
+   otherwise unchanged.
+
+**Not changed, on purpose:** the v0.2 to v0.5 change lists and every `[OPEN]`, `[UNVERIFIED]` and `[PLACEHOLDER]` marker; all counsel questions Q1 to Q24.
 
 ## v0.4 changes (what changed since v0.3, and why)
 
@@ -137,7 +161,7 @@ whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **
 | Email-change requests | Postgres `EmailChangeRequest` (`newEmail` lower-cased, `tokenHash` SHA-256, expiry, `usedAt`) | Link token stored **hashed**, single use, 48 hours. **[v0.2 CHANGED — `email-change/README.md` (Decision Log #476).]** | A pending new address; the token itself is not recoverable from the row. |
 | Two-factor recovery requests | Postgres `TwoFactorRecoveryRequest` (state, `executeAt`, link and cancel tokens) | Tokens stored **hashed** (SHA-256); one active request per account. **[v0.2 CHANGED — `two-factor/README.md` "Recovery" (Decision Log #455, #456, #480).]** | Shows that an account is mid-recovery; rows for ended requests are deleted 30 days after they end, unused links 30 days after expiry. |
 | Posts, comments, Bants posts, reports, Contact Us enquiries (name, email, message) | Postgres | Plain columns | Content; reports and enquiries may contain safeguarding disclosures. |
-| Photos and videos | Cloudflare R2: `private-media/` (waiting, held, rejected) and `post-media/` (approved) | Private prefix is private **only if** the public address serves `post-media/` alone — **not verified against a real bucket (B-265)** | Images of children; rejected files are kept private and never deleted (B-206, open under counsel). |
+| Photos and videos | Cloudflare R2: `private-media/` (waiting, held, rejected) and `post-media/` (approved) | Private prefix is private **only if** the public address serves `post-media/` alone — **not verified against a real bucket (B-265)** | Images of children. **[v0.6 CHANGED — B-283, B-306]** (v0.5: "rejected files are kept private and never deleted") A rejected file's private object is deleted on the paths that remove its row unless an active admin hold or an unclosed report applies (§8.3); user uploads are off by default in production until B-206 is answered (§4.7); B-206 is open under counsel. |
 | Refresh tokens, password-reset tokens | Redis | Stored as SHA-256 hashes | Not directly replayable from a Redis dump. Email-verification tokens: hashing **not confirmed**. |
 | Two-factor enrolment in progress | Redis, 10 minutes | Encrypted with the same key | Short-lived. |
 | Rate-limit counters | Redis (and per-instance memory) | Email and IP are **hashed** in the keys | No raw email or IP. |
@@ -213,7 +237,7 @@ retention clock appear among these roles (proposals for the founder and counsel)
 - **The vetting gate shapes who can do the work.** A report with `concernsMinor`, and a message report whose reported sender or
   any participant is under 18 (#486), shows its full content (including attached context and the edited original) **only to a
   child-safety-vetted admin**. If the safeguarding lead is not vetted they cannot assess a minor's message report, and must hand
-  the assessment to a vetted admin. `[OPEN — Q23]` **[v0.4 CHANGED — #491, B-297]** The same rule now covers *acting* on such a report (recording an action, recording an appeal on someone's behalf, deciding an appeal): a non-vetted admin cannot do any of them on a message report where the reported sender or any participant is under 18, and the other admins still see the bare message with "Context hidden: this involves a child". It does **not** yet cover post, comment or user reports about a child outside the `child_safety_concern` category, the user-page suspension, or the hold routes (DPIA v0.6 R33(f) update). **[FOR FOUNDER — not a counsel blocker]**
+  the assessment to a vetted admin. `[OPEN — Q23]` **[v0.4 CHANGED — #491, B-297]** The same rule now covers *acting* on such a report (recording an action, recording an appeal on someone's behalf, deciding an appeal): a non-vetted admin cannot do any of them on a message report where the reported sender or any participant is under 18, and the other admins still see the bare message with "Context hidden: this involves a child". It does **not** yet cover post, comment or user reports about a child outside the `child_safety_concern` category, the user-page suspension, or the hold routes (DPIA v0.6 R33(f) update). **[v0.6 CHANGED — #498, #499, B-302, B-308]** The hold routes are now covered for message reports: placing a bad-faith hold, placing a legal hold and lifting a hold on a message report where the reported sender or any participant is under 18 (or on any `concernsMinor` report) need a child-safety-vetted admin, with the same fail-closed reading; a hold on a post, comment or user report about a child outside `child_safety_concern` still follows `concernsMinor` only; lifting a hold whose report was purged (report link NULL) may be done by any moderator (#499); and since PR #757 the admin screen does not show the hold buttons to a non-vetted admin on such a report (the server still refuses). A safeguarding lead who is not vetted therefore cannot place a hold on a child-involved message report and must hand it to a vetted admin (§8.4). **[FOR FOUNDER — not a counsel blocker]**
 - **Evidence preservation belongs to the incident lead** and starts *before* any removal or suspension (§5 step 3, §8.4): the
   retention sweeps (§8.4) run nightly and no pause switch is known.
 
@@ -241,14 +265,13 @@ system.** Where a tool does not exist, §4.9 says so.
   runs the same code (`AccountSuspensionService`): the status write, then session revocation, **revocation of earned engagement
   points (not restored on reinstatement)**, one guardian notice for a minor (unless the withhold flag is on) and an email to the
   person. §4.10 sets out what that means when a suspension is used as containment.
-- **Limit:** an already-issued access token stays valid until it expires (15 minutes by default). Ending a session is therefore
-  "within about 15 minutes", not instant. There is no per-request database check for ordinary users.
+- **Limit:** **[v0.6 CHANGED — Decision Log #500, B-305, PR #755]** (v0.5: "an already-issued access token stays valid until it expires (15 minutes by default), so ending a session is within about 15 minutes, not instant") Ending a session now also stops an access token that was already issued: revoking all of a user's sessions writes a Redis marker `auth:revoked-at:user:<id>` (whole seconds, kept for the access-token lifetime plus 60 seconds), and the sign-in guards refuse any token issued before it, with the ordinary 401. **Two limits a responder must know.** (1) **Redis unreachable: fail open.** If the marker cannot be read the token is accepted again; a log line and a Sentry event (tag `session_revocation=user`) are produced at most once a minute, and Sentry reaches no one until a real `SENTRY_DSN` and an alert rule exist (B-267 (c)). While Redis is down a revoked, unexpired token therefore works until it expires (15 minutes by default) or Redis returns. If the marker cannot be written, the call fails and the refresh tokens may already have been deleted. (2) **A one-second edge:** a token issued in the same second as, but just before, the revocation is not refused. A password change now also ends the current device's token. This is built behaviour, not a promise made to users.
 
 ### 4.2 End one admin's sessions
 - `AdminTokenService.revokeAllSessionsForAdmin`. Runs on: admin password change, **deactivating the admin**
   (`PATCH /admin/staff/:id/status`, superadmin; refused for the last active superadmin), and the two-factor peer reset.
 - With `ADMIN_2FA_ENFORCED = "true"`, an admin without two-factor is refused at their next **refresh** and all their sessions end
-  (PR #565). Access tokens already issued last up to their lifetime (15 minutes default; `ADMIN_JWT_*_TTL_*` env vars).
+  (PR #565). **[v0.6 CHANGED — #500, B-305]** (v0.5: access tokens already issued last up to their lifetime) An admin's already-issued access token is now stopped by a marker `admin:revoked-at:admin:<id>` that `AdminJwtAuthGuard` checks, with the same fail-open (Redis unreachable: accepted, Sentry tag `session_revocation=admin`) and one-second edge as §4.1. Removing an admin account (deactivation) is among the callers. The access-token lifetime (15 minutes default; `ADMIN_JWT_*_TTL_*` env vars) now only bounds the fail-open case.
 
 ### 4.3 Reset an admin's two-factor
 - `POST /admin/staff/:id/two-factor/reset` (superadmin, never your own; ends the target's sessions; audit row
@@ -289,7 +312,7 @@ system.** Where a tool does not exist, §4.9 says so.
 - Global limiter (user 120/min, anonymous 600/min per IP, writes 30/min, uploads 10/10 min), sign-in limits (5 failed attempts
   per 15 minutes per account-and-IP pair; 20 per 24 hours per account; per-IP ceiling), admin login 5 per 15 minutes per IP,
   guardian-withdrawal 5 per 15 minutes. All numbers are environment variables in `render.yaml` and can be tightened by redeploy.
-- **Fail-open with Sentry report** when Redis is down (`rate_limiter=global` / `rate_limiter=auth`). **No alert reaches anyone
+- **Fail-open with Sentry report** when Redis is down (`rate_limiter=global` / `rate_limiter=auth`; **[v0.6 CHANGED — #500, B-305]** and the session-revocation check, tags `session_revocation=user` / `admin`, which also fails open). **No alert reaches anyone
   until `SENTRY_DSN` is real and an alert rule exists (B-267 (c)).** The admin login is *not* fail-closed (Decision Log #433).
 - Accounts: a moderator can suspend (`suspended` — not reversible by the user) or delete a user (`PATCH /admin/users/:id`);
   a held account is handled by `AccountHold`. **[v0.3 CHANGED — suspension by this route now requires a reason category (400
@@ -298,8 +321,9 @@ system.** Where a tool does not exist, §4.9 says so.
 ### 4.7 Switch off a feature
 - Uploads: with no object store configured, upload routes answer 503 and nothing else breaks; video uploads answer 503 when
   ffmpeg is absent. Removing the `S3_*` / `REKOGNITION_*` values and redeploying is the existing off switch for media.
+- **[v0.6 CHANGED — Decision Log #501, B-306, PR #756]** **`MEDIA_UPLOADS_ENABLED` is now a per-feature switch for user uploads.** It is read on every call. In production uploads work only when it is exactly `true`; elsewhere they work unless it is exactly `false`; Render sets `NODE_ENV=production` on staging too, so both start **off**. With it off, `POST /media/uploads`, its confirm step, and the avatar and cover uploads refuse with a coded 403 `media_uploads_disabled` before any file is read or stored. It does **not** hide or remove media that already exists, and does not stop reading, deleting, reporting a file, the staff upload route, or posts without media. Changing it is a Render environment change. The founder sets it to `true` only after counsel answers B-206; this plan does not decide B-206 and does not say what the answer should be.
 - Email: an unusable `WEB_APP_BASE_URL` stops verification, guardian-consent and withdrawal emails from being sent at all.
-- There is **no maintenance mode, no read-only mode and no per-feature kill switch** in the code. Taking the API down means
+- There is **no maintenance mode, no read-only mode and no per-feature kill switch** in the code **[v0.6 CHANGED — B-306: except the uploads switch above]**. Taking the API down means
   suspending the Render service `[PLACEHOLDER: who holds the Render login]`.
 
 ### 4.8 Processor contact routes (to be filled on account creation)
@@ -340,9 +364,7 @@ opened.
   hold** is the built way to keep a report, its removed content and a held account's messages, but it needs an existing report
   and a real account to attach to.
 - **[v0.3 CHANGED]** No **bulk or quiet suspension**: every suspension emails the person and tells a minor's guardian (§4.10). No
-  staff tool to **restore** removed content other than overturning the removing report's appeal, and no **staff-recorded
-  appeal** yet (B-292 is decided, not built — `CLAUDE.md`), so a responder who removed or suspended in error has only a manual
-  reinstatement (accounts) or the appeal route (content). Content removal can only be recorded **on a report**: a responder
+  staff tool to **restore** removed content other than overturning the removing report's appeal, and, **[v0.6 CHANGED — B-292, PR #731]** (v0.5: "no staff-recorded appeal yet (B-292 is decided, not built)") a **staff-recorded appeal** now exists (`POST /admin/moderation/reports/:id/appeal`: only for a report whose action was `user_suspended`, with a written reason, inside the same 30-day window; the recorder and the original actioner may not decide it), but there is no staff tool to undo a wrong `content_removed` other than the appeal route. A responder who removed or suspended in error has a manual reinstatement (accounts) or the appeal route (content, and a suspension made on a report). Content removal can only be recorded **on a report**: a responder
   without an existing report must have one filed first (`[UNVERIFIED]` — an admin cannot submit a report from the admin
   console; inferred from the routes).
 - **Sentry, Postmark, Upstash alerting, Render, Neon: none live.** This plan cannot be exercised until they are.
@@ -358,7 +380,7 @@ triggers by using one.
 |---|---|---|---|---|
 | **Remove Content** (post, comment, message) on a report | Moderator or superadmin; a vetted admin for a `concernsMinor` report | Marks that **one** item removed (soft): it vanishes from user-facing reads; the **public** copy of a post's media is withdrawn and a **private** copy kept | The guardian of a minor author is told the *kind* of action (`content_removed`) unless the withhold flag is on; the reporter is told the outcome; the author sees a stub. Counts drop (`commentCount`). **The text and the private media stay**, so this does **not** erase anything from the database. | Overturn the report's appeal (restores both content and media). |
 | **Suspend User** on a report, or `status: suspended` on the user page | Moderator or superadmin (user page: reason category required) | Sets `accountStatus = 'suspended'`; the person cannot sign in; **all sessions end; earned engagement points are revoked** | **An email to the person's address on file** with a fixed reason line chosen from the report category (the generic line "breaching our community rules" for `child_safety_concern`, `other` or none), never free text, the reporter or a duration, and how to appeal; a guardian notice for a minor (unless withheld); points are not restored on reinstatement. | Overturn the suspending report's appeal (automatic, only if *that* report caused it), or a manual reinstatement from the user page (also emails the person). |
-| **Legal hold** / **bad-faith hold** | Moderator or superadmin, on a report | Keeps the report, the removed content, and (legal hold) the held person's messages out of the nightly deletions (§8.4) | **No one is notified**, including no guardian (#459). | Lift the hold (reason required). |
+| **Legal hold** / **bad-faith hold** | Moderator or superadmin, on a report (**[v0.6 CHANGED — #498, B-302]** a child-safety-vetted admin where a child is involved) | Keeps the report, the removed content, and (legal hold) the held person's messages out of the nightly deletions (§8.4) | **No one is notified**, including no guardian (#459). **[v0.6 CHANGED — #498, #499, B-302]** On a message report where the sender or any participant is under 18, or any `concernsMinor` report, placing and lifting need a child-safety-vetted admin (fails closed); lifting a hold whose report was purged needs no vetting (#499). | Lift the hold (reason required). |
 
 **Using suspension to contain an account takeover — cautions for the incident lead (proposals).**
 - The suspension email goes to the address on file. If the attacker changed the email (`POST /auth/email-change/confirm`) it goes
@@ -367,6 +389,7 @@ triggers by using one.
   of a takeover this is the wrong message, and no quiet or custom variant exists. `[OPEN — Q20]`
 - A suspension revokes earned engagement points and does not restore them; a victim loses leaderboard points.
 - For a **minor**, a guardian notice goes out too (unless the withhold flag is on) — alongside any breach notice (§7.5).
+- **[v0.6 CHANGED — #500, B-305]** A suspension now stops the account's already-issued access token at once, unless Redis is unreachable (§4.1), so it works within seconds, not within 15 minutes.
 - Prefer, in this order: end the sessions without suspending (§4.1) and reset the credential; suspend only when the account is
   itself the source of harm.
 
@@ -382,7 +405,7 @@ cannot use the in-app appeal. They write through the public Contact Us page (sev
 required). **The staff member who records the appeal, and the one who took the original action, may not decide it**, so a third admin is needed; for a message report
 involving a child, all of them must be child-safety-vetted. The recorded appeal pauses the report's retention clock. Two things for a responder to expect: the Contact Us
 enquiry may hold a child's account email and is readable by any moderator or superadmin (the inbox has no vetting gate; **[FOR FOUNDER — not a counsel blocker]**), and the
-suspension email still goes to the address on file, which an attacker may have changed (Q20; recorded, not decided). A suspension is applied even if an admin hold exists
+suspension email still goes to the address on file, which an attacker may have changed (Q20; **[v0.6 CHANGED — #503]** a founder-accepted position, nothing to build). A suspension is applied even if an admin hold exists
 on the account (founder decision, #494; no counsel position). The reinstatement email says nothing about points.
 
 ## 5. The response process
@@ -627,7 +650,7 @@ account hold (#459).
   the legal draft (PP §9). The incident log itself will contain personal data.
 - **Law enforcement requests:** route to counsel; do not hand over data on a phone call. A report to the police `[OPEN — Q11]`
   is separate from a regulator filing.
-- **Rejected media and CSAM:** rejected files are kept private and **never deleted** (B-206); the handling of material that may
+- **Rejected media and CSAM:** **[v0.6 CHANGED — B-283, PR #608]** (v0.5: "rejected files are kept private and never deleted") a rejected file's private object is deleted on every path that removes its database row (a post deleted by a live account, a deleted upload, the quarantine and unattached purges, account anonymisation and the account purge), unless the uploader is under an active admin hold or the post has a report that is not yet closed; a moderator's Reject itself deletes nothing. A daily sweep for stray objects with no row exists but needs a list permission on the storage key (B-207), so it may find none until that is granted. What counts as evidence, and any statutory duty, is **not decided and open under counsel (B-206)**; user uploads are off by default in production until it is answered (§4.7). The handling of material that may
   be illegal is **undecided and open under counsel**. A responder who finds possible CSAM must not copy, forward or view it
   further and goes to counsel at once.
 
@@ -642,7 +665,7 @@ conclusion; the figures are configuration and several are unverified for the jur
 | What | When | Anchor | Kept when |
 |---|---|---|---|
 | A direct message (and its edit original) | 12 months after it was sent, nightly at 04:00 | send time | Referenced by a report; attached as context to a report; an active **legal hold** on its sender or another participant |
-| A report, and the content it removed (rows and stored media, in one transaction) | `REPORT_RETENTION_YEARS` (default **6**) after the report **closes** **[v0.4 CHANGED — #490]** (v0.3: 12 months), nightly at 04:15, at most 100 per run; **7 years** (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) if `concernsMinor` (v0.3: 6) | the report's closing time (dismissed: its review; actioned with no appeal: review plus the appeal window, default 30 days; appeal upheld: that decision). An **open** report, or one with an appeal pending, is never due | An active legal or bad-faith hold on the reporter, on the target's account or (message) on the sender or another participant; an **escalated** report (until counsel answers B-206); a removed post whose media is not deletable; another unclosed report on the same item. **Blocked** (kept and counted): the removed post is a Contest entry; a removed message is attached as context to a different report. **[v0.4 CHANGED — #493, B-299]** A hold record that references a due report no longer blocks it (the hold stays, its report link is cleared), and an escalated Contact Us enquiry no longer blocks it (it is detached and returns to its 12-month clock) |
+| A report, and the content it removed (rows and stored media, in one transaction) | `REPORT_RETENTION_YEARS` (default **6**) after the report **closes** **[v0.4 CHANGED — #490]** (v0.3: 12 months), nightly at 04:15, at most 100 per run; **7 years** (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) if `concernsMinor` (v0.3: 6) | the report's closing time (dismissed: its review; actioned with no appeal: review plus the appeal window, default 30 days; appeal upheld: that decision). An **open** report, or one with an appeal pending, is never due | An active legal or bad-faith hold on the reporter, on the target's account or (message) on the sender or another participant; an **escalated** report (until counsel answers B-206); a removed post whose media is not deletable; another unclosed report on the same item. **Blocked** (kept and counted): the removed post is a Contest entry **[v0.6 CHANGED — B-300, B-307]** only where the entry's cycle is not completed or it still holds a legacy admin-judged winner row (otherwise the report is deleted on the normal clock, with the post's Contest rows); a removed message is attached as context to a different report. **[v0.4 CHANGED — #493, B-299]** A hold record that references a due report no longer blocks it (the hold stays, its report link is cleared), and an escalated Contact Us enquiry no longer blocks it (it is detached and returns to its 12-month clock) |
 | A removed post's private media | When the removing report closes | as above | Uploader under an active admin hold, or another report on the post still open |
 | `AdminActionLog`, earned points | Never by these jobs | n/a | n/a |
 
@@ -868,11 +891,11 @@ purpose, and whether a stranger who can trigger a lock by guessing a password ca
 
 | # | Question |
 |---|---|
-| **Q20** | A suspension (user page or report) always emails the person at the address on file with a fixed reason line, and revokes earned points without restoring them (#485). When a suspension is used to contain an account takeover: may a different or no email be sent; may the address on file, which an attacker may have changed, be used; and is the §10.7 hand-sent note acceptable? Should points be restored when a suspension was precautionary? (§4.10) |
+| **Q20** | A suspension (user page or report) always emails the person at the address on file with a fixed reason line, and revokes earned points without restoring them (#485). When a suspension is used to contain an account takeover: may a different or no email be sent; may the address on file, which an attacker may have changed, be used; and is the §10.7 hand-sent note acceptable? Should points be restored when a suspension was precautionary? (§4.10) **[v0.6 CHANGED — #503]** The founder has accepted that the email keeps going to the address on file; nothing is to be built for that. |
 | **Q21** | **[v0.4 CHANGED — #490]** Reports are deleted 6 years after closure and 7 years for a minor (v0.3: 12 months and 6; the range is the one recorded as counsel-approved in the legal draft v0.7, not re-confirmed here). If an incident is discovered after a report has been deleted, the report and the content it removed are gone from the platform. Do those periods suit a safeguarding record that may be needed for a later inquiry, or for a statutory report; and does counsel want a legal hold placed automatically on any report linked to an open incident? (§8.4) |
 | **Q22** | Removed content is **soft-removed**: it stays in clear text in Postgres, and the private copy of a removed post's media stays until the report closes (#483, #484). Is that an acceptable position for a platform whose users and guardians are told the content has been taken down; is the Privacy Policy draft's retention text consistent with it; and how does it relate to the open B-206 question about rejected media and evidence? **This plan does not decide B-206.** (§1, §8.4) |
 | **Q23** | A message report whose reported sender or any participant is under 18 hides the attached context and the edit original from every admin who is not child-safety-vetted (#486). In a breach affecting messages, the people who must assess exposure may not be vetted. Who is allowed to read those messages for the purpose of the assessment, and is a vetted admin required on the incident team? (§3) |
-| **Q24** | **[v0.4 CHANGED — new; #493, #492, #494]** (a) A report that is held or escalated keeps the Contact Us enquiry escalated into it, with its name, email and message, until the report is purged; a legal hold has no end date. Is that acceptable, and who decides when a hold ends? (b) A suspension-appeal enquiry may hold a child's account email and sits in an inbox readable by any moderator or superadmin; does counsel want it limited to child-safety-vetted staff when the sender is a minor? **[FOR FOUNDER — not a counsel blocker]** for the design; counsel for whether the exposure is acceptable. (c) The suspension email goes to the address on file (recorded, not decided): if the incident was an account takeover, the attacker may receive it. (§4.10, §8.4) |
+| **Q24** | **[v0.4 CHANGED — new; #493, #492, #494]** (a) A report that is held or escalated keeps the Contact Us enquiry escalated into it, with its name, email and message, until the report is purged; a legal hold has no end date. Is that acceptable, and who decides when a hold ends? (b) A suspension-appeal enquiry may hold a child's account email and sits in an inbox readable by any moderator or superadmin; does counsel want it limited to child-safety-vetted staff when the sender is a minor? **[FOR FOUNDER — not a counsel blocker]** for the design; counsel for whether the exposure is acceptable. (c) The suspension email goes to the address on file (**[v0.6 CHANGED — #503]** a founder-accepted position, nothing to build): if the incident was an account takeover, the attacker may receive it. (§4.10, §8.4) |
 
 ---
 
@@ -893,6 +916,8 @@ purpose, and whether a stranger who can trigger a lock by guessing a password ca
 "Retention", "Edit, delete for me, delete for everyone"); `services/api/src/modules/moderation/README.md` ("Reporting a
 message in a chat", "Context messages"); `services/api/src/modules/admin-users/README.md` ("Guardian notices"); Decision Log
 entries #455–#459 and #476–#480 as recorded in `CLAUDE.md`. Not re-read in v0.2: the docx itself.
+
+**Repository sources added in v0.6 (read on `origin/main` `d6138c8`, 2026-11-13):** `docs/backend-b305-session-revocation-report.md`, `docs/backend-b306-media-uploads-switch-report.md`, `docs/backend-b307-contest-entry-retention-report.md`, `docs/frontend-b308-hold-controls-audit-notes-report.md`, `docs/backend-contest-removal-report.md`, `services/api/src/session-revocation/session-revocation.ts`, `services/api/src/media-uploads/`, `moderation-holds.service.ts`, `contest-entry-retention.util.ts`, the B-283 section of `post-media/README.md`, register Sections 90 to 92. **Not verified in v0.6:** any behaviour against a live system or a real Redis outage; CI (cannot be read from here); the Playwright specs; whether a Sentry alert would ever reach anyone.
 
 **Repository sources added in v0.3 (all read on `origin/main` `0e440bf`, 2026-11-11):** `services/api/src/modules/moderation/README.md`
 ("`actionTaken`: `content_removed` is enforced", "Recording `user_suspended` suspends the account", "Report retention", "Vetted-only
@@ -924,5 +949,5 @@ controller of major importance; everything for the US and EU.
 
 ---
 
-*End of draft v0.4. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
+*End of draft v0.6. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
 Log Book, the register and the Build Plan were not edited by this draft.*
