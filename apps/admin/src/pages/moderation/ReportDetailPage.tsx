@@ -58,7 +58,13 @@ import ReportedMessageFields from "./ReportedMessageFields";
 import ContextMessagesCard from "./ContextMessagesCard";
 import RecordAppealDialog from "./RecordAppealDialog";
 import SuspendAccountDialog from "./SuspendAccountDialog";
-import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
+import {
+  CaseLevelHoldButtons,
+  CaseLevelHoldCallout,
+  HoldControlsRestrictedLine,
+  HoldStatus,
+  mergeHolds,
+} from "./holdActions";
 import {
   EscalateReportCard,
   formatDateTime,
@@ -271,13 +277,26 @@ export default function ReportDetailPage() {
   const canRecordAppeal = suspendedByReport && !report.appealStatus;
   const appealRecordedByStaff = report.appealRecordedByStaff === true;
 
+  // B-308 (Decision Log #502 (a)): the three hold controls (place bad faith, place legal, lift) are not drawn on a message
+  // report whose thread involves a child for an admin who is not child-safety vetted; a line says why. The signal is the
+  // contextHidden flag the single-report read already carries (B-293): the server sets it exactly when the admin is not
+  // vetted and the thread involves a child, so this page applies no age rule of its own and makes no extra call.
+  //  * restricted: contextHidden is true.
+  //  * pending: a message report whose single-report read has not answered yet (the queue row carries no flag), so the
+  //    controls are held back until it has, instead of showing and then withdrawing them. If that read fails the page
+  //    falls back to showing them; the server's refusal (onRestricted) is still the safety net.
+  const holdControlsRestricted = report.targetType === "message" && report.contextHidden === true;
+  const holdControlsPending =
+    report.targetType === "message" && report.contextHidden === undefined && report.reportedMessage === undefined;
+  const showHoldControls = !holdControlsRestricted && !holdControlsPending;
+
   return (
     <>
       <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} />
       <div className="mod-page">
         {backLink}
 
-        <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
+        <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} canLift={showHoldControls} />
 
         <div className="mod-card">
           <h2 className="mod-card__title">Reported content</h2>
@@ -418,13 +437,16 @@ export default function ReportDetailPage() {
                   Record an appeal
                 </button>
               ) : null}
-              <CaseLevelHoldButtons
-                report={report}
-                onPlaced={handleHoldsPlaced}
-                onRestricted={() => setActionRestricted(true)}
-              />
+              {showHoldControls ? (
+                <CaseLevelHoldButtons
+                  report={report}
+                  onPlaced={handleHoldsPlaced}
+                  onRestricted={() => setActionRestricted(true)}
+                />
+              ) : null}
             </div>
-            <CaseLevelHoldCallout />
+            {holdControlsRestricted ? <HoldControlsRestrictedLine /> : null}
+            {showHoldControls ? <CaseLevelHoldCallout /> : null}
           </div>
         ) : null}
 
@@ -458,12 +480,15 @@ export default function ReportDetailPage() {
                   {submitting === action ? "Saving…" : REPORT_ACTION_LABELS[action]}
                 </button>
               ))}
-              <CaseLevelHoldButtons
-                report={report}
-                onPlaced={handleHoldsPlaced}
-                onRestricted={() => setActionRestricted(true)}
-              />
+              {showHoldControls ? (
+                <CaseLevelHoldButtons
+                  report={report}
+                  onPlaced={handleHoldsPlaced}
+                  onRestricted={() => setActionRestricted(true)}
+                />
+              ) : null}
             </div>
+            {holdControlsRestricted ? <HoldControlsRestrictedLine /> : null}
             {/* B-295 (Figma 7041:60951 to 7041:62132): says where Suspend User applies, or why it is missing. */}
             <p className="mod-helper">{suspendHelperLine(report.targetType)}</p>
             <p className="mod-note">
@@ -472,7 +497,7 @@ export default function ReportDetailPage() {
                 ? " Remove Content hides it from everyone but you and the other moderators; the original is kept as evidence."
                 : " Recording an action does not by itself remove content."}
             </p>
-            <CaseLevelHoldCallout />
+            {showHoldControls ? <CaseLevelHoldCallout /> : null}
           </div>
         )}
 
