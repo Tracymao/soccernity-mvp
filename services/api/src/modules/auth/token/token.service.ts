@@ -7,6 +7,13 @@ import {
   DEFAULT_REFRESH_TOKEN_TTL_DAYS,
 } from './token.constants';
 import { AccessTokenPayload, AccessTokenResult, TokenPair } from './token.types';
+import {
+  isIssuedBeforeRevocation,
+  parseRevocationMarker,
+  reportRevocationCheckFailure,
+  revocationMarkerTtlMs,
+  wholeSecondsNow,
+} from '../../../session-revocation/session-revocation';
 
 // Build Plan Section 5.7's concrete auth spec, owned by this service:
 // short-lived access token (JWT) + rotating, revocable refresh token
@@ -66,9 +73,33 @@ export class TokenService {
   // only { sub, role } — see AccessTokenPayload for why isMinor /
   // consentStatus must never be added here.
   verifyAccessToken(token: string): AccessTokenPayload {
+    return this.verifyWithIssuedAt(token).payload;
+  }
+
+  // B-305 (Decision Log #500): what the guards call. Verifies the token exactly as verifyAccessToken does, THEN
+  // refuses it when the user's sessions were revoked after it was issued (the Redis marker written by
+  // revokeAllSessionsForUser; compared with the token's standard `iat`). The refusal is the same 401 as an invalid
+  // token. If Redis cannot be read the token is accepted (fail open): the failure is logged and sent to Sentry
+  // (tag session_revocation=user) and never thrown. Still returns only { sub, role }.
+  async verifyActiveAccessToken(token: string): Promise<AccessTokenPayload> {
+    const { payload, issuedAt } = this.verifyWithIssuedAt(token);
+    let marker: number | null = null;
     try {
-      const decoded = this.jwtService.verify<AccessTokenPayload>(token);
-      return { sub: decoded.sub, role: decoded.role };
+      marker = parseRevocationMarker(await this.refreshTokenStore.getSessionsRevokedAt(payload.sub));
+    } catch (err) {
+      reportRevocationCheckFailure('user', err);
+      return payload;
+    }
+    if (isIssuedBeforeRevocation(issuedAt, marker)) {
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
+    return payload;
+  }
+
+  private verifyWithIssuedAt(token: string): { payload: AccessTokenPayload; issuedAt: number | undefined } {
+    try {
+      const decoded = this.jwtService.verify<AccessTokenPayload & { iat?: number }>(token);
+      return { payload: { sub: decoded.sub, role: decoded.role }, issuedAt: decoded.iat };
     } catch {
       throw new UnauthorizedException('Invalid or expired access token');
     }
@@ -80,8 +111,16 @@ export class TokenService {
 
   // Logout-everywhere / admin-triggered revocation (Build Plan Section
   // 8.4 moderation & appeals workflow).
+  // B-305: also stops access tokens already issued -- see verifyActiveAccessToken. The marker is written AFTER the
+  // refresh tokens are gone; a Redis failure there propagates like the revocation's own would (a half-done
+  // revocation is not reported as done).
   async revokeAllSessionsForUser(userId: string): Promise<void> {
     await this.refreshTokenStore.revokeAllForUser(userId);
+    await this.refreshTokenStore.markSessionsRevoked(
+      userId,
+      wholeSecondsNow(),
+      revocationMarkerTtlMs(this.accessTokenTtlSeconds),
+    );
   }
 
   private signAccessToken(userId: string, role: string): AccessTokenResult {

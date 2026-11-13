@@ -479,3 +479,12 @@ database, a reset helper that silently excluded it from truncation would
 undermine the exact isolation this PR is trying to provide. Querying
 `pg_catalog` stays correct automatically as new models/relations are
 added later, with no update needed here.
+
+## B-305 -- session-revocation marker (`test/session-revocation.e2e-spec.ts`)
+
+Real Postgres and Redis. Covers: suspending a user through the admin route (earlier access token 401 at once,
+reinstate + new login works), changing the password (the access token used for the change is refused, the new
+password logs in), removing an admin (deactivation) refusing that admin's earlier token while other admins are
+untouched, and the marker's real key and TTL in Redis. Because `iat` and the marker are whole seconds and a token issued
+in the same second just before a revocation is not refused (the documented one-second edge), every test that revokes and
+then expects a 401 waits for the next whole second after issuing the token (`nextSecond()`).

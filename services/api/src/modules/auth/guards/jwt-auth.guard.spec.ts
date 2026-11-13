@@ -19,63 +19,61 @@ function buildContext(headers: Record<string, string | undefined>): {
 }
 
 describe('JwtAuthGuard', () => {
-  it('attaches the verified { sub, role } payload to request.user and allows the request through', () => {
+  it('attaches the verified { sub, role } payload to request.user and allows the request through', async () => {
     const payload: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
     const tokenService = {
-      verifyAccessToken: jest.fn().mockReturnValue(payload),
+      verifyActiveAccessToken: jest.fn().mockResolvedValue(payload),
     } as unknown as TokenService;
     const guard = new JwtAuthGuard(tokenService);
     const { context, request } = buildContext({ authorization: 'Bearer a.valid.token' });
 
-    const result = guard.canActivate(context);
+    const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
-    expect(tokenService.verifyAccessToken).toHaveBeenCalledWith('a.valid.token');
+    expect(tokenService.verifyActiveAccessToken).toHaveBeenCalledWith('a.valid.token');
     expect(request.user).toEqual(payload);
   });
 
-  it('rejects a request with no Authorization header at all, without calling TokenService', () => {
+  it('rejects a request with no Authorization header at all, without calling TokenService', async () => {
     const tokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as TokenService;
     const guard = new JwtAuthGuard(tokenService);
     const { context } = buildContext({});
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(tokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('rejects a header that is not the Bearer scheme', () => {
+  it('rejects a header that is not the Bearer scheme', async () => {
     const tokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as TokenService;
     const guard = new JwtAuthGuard(tokenService);
     const { context } = buildContext({ authorization: 'Basic dXNlcjpwYXNz' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(tokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('rejects "Bearer" with no token after it', () => {
+  it('rejects "Bearer" with no token after it', async () => {
     const tokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as TokenService;
     const guard = new JwtAuthGuard(tokenService);
     const { context } = buildContext({ authorization: 'Bearer' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(tokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('propagates TokenService.verifyAccessToken rejecting an invalid/expired token', () => {
+  it('propagates TokenService.verifyActiveAccessToken rejecting an invalid/expired token', async () => {
     const tokenService = {
-      verifyAccessToken: jest.fn().mockImplementation(() => {
-        throw new UnauthorizedException('Invalid or expired access token');
-      }),
+      verifyActiveAccessToken: jest.fn().mockRejectedValue(new UnauthorizedException('Invalid or expired access token')),
     } as unknown as TokenService;
     const guard = new JwtAuthGuard(tokenService);
     const { context } = buildContext({ authorization: 'Bearer a.bad.token' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 });
