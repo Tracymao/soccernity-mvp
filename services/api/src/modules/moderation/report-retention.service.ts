@@ -22,6 +22,7 @@ import {
   ReportRetentionConfig,
   retentionMonthsFor,
 } from './report-retention.config';
+import { contestEntryStillCounts } from './contest-entry-retention.util';
 import { resolveReportedUserId } from './report-target.util';
 
 // backend/b294-report-retention (B-294; Decision Log #487, founder decision of 2026-11-11).
@@ -47,9 +48,19 @@ import { resolveReportedUserId } from './report-target.util';
 //
 // A REPORT IS BLOCKED (kept; the finding is logged as a COUNT per kind and listed in the PR) when a record outside
 // the deletion list depends on it or on an item, and no rule says what to do with that record. Nothing is invented:
-//   - contest_entry             the removed post is a Contest entry (deleting it would delete votes, winners and
-//                               impressions with it);
+//   - contest_entry             the removed post is a Contest entry AND deleting it would still change something
+//                               that counts (B-307, below -- the common case is NOT blocked any more);
 //   - context_of_other_report   a removed message is attached as context to a DIFFERENT report (a RESTRICT FK).
+//
+// CONTEST ENTRIES (B-307; Decision Log #493 (c), #495 (g)). Deleting a removed post cascades to its ContestEntry and,
+// from there, to the entry's ContestRoundWinner, ContestVote, ContestEngagement and ContestImpression rows (the four
+// relations to ContestEntry; test/ and contest-entry-retention.util.ts pin that list against the Prisma schema).
+// B-300 already took the removed entry out of everything that counts when the post was removed -- every ranking
+// filters POST_NOT_REMOVED, the podium reconcile deleted its winner row, the placement and baseline points were
+// revoked, and the finalist set is keyed by user, not by entry -- so those four tables hold nothing that still counts
+// for it, and the purge may drop them. The check below keeps the report ONLY where that is not so
+// (contest-entry-retention.util.ts, contestEntryStillCounts): the entry's cycle is not completed yet, or the entry
+// still has a winner row (a legacy admin-judged cycle, which B-300 does not reconcile, or any state it did not).
 //
 // TWO KINDS OF RECORD ARE DETACHED, NOT BLOCKING (B-299): an AccountHold row that points at the report gets
 // reportId = NULL and is otherwise untouched (a hold is audit evidence and outlives the report; the migration
@@ -99,6 +110,7 @@ export interface PurgeReportsResult {
   detachedHolds: number;
   /** ContactEnquiry rows detached (escalatedReportId set to NULL) from a report that was then deleted. */
   detachedEnquiries: number;
+  /** A removed Contest entry whose deletion would still change what counts (B-307): kept. Normally 0. */
   blockedContestEntry: number;
   blockedContextOfOtherReport: number;
   /** A serialization conflict or a report that changed under us; retried next run. */
@@ -297,8 +309,9 @@ export class ReportRetentionService {
     }
 
     // 5. records outside the deletion list that depend on an item: kept, counted, reported. (Holds and escalated
-    // enquiries are not here: they are detached on deletion.)
-    if (plan.postIds.length > 0 && (await db.contestEntry.count({ where: { postId: { in: plan.postIds } } })) > 0) {
+    // enquiries are not here: they are detached on deletion.) A removed Contest entry no longer blocks by itself (B-307):
+    // only one whose deletion would still change what counts does.
+    if (plan.postIds.length > 0 && (await contestEntryStillCounts(db, plan.postIds))) {
       return { outcome: { kind: 'blocked', reason: 'contest_entry' }, plan };
     }
     if (

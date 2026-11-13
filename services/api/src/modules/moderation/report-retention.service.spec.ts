@@ -62,7 +62,8 @@ interface State {
   holdAppearsAfterCalls?: number;
   holdRecords: number;
   enquiries: number;
-  contestEntries: number;
+  // one row per contest entry whose post is among the removed posts (B-307): its cycle's status and whether it still has a winner row
+  contestEntryRows: { cycleStatus: string; hasWinner: boolean }[];
   contextOfOther: number;
   otherReports: Pick<Row, 'status' | 'appealStatus' | 'reviewedAt' | 'appealReviewedAt'>[];
   otherCommentReports: Pick<Row, 'status' | 'appealStatus' | 'reviewedAt' | 'appealReviewedAt'>[];
@@ -83,7 +84,7 @@ function build(state: Partial<State> = {}) {
     holdsByUser: {},
     holdRecords: 0,
     enquiries: 0,
-    contestEntries: 0,
+    contestEntryRows: [],
     contextOfOther: 0,
     otherReports: [],
     otherCommentReports: [],
@@ -157,7 +158,11 @@ function build(state: Partial<State> = {}) {
         return { count: s.enquiries };
       }),
     },
-    contestEntry: { count: jest.fn(async () => s.contestEntries) },
+    contestEntry: {
+      findMany: jest.fn(async () =>
+        s.contestEntryRows.map((r, i) => ({ id: `e${i}`, cycle: { status: r.cycleStatus }, winner: r.hasWinner ? { id: `w${i}` } : null })),
+      ),
+    },
     reportContextMessage: {
       count: jest.fn(async () => s.contextOfOther),
       deleteMany: jest.fn(async () => {
@@ -387,23 +392,95 @@ describe('ReportRetentionService - skip rules (the report and its content are ke
 });
 
 describe('ReportRetentionService - blocked by a dependent record (kept, counted, a finding)', () => {
-  it.each([
-    ['the removed post is a Contest entry', { contestEntries: 1, removedPosts: { r1: ['p1'] }, postAuthor: { p1: 'u' } }, 'blockedContestEntry'],
-    [
-      'the removed message is context in a different report',
-      { contextOfOther: 1, removedMessages: { r1: ['m1'] }, messages: { m1: { senderId: 'u', conversationId: 'c', participantIds: ['u'] } } },
-      'blockedContextOfOtherReport',
-    ],
-  ] as const)('%s', async (_label, patch, counter) => {
-    const targetType = 'contestEntries' in patch ? 'post' : 'removedMessages' in patch ? 'message' : 'user';
-    const targetId = targetType === 'post' ? 'p1' : targetType === 'message' ? 'm1' : 'u-target';
-    const { service, db } = build({ ...(patch as unknown as Partial<State>), candidates: [report({ targetType, targetId })] });
+  it('the removed message is context in a different report', async () => {
+    const { service, db } = build({
+      contextOfOther: 1,
+      removedMessages: { r1: ['m1'] },
+      messages: { m1: { senderId: 'u', conversationId: 'c', participantIds: ['u'] } },
+      candidates: [report({ targetType: 'message', targetId: 'm1' })],
+    });
     const r = await service.purgeDue(NOW);
-    expect(r[counter]).toBe(1);
+    expect(r.blockedContextOfOtherReport).toBe(1);
     expect(r.deletedReports).toBe(0);
     expect(db.report.delete).not.toHaveBeenCalled();
-    expect(db.post.delete).not.toHaveBeenCalled();
     expect(db.message.delete).not.toHaveBeenCalled();
+  });
+});
+
+// B-307 (Decision Log #493 (c), #495 (g)): a removed Contest entry no longer blocks the purge by itself.
+describe('ReportRetentionService - removed Contest entries (B-307)', () => {
+  const contestPostReport = (patch: Partial<State>) =>
+    build({ removedPosts: { r1: ['p1'] }, postAuthor: { p1: 'u' }, candidates: [report({ targetType: 'post', targetId: 'p1' })], ...patch });
+
+  it('a removed entry of a COMPLETED cycle with no winner row is deleted with its post; the report goes with it', async () => {
+    const { service, db, calls } = contestPostReport({ contestEntryRows: [{ cycleStatus: 'completed', hasWinner: false }] });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 1, deletedPosts: 1, blockedContestEntry: 0 });
+    expect(db.post.delete).toHaveBeenCalledTimes(1);
+    expect(calls.indexOf('post.delete')).toBeLessThan(calls.indexOf('report.delete'));
+  });
+
+  it('asks only about the posts this report removed (the cascade list)', async () => {
+    const { service, db } = contestPostReport({ contestEntryRows: [{ cycleStatus: 'completed', hasWinner: false }] });
+    await service.purgeDue(NOW);
+    expect(db.contestEntry.findMany).toHaveBeenCalledWith({
+      where: { postId: { in: ['p1'] } },
+      select: { id: true, cycle: { select: { status: true } }, winner: { select: { id: true } } },
+    });
+  });
+
+  it.each([
+    ['active', 'the cycle is still active'],
+    ['final', 'the cycle is in the final week'],
+  ])('KEPT while the cycle is %s (%s): nothing is deleted', async (cycleStatus) => {
+    const { service, db } = contestPostReport({ contestEntryRows: [{ cycleStatus, hasWinner: false }] });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 0, blockedContestEntry: 1 });
+    expect(db.post.delete).not.toHaveBeenCalled();
+    expect(db.report.delete).not.toHaveBeenCalled();
+  });
+
+  it('KEPT when the entry still has a winner row (a legacy cycle, or a state B-300 did not reconcile): the cascade would delete a placed result', async () => {
+    const { service, db } = contestPostReport({ contestEntryRows: [{ cycleStatus: 'completed', hasWinner: true }] });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 0, blockedContestEntry: 1 });
+    expect(db.post.delete).not.toHaveBeenCalled();
+    expect(db.report.delete).not.toHaveBeenCalled();
+  });
+
+  it('one entry that still counts keeps the whole report', async () => {
+    const { service, db } = contestPostReport({
+      removedPosts: { r1: ['p1', 'p2'] },
+      postAuthor: { p1: 'u', p2: 'u' },
+      contestEntryRows: [
+        { cycleStatus: 'completed', hasWinner: false },
+        { cycleStatus: 'completed', hasWinner: true },
+      ],
+    });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 0, blockedContestEntry: 1 });
+    expect(db.post.delete).not.toHaveBeenCalled();
+  });
+
+  it('a removed post that is not a contest entry is unaffected', async () => {
+    const { service, db } = contestPostReport({ contestEntryRows: [] });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 1, blockedContestEntry: 0 });
+    expect(db.post.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('the check runs again INSIDE the delete transaction: an entry that gains a winner after the scan stops the purge', async () => {
+    const { service, db } = contestPostReport({ contestEntryRows: [{ cycleStatus: 'completed', hasWinner: false }] });
+    let calls = 0;
+    (db.contestEntry.findMany as jest.Mock).mockImplementation(async () => {
+      calls += 1;
+      // first look (the scan, outside the transaction): clean; every later look (inside): a winner row has appeared
+      return [{ id: 'e0', cycle: { status: 'completed' }, winner: calls === 1 ? null : { id: 'w0' } }];
+    });
+    const r = await service.purgeDue(NOW);
+    expect(r).toMatchObject({ deletedReports: 0, blockedContestEntry: 1 });
+    expect(db.post.delete).not.toHaveBeenCalled();
+    expect(db.report.delete).not.toHaveBeenCalled();
   });
 });
 

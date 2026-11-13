@@ -975,8 +975,10 @@ the old months setting no longer exists).
   it `string | null`). **Consequences:** the admin enquiry view stops showing an enquiry as escalated once its report is purged,
   and `ModerationHoldsService.lift` treats a hold with no report as not concerning a minor (its vetting gate reads the report).
 - **Blocked (kept, counted, a finding):** a record outside the deletion list depends on the item and no rule says what to do
-  with it, so nothing is deleted: the removed post is a Contest entry (deleting it would cascade away votes, winners and
-  impressions); a removed message is attached as context to a DIFFERENT report (RESTRICT FK). The log line counts each kind.
+  with it, so nothing is deleted: the removed post is a Contest entry that STILL COUNTS (see "Contest entries (B-307)" below: only
+  an entry in a cycle that is not completed, or one that still holds a winner row); a removed message is attached as context to a
+  DIFFERENT report (RESTRICT FK). The log line counts each kind (`blocked(contestEntry=… contextOfOtherReport=…)`; the
+  contest-entry count is normally 0 now).
 - **What is deleted, in this order, in one Serializable transaction** (re-checked inside it, so a hold placed or a report filed
   since the scan stops it): (1) the content with `removedByReportId` = this report: for a post, a deferral record for every
   stored object, the `Hashtag.postCount` decrements, the like/comment notifications that point at it and the notifications about
@@ -993,10 +995,38 @@ the old months setting no longer exists).
   `ON DELETE SET NULL`: a still-suspended account stays suspended and only loses the link (a manual reinstatement is then the
   only way back; the appeal window has closed by definition).
 - **Known consequences / findings:** a report whose action was recorded with an unclosed sibling, an
-  escalated report or a Contest entry is kept indefinitely until someone decides what to do with that dependency; a report is
+  escalated report, or a Contest entry that still counts (B-307) is kept until someone decides what to do with that dependency; a report is
   only re-evaluated, not tracked, so a large permanently-kept set is re-read every night; "another report not yet closed" is
   judged on closure only, so a sibling report that closed recently but has a longer retention of its own does not hold this one
   back (its target is then gone when its own clock runs out).
+
+### Contest entries (B-307, `backend/b307-contest-entry-retention-lift`; Decision Log #493 (c), #495 (g))
+
+Until B-307 the sweep kept forever any report whose removed post is a Contest entry, because deleting the post cascades to
+`ContestEntry`. B-300 (Decision Log #495) made a removed entry count for nothing, so the block is lifted for the entries where
+that is provable. `contest-entry-retention.util.ts` holds the analysis; `contest-entry-retention.util.spec.ts` pins it to the
+Prisma schema, and `test/contest-entry-retention.e2e-spec.ts` proves the before/after equality against real Postgres.
+
+What the cascade removes (`ENTRY_CASCADE_TABLES`, the only four relations to `ContestEntry`, all `ON DELETE CASCADE`) and why each
+is already worth nothing for a removed entry in a completed cycle:
+
+| Row deleted by the cascade | Why nothing that counts is lost |
+|---|---|
+| `ContestRoundWinner` | B-300 deleted the removed entry's winner row at removal and revoked the placement points; a restore cannot happen after closure |
+| `ContestVote` | every ranking, tally and "my vote" read filters `post: { is: POST_NOT_REMOVED }`; the weekly podium is derived from non-removed entries only; before the lock the votes were released |
+| `ContestEngagement` | the Phase 1 and monthly rankings take non-removed entries only; baseline points live in `PointsLedgerEntry` (no foreign key, never touched) |
+| `ContestImpression` | folded into `impressionTotal` and deleted at the crown; the exposure view and admin distribution filter removed entries |
+| the `ContestEntry` row | its stored tally/rank are read only through the same non-removed filters; `ContestFinalist`, `ContestStanding`, `PointsLedgerEntry`, `ContestVoteEvent`, `Notification` and `LeaderboardEntry` have no relation to it |
+
+Still blocked (`blockedContestEntry`), because there the cascade WOULD remove something that counts: (1) the entry's cycle is not
+`completed` (its rows are still inputs to the lifecycle; with the 6 / 7-year periods this is unreachable, it guards a mis-set
+period); (2) the entry still has a `ContestRoundWinner` row (B-300 deletes a removed entry's winner row, so one that remains
+means a legacy admin-judged cycle, `monthKey` NULL, which B-300 leaves alone, or an unreconciled state). No other rule is invented.
+
+A restored entry or a pending appeal cannot reach this check: the candidate scan only takes closed reports (`reportClosedAt`),
+and an overturned appeal reopens the report. The 6 / 7-year clocks, the hold / escalation / open-appeal / other-open-report skips
+and the context-of-another-report block are unchanged. The one visible difference after a purge is the admin cycle detail, which
+no longer lists the removed entry (and its round's `entryCount` is one lower).
 
 ## Staff-recorded appeal (`backend/b292-staff-recorded-appeal`, B-292, Decision Log #485 (f), #492)
 
