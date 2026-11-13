@@ -160,7 +160,7 @@ test.describe.serial('user two-factor (B-087 / B-111)', () => {
   test('sign in with a backup code; the same code does not work twice', async ({ page }) => {
     const used = firstCodes[0];
     await loginViaUi(page, acct.email);
-    await page.getByRole('button', { name: /can.t use your authenticator app\?/i }).click();
+    await page.getByRole('button', { name: /use a backup code instead/i }).click();
     await expect(page.getByRole('heading', { name: 'Enter a backup code' })).toBeVisible();
     await page.getByLabel('Backup code').fill(used);
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -172,7 +172,7 @@ test.describe.serial('user two-factor (B-087 / B-111)', () => {
 
     // The spent code is refused, with the drawn backup-code message.
     await loginViaUi(page, acct.email);
-    await page.getByRole('button', { name: /can.t use your authenticator app\?/i }).click();
+    await page.getByRole('button', { name: /use a backup code instead/i }).click();
     await page.getByLabel('Backup code').fill(used);
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByRole('alert')).toHaveText(
@@ -185,7 +185,7 @@ test.describe.serial('user two-factor (B-087 / B-111)', () => {
     page,
   }) => {
     await loginViaUi(page, acct.email);
-    await page.getByRole('button', { name: /can.t use your authenticator app\?/i }).click();
+    await page.getByRole('button', { name: /use a backup code instead/i }).click();
     await page.getByLabel('Backup code').fill(firstCodes[1]);
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page).toHaveURL(/\/community$/);
@@ -222,7 +222,7 @@ test.describe.serial('user two-factor (B-087 / B-111)', () => {
     page,
   }) => {
     await loginViaUi(page, acct.email);
-    await page.getByRole('button', { name: /can.t use your authenticator app\?/i }).click();
+    await page.getByRole('button', { name: /use a backup code instead/i }).click();
     await page.getByLabel('Backup code').fill(secondCodes[1]);
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page).toHaveURL(/\/community$/);

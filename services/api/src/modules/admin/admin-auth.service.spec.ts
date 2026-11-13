@@ -19,6 +19,7 @@ interface FakeAdminRecord {
   phone: string | null;
   role: string;
   accountStatus: string;
+  totpEnabledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,7 +86,7 @@ class SessionAdminAuthService extends AdminAuthService {
   }
 }
 
-async function buildHarness() {
+async function buildHarness(options: { enforced?: boolean } = {}) {
   const passwordService = new PasswordService();
   const jwtService = new JwtService({ secret: 'unit-test-admin-secret-do-not-use-in-real-env' });
   const refreshTokenStore = new AdminRefreshTokenStore(new InMemoryRedisFake());
@@ -95,7 +96,7 @@ async function buildHarness() {
 
   // Two-factor has its own specs; admins seeded here have it off and enforcement is off, so it is never reached.
   const twoFactorStub = {
-    isAdminEnforced: () => false,
+    isAdminEnforced: () => options.enforced === true,
     issueChallenge: jest.fn(),
     issueAdminEnrolmentToken: jest.fn(),
   };
@@ -313,6 +314,131 @@ describe('AdminAuthService', () => {
 
       await expect(adminAuthService.refresh(sessionA.refreshToken)).rejects.toThrow(UnauthorizedException);
       await expect(adminAuthService.refresh(sessionB.refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+
+    // B-310: the caller is issued a fresh session after the revoke, everything else stays revoked.
+    describe('fresh session for the caller (B-310)', () => {
+      async function seededAdmin(options: { enforced?: boolean; totpEnabledAt?: Date | null } = {}) {
+        const harness = await buildHarness({ enforced: options.enforced });
+        const passwordHash = await harness.passwordService.hash('old-password-123');
+        harness.prisma.seed('a@example.com', {
+          id: 'admin-1', role: 'editor', passwordHash, totpEnabledAt: options.totpEnabledAt ?? null,
+        });
+        return harness;
+      }
+
+      it('issues a usable access token and a refresh token that rotates', async () => {
+        const { adminAuthService, adminTokenService } = await seededAdmin();
+        const current = await adminAuthService.login('a@example.com', 'old-password-123');
+
+        const result = await adminAuthService.changePassword(
+          'admin-1', 'old-password-123', 'new-password-456', current.refreshToken,
+        );
+
+        expect(result).not.toBeNull();
+        const { response } = result!;
+        expect(response.refreshToken).not.toEqual(current.refreshToken);
+        await expect(adminTokenService.verifyActiveAccessToken(response.accessToken)).resolves.toMatchObject({
+          sub: 'admin-1',
+        });
+        await expect(adminAuthService.refresh(response.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+
+      it('leaves every OTHER session revoked', async () => {
+        const { adminAuthService } = await seededAdmin();
+        const current = await adminAuthService.login('a@example.com', 'old-password-123');
+        const other = await adminAuthService.login('a@example.com', 'old-password-123');
+
+        await adminAuthService.changePassword('admin-1', 'old-password-123', 'new-password-456', current.refreshToken);
+
+        await expect(adminAuthService.refresh(current.refreshToken)).rejects.toThrow(UnauthorizedException);
+        await expect(adminAuthService.refresh(other.refreshToken)).rejects.toThrow(UnauthorizedException);
+      });
+
+      it('keeps Stay signed in from a persistent refresh token, and a non-persistent one stays non-persistent', async () => {
+        const { adminAuthService } = await seededAdmin();
+        const persistentSession = await adminAuthService.login('a@example.com', 'old-password-123', true);
+        const first = await adminAuthService.changePassword(
+          'admin-1', 'old-password-123', 'new-password-456', persistentSession.refreshToken,
+        );
+        expect(first!.persistent).toBe(true);
+
+        const plainSession = await adminAuthService.login('a@example.com', 'new-password-456', false);
+        const second = await adminAuthService.changePassword(
+          'admin-1', 'new-password-456', 'newer-password-789', plainSession.refreshToken,
+        );
+        expect(second!.persistent).toBe(false);
+      });
+
+      it.each([
+        ['no refresh token was supplied', undefined],
+        ['the refresh token is garbage', 'not-a-real-token'],
+      ])('falls back to non-persistent when %s', async (_label, token) => {
+        const { adminAuthService } = await seededAdmin();
+        await adminAuthService.login('a@example.com', 'old-password-123', true);
+        const result = await adminAuthService.changePassword('admin-1', 'old-password-123', 'new-password-456', token);
+        expect(result!.persistent).toBe(false);
+      });
+
+      it('falls back to non-persistent when the refresh token belongs to a DIFFERENT admin (and consumes nothing)', async () => {
+        const { adminAuthService, prisma, passwordService } = await seededAdmin();
+        prisma.seed('b@example.com', {
+          id: 'admin-2', role: 'editor', passwordHash: await passwordService.hash('other-password-123'),
+        });
+        const theirs = await adminAuthService.login('b@example.com', 'other-password-123', true);
+
+        const result = await adminAuthService.changePassword(
+          'admin-1', 'old-password-123', 'new-password-456', theirs.refreshToken,
+        );
+        expect(result!.persistent).toBe(false);
+        await expect(adminAuthService.refresh(theirs.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+
+      it('a wrong current password issues nothing and revokes nothing', async () => {
+        const { adminAuthService } = await seededAdmin();
+        const current = await adminAuthService.login('a@example.com', 'old-password-123');
+
+        await expect(
+          adminAuthService.changePassword('admin-1', 'totally-wrong-password', 'new-password-456', current.refreshToken),
+        ).rejects.toThrow('Current password is incorrect');
+
+        await expect(adminAuthService.refresh(current.refreshToken)).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      });
+
+      // The decided exception: issuing a session to an admin with no two-factor while ADMIN_2FA_ENFORCED is on would
+      // sidestep the refresh gate (assertEnrolledWhenEnforced).
+      it('ENFORCED and no two-factor: the password is saved, every session is revoked and NOTHING is issued', async () => {
+        const { adminAuthService, adminTokenService, prisma, passwordService } = await seededAdmin({ enforced: true });
+        const pair = await adminTokenService.issueTokenPair('admin-1', 'editor', true);
+
+        const result = await adminAuthService.changePassword(
+          'admin-1', 'old-password-123', 'new-password-456', pair.refreshToken.token,
+        );
+
+        expect(result).toBeNull();
+        await expect(adminAuthService.refresh(pair.refreshToken.token)).rejects.toThrow(UnauthorizedException);
+        const stored = await prisma.adminUser.findUnique({ where: { id: 'admin-1' } });
+        await expect(passwordService.verify(stored!.passwordHash, 'new-password-456')).resolves.toBe(true);
+      });
+
+      it('ENFORCED but two-factor is ON: a fresh session is issued as usual', async () => {
+        const { adminAuthService, adminTokenService } = await seededAdmin({
+          enforced: true, totpEnabledAt: new Date('2026-10-01T00:00:00Z'),
+        });
+        const pair = await adminTokenService.issueTokenPair('admin-1', 'editor', true);
+
+        const result = await adminAuthService.changePassword(
+          'admin-1', 'old-password-123', 'new-password-456', pair.refreshToken.token,
+        );
+        expect(result).not.toBeNull();
+        expect(result!.persistent).toBe(true);
+      });
     });
   });
 });

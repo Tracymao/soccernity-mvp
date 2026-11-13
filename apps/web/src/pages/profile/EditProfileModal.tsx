@@ -37,7 +37,7 @@ import {
 } from "../../api/auth";
 import { UsersApiError, updateUser, type ProfileImage, type UserProfile } from "../../api/users";
 import { profileCountryOptions } from "../../lib/countries";
-import { clearStoredSession } from "../../lib/session";
+import { clearStoredSession, replaceAccessToken } from "../../lib/session";
 import ProfileImageControl from "./ProfileImageControl";
 import { NOT_FLAGGED, RephraseNote, flaggedFieldsFrom, type FlaggedFields } from "./rephrase";
 import {
@@ -193,7 +193,10 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
 
     setPasswordBusy(true);
     try {
-      await changePassword(accessToken, currentPassword, newPassword);
+      const fresh = await changePassword(accessToken, currentPassword, newPassword);
+      // B-310: keep this device signed in with the fresh session the API issues (see ChangePasswordPage).
+      if (fresh) replaceAccessToken(fresh.accessToken);
+      else clearStoredSession();
       setPasswordMessage({ kind: "success", text: "Your password has been changed." });
       setCurrentPassword("");
       setNewPassword("");

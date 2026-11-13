@@ -129,7 +129,7 @@ describe('Transactional account emails (B-069) -- real Postgres', () => {
 
   it('POST /auth/change-password: ONE "password changed" email, to the account, with the first name', async () => {
     const u = await seedUser();
-    await http().post('/auth/change-password').set(u.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(204);
+    await http().post('/auth/change-password').set(u.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(200);
     await settle();
     expect(calls('sendPasswordChangedEmail')).toHaveLength(1);
     expect(calls('sendPasswordChangedEmail')[0].args).toEqual([u.email, 'Ada']);
@@ -165,7 +165,7 @@ describe('Transactional account emails (B-069) -- real Postgres', () => {
   it('a failing sender does not fail the password change', async () => {
     failSends = true;
     const u = await seedUser();
-    await http().post('/auth/change-password').set(u.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(204);
+    await http().post('/auth/change-password').set(u.auth).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }).expect(200);
     await settle();
     expect(calls('sendPasswordChangedEmail')).toHaveLength(1);
     const row = await prisma().user.findUnique({ where: { id: u.id }, select: { passwordHash: true } });

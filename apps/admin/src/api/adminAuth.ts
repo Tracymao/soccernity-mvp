@@ -137,13 +137,30 @@ export function updateAdminProfile(input: UpdateAdminProfileInput): Promise<Admi
   return adminFetch<AdminSummary>("/admin/profile", { method: "PATCH", body: input });
 }
 
-// POST /admin/auth/change-password — AdminJwtAuthGuard. Requires the
-// current password; on success the server revokes every OTHER admin
-// session for this account (same mechanism as
-// AuthService.changePassword). Returns 204.
-export function changeAdminPassword(currentPassword: string, newPassword: string): Promise<void> {
-  return adminFetch<void>("/admin/auth/change-password", {
+// POST /admin/auth/change-password — AdminJwtAuthGuard. Requires the current password. B-310: a successful change
+// revokes EVERY session of this account, the caller's own included, and the API answers 200 with a FRESH session for
+// this device (cookie mode: the new refresh token is the sn_admin_rt cookie, the body carries only the access token).
+// The caller must hand `accessToken` to `replaceAdminAccessToken` (lib/adminSession.ts) -- that is what keeps the
+// operator signed in here. The one exception is 204 with no body: ADMIN_2FA_ENFORCED is on and this admin has no
+// two-factor, so the server issued nothing; this function then returns null and the caller must end the session
+// locally (clearAdminSession). The cookie-mode header and credentials let the API read the CURRENT cookie (for
+// "Stay signed in") and set the NEW one.
+export interface ChangeAdminPasswordResult {
+  accessToken: string;
+}
+
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangeAdminPasswordResult | null> {
+  const result = await adminFetch<{ accessToken?: unknown } | undefined>("/admin/auth/change-password", {
     method: "POST",
+    headers: { ...ADMIN_COOKIE_MODE_HEADERS },
+    credentials: "include",
     body: { currentPassword, newPassword },
   });
+  if (result && typeof result.accessToken === "string" && result.accessToken !== "") {
+    return { accessToken: result.accessToken };
+  }
+  return null;
 }

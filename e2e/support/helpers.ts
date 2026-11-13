@@ -139,9 +139,22 @@ export async function api(
   }
   return { status: res.status, body };
 }
-export async function adminToken(email: string, password: string): Promise<string> {
+// The admin login is limited to 5 per 15 minutes per IP (Decision Log #190). That limit is a hard-coded per-handler
+// override in the API (admin-auth.controller.ts, @AuthRateLimit({ limit: 5, windowMs: 15 min })), NOT an environment
+// variable, so the QA stack cannot relax it without an app code change. So the harness spends as few real admin logins
+// as it can: one per (email, password) per run. A cached token is reused for 10 minutes (the API's access token lives
+// 15 minutes); a different password for the same email is a different key, so a test that changes an admin's password
+// and signs in again still gets a real new login. Pass `fresh: true` to force a real login (a test that is ABOUT the
+// sign-in itself should call api('POST', '/admin/auth/login') directly instead).
+const ADMIN_TOKEN_TTL_MS = 10 * 60 * 1000;
+const adminTokenCache = new Map<string, { token: string; at: number }>();
+export async function adminToken(email: string, password: string, opts: { fresh?: boolean } = {}): Promise<string> {
+  const key = `${email}\u0000${password}`;
+  const hit = adminTokenCache.get(key);
+  if (!opts.fresh && hit && Date.now() - hit.at < ADMIN_TOKEN_TTL_MS) return hit.token;
   const res = await api('POST', '/admin/auth/login', { body: { email, password } });
   if (res.status !== 200 && res.status !== 201) throw new Error(`admin login failed: ${res.status} ${JSON.stringify(res.body)}`);
+  adminTokenCache.set(key, { token: res.body.accessToken as string, at: Date.now() });
   return res.body.accessToken as string;
 }
 export async function userLogin(email: string, password = USER_PASSWORD): Promise<{ status: number; body: any }> {

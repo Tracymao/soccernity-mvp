@@ -105,6 +105,13 @@ export class TokenService {
     }
   }
 
+  // B-310: whether the caller's CURRENT refresh token is a "Stay signed in" one, read without consuming it. See
+  // RefreshTokenStore.peekPersistent. Must be called BEFORE revokeAllSessionsForUser, which deletes the record.
+  async isRefreshTokenPersistent(rawRefreshToken: string | undefined, userId: string): Promise<boolean> {
+    if (!rawRefreshToken) return false;
+    return this.refreshTokenStore.peekPersistent(rawRefreshToken, userId);
+  }
+
   async revokeRefreshToken(rawRefreshToken: string): Promise<void> {
     await this.refreshTokenStore.revokeToken(rawRefreshToken);
   }

@@ -58,7 +58,9 @@ test.describe.serial('Privacy leaves: Direct Messages and Your Posts', () => {
 
     await expect(page.getByRole('radio', { name: /everyone the rules allow/i })).toBeChecked();
     await expect(page.getByText('Read receipts', { exact: true })).toBeVisible();
-    await expect(page.getByRole('img', { name: /read receipts: not adjustable yet/i })).toBeVisible();
+    // Read receipts is a live switch since B-061 (default On for an adult).
+    await expect(page.getByRole('switch', { name: 'Read receipts' })).toBeEnabled();
+    await expect(page.getByRole('switch', { name: 'Read receipts' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByText(/This can only make messaging stricter/)).toBeVisible();
     await shot(page, '01-direct-messages-default-desktop');
 

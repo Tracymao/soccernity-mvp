@@ -20,7 +20,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { AuthApiError, changePassword } from "../../api/auth";
-import { getStoredAccessToken } from "../../lib/session";
+import { clearStoredSession, getStoredAccessToken, replaceAccessToken } from "../../lib/session";
 import checkIcon from "../../assets/icons/change-password-check.svg";
 import "./ChangePasswordPage.css";
 
@@ -133,7 +133,12 @@ export default function ChangePasswordPage() {
 
     setBusy(true);
     try {
-      await changePassword(token as string, current, next);
+      const fresh = await changePassword(token as string, current, next);
+      // B-310: the change revoked every session, this one included. The API hands back a fresh one for THIS device;
+      // storing it is what makes "You stay logged in on this device." true. No fresh session (a 204) means the server
+      // ended it, so sign out here too rather than leave a dead token in memory.
+      if (fresh) replaceAccessToken(fresh.accessToken);
+      else clearStoredSession();
       setCurrent("");
       setNext("");
       setConfirm("");

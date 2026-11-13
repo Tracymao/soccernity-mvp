@@ -614,16 +614,30 @@ export async function resendVerificationEmail(email: string): Promise<{ message:
 // exactly (see auth.controller.ts). The UI calling these MUST collect the
 // password before calling, never send a blank/omitted one.
 
+// B-310 (Decision Log #500 follow-up): a successful change revokes every session, the caller's own included, so the
+// API answers 200 with a FRESH session for this device (cookie mode: the new refresh token is the sn_rt cookie, the
+// body carries only the access token). The caller MUST hand `accessToken` to `replaceAccessToken` (lib/session.ts):
+// that is what keeps the person signed in on this device, as the Change password page promises. This function does
+// not store anything itself -- like login(), it only talks to the API, and each caller stores the session.
+// Returns null when the server answered 204 (it issued no session), in which case the caller must treat the
+// session as ended (clearStoredSession).
+export interface ChangePasswordResult {
+  accessToken: string;
+}
+
 export async function changePassword(
   accessToken: string,
   currentPassword: string,
   newPassword: string,
-): Promise<void> {
+): Promise<ChangePasswordResult | null> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/auth/change-password`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      // The cookie-mode header and credentials let the API read the CURRENT sn_rt cookie (for "Stay signed in") and
+      // set the NEW one. The 401-replay in silentRefresh.ts is unchanged.
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...COOKIE_MODE_HEADERS },
+      credentials: "include",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   } catch (networkError) {
@@ -635,6 +649,15 @@ export async function changePassword(
   if (!response.ok) {
     const message = response.status === 401 ? "Your current password is incorrect." : "Couldn't change your password.";
     throw new AuthApiError(message, { status: response.status });
+  }
+
+  if (response.status === 204) return null;
+  try {
+    const body = (await response.json()) as { accessToken?: unknown };
+    return typeof body.accessToken === "string" && body.accessToken !== "" ? { accessToken: body.accessToken } : null;
+  } catch {
+    // The password WAS changed; an unreadable body only means no fresh session was handed over.
+    return null;
   }
 }
 

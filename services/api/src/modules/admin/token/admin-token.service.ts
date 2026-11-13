@@ -155,6 +155,12 @@ export class AdminTokenService {
     }
   }
 
+  // B-310: see TokenService.isRefreshTokenPersistent. Call BEFORE revokeAllSessionsForAdmin.
+  async isRefreshTokenPersistent(rawRefreshToken: string | undefined, adminId: string): Promise<boolean> {
+    if (!rawRefreshToken) return false;
+    return this.refreshTokenStore.peekPersistent(rawRefreshToken, adminId);
+  }
+
   async revokeRefreshToken(rawRefreshToken: string): Promise<void> {
     await this.refreshTokenStore.revokeToken(rawRefreshToken);
   }

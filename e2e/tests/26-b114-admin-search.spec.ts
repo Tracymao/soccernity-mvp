@@ -57,7 +57,7 @@ test.describe.serial('admin search: the bar and the results page', () => {
 
     await searchFor(page, player.email);
     await page.waitForURL((url) => url.pathname === '/search' && url.searchParams.get('q') === player.email);
-    await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Search', exact: true })).toBeVisible();
     await expect(page.getByText(`Results for “${player.email}”`)).toBeVisible();
     await expect(page.getByText('1 result in 1 group')).toBeVisible();
     const users = page.getByRole('table', { name: 'Users' });
