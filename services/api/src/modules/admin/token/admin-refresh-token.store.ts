@@ -55,6 +55,8 @@ const adminTokenKey = (id: string) => `admin:refresh:token:${id}`;
 const adminUsedTombstoneKey = (id: string) => `admin:refresh:used:${id}`;
 const adminFamilyKey = (familyId: string) => `admin:refresh:family:${familyId}`;
 const adminSessionsKey = (adminId: string) => `admin:refresh:admin:${adminId}`;
+// B-305: per-admin "sessions revoked at" marker (whole seconds), in the admin:* namespace like everything else here.
+const adminRevokedAtKey = (adminId: string) => `admin:revoked-at:admin:${adminId}`;
 
 function hashSecret(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
@@ -180,5 +182,16 @@ export class AdminRefreshTokenStore {
       await this.redis.del(...ids.map(adminTokenKey));
     }
     await this.redis.del(adminSessionsKey(adminId));
+  }
+
+  // B-305: records that every session of this admin was revoked at `atSeconds`; admin access tokens issued
+  // before it are refused by AdminJwtAuthGuard. Expires on its own once no older access token can still be valid.
+  async markSessionsRevoked(adminId: string, atSeconds: number, ttlMs: number): Promise<void> {
+    await this.redis.set(adminRevokedAtKey(adminId), String(atSeconds), 'PX', ttlMs);
+  }
+
+  // Raw marker value (whole seconds as a string) or null. Throws if Redis does; the caller decides what that means.
+  async getSessionsRevokedAt(adminId: string): Promise<string | null> {
+    return this.redis.get(adminRevokedAtKey(adminId));
   }
 }

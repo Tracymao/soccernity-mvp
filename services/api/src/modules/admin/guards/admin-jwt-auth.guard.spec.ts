@@ -19,64 +19,62 @@ function buildContext(headers: Record<string, string | undefined>): {
 }
 
 describe('AdminJwtAuthGuard', () => {
-  it('attaches the verified { sub, role, aud } payload to request.admin (not request.user) and allows the request through', () => {
+  it('attaches the verified { sub, role, aud } payload to request.admin (not request.user) and allows the request through', async () => {
     const payload: AdminAccessTokenPayload = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
     const adminTokenService = {
-      verifyAccessToken: jest.fn().mockReturnValue(payload),
+      verifyActiveAccessToken: jest.fn().mockResolvedValue(payload),
     } as unknown as AdminTokenService;
     const guard = new AdminJwtAuthGuard(adminTokenService);
     const { context, request } = buildContext({ authorization: 'Bearer a.valid.admin.token' });
 
-    const result = guard.canActivate(context);
+    const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
-    expect(adminTokenService.verifyAccessToken).toHaveBeenCalledWith('a.valid.admin.token');
+    expect(adminTokenService.verifyActiveAccessToken).toHaveBeenCalledWith('a.valid.admin.token');
     expect(request.admin).toEqual(payload);
     expect(request).not.toHaveProperty('user');
   });
 
-  it('rejects a request with no Authorization header at all, without calling AdminTokenService', () => {
+  it('rejects a request with no Authorization header at all, without calling AdminTokenService', async () => {
     const adminTokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as AdminTokenService;
     const guard = new AdminJwtAuthGuard(adminTokenService);
     const { context } = buildContext({});
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(adminTokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(adminTokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('rejects a header that is not the Bearer scheme', () => {
+  it('rejects a header that is not the Bearer scheme', async () => {
     const adminTokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as AdminTokenService;
     const guard = new AdminJwtAuthGuard(adminTokenService);
     const { context } = buildContext({ authorization: 'Basic dXNlcjpwYXNz' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(adminTokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(adminTokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('rejects "Bearer" with no token after it', () => {
+  it('rejects "Bearer" with no token after it', async () => {
     const adminTokenService = {
-      verifyAccessToken: jest.fn(),
+      verifyActiveAccessToken: jest.fn(),
     } as unknown as AdminTokenService;
     const guard = new AdminJwtAuthGuard(adminTokenService);
     const { context } = buildContext({ authorization: 'Bearer' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(adminTokenService.verifyAccessToken).not.toHaveBeenCalled();
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(adminTokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
   });
 
-  it('propagates AdminTokenService.verifyAccessToken rejecting an invalid/expired/non-admin token', () => {
+  it('propagates AdminTokenService.verifyActiveAccessToken rejecting an invalid/expired/non-admin token', async () => {
     const adminTokenService = {
-      verifyAccessToken: jest.fn().mockImplementation(() => {
-        throw new UnauthorizedException('Invalid or expired admin access token');
-      }),
+      verifyActiveAccessToken: jest.fn().mockRejectedValue(new UnauthorizedException('Invalid or expired admin access token')),
     } as unknown as AdminTokenService;
     const guard = new AdminJwtAuthGuard(adminTokenService);
     const { context } = buildContext({ authorization: 'Bearer a.bad.token' });
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 });

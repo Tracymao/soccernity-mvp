@@ -53,6 +53,8 @@ const tokenKey = (id: string) => `auth:refresh:token:${id}`;
 const usedTombstoneKey = (id: string) => `auth:refresh:used:${id}`;
 const familyKey = (familyId: string) => `auth:refresh:family:${familyId}`;
 const userSessionsKey = (userId: string) => `auth:refresh:user:${userId}`;
+// B-305: per-user "sessions revoked at" marker (whole seconds). See session-revocation.ts.
+const userRevokedAtKey = (userId: string) => `auth:revoked-at:user:${userId}`;
 
 function hashSecret(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
@@ -177,5 +179,16 @@ export class RefreshTokenStore {
       await this.redis.del(...ids.map(tokenKey));
     }
     await this.redis.del(userSessionsKey(userId));
+  }
+
+  // B-305: records that every session of this user was revoked at `atSeconds`; access tokens issued before it
+  // are refused by the guards. Expires on its own once no older access token can still be valid.
+  async markSessionsRevoked(userId: string, atSeconds: number, ttlMs: number): Promise<void> {
+    await this.redis.set(userRevokedAtKey(userId), String(atSeconds), 'PX', ttlMs);
+  }
+
+  // Raw marker value (whole seconds as a string) or null. Throws if Redis does; the caller decides what that means.
+  async getSessionsRevokedAt(userId: string): Promise<string | null> {
+    return this.redis.get(userRevokedAtKey(userId));
   }
 }

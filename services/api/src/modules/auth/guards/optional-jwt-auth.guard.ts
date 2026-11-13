@@ -38,7 +38,7 @@ import { AccessTokenPayload } from '../token/token.types';
 export class OptionalJwtAuthGuard implements CanActivate {
   constructor(private readonly tokenService: TokenService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<Request & { user?: AccessTokenPayload }>();
@@ -49,11 +49,12 @@ export class OptionalJwtAuthGuard implements CanActivate {
     }
 
     try {
-      request.user = this.tokenService.verifyAccessToken(token);
+      request.user = await this.tokenService.verifyActiveAccessToken(token);
     } catch {
-      // TokenService.verifyAccessToken throws UnauthorizedException for
+      // TokenService.verifyActiveAccessToken throws UnauthorizedException for
       // every failure mode (expired, malformed, tampered, wrong
-      // signature). This is the one guard in the codebase that
+      // signature, and -- B-305 -- issued before the user's sessions were
+      // revoked, which is treated exactly like an invalid token). This is the one guard in the codebase that
       // deliberately swallows it — an invalid token on an optionally-
       // authenticated route degrades to "anonymous caller," it doesn't
       // reject the request.

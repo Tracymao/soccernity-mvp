@@ -59,7 +59,7 @@ describe('FeedController (HTTP layer)', () => {
     guardian: { findUnique: jest.fn() },
   };
   const tokenService = {
-    verifyAccessToken: jest.fn(),
+    verifyActiveAccessToken: jest.fn(),
   };
 
   const ADULT = { sub: 'adult-1', role: 'fan' };
@@ -580,12 +580,12 @@ describe('FeedController (HTTP layer)', () => {
 
       expect(response.body).toEqual({ postId: 'post-1', viewCount: 5 });
       expect(feedService.recordView).toHaveBeenCalledWith(undefined, 'post-1');
-      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+      expect(tokenService.verifyActiveAccessToken).not.toHaveBeenCalled();
     });
 
     it('records a logged-in view when a real, valid bearer token is presented — proves OptionalJwtAuthGuard is genuinely wired, not stubbed away', async () => {
       const payload: AccessTokenPayload = { sub: 'user-9', role: 'fan' };
-      tokenService.verifyAccessToken.mockReturnValue(payload);
+      tokenService.verifyActiveAccessToken.mockResolvedValue(payload);
       feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 6 });
 
       const response = await request(app.getHttpServer())
@@ -594,14 +594,12 @@ describe('FeedController (HTTP layer)', () => {
         .expect(200);
 
       expect(response.body).toEqual({ postId: 'post-1', viewCount: 6 });
-      expect(tokenService.verifyAccessToken).toHaveBeenCalledWith('a.valid.token');
+      expect(tokenService.verifyActiveAccessToken).toHaveBeenCalledWith('a.valid.token');
       expect(feedService.recordView).toHaveBeenCalledWith('user-9', 'post-1');
     });
 
     it('degrades an invalid/expired bearer token to an anonymous view (200, not 401) — the one real behavioral difference from JwtAuthGuard', async () => {
-      tokenService.verifyAccessToken.mockImplementation(() => {
-        throw new Error('Invalid or expired access token');
-      });
+      tokenService.verifyActiveAccessToken.mockRejectedValue(new Error('Invalid or expired access token'));
       feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 7 });
 
       const response = await request(app.getHttpServer())
