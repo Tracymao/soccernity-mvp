@@ -479,7 +479,8 @@ describe('Report retention e2e (B-294 / B-299)', () => {
     const author = await user('author');
     const reporter = await user('reporter');
 
-    // (1) the removed post is a Contest entry
+    // (1) the removed post is a Contest entry in a cycle that is NOT completed (status defaults to 'active'): still blocked (B-307;
+    //     the completed-cycle cases that are now purged are proved in test/contest-entry-retention.e2e-spec.ts)
     const r3 = await report({ targetType: 'post', status: 'actioned', actionTaken: 'content_removed', reviewedAt: monthsAgo(74) });
     const p3 = (await removedPost(author.id, r3.id)).post;
     await prisma().report.update({ where: { id: r3.id }, data: { targetId: p3.id } });
