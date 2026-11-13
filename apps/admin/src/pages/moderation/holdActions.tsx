@@ -101,6 +101,24 @@ export function CaseLevelHoldButtons({
   );
 }
 
+/**
+ * B-308 (Decision Log #502 (a)): shown INSTEAD of the hold controls on a message report whose thread involves a child,
+ * for an admin who is not child-safety vetted. The server would refuse the three hold calls (B-302), so the controls are
+ * not drawn at all. The page does not work out the age rule: it acts on the report's contextHidden flag (B-293), which
+ * the server sets exactly when the admin is not vetted and the thread involves a child.
+ * New wording, pending legal review.
+ */
+export const HOLD_CONTROLS_RESTRICTED_MESSAGE =
+  "Holds on this report need a child-safety-vetted admin (Settings › Roles). [COPY PENDING LEGAL REVIEW]";
+
+export function HoldControlsRestrictedLine() {
+  return (
+    <p className="mod-note" data-testid="hold-controls-restricted">
+      {HOLD_CONTROLS_RESTRICTED_MESSAGE}
+    </p>
+  );
+}
+
 /** The drawn callout under the case-level actions (alert-tone bar, as the frame draws it). */
 export function CaseLevelHoldCallout() {
   return (
@@ -194,9 +212,12 @@ export function LiftHoldDialog({
 export function HoldStatus({
   holds,
   onLifted,
+  canLift = true,
 }: {
   holds: HoldView[] | undefined;
   onLifted: (lifted: HoldView[]) => void;
+  /** B-308: false hides the Lift hold control (the row itself, which only reports the hold, stays). */
+  canLift?: boolean;
 }) {
   const [lifting, setLifting] = useState<string | null>(null);
   const [restricted, setRestricted] = useState(false);
@@ -227,17 +248,19 @@ export function HoldStatus({
               </span>
               <span className="mod-hold-status__since">Active since {formatShortDate(first.placedAt)}</span>
               {ends ? <span className="mod-hold-status__since">Ends {formatShortDate(ends)}</span> : null}
-              <button
-                type="button"
-                className="mod-btn mod-btn--outline mod-btn--sm"
-                aria-label={`Lift hold: ${marker.label}`}
-                onClick={() => {
-                  setRestricted(false);
-                  setLifting(type);
-                }}
-              >
-                Lift hold
-              </button>
+              {canLift ? (
+                <button
+                  type="button"
+                  className="mod-btn mod-btn--outline mod-btn--sm"
+                  aria-label={`Lift hold: ${marker.label}`}
+                  onClick={() => {
+                    setRestricted(false);
+                    setLifting(type);
+                  }}
+                >
+                  Lift hold
+                </button>
+              ) : null}
             </div>
           );
         })}

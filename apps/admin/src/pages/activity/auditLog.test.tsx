@@ -169,7 +169,7 @@ describe("Audit log (superadmin)", () => {
     expect(cells(3).slice(2)).toEqual(["Media rejected", "Media", "Media #dddd4444", "Off topic"]);
   });
 
-  it("an appeal recorded on someone's behalf and a username review decision read by label, with notes and links as stored", async () => {
+  it("an appeal recorded on someone's behalf and a username review decision read by label and in words, with links as stored", async () => {
     list.mockResolvedValue(
       page([
         row({ id: "ar", action: "report.appeal_recorded", targetType: "report", targetId: "aaaa1111-0000", notes: "pending" }),
@@ -187,12 +187,12 @@ describe("Audit log (superadmin)", () => {
     const rows = screen.getAllByRole("row").slice(1);
     const cells = (i: number) => within(rows[i]).getAllByRole("cell").map((c) => c.textContent);
     // [time, actor, action, target type, target, notes]
-    expect(cells(0).slice(2)).toEqual(["Appeal recorded", "Report", "Report #aaaa1111", "pending"]);
+    expect(cells(0).slice(2)).toEqual(["Appeal recorded", "Report", "Report #aaaa1111", "Appeal recorded, decision pending"]);
     expect(cells(1).slice(2)).toEqual([
       "Username review decided",
       "User",
       "User #bbbb2222",
-      "decision=decline; username=adab; reason=Not enough detail.",
+      "Declined the request to restore the username “adab”. Reason: Not enough detail.",
     ]);
     expect(within(rows[0]).getByRole("link").getAttribute("href")).toBe("/moderation/reports/aaaa1111-0000");
     expect(within(rows[1]).getByRole("link").getAttribute("href")).toBe("/users/bbbb2222-0000");
@@ -457,6 +457,78 @@ describe("rendered with no session at all", () => {
     list.mockResolvedValue(page([]));
     renderPage();
     expect(await screen.findByText("No activity yet")).not.toBeNull();
+    expect(screen.getByRole("heading", { level: 1, name: "My activity" })).not.toBeNull();
+  });
+});
+
+describe("readable notes (B-308, Decision Log #502 (b))", () => {
+  const REVIEW = "user.username_review_decided";
+
+  it("a username-review decision reads as words: the decision, the username, then the reason", async () => {
+    list.mockResolvedValue(
+      page([
+        row({ id: "u1", action: REVIEW, targetType: "user", targetId: "aaaa1111-0000", notes: "decision=reinstate; username=nazif; reason=Checked the handle, it is fine." }),
+        row({ id: "u2", action: REVIEW, targetType: "user", targetId: "bbbb2222-0000", notes: "decision=decline; username=adab_1; reason=Impersonates a club." }),
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText("Reinstated the username “nazif”. Reason: Checked the handle, it is fine.")).not.toBeNull();
+    expect(screen.getByText("Declined the request to restore the username “adab_1”. Reason: Impersonates a club.")).not.toBeNull();
+    // No raw key=value string anywhere on the screen.
+    expect(screen.queryByText(/decision=/)).toBeNull();
+    expect(screen.queryByText(/username=/)).toBeNull();
+    expect(screen.queryByText(/reason=/)).toBeNull();
+  });
+
+  it("the reason is everything after reason=, even when it contains semicolons or equals signs", async () => {
+    list.mockResolvedValue(
+      page([row({ action: REVIEW, targetType: "user", notes: "decision=decline; username=x_y; reason=a; b=c; reason=again" })]),
+    );
+    renderPage();
+    expect(await screen.findByText("Declined the request to restore the username “x_y”. Reason: a; b=c; reason=again")).not.toBeNull();
+  });
+
+  it("an empty reason leaves the sentence without a Reason part", async () => {
+    list.mockResolvedValue(page([row({ action: REVIEW, targetType: "user", notes: "decision=reinstate; username=nazif; reason=" })]));
+    renderPage();
+    expect(await screen.findByText("Reinstated the username “nazif”.")).not.toBeNull();
+  });
+
+  it("an appeal-recorded row reads 'Appeal recorded, decision pending'", async () => {
+    list.mockResolvedValue(page([row({ id: "ap", action: "report.appeal_recorded", targetType: "report", notes: "pending" })]));
+    renderPage();
+    expect(await screen.findByText("Appeal recorded, decision pending")).not.toBeNull();
+    expect(screen.queryByText("pending", { exact: true })).toBeNull();
+  });
+
+  it("a note that does not parse is shown as stored", async () => {
+    list.mockResolvedValue(
+      page([
+        row({ id: "x1", action: REVIEW, targetType: "user", notes: "something else entirely" }),
+        row({ id: "x2", action: REVIEW, targetType: "user", notes: "decision=maybe; username=a; reason=b" }),
+        row({ id: "x3", action: "report.appeal_recorded", targetType: "report", notes: "later" }),
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText("something else entirely")).not.toBeNull();
+    expect(screen.getByText("decision=maybe; username=a; reason=b")).not.toBeNull();
+    expect(screen.getByText("later")).not.toBeNull();
+  });
+
+  it("a missing note is a dash, and another kind of row keeps its stored note", async () => {
+    list.mockResolvedValue(
+      page([row({ id: "n1", action: REVIEW, targetType: "user", notes: null }), row({ id: "n2", notes: "Content removed" })]),
+    );
+    renderPage();
+    expect(await screen.findByText("Content removed")).not.toBeNull();
+    expect(screen.getAllByText("\u2014").length).toBeGreaterThan(0);
+  });
+
+  it("the same wording appears on My activity (a non-superadmin)", async () => {
+    signInAs("moderator");
+    list.mockResolvedValue(page([row({ action: "report.appeal_recorded", targetType: "report", notes: "pending" })]));
+    renderPage();
+    expect(await screen.findByText("Appeal recorded, decision pending")).not.toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "My activity" })).not.toBeNull();
   });
 });

@@ -155,6 +155,31 @@ export function profileImageRowText(item: Pick<ActionLogItem, "action" | "notes"
   return { typeLabel, actionText: verb ? `${typeLabel} ${verb}` : actionLabel(item.action), reason };
 }
 
+// B-308 (Decision Log #502 (b)): two kinds of row store their notes as a machine string. These helpers only make
+// that readable; they add nothing the note does not already say, and a note that does not parse is shown as stored.
+//  * user.username_review_decided: "decision=<reinstate|decline>; username=<handle>; reason=<free text>".
+//  * report.appeal_recorded: "pending".
+// The reason is the admin's own free text and may contain "; " or "=", so it is everything after "reason=".
+const USERNAME_REVIEW_NOTES = /^decision=(reinstate|decline); username=([^;]*); reason=([\s\S]*)$/;
+
+export function readableNotes(item: Pick<ActionLogItem, "action" | "notes">): string | null {
+  const notes = item.notes;
+  if (notes === null || notes === undefined) return null;
+  if (item.action === "user.username_review_decided") {
+    const match = USERNAME_REVIEW_NOTES.exec(notes);
+    if (!match) return notes;
+    const [, decision, username, reason] = match;
+    const lead =
+      decision === "reinstate"
+        ? `Reinstated the username “${username}”.`
+        : `Declined the request to restore the username “${username}”.`;
+    const why = reason.trim();
+    return why ? `${lead} Reason: ${why}` : lead;
+  }
+  if (item.action === "report.appeal_recorded" && notes === "pending") return "Appeal recorded, decision pending";
+  return notes;
+}
+
 // Where a row's TARGET opens: the existing detail screen for it. A search row has no target to open, and an
 // unknown target type is plain text.
 export function targetPath(targetType: string, targetId: string): string | null {

@@ -36,6 +36,7 @@ import {
   listActionLog,
   targetPath,
   profileImageRowText,
+  readableNotes,
   targetTypeLabel,
   type ActionLogItem,
   type ActionLogPage,
@@ -87,7 +88,7 @@ function ActivityRow({ item, showActor }: { item: ActionLogItem; showActor: bool
         )}
       </span>
       <span className="al-notes" role="cell">
-        {profileImage ? (profileImage.reason ? `Reason: ${profileImage.reason}` : "—") : (item.notes ?? "—")}
+        {profileImage ? (profileImage.reason ? `Reason: ${profileImage.reason}` : "—") : (readableNotes(item) ?? "—")}
       </span>
     </div>
   );
