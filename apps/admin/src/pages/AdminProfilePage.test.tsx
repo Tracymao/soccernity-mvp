@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router";
 import AdminProfilePage from "./AdminProfilePage";
 import { AdminApiError } from "../api/adminClient";
+import { clearAdminSession, getAdminAccessToken, replaceAdminAccessToken } from "../lib/adminSession";
 
 vi.mock("../api/adminAuth", () => ({
   updateAdminProfile: vi.fn(),
@@ -37,7 +38,10 @@ beforeEach(() => {
     applyProfile,
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clearAdminSession();
+});
 
 // The page header now carries the working admin search bar (B-114); the form fields exclude it.
 const fieldTextboxes = () =>
@@ -127,8 +131,9 @@ describe("AdminProfilePage — change password", () => {
     expect(changeAdminPassword).not.toHaveBeenCalled();
   });
 
-  it("shows the other-sessions-signed-out message on success", async () => {
-    vi.mocked(changeAdminPassword).mockResolvedValue(undefined);
+  it("shows the other-sessions-signed-out message on success and stores the FRESH session (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockResolvedValue({ accessToken: "fresh-access" });
     openPanel();
     fill(/current password/i, "oldpass12");
     fill(/^new password/i, "brandnewpass1");
@@ -139,6 +144,21 @@ describe("AdminProfilePage — change password", () => {
       expect(screen.getByText(/signed out of every other Admin Console session/i)).not.toBeNull(),
     );
     expect(changeAdminPassword).toHaveBeenCalledWith("oldpass12", "brandnewpass1");
+    // The change revoked this device's old session; the fresh one keeps the operator signed in.
+    expect(getAdminAccessToken()).toBe("fresh-access");
+  });
+
+  it("204 (enforced two-factor, none enrolled): ends the session locally instead of showing success (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockResolvedValue(null);
+    openPanel();
+    fill(/current password/i, "oldpass12");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => expect(getAdminAccessToken()).toBeNull());
+    expect(screen.queryByText(/signed out of every other Admin Console session/i)).toBeNull();
   });
 
   it("surfaces a wrong current password (401)", async () => {
@@ -152,5 +172,18 @@ describe("AdminProfilePage — change password", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toContain("current password is incorrect"),
     );
+  });
+
+  it("a wrong current password leaves the existing session untouched (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockRejectedValue(new AdminApiError(401, "unauthorized"));
+    openPanel();
+    fill(/current password/i, "wrongpass1");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).not.toBeNull());
+    expect(getAdminAccessToken()).toBe("old-access");
   });
 });

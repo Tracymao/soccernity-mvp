@@ -22,6 +22,7 @@ import {
   type AdminSummary,
 } from "../api/adminAuth";
 import { AdminApiError } from "../api/adminClient";
+import { clearAdminSession, replaceAdminAccessToken } from "../lib/adminSession";
 import TwoFactorCard from "./two-factor/TwoFactorCard";
 import "./AdminProfilePage.css";
 
@@ -179,8 +180,16 @@ function ChangePasswordPanel({ onClose }: { onClose: () => void }) {
     }
     setSaving(true);
     try {
-      await changeAdminPassword(current, next);
-      setDone(true);
+      const fresh = await changeAdminPassword(current, next);
+      if (fresh) {
+        // B-310: the change revoked every session, this one included; the API hands back a fresh one for THIS device.
+        replaceAdminAccessToken(fresh.accessToken);
+        setDone(true);
+      } else {
+        // 204: the server issued no session (ADMIN_2FA_ENFORCED and no two-factor). End it here too; the Console
+        // goes to the sign-in screen, which shows the existing "two-factor is now required" notice.
+        clearAdminSession("two-factor-enrolment-required");
+      }
     } catch (err) {
       if (err instanceof AdminApiError && err.status === 401) {
         setError("Your current password is incorrect.");
