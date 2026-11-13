@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 import { UserCoverController } from './user-cover.controller';
 import { UserCoverService } from './user-cover.service';
 
@@ -17,6 +18,8 @@ describe('UserCoverController (HTTP layer, B-196)', () => {
       controllers: [UserCoverController],
       providers: [{ provide: UserCoverService, useValue: covers }],
     })
+      .overrideGuard(MediaUploadsEnabledGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(GuardianConsentGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(EmailVerifiedGuard)

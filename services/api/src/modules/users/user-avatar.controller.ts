@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { AVATAR_MAX_FILE_SIZE_BYTES, UploadedAvatarFile, UserAvatarService } from './user-avatar.service';
 import { UploadRateLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 
 // backend/w5-profile-block (B-035). The profile picture of the CALLER. Mounted
 // under /users next to PATCH /users/:id, with the same self-only rule: :id must be
@@ -29,7 +30,9 @@ export class UserAvatarController {
 
   @Post(':id/avatar')
   @UploadRateLimit()
-  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
+  // B-306 (Decision Log #501): MediaUploadsEnabledGuard first, so with MEDIA_UPLOADS_ENABLED off the route answers
+  // 403 `media_uploads_disabled` before the multipart body is parsed. DELETE is not gated.
+  @UseGuards(MediaUploadsEnabledGuard, GuardianConsentGuard, EmailVerifiedGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_FILE_SIZE_BYTES } }))
   async upload(
     @Param('id') id: string,

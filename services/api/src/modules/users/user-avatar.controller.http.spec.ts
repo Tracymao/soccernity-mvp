@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
 
@@ -17,6 +18,8 @@ describe('UserAvatarController (HTTP layer, B-035)', () => {
       controllers: [UserAvatarController],
       providers: [{ provide: UserAvatarService, useValue: avatars }],
     })
+      .overrideGuard(MediaUploadsEnabledGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(GuardianConsentGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(EmailVerifiedGuard)

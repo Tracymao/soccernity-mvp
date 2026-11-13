@@ -159,6 +159,14 @@ services:
       # (docs/deployment.md, launch-gate check B-267).
       - key: ADMIN_2FA_ENFORCED
         sync: false
+      # MEDIA_UPLOADS_ENABLED (B-306, Decision Log #501): user uploads of images and video (post media, contest
+      # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
+      # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
+      # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
+      # "true" at the launch gate ONLY after counsel's written answer on B-206 (docs/deployment.md, B-267 item (l)).
+      # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
+      - key: MEDIA_UPLOADS_ENABLED
+        sync: false
       - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false
       # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
@@ -497,6 +505,14 @@ services:
       # switch it back off. Unset = off, with a warning logged at start; it MUST be "true" in production at launch
       # (docs/deployment.md, launch-gate check B-267).
       - key: ADMIN_2FA_ENFORCED
+        sync: false
+      # MEDIA_UPLOADS_ENABLED (B-306, Decision Log #501): user uploads of images and video (post media, contest
+      # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
+      # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
+      # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
+      # "true" at the launch gate ONLY after counsel's written answer on B-206 (docs/deployment.md, B-267 item (l)).
+      # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
+      - key: MEDIA_UPLOADS_ENABLED
         sync: false
       - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
+import { MediaUploadsModule } from '../../media-uploads/media-uploads.module';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { FfmpegMediaProcessor } from './ffmpeg-media-processor';
@@ -26,7 +27,7 @@ import { PostMediaService } from './post-media.service';
 // is NOT a provider here: it is the pure helpers in post-media-attach.util.ts, called by FeedService (the
 // single post-creation path), so FeedModule does not need to import this module's services.
 @Module({
-  imports: [PrismaModule, ConfigModule, StorageModule, AuthFoundationModule, GuardianSecurityNoticeModule],
+  imports: [PrismaModule, ConfigModule, StorageModule, AuthFoundationModule, GuardianSecurityNoticeModule, MediaUploadsModule],
   controllers: [PostMediaController, PostMediaReportController],
   providers: [
     PostMediaConfig,

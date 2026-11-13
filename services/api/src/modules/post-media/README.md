@@ -340,6 +340,27 @@ account and a `rekognition:DetectModerationLabels` IAM user, optionally a bucket
 as a backstop to the purge. **B-283: the R2/S3 key must be allowed to LIST objects** (a founder step at the launch gate, B-207;
 Cloudflare's "Object Read & Write" token permission is believed to include it, not re-checked against Cloudflare's documentation).
 
+## Uploads switch (B-306; Decision Log #501, #462 (g))
+
+`MEDIA_UPLOADS_ENABLED` (`src/media-uploads/`) is the one switch for user uploads of images and video. In production
+(`NODE_ENV=production`, which Render sets on staging too) uploads are OFF unless the value is exactly `true`; in any other
+environment they are ON unless it is exactly `false`. The rule lives in ONE function, `isMediaUploadsEnabled`
+(`media-uploads.switch.ts`); `MediaUploadsSwitchService` reads it through `ConfigService` on every call, and
+`MediaUploadsEnabledGuard` is the only gate. When off, these routes answer `403 { code: 'media_uploads_disabled' }`
+BEFORE any storage call or database write (the guard is first in the route guard list, ahead of consent, email and profile
+checks and ahead of multipart parsing):
+
+- GATED here: `POST /media/uploads` and `POST /media/uploads/:id/confirm`.
+- GATED in the users module: `POST /users/:id/avatar` and `POST /users/:id/cover`.
+- NOT gated: `GET` and `DELETE /media/uploads/:id`, `POST /media/:id/report`, the staff route `POST /admin/media/upload`, every
+  read of existing media, `DELETE /users/:id/avatar` and `/cover`, and post creation without media. `POST /posts` and the
+  contest final entry take a `mediaId` from an upload that already exists, so with the switch off they can only use media
+  uploaded earlier; the contest final entry (`POST /contest/final-entry`) needs a video uploaded through `POST /media/uploads`,
+  so it needs no gate of its own and cannot take new entries while the switch is off.
+
+One warning is logged at start-up while uploads are off; the boot is never refused. The founder sets the value to `true` in
+Render by hand at the launch gate, only after counsel answers B-206 (`render.yaml`, `docs/deployment.md`).
+
 ## Not built here
 
 The frontend switch to `viewUrl` (apps/web still reads `url`; B-260); CSAM and statutory reporting for rejected files, and evidence retention beyond an active hold (B-206, OPEN under counsel);

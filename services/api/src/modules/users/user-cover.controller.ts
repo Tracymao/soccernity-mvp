@@ -8,6 +8,7 @@ import { AccessTokenPayload } from '../auth/token/token.types';
 import { PROFILE_IMAGE_MAX_FILE_SIZE_BYTES, UploadedProfileImage } from './profile-image.util';
 import { UserCoverService } from './user-cover.service';
 import { UploadRateLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 
 // B-196 (Decision Log #411 item 4). The cover photo of the CALLER, mounted under
 // /users next to the avatar routes with the SAME self-only rule and the SAME
@@ -23,7 +24,9 @@ export class UserCoverController {
 
   @Post(':id/cover')
   @UploadRateLimit()
-  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
+  // B-306 (Decision Log #501): MediaUploadsEnabledGuard first, so with MEDIA_UPLOADS_ENABLED off the route answers
+  // 403 `media_uploads_disabled` before the multipart body is parsed. DELETE is not gated.
+  @UseGuards(MediaUploadsEnabledGuard, GuardianConsentGuard, EmailVerifiedGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: PROFILE_IMAGE_MAX_FILE_SIZE_BYTES } }))
   async upload(
     @Param('id') id: string,

@@ -5,6 +5,7 @@ import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 import { PostMediaController } from './post-media.controller';
 import { PostMediaService } from './post-media.service';
 
@@ -18,7 +19,10 @@ describe('PostMediaController (HTTP layer, B-041)', () => {
       controllers: [PostMediaController],
       providers: [{ provide: PostMediaService, useValue: media }],
     })
-      // Guard behaviour: write-route-guards.spec.ts pins which guards sit on each route.
+      // Guard behaviour: write-route-guards.spec.ts pins which guards sit on each route. The B-306 switch has its
+      // own spec (src/media-uploads/media-uploads-switch.http.spec.ts).
+      .overrideGuard(MediaUploadsEnabledGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(GuardianConsentGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(EmailVerifiedGuard)
