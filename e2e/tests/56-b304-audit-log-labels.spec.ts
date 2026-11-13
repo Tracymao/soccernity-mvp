@@ -96,7 +96,8 @@ test.describe.serial('audit log: the two newest action kinds read as words', () 
       await page.goto(`${URLS.admin}/activity`);
       await expect(page.getByRole('heading', { level: 1, name: 'My activity' })).toBeVisible();
       const table = page.getByRole('table', { name: 'My activity' });
-      await expect(table.getByRole('cell', { name: label })).toHaveCount(1);
+      // exact: B-308 (PR #757) made the notes cell of an appeal row read "Appeal recorded, decision pending", which also contains the label.
+      await expect(table.getByRole('cell', { name: label, exact: true })).toHaveCount(1);
       await expect(table).not.toContainText(raw);
       await page.context().close();
     }

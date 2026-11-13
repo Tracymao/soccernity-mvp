@@ -132,14 +132,17 @@ test.describe.serial('hidden message context and the vetting rule', () => {
     await page.context().close();
   });
 
-  test('B-302: placing a bad-faith or legal hold is refused for the admin who is not vetted (coded 403, UI panel), and nothing is written', async ({ browser }) => {
+  test('B-302 / B-308: the admin who is not vetted is not offered the hold controls (a line instead), and the real routes still refuse with the coded 403 and write nothing', async ({ browser }) => {
     const page = await adminPageAs(browser, unvetted.token);
     await page.goto(`${URLS.admin}/moderation/reports/${childReport}`);
-    await page.getByRole('button', { name: 'Legal hold', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Legal hold' });
-    await dialog.getByRole('textbox').fill(REASON);
-    await dialog.getByRole('button', { name: 'Place legal hold' }).click();
-    await expect(page.getByRole('heading', { name: RESTRICTED })).toBeVisible();
+    // B-308 (PR #757): on a child-involved message report the page no longer draws the hold controls for an admin who is
+    // not child-safety vetted; it draws a line instead. (Before B-308 the button was drawn and the SERVER refused the
+    // click, and this test clicked it and looked for the restricted panel.)
+    await expect(page.getByText('Context hidden: this involves a child.', { exact: false })).toBeVisible();
+    await expect(page.getByText(tagged('Holds on this report need a child-safety-vetted admin (Settings › Roles).'), { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Legal hold', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Lift hold/ })).toHaveCount(0);
 
     for (const kind of ['bad-faith', 'legal']) {
       const res = await api('POST', `/admin/moderation/reports/${childReport}/holds/${kind}`, { token: unvetted.token, body: { reason: REASON } });

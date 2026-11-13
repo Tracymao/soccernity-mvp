@@ -21,6 +21,8 @@ export interface ApiClock {
   advance?: boolean;
   /** Start the API with NO object store configured (the S3_* placeholders), as a fresh deployment is. */
   noObjectStore?: boolean;
+  /** MEDIA_UPLOADS_ENABLED (B-306). Default true; false starts the API with uploads switched off. */
+  mediaUploads?: boolean;
 }
 
 // ffmpeg / ffprobe for the video half of the media pipeline: the static binaries from the harness's own
@@ -102,6 +104,9 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     REKOGNITION_SECRET_ACCESS_KEY: 'qa-rekognition-secret',
     REKOGNITION_REGION: 'eu-west-1',
     AWS_ENDPOINT_URL_REKOGNITION: FAKE_MEDIA.rekognition,
+    // B-306 (Decision Log #501): the upload switch. ON explicitly, so a launcher that sets NODE_ENV=production cannot
+    // switch the media specs off; spec 59 restarts the API with it false.
+    MEDIA_UPLOADS_ENABLED: clock.mediaUploads === false ? 'false' : 'true',
     FFMPEG_PATH: videoTools().ffmpeg,
     FFPROBE_PATH: videoTools().ffprobe,
     // B-062 / B-285 web push: a TEST-ONLY VAPID key pair (generated for this harness, protects nothing) so GET
