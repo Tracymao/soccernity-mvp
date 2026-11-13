@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { login, logoutSession, reactivateAccount, registerUser } from "./auth";
+import { changePassword, login, logoutSession, reactivateAccount, registerUser } from "./auth";
 import type { RegisterRequest } from "./auth";
 import { restoreSession } from "../lib/silentRefresh";
 
@@ -98,5 +98,38 @@ describe("the five cookie routes (B-246)", () => {
   it("logout never throws, even when the network is down", async () => {
     backend.mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(logoutSession()).resolves.toBeUndefined();
+  });
+});
+
+// B-310: change-password revokes every session including the caller's own, so the API issues a fresh one. The call
+// goes out in cookie mode with credentials (the API reads the CURRENT sn_rt cookie for "Stay signed in" and sets
+// the NEW one) and the fresh access token comes back to the caller, who stores it.
+describe("changePassword (B-310)", () => {
+  it("cookie mode, credentials include, bearer header, and returns the fresh access token", async () => {
+    backend.mockResolvedValue(ok({ accessToken: "fresh", accessTokenExpiresIn: 900 }));
+
+    const result = await changePassword("old-access", "old-pw", "new-password-1");
+
+    expect(result).toEqual({ accessToken: "fresh" });
+    const { init, headers } = lastCall("/auth/change-password");
+    expect(headers.get("X-Auth-Mode")).toBe("cookie");
+    expect(headers.get("Authorization")).toBe("Bearer old-access");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({ currentPassword: "old-pw", newPassword: "new-password-1" });
+  });
+
+  it("returns null for a 204 (no session issued)", async () => {
+    backend.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(changePassword("old-access", "old-pw", "new-password-1")).resolves.toBeNull();
+  });
+
+  it("returns null (the password WAS changed) when the body is unreadable", async () => {
+    backend.mockResolvedValue(new Response("not json", { status: 200 }));
+    await expect(changePassword("old-access", "old-pw", "new-password-1")).resolves.toBeNull();
+  });
+
+  it("a 401 is the wrong-current-password error", async () => {
+    backend.mockResolvedValue(new Response(JSON.stringify({ message: "Current password is incorrect" }), { status: 401 }));
+    await expect(changePassword("old-access", "wrong", "new-password-1")).rejects.toMatchObject({ status: 401 });
   });
 });

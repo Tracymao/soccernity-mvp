@@ -157,6 +157,19 @@ export class AdminRefreshTokenStore {
     };
   }
 
+  // B-310: read-only twin of RefreshTokenStore.peekPersistent (own key namespace). Consumes nothing; false for a
+  // malformed/unknown token, a secret mismatch, or a record that belongs to a different admin.
+  async peekPersistent(rawToken: string, adminId: string): Promise<boolean> {
+    const parsed = parseRawToken(rawToken);
+    if (!parsed) return false;
+    const raw = await this.redis.get(adminTokenKey(parsed.id));
+    if (!raw) return false;
+    const record = JSON.parse(raw) as StoredAdminRefreshToken;
+    if (record.adminId !== adminId) return false;
+    if (!secretMatchesHash(parsed.secret, record.secretHash)) return false;
+    return record.persistent === true;
+  }
+
   // Single-session logout.
   async revokeToken(rawToken: string): Promise<void> {
     const parsed = parseRawToken(rawToken);

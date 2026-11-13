@@ -1728,12 +1728,31 @@ revocation second is accepted; only a token from an EARLIER second is refused. I
 effective for every token that is at least one second old. Tests that revoke and then expect a 401 therefore wait until
 the next whole second after issuing the token (`nextSecond()` in `test/session-revocation.e2e-spec.ts`).
 
-**Behaviour change worth knowing.** `POST /auth/change-password` answers `204` with no new token pair, so the access token
-the client used for the change is refused straight away (before: it lasted up to 15 minutes and only the refresh token
-was dead). A client that wants to stay signed in must sign in again with the new password. Every other caller of the
+**Behaviour change worth knowing.** `POST /auth/change-password` used to answer `204` with no new token pair, so the access
+token the client used for the change was refused straight away. **[Superseded by B-310 (2026-11-13), see the next
+section: it now answers `200` with a fresh session for the caller.]** Every other caller of the
 revoke method (suspension, deactivate, delete, password reset, email change, two-factor recovery, admin Block, admin
 delete) likewise ends the person's access tokens at once.
 
 Tests: `src/session-revocation/session-revocation.spec.ts` (marker, TTL from config, the edge, Redis failure and
 once-a-minute reporting, the three guards on real routes with real token services), the rewritten guard specs, and
 `test/session-revocation.e2e-spec.ts` (real Postgres and Redis: suspend, password change, admin removal, key and TTL).
+
+## Status update -- change-password keeps the caller signed in (B-310, 2026-11-13)
+
+Since B-305 a password change revokes EVERY session of the account, the caller's own included. The web page promises
+"You stay logged in on this device.", so the change now hands the caller a fresh session.
+
+- `POST /auth/change-password` answers **`200` with the `TokenPairResponse` shape** (`accessToken`, `accessTokenExpiresIn`,
+  `refreshToken`, `refreshTokenExpiresAt`; no user summary). Order inside `AuthService.changePassword`: verify the current
+  password, read whether the caller's refresh token is persistent, hash and save the new password, **await the revoke**, then
+  `issueTokenPair`. Awaiting the revoke first means the new token's `iat` is at or after the marker second, and "iat equals
+  the marker is accepted" (B-305) is unchanged, so the fresh access token passes at once.
+- "Stay signed in" is kept: `RefreshTokenStore.peekPersistent(rawToken, userId)` reads the caller's current refresh record
+  WITHOUT consuming or rewriting it (it is deleted by the revoke, so this must happen before it) and the new pair is issued
+  with the same `persistent` value. The record must belong to the same user (another account's cookie is ignored). Cookie
+  mode reads `sn_rt` (`readRefreshCookie`); with no cookie, or in body mode (the DTO carries no refresh token), the new
+  session is not persistent.
+- Cookie mode: the controller calls `assertAllowedCookieOrigin` and `applyCookieSession`, so a fresh `sn_rt` replaces the
+  revoked one (same persistent/session lifetime).
+- The guardian notice and the "password changed" email stay non-blocking background work.

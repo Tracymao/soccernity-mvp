@@ -156,19 +156,96 @@ describe('AdminAuthController (HTTP layer)', () => {
   });
 
   describe('POST /admin/auth/change-password', () => {
-    it('returns 204 and delegates to adminAuthService with the caller-from-JWT id, not a body field', async () => {
-      adminAuthService.changePassword.mockResolvedValueOnce(undefined);
+    // B-310: the change revokes every session including the caller's own, so it answers 200 with a FRESH session
+    // (no admin summary), except the decided case below.
+    const FRESH_SESSION = { response: tokenPairResponse, persistent: false };
 
-      await request(app.getHttpServer())
+    it('returns 200 with a fresh token pair and delegates with the caller-from-JWT id, not a body field', async () => {
+      adminAuthService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
         .post('/admin/auth/change-password')
         .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
-        .expect(204);
+        .expect(200);
 
+      expect(res.body).toEqual(tokenPairResponse);
+      expect(res.body.admin).toBeUndefined();
+      expect(res.headers['set-cookie']).toBeUndefined();
       expect(adminAuthService.changePassword).toHaveBeenCalledWith(
         AUTHENTICATED_ADMIN.sub,
         'old-password',
         'new-password-123',
+        undefined,
       );
+    });
+
+    it('cookie mode: sets the new sn_admin_rt cookie, leaves the refresh token out of the body, reads the CURRENT cookie', async () => {
+      adminAuthService.changePassword.mockResolvedValueOnce({ response: tokenPairResponse, persistent: true });
+
+      const res = await request(app.getHttpServer())
+        .post('/admin/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5174')
+        .set('Cookie', 'sn_admin_rt=current-id.current-secret; sn_rt=a-user-cookie')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(res.body.accessToken).toBe('admin-access-token');
+      expect(res.body.refreshToken).toBeUndefined();
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_admin_rt=refresh-id.secret');
+      expect(cookie).toContain('Path=/admin/auth');
+      expect(cookie).toMatch(/HttpOnly/i);
+      expect(cookie).toMatch(/SameSite=Strict/i);
+      expect(cookie).toMatch(/Max-Age=\d+/i);
+      // only the ADMIN cookie is read, never the user one
+      expect(adminAuthService.changePassword).toHaveBeenCalledWith(
+        AUTHENTICATED_ADMIN.sub,
+        'old-password',
+        'new-password-123',
+        'current-id.current-secret',
+      );
+    });
+
+    it('cookie mode from a foreign Origin is a 403 and the password is NOT changed', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'https://evil.example')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(403);
+
+      expect(adminAuthService.changePassword).not.toHaveBeenCalled();
+    });
+
+    // The decided exception: ADMIN_2FA_ENFORCED on and no two-factor for this admin. The password is saved and every
+    // session revoked, but no session is issued (it would sidestep the refresh gate).
+    it('204 with NO body when the service issues nothing (enforced, no two-factor)', async () => {
+      adminAuthService.changePassword.mockResolvedValueOnce(null);
+
+      const res = await request(app.getHttpServer())
+        .post('/admin/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(204);
+
+      expect(res.text).toBe('');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('204 in cookie mode also clears the now-dead admin cookie', async () => {
+      adminAuthService.changePassword.mockResolvedValueOnce(null);
+
+      const res = await request(app.getHttpServer())
+        .post('/admin/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5174')
+        .set('Cookie', 'sn_admin_rt=current-id.current-secret')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(204);
+
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_admin_rt=;');
+      expect(cookie).toMatch(/Max-Age=0/i);
     });
 
     it('rejects a newPassword shorter than 8 characters with 400', async () => {

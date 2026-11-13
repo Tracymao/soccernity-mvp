@@ -218,7 +218,21 @@ export class AuthService implements OnModuleInit {
   // "credential changed, kill other sessions" scenario. Deliberately not
   // skipped: a changed password that leaves old sessions valid defeats
   // much of the point of changing it (e.g. after suspecting compromise).
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  //
+  // B-310 (Decision Log #500 follow-up): that revocation also refuses the CALLER's own access token and kills their
+  // refresh token (B-305's marker), which signed the person out although the Change password page promises
+  // "You stay logged in on this device." So after the revoke the caller is issued a FRESH session (a new refresh-token
+  // family, a new access token) and everything else stays revoked. Order matters: (1) read the "Stay signed in" flag of
+  // the caller's current refresh token BEFORE the revoke deletes it (read-only, nothing consumed); (2) write the
+  // password; (3) revoke, and WAIT for it; (4) only then issue. The new access token's `iat` is then >= the revocation
+  // marker, and the marker rule "iat === marker is accepted" keeps it valid. A wrong current password changes nothing
+  // and issues nothing (it throws before step 1 matters).
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentRefreshToken?: string,
+  ): Promise<{ response: TokenPairResponse; persistent: boolean }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       // Same rare-but-real "valid access token for a since-deleted
@@ -232,11 +246,14 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
+    const persistent = await this.tokenService.isRefreshTokenPersistent(currentRefreshToken, userId);
     const newPasswordHash = await this.passwordService.hash(newPassword);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash } });
     await this.tokenService.revokeAllSessionsForUser(userId);
+    const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role, persistent);
     // B-069: the change has committed; tell the person (Figma 1380:2318). Never delays or fails the change.
     this.accountEmails?.passwordChangedInBackground(userId);
+    return { response: toTokenPairResponse(tokenPair), persistent };
   }
 
   // POST /auth/deactivate-account. Requires password re-entry as a
