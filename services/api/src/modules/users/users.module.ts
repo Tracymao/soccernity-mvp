@@ -4,6 +4,7 @@ import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { PostMediaModule } from '../post-media/post-media.module';
+import { MediaUploadsModule } from '../../media-uploads/media-uploads.module';
 import { ProfileImageCheckService, ProfileImageCheckSweepService } from './profile-image-check.service';
 import { ProfileImagePublishService } from './profile-image-publish.service';
 import { ProfileImageViewService } from './profile-image-view.service';
@@ -31,7 +32,7 @@ import { UsersService } from './users.service';
 @Module({
   // PostMediaModule exports MediaProcessor: avatars and covers are re-encoded without metadata by the
   // same sanitizeImage post images use (B-205).
-  imports: [PrismaModule, AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule],
+  imports: [PrismaModule, AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule, MediaUploadsModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
   providers: [
     UsersService,

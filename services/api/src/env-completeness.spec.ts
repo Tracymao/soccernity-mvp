@@ -114,6 +114,18 @@ describe('environment completeness (B-018)', () => {
     for (const d of declarations) expect(d[1]).toBe('sync: false');
   });
 
+  // B-306 / Decision Log #501: the user media uploads switch is read with a literal name, declared by hand
+  // (sync: false) in both services so a Blueprint re-sync can never silently switch uploads on, and documented.
+  it('knows about MEDIA_UPLOADS_ENABLED, declared by hand (sync: false) in both render.yaml services and in .env.example', () => {
+    expect(read.has('MEDIA_UPLOADS_ENABLED')).toBe(true);
+    expect(services.every((keys) => keys.has('MEDIA_UPLOADS_ENABLED'))).toBe(true);
+    expect(example.has('MEDIA_UPLOADS_ENABLED')).toBe(true);
+    const yaml = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+    const declarations = [...yaml.matchAll(/-\s+key:\s+MEDIA_UPLOADS_ENABLED\s*\r?\n\s+(sync: false|value:[^\r\n]*)/g)];
+    expect(declarations).toHaveLength(2);
+    for (const d of declarations) expect(d[1]).toBe('sync: false');
+  });
+
   it('every variable the code reads is declared in render.yaml for BOTH services', () => {
     const missing: string[] = [];
     services.forEach((keys, i) => {

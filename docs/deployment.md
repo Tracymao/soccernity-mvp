@@ -111,6 +111,18 @@ No two may be the same.
   production at launch** (launch-gate check B-267). If the last superadmin
   ever loses their device and their backup codes, follow
   `docs/admin-two-factor-recovery.md`.
+- **`MEDIA_UPLOADS_ENABLED` switches user image and video uploads on.** Set it by
+  hand in Render's dashboard, separately for staging and production (both are
+  `NODE_ENV=production`). Only the exact text `true` turns it on; anything else,
+  including leaving it empty, leaves uploads off and the API logs a warning at
+  start-up. Off means post media, Contest entry videos, profile pictures and
+  cover photos answer `403 media_uploads_disabled` (the Contest final entry
+  needs a video, so Contests cannot take entries while it is off). Staff upload
+  (`POST /admin/media/upload`), reading and deleting existing media and reporting
+  media are not affected. **Leave it off until counsel has answered the
+  CSAM and statutory-reporting question (B-206)**; the founder turns it on at the
+  launch gate (check B-267 item (l)), together with the post-media setup steps
+  below. Locally and in tests it is on unless set to `false`.
 - None of these three has a code default. In production (`NODE_ENV=production`,
   which Render sets) the app now **refuses to start** if `JWT_SECRET` or
   `ADMIN_JWT_SECRET` is unset, still a placeholder such as `replace-me`, or if

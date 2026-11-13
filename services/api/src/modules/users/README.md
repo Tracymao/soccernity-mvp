@@ -898,3 +898,10 @@ club feed, view recording and the heartbeat all go through `visibleToViewer`.
 - `viewerFollows` is added next to the existing `isFollowing` (identical value).
 - Migration `20261121090000` sorts before the already-merged `20261122090000`; a database that already applied the
   later one applies this one on `migrate deploy` (it is a plain additive column). `migrate dev` may report it as out of order.
+
+## Uploads switch (B-306; Decision Log #501)
+
+`POST /users/:id/avatar` and `POST /users/:id/cover` carry `MediaUploadsEnabledGuard` first in their guard list. With
+`MEDIA_UPLOADS_ENABLED` off (production default, see `post-media/README.md` "Uploads switch") they answer
+`403 { code: 'media_uploads_disabled' }` before the multipart body is parsed, so nothing is re-encoded, stored or written.
+`DELETE /users/:id/avatar` and `/cover` are not gated: a person can still remove a picture they already hold.

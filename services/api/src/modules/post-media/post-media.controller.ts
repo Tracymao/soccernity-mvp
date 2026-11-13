@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { SkipGlobalRateLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { MediaUploadsEnabledGuard } from '../../media-uploads/media-uploads-enabled.guard';
 import { CreateUploadDto } from './dto/create-upload.dto';
 import { PostMediaService } from './post-media.service';
 
@@ -17,6 +18,11 @@ import { PostMediaService } from './post-media.service';
 // by #430 item 4 / B-259). Reading and deleting your own upload need only
 // `JwtAuthGuard`, so an account that is restricted LATER can still see and remove what it already holds.
 // write-route-guards.spec.ts pins this.
+//
+// backend/b306-media-uploads-switch (B-306; Decision Log #501): `create` and `confirm` ALSO carry
+// MediaUploadsEnabledGuard, first in their guard list. With MEDIA_UPLOADS_ENABLED off they answer 403
+// `media_uploads_disabled` before any storage call or database write. `get` and `remove` are NOT gated: an
+// upload the account already holds can still be read and deleted.
 @Controller('media/uploads')
 @UseGuards(JwtAuthGuard)
 export class PostMediaController {
@@ -27,14 +33,14 @@ export class PostMediaController {
   // go from the browser straight to the bucket and never reach the API.
   @Post()
   @SkipGlobalRateLimit()
-  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
+  @UseGuards(MediaUploadsEnabledGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateUploadDto) {
     return this.postMedia.createUpload(user.sub, dto);
   }
 
   @Post(':id/confirm')
   @HttpCode(200)
-  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
+  @UseGuards(MediaUploadsEnabledGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async confirm(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.postMedia.confirmUpload(user.sub, id);
   }
