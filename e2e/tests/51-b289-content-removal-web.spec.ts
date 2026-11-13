@@ -102,7 +102,9 @@ test.describe.serial('messages a moderator removed', () => {
       expect(thread.status).toBe(200);
       const stubs = thread.body.items.filter((m: any) => m.removedByModeration);
       expect(stubs).toHaveLength(1);
-      expect(Object.keys(stubs[0]).sort()).toEqual(['id', 'removedByModeration', 'sentAt']);
+      // PR #724 (B-296, Decision Log #489): the stub also says whether the VIEWER sent it, and nothing about who did.
+      expect(Object.keys(stubs[0]).sort()).toEqual(['id', 'isMine', 'removedByModeration', 'sentAt']);
+      expect(stubs[0].isMine).toBe(who === sender);
       expect(JSON.stringify(thread.body)).not.toContain(REMOVED);
     }
   });

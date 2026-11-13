@@ -32,7 +32,7 @@ async function deleteAccountAndAgeIt(acct: Account): Promise<void> {
 async function reportAgainst(reporter: Account, target: Account, reason: string): Promise<string> {
   const res = await api('POST', '/reports', {
     token: reporter.accessToken,
-    body: { targetType: 'user', targetId: target.userId, reason },
+    body: { targetType: 'user', targetId: target.userId, reasonCategory: 'harassment_or_bullying', reason },
   });
   if (res.status !== 201) throw new Error(`report failed ${res.status} ${JSON.stringify(res.body)}`);
   return res.body.id as string;

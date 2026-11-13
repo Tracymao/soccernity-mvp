@@ -3,7 +3,7 @@ import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { api, db, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
 import { adminPage } from '../support/admin-ui';
-import { URLS } from '../support/stack';
+import { ADMIN_CREDENTIALS, URLS } from '../support/stack';
 
 // B-284 slice: a report about a chat message in the Admin Console (backend/b067-message-report), in real Chrome
 // against the real API, Postgres and Redis. Scoped to this work: the Moderation Queue row for a message report (the
@@ -156,17 +156,35 @@ test.describe.serial('admin: reports about a chat message', () => {
     await page.context().close();
   });
 
+  // Since PR #730 (B-297) and PR #721 (B-293) a report whose Message row is gone counts as "a child may be involved"
+  // (fail closed), so only a child-safety-vetted admin may act on it. The QA admin is not vetted by default, so this
+  // test vets it for its own run and puts it back exactly as found in `finally`, so no later spec inherits the change.
+  // The unvetted refusal itself is proved by the B-304 spec on hidden context and vetting.
   test('a message that is gone says so and the rest of the report still shows and can be dismissed', async ({ browser }) => {
-    const page = await adminPage(browser);
-    await page.goto(`${URLS.admin}/moderation/reports/${goneReport}`);
-    await expect(page.getByText('The reported message is no longer available.')).toBeVisible();
-    const details = page.locator('.mod-card', { hasText: 'Report details' });
-    await expect(details.locator('.mod-field', { hasText: 'Reason category' }).locator('.mod-field__value')).toHaveText('Spam or scam');
-    await shot(page, '05-detail-gone');
+    const admin = await db().adminUser.findUnique({ where: { email: ADMIN_CREDENTIALS.email } });
+    const before = {
+      childSafetyVetted: admin.childSafetyVetted,
+      vettedAt: admin.vettedAt,
+      vettedByAdminId: admin.vettedByAdminId,
+    };
+    await db().adminUser.update({
+      where: { id: admin.id },
+      data: { childSafetyVetted: true, vettedAt: new Date(), vettedByAdminId: admin.id },
+    });
+    try {
+      const page = await adminPage(browser);
+      await page.goto(`${URLS.admin}/moderation/reports/${goneReport}`);
+      await expect(page.getByText('The reported message is no longer available.')).toBeVisible();
+      const details = page.locator('.mod-card', { hasText: 'Report details' });
+      await expect(details.locator('.mod-field', { hasText: 'Reason category' }).locator('.mod-field__value')).toHaveText('Spam or scam');
+      await shot(page, '05-detail-gone');
 
-    await page.getByRole('button', { name: 'Dismiss Report' }).click();
-    await expect(page).toHaveURL(`${URLS.admin}/moderation`);
-    expect((await db().report.findUnique({ where: { id: goneReport } })).status).toBe('reviewed');
-    await page.context().close();
+      await page.getByRole('button', { name: 'Dismiss Report' }).click();
+      await expect(page).toHaveURL(`${URLS.admin}/moderation`);
+      expect((await db().report.findUnique({ where: { id: goneReport } })).status).toBe('reviewed');
+      await page.context().close();
+    } finally {
+      await db().adminUser.update({ where: { id: admin.id }, data: before });
+    }
   });
 });
