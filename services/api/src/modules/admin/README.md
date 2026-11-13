@@ -191,3 +191,21 @@ that file's own header comment for the full reasoning, matching
 on the whole, really-bootstrapped app" spirit (a genuinely novel Prisma
 model extension, `AdminUser`'s new unique-email-backed columns, is also
 exercised against real Postgres for the first time here).
+
+## Status update -- admin session-revocation marker (`backend/b305-session-revocation-marker`, B-305, Decision Log #500)
+
+`AdminTokenService.revokeAllSessionsForAdmin` now also writes a marker, key `admin:revoked-at:admin:<adminId>` (the
+`admin:*` namespace, never `auth:*`), value = the revocation time in whole seconds, TTL = `ADMIN_JWT_ACCESS_TTL_SECONDS`
+(default 900) plus 60 seconds, after the refresh tokens are deleted. `AdminTokenService.verifyActiveAccessToken` verifies
+the admin token as before (signature, expiry, `aud`) and then refuses it (`401 Invalid or expired admin access token`)
+when its `iat` is strictly less than the marker. `AdminJwtAuthGuard` calls it; `canActivate` is now async. Redis
+unreadable: the token is accepted, one warning is logged and Sentry gets an event tagged `session_revocation=admin`
+(at most once a minute); nothing throws. No claim was added to the admin token. The same one-second edge applies (a
+token issued in the same second just before the revocation is not refused) and is documented in the auth README, which
+also holds the full description.
+
+Callers covered by the change in the revoke method: admin change-password, `logout` with all sessions, the
+two-factor enrolment refresh gate (`assertEnrolledWhenEnforced`), `admin-staff-roles` deactivation (the "remove
+account" action) and the superadmin two-factor reset. A removed or reset admin's earlier access token is now a 401
+immediately, not after up to 15 minutes. `POST /admin/auth/change-password` returns `204` with no new pair, so the
+admin's own access token for that call is refused afterwards and the admin signs in again.

@@ -37,7 +37,7 @@ import { AdminAccessTokenPayload } from '../token/admin-token.types';
 export class AdminJwtAuthGuard implements CanActivate {
   constructor(private readonly adminTokenService: AdminTokenService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<Request & { admin?: AdminAccessTokenPayload }>();
@@ -47,7 +47,7 @@ export class AdminJwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    request.admin = this.adminTokenService.verifyAccessToken(token);
+    request.admin = await this.adminTokenService.verifyActiveAccessToken(token);
     return true;
   }
 

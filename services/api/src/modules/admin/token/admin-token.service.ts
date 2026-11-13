@@ -8,6 +8,13 @@ import {
   DEFAULT_ADMIN_REFRESH_TOKEN_TTL_DAYS,
 } from './admin-token.constants';
 import { AdminAccessTokenPayload, AdminAccessTokenResult, AdminTokenPair } from './admin-token.types';
+import {
+  isIssuedBeforeRevocation,
+  parseRevocationMarker,
+  reportRevocationCheckFailure,
+  revocationMarkerTtlMs,
+  wholeSecondsNow,
+} from '../../../session-revocation/session-revocation';
 
 // ---------------------------------------------------------------------
 // Decision Log #54 (Build Plan Section 9): the Admin Console needed its
@@ -111,12 +118,38 @@ export class AdminTokenService {
   // safety/state-sensitive (e.g. accountStatus) is ever put in the token
   // itself; every safety-sensitive check must re-read Postgres.
   verifyAccessToken(token: string): AdminAccessTokenPayload {
+    return this.verifyWithIssuedAt(token).payload;
+  }
+
+  // B-305 (Decision Log #500): what AdminJwtAuthGuard calls. Verifies as verifyAccessToken does, THEN refuses the
+  // token when this admin's sessions were revoked after it was issued (Redis marker written by
+  // revokeAllSessionsForAdmin, compared with the token's standard `iat`). Same 401 as an invalid token. Redis
+  // unreadable: accept (fail open), log and report to Sentry (tag session_revocation=admin), never throw.
+  async verifyActiveAccessToken(token: string): Promise<AdminAccessTokenPayload> {
+    const { payload, issuedAt } = this.verifyWithIssuedAt(token);
+    let marker: number | null = null;
     try {
-      const decoded = this.jwtService.verify<AdminAccessTokenPayload>(token);
+      marker = parseRevocationMarker(await this.refreshTokenStore.getSessionsRevokedAt(payload.sub));
+    } catch (err) {
+      reportRevocationCheckFailure('admin', err);
+      return payload;
+    }
+    if (isIssuedBeforeRevocation(issuedAt, marker)) {
+      throw new UnauthorizedException('Invalid or expired admin access token');
+    }
+    return payload;
+  }
+
+  private verifyWithIssuedAt(token: string): { payload: AdminAccessTokenPayload; issuedAt: number | undefined } {
+    try {
+      const decoded = this.jwtService.verify<AdminAccessTokenPayload & { iat?: number }>(token);
       if (decoded.aud !== ADMIN_TOKEN_AUDIENCE) {
         throw new Error('Token is not an admin-console token');
       }
-      return { sub: decoded.sub, role: decoded.role, aud: ADMIN_TOKEN_AUDIENCE };
+      return {
+        payload: { sub: decoded.sub, role: decoded.role, aud: ADMIN_TOKEN_AUDIENCE },
+        issuedAt: decoded.iat,
+      };
     } catch {
       throw new UnauthorizedException('Invalid or expired admin access token');
     }
@@ -127,8 +160,14 @@ export class AdminTokenService {
   }
 
   // Logout-everywhere for one admin (e.g. on change-password).
+  // B-305: also stops admin access tokens already issued -- see verifyActiveAccessToken.
   async revokeAllSessionsForAdmin(adminId: string): Promise<void> {
     await this.refreshTokenStore.revokeAllForAdmin(adminId);
+    await this.refreshTokenStore.markSessionsRevoked(
+      adminId,
+      wholeSecondsNow(),
+      revocationMarkerTtlMs(this.accessTokenTtlSeconds),
+    );
   }
 
   private signAccessToken(adminId: string, role: string): AdminAccessTokenResult {

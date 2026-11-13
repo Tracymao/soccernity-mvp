@@ -1696,3 +1696,44 @@ to N times looser until Redis is back, and a flood of distinct keys during an ou
 new variables: read in code, declared in both `render.yaml` services, documented, numbers equal the code
 defaults). Both e2e layers relax the new variables like the other `AUTH_*` limits (`test/env.ts`,
 `e2e/support/api-process.ts`).
+
+## Status update -- session-revocation marker: revoking sessions also stops access tokens already issued (`backend/b305-session-revocation-marker`, B-305, Decision Log #500)
+
+Until now `TokenService.revokeAllSessionsForUser` deleted the user's refresh tokens only. An access token already
+issued kept working for its whole lifetime (`JWT_ACCESS_TTL_SECONDS`, 900 s by default), so a suspended user, or the
+device that had just changed its password, could keep calling the API for up to 15 minutes. (The full list of
+callers is in `docs/backend-b305-session-revocation-report.md`.)
+
+**How it works.**
+
+- `revokeAllSessionsForUser(userId)` deletes the refresh tokens as before and THEN writes a marker in Redis:
+  key `auth:revoked-at:user:<userId>`, value = the revocation time in whole seconds, TTL = the configured access-token
+  lifetime plus 60 seconds (`SESSION_REVOCATION_MARKER_MARGIN_SECONDS`). Nothing is hard-coded: the TTL is read from
+  `JWT_ACCESS_TTL_SECONDS` (default 900) by `TokenService`. Once the marker has expired no token it could refuse is
+  still alive, so it deletes itself. If writing the marker fails the error propagates, like a failed revocation would.
+- `TokenService.verifyActiveAccessToken(token)` (new) verifies the token exactly as `verifyAccessToken` does, then reads
+  the marker and refuses the token (the same `401 Invalid or expired access token`) when the token's standard `iat` is
+  strictly less than the marker. `JwtAuthGuard` and `OptionalJwtAuthGuard` call it, and their `canActivate` is now
+  async. `OptionalJwtAuthGuard` treats a revoked token exactly like an invalid one (anonymous, never a 401).
+  `verifyAccessToken` itself is unchanged (logout, the rate-limit identity resolver and the other plain checks still
+  use it). **No claim was added to the token** -- it is still exactly `sub`, `role`, `iat`, `exp`.
+- **Redis unreadable: fail open.** The guard accepts the token, logs one warning and reports to Sentry with the tag
+  `session_revocation=user` (at most once a minute, like the rate limiters' `rate_limiter` tag), and never throws.
+  Trade-off, stated plainly: while Redis is down a revoked-but-unexpired access token works again until Redis returns
+  or the token expires; failing closed would sign everyone out whenever Redis blips.
+
+**The one-second edge (accepted, Decision Log #500).** `iat` and the marker are whole seconds. A token issued in the
+SAME second as a revocation, but just before it, has `iat === marker` and is NOT refused; a token issued at or after the
+revocation second is accepted; only a token from an EARLIER second is refused. In practice this means a revocation is
+effective for every token that is at least one second old. Tests that revoke and then expect a 401 therefore wait until
+the next whole second after issuing the token (`nextSecond()` in `test/session-revocation.e2e-spec.ts`).
+
+**Behaviour change worth knowing.** `POST /auth/change-password` answers `204` with no new token pair, so the access token
+the client used for the change is refused straight away (before: it lasted up to 15 minutes and only the refresh token
+was dead). A client that wants to stay signed in must sign in again with the new password. Every other caller of the
+revoke method (suspension, deactivate, delete, password reset, email change, two-factor recovery, admin Block, admin
+delete) likewise ends the person's access tokens at once.
+
+Tests: `src/session-revocation/session-revocation.spec.ts` (marker, TTL from config, the edge, Redis failure and
+once-a-minute reporting, the three guards on real routes with real token services), the rewritten guard specs, and
+`test/session-revocation.e2e-spec.ts` (real Postgres and Redis: suspend, password change, admin removal, key and TTL).

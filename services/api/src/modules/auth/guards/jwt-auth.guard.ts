@@ -35,9 +35,11 @@ import { AccessTokenPayload } from '../token/token.types';
 // 2. Missing/malformed header -> 401 (UnauthorizedException) before ever
 //    touching TokenService.
 // 3. Delegates signature/expiry verification to
-//    TokenService.verifyAccessToken(), which itself throws
+//    TokenService.verifyActiveAccessToken(), which itself throws
 //    UnauthorizedException on invalid/expired/tampered tokens — this
-//    guard does not duplicate that logic.
+//    guard does not duplicate that logic. B-305: that method ALSO
+//    refuses a token issued before the user's sessions were revoked
+//    (Redis marker), with the same 401; Redis down = accept + report.
 // 4. On success, attaches the verified payload to `request.user`.
 //
 // WHAT IT DELIBERATELY DOES NOT DO: it does not attach isMinor,
@@ -52,7 +54,7 @@ import { AccessTokenPayload } from '../token/token.types';
 export class JwtAuthGuard implements CanActivate {
   constructor(private readonly tokenService: TokenService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<Request & { user?: AccessTokenPayload }>();
@@ -62,7 +64,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    request.user = this.tokenService.verifyAccessToken(token);
+    request.user = await this.tokenService.verifyActiveAccessToken(token);
     return true;
   }
 
