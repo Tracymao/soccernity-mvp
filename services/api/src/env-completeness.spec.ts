@@ -80,10 +80,14 @@ function envVarsReadInCode(): Map<string, string> {
 
 function renderKeysPerService(): Set<string>[] {
   const text = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
-  // One chunk per "- type: web" service; keys are `- key: NAME` lines.
+  // One chunk per "- type: web" service; keys are `- key: NAME` lines. The static sites (`runtime: static`: apps/web and
+  // apps/admin) are also `type: web` but are not the API: they carry only build-time VITE_* variables, which this guard's
+  // question ("does the API read a variable render.yaml does not declare?") does not apply to. They have their own guard,
+  // render-static-sites.spec.ts.
   return text
     .split(/^\s*-\s+type:\s+web\b/m)
     .slice(1)
+    .filter((chunk) => !/^\s+runtime:\s+static\b/m.test(chunk))
     .map((chunk) => new Set([...chunk.matchAll(/^\s*-\s+key:\s+([A-Z0-9_]+)/gm)].map((m) => m[1])));
 }
 

@@ -141,6 +141,9 @@ No two may be the same.
    `soccernity-api-staging` (tracks the `staging` branch) and
    `soccernity-api` (tracks the `main` branch, production). Both should show
    the Frankfurt region.
+   **Update 2026-11-14:** the Blueprint now also defines four static sites for `apps/web` and `apps/admin`
+   (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`, `soccernity-admin`; section 4b), so it shows six
+   services, not two. The static sites have no region (Render does not support one for static sites).
 4. Render prompts for every variable marked `sync: false` in `render.yaml`
    (only at the first import; later edits are made on each service's
    "Environment" tab). For **each** of the two services, set:
@@ -177,6 +180,11 @@ No two may be the same.
      placeholder host, `http`, or localhost makes the API refuse to start**
      (`assertProductionEnv`, B-163; Decision Log #408). Outside production
      nothing is checked and localhost origins on any port are allowed.
+     **Update 2026-11-14:** `render.yaml` now sets both `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL` as plain values
+     (they are no longer `sync: false`), equal to the origins of the new static sites (section 4b): staging
+     `https://staging.soccernity.com` / `https://admin.staging.soccernity.com`, production `https://soccernity.com` /
+     `https://admin.soccernity.com`. Render therefore no longer prompts for them; change them in `render.yaml` if a
+     final domain differs.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding
@@ -335,6 +343,11 @@ gate), so these are the settings to apply **when that site is created**:
 - The API needs the VAPID key pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) before
   the Push page can turn on; until then it shows "not supported on this device".
 
+**Update 2026-11-14:** the static sites are now defined in `render.yaml` (section 4b), so the settings above are applied there:
+`/sw.js` gets `Cache-Control: no-cache`, the web CSP has `worker-src 'self'`, and the rewrite does not shadow the file. The
+statements above that no web static-site definition exists are out of date; whether Render serves `/sw.js` with a JavaScript
+content type is not verified (section 4b, "What is NOT verified").
+
 ### QA-only variables that must never be set on Render
 
 Two groups of variables exist only so the Playwright QA stack (`e2e/`) can run, and the API **refuses to start**
@@ -347,6 +360,157 @@ deliberately absent from `render.yaml`; do not add them in the dashboard either.
 
 If a deploy fails with "Refusing to start: the QA admin login limit is configured in production", remove that
 variable from the service's environment.
+
+## 4b. Static sites (apps/web and apps/admin) — build register B-179, B-088
+
+Added 2026-11-14 (branch `infra/static-site-hosting-definitions`). The founder lifted the deferral for the **repo files
+only**: `render.yaml`, this document and the build scripts. Nothing has been created on Render, no domain or DNS record
+exists, and the Blueprint has **not** been imported. Merging the change creates no service; the services appear only when a
+human imports or syncs the Blueprint (steps 2 to 6 above, and "Manual steps" below).
+
+### What is defined
+
+Three services per environment, each on its own https origin under `soccernity.com` (Decision Log #437). The API services
+are the ones from step 4; the four below are new. They are `type: web` with `runtime: static`.
+
+| Service (`render.yaml` name) | Branch | Origin it is meant to serve | Built against the API at |
+|---|---|---|---|
+| `soccernity-web-staging` | `staging` | `https://staging.soccernity.com` | `https://api.staging.soccernity.com` |
+| `soccernity-admin-staging` | `staging` | `https://admin.staging.soccernity.com` | `https://api.staging.soccernity.com` |
+| `soccernity-web` | `main` | `https://soccernity.com` (and `www`) | `https://api.soccernity.com` |
+| `soccernity-admin` | `main` | `https://admin.soccernity.com` | `https://api.soccernity.com` |
+
+`render.yaml` deliberately has **no `domains:` entries**: attaching a custom domain, the DNS records and the Cloudflare proxy
+are founder steps at the launch gate (B-249, B-251). Until then each site answers only on its `onrender.com` address, where
+the host-only, same-site refresh cookie (B-246 to B-248) does **not** work: the cookie check on the real domains is item (a)
+of B-267. The API's `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL` are no longer `sync: false`: they are plain values in
+`render.yaml`, equal to the two origins above for each environment (`services/api/src/render-static-sites.spec.ts` keeps
+them equal to what the sites are built for). They are still the **CORS allowlist** and the link base of the emails, as
+described in step 4. If a final domain differs from this layout, change the API's two values, the site's
+`VITE_API_BASE_URL`, the `connect-src` host in the headers and that spec together.
+
+### Common to all four sites
+
+- **Build command.** Run from the repository root: `npm install && npm run build --workspace=apps/<app>` for staging, and
+  `npm install && npm run build:release` for production (see "Pending-copy gate" below). Publish directory:
+  `./apps/<app>/dist`. There is no `region` and no `plan`: Render documents both as unsupported for static sites (a global
+  CDN, no compute plan). The EU rule of the API, Neon and Upstash does not apply to them: the files are public and hold no
+  personal data.
+- **`VITE_API_BASE_URL` is read at build time.** Vite writes it into the JavaScript bundle (`apps/web/src/api/*`,
+  `apps/admin/src/api/*`). **Changing it means a rebuild**: edit the value in `render.yaml` (or on the service's Environment
+  tab) and trigger a deploy; a restart does nothing. It must be the API's own https origin, the same one as in the site's
+  `connect-src`. If it is unset the apps fall back to `http://localhost:3000`, which would break a deployed site.
+- **Rewrite.** One rule per site: `/*` to `/index.html` (single-page app). Render serves a real file at a path before it
+  applies a rewrite, so `/sw.js`, `/assets/*` and the favicon are served as files and are not shadowed.
+- **Headers** live in `render.yaml` (the `headers:` list of each site; Render cannot interpolate variables, so the origins are
+  written out). They can move to the Cloudflare proxy if B-251 is built; if both set a header, check the response for a
+  duplicate. Every site sends, on every path: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer` and a `Permissions-Policy` that turns off camera, microphone, geolocation and USB.
+  **Production sites also send `Strict-Transport-Security: max-age=31536000; includeSubDomains`; staging does not**
+  (HSTS is sticky: a mistake on staging would otherwise stay in browsers for a year).
+- **CSP.** Deny by default (`default-src 'none'`), `script-src 'self'` with **no** `'unsafe-inline'` and **no**
+  `'unsafe-eval'`, `style-src 'self'` and `font-src 'self'` (both apps self-host Inter and Montserrat now, so no font CDN),
+  `base-uri 'none'`, `object-src 'none'`, `form-action 'self'`, `frame-ancestors 'none'` (this one only works as a header,
+  not a meta tag). React's inline `style` props are allowed because React writes them through the style object model, not as
+  an attribute. The rest is per app:
+  - **web:** `connect-src` the API origin, `https://*.r2.cloudflarestorage.com` (the browser PUTs uploads to a signed link on
+    the S3 endpoint) and `https://api.stripe.com`; `img-src` `data:`, `blob:` (cover-crop and upload previews) and
+    `https://*.r2.dev` (the public bucket); `media-src` the same bucket; `script-src` and `frame-src` Stripe
+    (`js.stripe.com`, `*.js.stripe.com`, `hooks.stripe.com`), which loads **only on the guardian card step**;
+    `worker-src 'self'` for the push service worker. `/sw.js` is also sent with `Cache-Control: no-cache` so browsers always
+    re-check it.
+  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://*.r2.dev` **and**
+    `https://*.r2.cloudflarestorage.com` (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
+    frames, no service worker.
+  - The two R2 wildcards stand in for `S3_PUBLIC_BASE_URL` (the public bucket address) and `S3_ENDPOINT` (the API's own S3
+    variable) because neither exists yet. **At the launch gate, tighten them to the exact hosts** (your account-specific
+    `<account-id>.r2.cloudflarestorage.com`; the real `pub-<hash>.r2.dev`), and **add a custom public domain** to `img-src`
+    and `media-src` if `S3_PUBLIC_BASE_URL` uses one. A wildcard `r2.dev` allows any Cloudflare R2 public bucket, which is
+    broader than intended.
+
+### Pending-copy gate (B-124) — which build runs where
+
+- **Production** (`soccernity-web`, `soccernity-admin`) builds with `npm run build:release`. That builds **both** apps and then
+  runs `check:pending-copy` on both `dist` folders, so **either production site fails to build while any
+  `[COPY PENDING LEGAL REVIEW]` text would ship**. The two sites are gated the same way on purpose: the check is a property
+  of the release, not of one app. It fails today by design (246 tagged places, allow-list empty). That is the gate working:
+  until counsel clears those strings the production sites cannot be deployed from `main`.
+- **Staging** (`soccernity-web-staging`, `soccernity-admin-staging`) builds with the plain build and **no** pending-copy check,
+  so the whole stack can be stood up and exercised (including by the QA reviewer) before counsel has cleared anything.
+  Staging must never be treated as the legal-copy source of truth.
+- `check:pending-copy` itself and its allow-list are unchanged. Strings are cleared by removing the tag in the source and
+  deleting the manifest row, never by allow-listing.
+
+### Staging vs production
+
+Same build, rewrite and header set, except: staging builds the plain build (no pending-copy gate), sends no HSTS, follows the
+`staging` branch and uses the `staging.` origins above; production builds `build:release`, sends HSTS and follows `main`.
+Staging and production never share an origin.
+
+### `soccernity-web-staging` / `soccernity-web` (apps/web)
+
+- Origin: `https://staging.soccernity.com` / `https://soccernity.com` (and `www.soccernity.com`: add a redirect to the root).
+- Publishes `./apps/web/dist`, which contains `index.html`, `assets/`, the fonts, `sw.js` and the icons.
+- **`/sw.js`** (web push, B-062 / B-285) is a real file in `dist`, so it is not rewritten; it is sent with
+  `Cache-Control: no-cache` and the CSP has `worker-src 'self'`. Whether Render serves `.js` with a JavaScript content type
+  is the platform default and is **not verified**; check it in the browser (below).
+- Service workers run only on https (or `localhost`): the real origin must be https. The push page also needs the API's VAPID
+  keys (B-285) before it can turn on.
+
+### `soccernity-admin-staging` / `soccernity-admin` (apps/admin)
+
+- Origin: `https://admin.staging.soccernity.com` / `https://admin.soccernity.com`.
+- Publishes `./apps/admin/dist`. No service worker, so no `/sw.js` header.
+- The Admin Console needs `ADMIN_JWT_SECRET` on the API and, once enforcement is on, `ADMIN_2FA_ENFORCED` true on the
+  production API (B-267). Restricting the admin site by IP is **not** configured here (a later decision; the Cloudflare proxy
+  would be the place).
+
+### Manual steps that stay human
+
+1. **Create the services.** Import the Blueprint (steps 2 to 6 above) or, if the API services already exist, **sync** the
+   Blueprint so Render adds the four static sites. Render prompts for `sync: false` values only at first import; the four
+   static sites have none (their only variable, `VITE_API_BASE_URL`, is a plain value).
+2. **Domains and DNS** (B-249, B-251; Decision Log #437, #449): add each custom domain on its service in Render's dashboard,
+   then create the DNS records at the registrar (GoDaddy) exactly as Render shows. Keep the records **"DNS only"** (not
+   proxied) until the edge-protection step. The registrar and DNS records are not in the repo. Render's custom-domain and
+   verification steps change; write them into the launch-gate runbook (B-180) from Render's documentation on the day.
+3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the bucket through a signed link, so the R2
+   bucket needs a CORS rule allowing `PUT` from the web origin(s) (`https://soccernity.com`,
+   `https://staging.soccernity.com`). See the post-media paragraph in step 4. Without it, uploads fail in the browser even
+   though the API side works.
+4. **`S3_PUBLIC_BASE_URL` serves `post-media/` and `profile-media/` only** (B-265): the public address must refuse
+   `private-media/` and `private-profile/`, or the private files must live in a separate bucket. Prove it by requesting an
+   object under each private prefix through the public address and checking you are refused. This also decides the exact
+   `img-src` / `media-src` host: put that same host in the headers (above).
+5. **Set the production API's** `WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` only if a final domain differs from the layout above.
+6. **Check the deployed headers and the service worker** once a site is live: open the site, then
+   `curl -sI https://<origin>/` for the headers, `curl -sI https://<origin>/sw.js` for the JavaScript content type and
+   `Cache-Control: no-cache` (web only), and `curl -sI https://<origin>/some/deep/link` for `200 text/html` (the rewrite).
+   Open the browser console on the sign-up, guardian-card and upload pages and fix any CSP violation it reports.
+
+### Inputs for the launch-gate runbook (B-180) that cannot be expressed in `render.yaml`
+
+- The exact S3 endpoint host and the exact public bucket host (and any custom public domain), to replace the two wildcards.
+- The custom domains, the DNS records and the registrar steps.
+- The Cloudflare proxy, WAF and origin lock (B-251), and which side then owns the headers.
+- Redirects: `www.soccernity.com` to the root, and any http to https redirect Render does not do itself.
+- A `Node` pin: the root `package.json` `engines` is `>=22.22.0` with no upper bound; Render's documentation says to add an
+  upper bound, and to set `NODE_VERSION` if the platform default is not wanted. Decide this at the gate.
+- Whether the admin site is later restricted by IP.
+
+### What is NOT verified
+
+There is **no Render account** and the Blueprint was **not imported**. The field names (`type: web` with `runtime: static`,
+`buildCommand`, `staticPublishPath`, `routes`, `headers`) were checked against Render's documentation on 2026-11-14
+(`https://render.com/docs/blueprint-spec`, `/docs/redirects-rewrites`, `/docs/static-site-headers`), **not against a live
+Render account**. In particular **not verified**: that Render accepts the file as written; that several header rules for one
+path (CSP plus the others) all apply; that Render does not also set `Strict-Transport-Security` itself (a duplicate); that
+`/sw.js` is served as JavaScript; that user-set environment variables are available to the static build; that
+`npm install` at the repository root (which installs every workspace, including `apps/mobile`) fits Render's static build
+time and memory; the Node version Render picks; the CSP against a real browser session (the audit in
+`docs/security-headers-csp-audit-report.md` served both `dist` builds under the target policy in Chrome, but the final
+policy, with the Stripe card step, the upload PUT and the real bucket hosts, has not been exercised end to end); and
+everything about domains, DNS, Cloudflare and the bucket.
 
 ## 5. After the first successful deploy
 

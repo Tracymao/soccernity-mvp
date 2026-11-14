@@ -1,4 +1,4 @@
-# Render Blueprint - Infrastructure as Code for services/api's web service.
+# Render Blueprint - Infrastructure as Code for services/api's web service AND the two static sites (apps/web, apps/admin).
 # Decision Log #26 (Build Plan Section 9 / CLAUDE.md): Render (API) + Neon
 # (Postgres) + Upstash (Redis), unbundled. Imported in Render's dashboard
 # ("New > Blueprint") to create the services below.
@@ -10,6 +10,9 @@
 # (Postgres) and Upstash (Redis) must ALSO be created in an EU region, in or
 # near the same area as the Render service, to keep latency low and data in the
 # EU. This file cannot enforce that; it is a manual step (docs/deployment.md).
+# The two static sites (apps/web, apps/admin) have NO `region`: Render documents it as unsupported for static sites, which are served
+# from a global CDN. The EU rule therefore covers the API, the database and the cache; the static files are public by design and hold
+# no personal data.
 #
 # VERIFIED AGAINST RENDER'S DOCS (https://render.com/docs/blueprint-spec,
 # read 2026-10-13): `region` accepts a fixed list that includes `frankfurt`; `branch` is a valid per-service key; `runtime` replaces the
@@ -180,11 +183,12 @@ services:
         sync: false
       - key: POSTMARK_FROM_EMAIL
         sync: false
+      # Final https origin of apps/web for this environment (single-sourced with the static sites below; a spec keeps them equal).
       - key: WEB_APP_BASE_URL
-        sync: false
+        value: https://staging.soccernity.com
       # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
       - key: ADMIN_APP_BASE_URL
-        sync: false
+        value: https://admin.staging.soccernity.com
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY
         sync: false
@@ -527,11 +531,12 @@ services:
         sync: false
       - key: POSTMARK_FROM_EMAIL
         sync: false
+      # Final https origin of apps/web for this environment (single-sourced with the static sites below; a spec keeps them equal).
       - key: WEB_APP_BASE_URL
-        sync: false
+        value: https://soccernity.com
       # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
       - key: ADMIN_APP_BASE_URL
-        sync: false
+        value: https://admin.soccernity.com
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY
         sync: false
@@ -735,3 +740,181 @@ services:
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
+
+  # =====================================================================================================
+  # STATIC SITES: apps/web and apps/admin, per environment (build register B-179, B-088; Decision Log #409, #437, #450).
+  # Three services per environment: the API above, the web app and the admin app, each on its own https origin under
+  # soccernity.com (production: soccernity.com, admin.soccernity.com, api.soccernity.com; staging: staging.soccernity.com,
+  # admin.staging.soccernity.com, api.staging.soccernity.com). `domains:` is deliberately NOT listed here: attaching domains,
+  # DNS records and the Cloudflare proxy are founder steps at the launch gate (docs/deployment.md, static sites). Until then each
+  # site is reachable only on its onrender.com address, where the host-only same-site refresh cookie will not work (B-249).
+  # Field names checked against https://render.com/docs/blueprint-spec, /docs/redirects-rewrites and /docs/static-site-headers
+  # (read 2026-11-14). NOT validated by an import: no Render account exists.
+  # =====================================================================================================
+  - type: web
+    name: soccernity-web-staging
+    runtime: static
+    branch: staging
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # STAGING builds with the plain build: no pending-copy check, so staging can go up before counsel has cleared the tagged strings.
+    buildCommand: npm install && npm run build --workspace=apps/web
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.staging.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT and
+    # https://*.r2.dev for S3_PUBLIC_BASE_URL while neither exists; tighten both to the exact hosts at the launch gate, and add a
+    # custom public domain if S3_PUBLIC_BASE_URL uses one (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://*.r2.dev; media-src 'self' https://*.r2.dev; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com https://*.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      # The push service worker (B-285): the browser must always re-check it. Served as a real file, never the rewrite above.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+
+  - type: web
+    name: soccernity-admin-staging
+    runtime: static
+    branch: staging
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # STAGING builds with the plain build: no pending-copy check, so staging can go up before counsel has cleared the tagged strings.
+    buildCommand: npm install && npm run build --workspace=apps/admin
+    staticPublishPath: ./apps/admin/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.staging.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT and
+    # https://*.r2.dev for S3_PUBLIC_BASE_URL while neither exists; tighten both to the exact hosts at the launch gate, and add a
+    # custom public domain if S3_PUBLIC_BASE_URL uses one (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.r2.dev https://*.r2.cloudflarestorage.com; media-src 'self' https://*.r2.dev https://*.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com; frame-src 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+
+  - type: web
+    name: soccernity-web
+    runtime: static
+    branch: main
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # PRODUCTION builds with `build:release`: it builds BOTH apps and then runs `check:pending-copy` on both dist folders, so this
+    # build FAILS while any [COPY PENDING LEGAL REVIEW] text would ship. That is the gate (B-124), intended to fail until counsel clears the strings.
+    buildCommand: npm install && npm run build:release
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT and
+    # https://*.r2.dev for S3_PUBLIC_BASE_URL while neither exists; tighten both to the exact hosts at the launch gate, and add a
+    # custom public domain if S3_PUBLIC_BASE_URL uses one (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://*.r2.dev; media-src 'self' https://*.r2.dev; font-src 'self'; connect-src 'self' https://api.soccernity.com https://*.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      # The push service worker (B-285): the browser must always re-check it. Served as a real file, never the rewrite above.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+
+  - type: web
+    name: soccernity-admin
+    runtime: static
+    branch: main
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # PRODUCTION builds with `build:release`: it builds BOTH apps and then runs `check:pending-copy` on both dist folders, so this
+    # build FAILS while any [COPY PENDING LEGAL REVIEW] text would ship. That is the gate (B-124), intended to fail until counsel clears the strings.
+    buildCommand: npm install && npm run build:release
+    staticPublishPath: ./apps/admin/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT and
+    # https://*.r2.dev for S3_PUBLIC_BASE_URL while neither exists; tighten both to the exact hosts at the launch gate, and add a
+    # custom public domain if S3_PUBLIC_BASE_URL uses one (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.r2.dev https://*.r2.cloudflarestorage.com; media-src 'self' https://*.r2.dev https://*.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.soccernity.com; frame-src 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
