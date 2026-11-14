@@ -268,6 +268,10 @@ export default function BanterRoomPage() {
               />
             )}
           </div>
+          {/* Optional room description (Figma pass Y 7061:63659 / 63660 / 63661),
+              directly under the title. Rendered as a React text node, never as
+              HTML, the same safe way the room name is. */}
+          {room.description && <p className="banter-room-page__description">{room.description}</p>}
           {room.status === "inactive" && <span className="banter-room-page__inactive-pill">Inactive</span>}
           <p className="banter-room-page__meta">
             {SCOPE_LABELS[room.scopeType]} &middot; {memberLine(room.memberCount)}

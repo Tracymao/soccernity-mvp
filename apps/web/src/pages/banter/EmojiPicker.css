@@ -1,0 +1,59 @@
+/* Emoji picker (Figma pass Y 7061:63618 / 7060:63607): white surface card, 1px inactive border,
+ * elevation/menu shadow (--sn-shadow-elevated), "Emoji" label, 3 x 6 grid of 32 px cells with an 8 px
+ * radius. Tokens only. */
+
+.emoji-picker {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 250px;
+  max-width: 100%;
+  padding: 12px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated);
+}
+
+.emoji-picker__label {
+  margin: 0;
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 32px);
+  gap: 4px;
+}
+
+.emoji-picker__cell {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: 400 18px/1 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.emoji-picker__cell:hover,
+.emoji-picker__cell:focus-visible {
+  background: var(--sn-green-tint-12);
+}
+
+.emoji-picker__cell:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.emoji-picker__cell[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

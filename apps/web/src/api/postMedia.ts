@@ -50,10 +50,12 @@ export class PostMediaApiError extends Error {
 
 /** True when an upload route answered "uploads are off": the switch (403) or no object store (503). */
 export function isUploadsOffError(err: unknown): boolean {
-  return (
-    err instanceof PostMediaApiError &&
-    (err.code === POST_MEDIA_CODES.uploadsUnavailable || err.code === POST_MEDIA_CODES.uploadsDisabled)
-  );
+  // Any API error class that carries the server's `code` counts: the post-media routes throw
+  // PostMediaApiError, the profile picture and cover routes throw UsersApiError, and both answer
+  // the same two codes when uploads are off.
+  if (!(err instanceof Error)) return false;
+  const code = (err as { code?: unknown }).code;
+  return code === POST_MEDIA_CODES.uploadsUnavailable || code === POST_MEDIA_CODES.uploadsDisabled;
 }
 
 /** The uploader's own view of one upload (PostMediaView). */

@@ -58,6 +58,15 @@
   gap: 10px;
 }
 
+/* Room description: under the title, wrapping, secondary text (Figma pass Y). */
+.banter-room-page__description {
+  margin: 0;
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .banter-room-page__inactive-pill {
   align-self: flex-start;
   padding: 2px 8px;

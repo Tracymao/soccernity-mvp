@@ -64,6 +64,10 @@ export interface BanterRoom {
   createdAt: string;
   memberCount: number;
   joined: boolean;
+  // Optional text-only description (backend B-042/B-117, founder decision
+  // 2026-11-14). null when none was given (and for rooms created before the
+  // column existed). Optional in the type only so older fixtures still type.
+  description?: string | null;
   // sprint-3/banter-room-topics -- returned on every room read. Optional here only
   // so older fixtures still type; the room page renders them read-only.
   topics?: BanterTopic[];
@@ -81,7 +85,18 @@ export interface CreateBanterRoomRequest {
   name: string;
   scopeType: BanterRoomScopeType;
   scopeRef?: string;
+  // Optional. Send it trimmed and only when non-empty (the server trims it
+  // too and stores a blank one as NULL).
+  description?: string;
 }
+
+// The server's limit on a room description
+// (services/api banter.constants.ts BANTER_ROOM_DESCRIPTION_MAX_LENGTH). It is
+// counted in UTF-16 code units (String.length), the way class-validator's
+// @MaxLength counts, so an emoji outside the Basic Multilingual Plane counts
+// as 2. ONE constant: the create dialog's counter, the textarea limit and the
+// emoji insertion guard all read it.
+export const BANTER_ROOM_DESCRIPTION_MAX_LENGTH = 500;
 
 // POST/DELETE /banter-rooms/:id/join.
 export interface JoinRoomState {

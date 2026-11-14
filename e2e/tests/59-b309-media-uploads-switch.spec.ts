@@ -13,7 +13,7 @@ import { URLS } from '../support/stack';
 // reporting media and every other route are not gated. The switch is read on every request.
 //   web composer : apps/web useMediaUploads maps 403 media_uploads_disabled to the "Uploads aren't available right now" state
 //                  (B-042; Figma pass Q state 11): attach controls disabled, text posts still go out
-//   web profile  : apps/web ProfileImageControl (shows the server sentence)
+//   web profile  : apps/web ProfileImageControl (same "Uploads aren't available right now" state, controls disabled, no Try again)
 // What the person SEES with the switch off is recorded in docs/qa-b309-playwright-specs-report.md; the assertions here only
 // require that the screen ends in a readable state: no endless spinner, no raw JSON.
 //
@@ -182,7 +182,7 @@ test.describe.serial('MEDIA_UPLOADS_ENABLED=false closes the upload routes and n
     expect(await db().postMedia.count({ where: { uploaderId: browserUser.userId } })).toBe(0);
   });
 
-  test('switch OFF, in the browser: choosing a profile picture shows the server sentence with Try again, no hang', async ({ page }) => {
+  test('switch OFF, in the browser: choosing a profile picture shows the uploads-off state with the controls disabled and no Try again, no hang', async ({ page }) => {
     test.setTimeout(120_000);
     await signIn(page, browserUser.email);
     await page.goto('/profile?edit=1');
@@ -190,8 +190,9 @@ test.describe.serial('MEDIA_UPLOADS_ENABLED=false closes the upload routes and n
     await expect(avatar).toBeVisible();
     await page.getByTestId('profile-image-avatar-input').setInputFiles({ name: 'qa.png', mimeType: 'image/png', buffer: pngOfWidth(400) });
     await expect(avatar.getByRole('progressbar')).toHaveCount(0, { timeout: 30_000 });
-    await expect(avatar.getByText('Uploads are not available right now.')).toBeVisible();
-    await expect(avatar.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(avatar.getByTestId('profile-image-avatar-uploads-off')).toHaveText('Uploads aren’t available right now.');
+    await expect(avatar.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+    await expect(avatar.locator('button:not([disabled])', { hasText: /Choose|Replace/ })).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('media_uploads_disabled');
     await expect(page.locator('body')).not.toContainText('statusCode');
     const row = await db().user.findUnique({ where: { id: browserUser.userId } });
