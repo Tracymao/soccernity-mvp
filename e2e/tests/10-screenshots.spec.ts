@@ -278,14 +278,21 @@ for (const vp of [
 
       let release: () => void = () => undefined;
       const gate = new Promise<void>((r) => (release = r));
+      // The handler holds the request until `release()`. Unrouting while it is still held makes its later
+      // route.continue() fail with "Route is already handled!", so wait until the held request has really been
+      // continued (`continued`) before removing the route.
+      let markContinued: () => void = () => undefined;
+      const continued = new Promise<void>((r) => (markContinued = r));
       await page.route('**/clubs?*cursor=*', async (route) => {
         await gate;
         await route.continue();
+        markContinued();
       });
       await page.locator('.club-picker__load-more').click();
       await page.getByRole('button', { name: /^Loading/ }).waitFor();
       await w9shot(page, `club-${vp.name}-5-load-more-loading`);
       release();
+      await continued;
       await page.unroute('**/clubs?*cursor=*');
 
       await page.getByLabel('Filter clubs by name').fill('zzzz no such club');
