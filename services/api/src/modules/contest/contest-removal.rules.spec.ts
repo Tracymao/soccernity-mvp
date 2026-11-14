@@ -2,6 +2,7 @@ import {
   entriesToQualify,
   planPlacementPoints,
   planPodium,
+  releaseOccurredAt,
   resolveFinalistUserIds,
   votesToRestore,
   VoteEventRow,
@@ -59,6 +60,34 @@ describe('weekHasTooFewEntries (fewer than 3 eligible, non-removed entries forfe
   });
 });
 
+describe('releaseOccurredAt (a release is never stamped before the cast it frees)', () => {
+  it('uses the removal clock when it is later than the cast', () => {
+    expect(releaseOccurredAt(t(5), t(1))).toEqual(t(5));
+  });
+
+  it('uses the cast time when the removal clock was read EARLIER (it started first but waited longer for the lock)', () => {
+    expect(releaseOccurredAt(t(1), t(5))).toEqual(t(5));
+  });
+
+  it('is the same instant when they are equal (a cast sorts before a release at the same millisecond)', () => {
+    expect(releaseOccurredAt(t(3), t(3))).toEqual(t(3));
+  });
+
+  it('returns a value that never sorts before the cast, for any pair', () => {
+    for (const [now, created] of [[0, 9], [9, 0], [4, 4], [1, 2], [2, 1]]) {
+      expect(releaseOccurredAt(t(now), t(created)).getTime()).toBeGreaterThanOrEqual(t(created).getTime());
+    }
+  });
+
+  it('does not change either input', () => {
+    const now = t(1);
+    const created = t(5);
+    releaseOccurredAt(now, created);
+    expect(now).toEqual(t(1));
+    expect(created).toEqual(t(5));
+  });
+});
+
 describe('votesToRestore (only an unbroken chain, only a voter holding no vote)', () => {
   const ev = (voterId: string, entryId: string, action: string, s: number): VoteEventRow => ({
     voterId,
@@ -87,6 +116,27 @@ describe('votesToRestore (only an unbroken chain, only a voter holding no vote)'
   it('skips a voter whose latest event is a release on a DIFFERENT entry', () => {
     const events = [ev('v1', 'F', 'cast', 1), ev('v1', 'F', 'release', 5)];
     expect(votesToRestore(events, new Set(), 'E')).toEqual([]);
+  });
+
+  it('brings a vote back when the release was CLAMPED to the cast time (the removal clock was read earlier)', () => {
+    // cast at 5; the removal read its clock at 1, so releaseOccurredAt stamped the release at 5 (the cast time)
+    const events = [ev('v1', 'E', 'cast', 5), { ...ev('v1', 'E', 'release', 5), occurredAt: releaseOccurredAt(t(1), t(5)) }];
+    expect(votesToRestore(events, new Set(), 'E')).toEqual([{ voterId: 'v1', createdAt: t(5) }]);
+  });
+
+  it('(the bug this fixes) a release stamped BEFORE its cast reads as an intact vote and is not restored', () => {
+    const events = [ev('v1', 'E', 'cast', 5), ev('v1', 'E', 'release', 1)];
+    expect(votesToRestore(events, new Set(), 'E')).toEqual([]);
+  });
+
+  it('control: a clamped release followed by a cast elsewhere is still not restored (the chain is broken)', () => {
+    const events = [
+      ev('v1', 'E', 'cast', 5),
+      { ...ev('v1', 'E', 'release', 5), occurredAt: releaseOccurredAt(t(1), t(5)) },
+      ev('v1', 'F', 'cast', 6),
+    ];
+    expect(votesToRestore(events, new Set(), 'E')).toEqual([]);
+    expect(votesToRestore(events, new Set(['v1']), 'E')).toEqual([]);
   });
 
   it('uses the LAST cast on this entry (a vote cast, retracted and cast again keeps the later time)', () => {

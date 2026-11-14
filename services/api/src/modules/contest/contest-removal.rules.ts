@@ -47,6 +47,18 @@ function compareEvents(a: VoteEventRow, b: VoteEventRow): number {
   return a.occurredAt.getTime() - b.occurredAt.getTime() || (ACTION_ORDER[a.action] ?? 9) - (ACTION_ORDER[b.action] ?? 9);
 }
 
+/**
+ * When a release event is stamped. A cast takes its `now` BEFORE it waits for the cycle and round locks, and so does a
+ * removal, so when the vote commits first the removal's `now` can be EARLIER than the vote's own (the removal
+ * started first but waited longer). Stamped as is, the release would then sort BEFORE the cast it frees, the voter's
+ * latest event would read as that cast, and `votesToRestore` would not bring the vote back. So a release is never
+ * stamped earlier than the vote it frees: the LATER of the removal's `now` and the vote's createdAt (which is the
+ * cast time). Equal is fine: a cast sorts before a release at the same millisecond.
+ */
+export function releaseOccurredAt(now: Date, voteCreatedAt: Date): Date {
+  return voteCreatedAt.getTime() > now.getTime() ? voteCreatedAt : now;
+}
+
 export interface VoteToRestore {
   voterId: string;
   /** The vote's ORIGINAL createdAt: the time of the voter's last `cast` event for the entry. The vote tie-break uses it. */
