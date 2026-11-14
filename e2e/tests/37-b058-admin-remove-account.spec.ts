@@ -129,7 +129,9 @@ test.describe.serial('admin Remove account', () => {
     await expect(dialog).toContainText('Ask another super admin to remove it.');
     await expect(page.getByRole('button', { name: 'Remove account', exact: true })).toHaveCount(0);
     await shot(page, '05-own-account');
-    await page.getByRole('button', { name: 'OK' }).click();
+    // Scoped to the dialog and exact: a bare 'OK' is a substring match and also hits a staff row's
+    // "Remove account: Mira Okon ..." button once earlier specs have left such admins in the database.
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(calls).toEqual([]);
     expect((await db().adminUser.findUnique({ where: { email: ADMIN_CREDENTIALS.email } })).accountStatus).toBe('active');
@@ -165,7 +167,7 @@ test.describe.serial('admin Remove account', () => {
     );
     await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
     await shot(page, '06-last-super-admin');
-    await page.getByRole('button', { name: 'OK' }).click();
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole('status')).toHaveCount(0);
     expect((await db().adminUser.findUnique({ where: { id: third.id } })).accountStatus).toBe('active');
