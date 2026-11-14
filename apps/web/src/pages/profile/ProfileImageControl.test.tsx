@@ -94,6 +94,46 @@ describe("ProfileImageControl", () => {
     expect(screen.getByRole("button", { name: "Try again" })).not.toBeNull();
   });
 
+  describe("uploads are switched off (B-306)", () => {
+    const OFF = "Uploads aren’t available right now.";
+
+    it.each([
+      ["403 media_uploads_disabled", new UsersApiError("Uploads are not available right now.", { status: 403, code: "media_uploads_disabled" })],
+      ["503 uploads_unavailable", new UsersApiError("Storage is not available.", { status: 503, code: "uploads_unavailable" })],
+    ])("%s shows the composers' wording, disables Choose, and offers no Try again", async (_label, err) => {
+      vi.mocked(uploadProfileImage).mockRejectedValue(err);
+      renderControl();
+      fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
+      const note = await screen.findByTestId("profile-image-avatar-uploads-off");
+      expect(note.textContent).toBe(OFF);
+      expect(note.getAttribute("role")).toBe("alert");
+      expect((screen.getByRole("button", { name: "Choose a picture" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+      // The server's own sentence is not shown.
+      expect(screen.queryByText(/storage is not available/i)).toBeNull();
+    });
+
+    it("an existing picture: Replace is disabled after the refusal, Remove stays available", async () => {
+      vi.mocked(uploadProfileImage).mockRejectedValue(
+        new UsersApiError("x", { status: 403, code: "media_uploads_disabled" }),
+      );
+      renderControl({ image: { url: "https://img/a.png", status: "approved" } });
+      fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
+      expect((await screen.findByTestId("profile-image-avatar-uploads-off")).textContent).toBe(OFF);
+      expect((screen.getByRole("button", { name: "Replace picture" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "Remove picture" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("a normal failure keeps the server message and Try again, and does not disable Choose", async () => {
+      vi.mocked(uploadProfileImage).mockRejectedValue(new UsersApiError("Storage hiccup.", { status: 500 }));
+      renderControl();
+      fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
+      expect((await screen.findByRole("alert")).textContent).toBe("Storage hiccup.");
+      expect(screen.getByRole("button", { name: "Try again" })).not.toBeNull();
+      expect(screen.queryByTestId("profile-image-avatar-uploads-off")).toBeNull();
+    });
+  });
+
   it("Cancel aborts the in-flight upload and leaves nothing behind", async () => {
     let signal: AbortSignal | undefined;
     vi.mocked(uploadProfileImage).mockImplementation(

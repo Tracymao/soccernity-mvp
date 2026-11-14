@@ -47,6 +47,7 @@ import {
   type ProfileImage,
   type ProfileImageKind,
 } from "../../api/users";
+import { isUploadsOffError } from "../../api/postMedia";
 import CoverCropDialog from "./CoverCropDialog";
 import "./ProfileImageControl.css";
 
@@ -93,6 +94,11 @@ type Phase = "idle" | "uploading" | "error" | "confirm-remove";
 const ERROR_FALLBACK =
   "We couldn’t upload that picture. Use a JPEG, PNG or WebP file under 5 MB and try again.";
 
+// Shown when the server says uploads are off (403 media_uploads_disabled, the B-306 switch, or 503
+// uploads_unavailable, no object store). The same wording the post composers use (MediaAttach), so the
+// two places a person can upload say the same thing. No "Try again": nothing the person does helps.
+const UPLOADS_OFF = "Uploads aren’t available right now.";
+
 interface Props {
   kind: ProfileImageKind;
   accessToken: string;
@@ -113,6 +119,9 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  // True once an upload came back "uploads are off". Choosing and changing the picture are then
+  // disabled for the life of this control; removing a picture still works (the switch does not gate it).
+  const [uploadsOff, setUploadsOff] = useState(false);
   // The chosen cover file while the crop step is open (B-210 / B-227). Nothing has been uploaded yet.
   const [cropFile, setCropFile] = useState<File | null>(null);
 
@@ -175,6 +184,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
         setPhase("idle");
         return;
       }
+      if (isUploadsOffError(err)) {
+        setUploadsOff(true);
+        setError(null);
+        setPhase("idle");
+        return;
+      }
       setPhase("error");
       setError(err instanceof UsersApiError && err.message ? err.message : ERROR_FALLBACK);
     } finally {
@@ -232,6 +247,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
         </div>
 
         <div className="profile-image__side">
+          {uploadsOff && phase !== "uploading" && (
+            <p className="profile-image__alert" role="alert" data-testid={`profile-image-${kind}-uploads-off`}>
+              {UPLOADS_OFF}
+            </p>
+          )}
+
           {phase === "uploading" && (
             <>
               <p className="profile-image__filename">{fileName}</p>
@@ -282,7 +303,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
 
           {phase === "idle" && !current && (
             <>
-              <button type="button" className="profile-image__button profile-image__button--primary" onClick={choose}>
+              <button
+                type="button"
+                className="profile-image__button profile-image__button--primary"
+                onClick={choose}
+                disabled={uploadsOff}
+              >
                 {kind === "avatar" ? "Choose a picture" : "Choose a cover photo"}
               </button>
               <p className="profile-image__note">{CHECKED_NOTE[kind]}</p>
@@ -293,7 +319,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
             <>
               <span className="profile-image__pill">Under review</span>
               <p className="profile-image__note">{copy.underReviewNote}</p>
-              <ReplaceRemove copy={copy} onReplace={choose} onRemove={() => setPhase("confirm-remove")} />
+              <ReplaceRemove
+                copy={copy}
+                onReplace={choose}
+                onRemove={() => setPhase("confirm-remove")}
+                replaceDisabled={uploadsOff}
+              />
             </>
           )}
 
@@ -301,7 +332,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
             <>
               <span className="profile-image__pill profile-image__pill--approved">Approved</span>
               <p className="profile-image__note">{copy.approvedNote}</p>
-              <ReplaceRemove copy={copy} onReplace={choose} onRemove={() => setPhase("confirm-remove")} />
+              <ReplaceRemove
+                copy={copy}
+                onReplace={choose}
+                onRemove={() => setPhase("confirm-remove")}
+                replaceDisabled={uploadsOff}
+              />
             </>
           )}
 
@@ -315,7 +351,7 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
                   Reason: {current.rejectionReason}
                 </p>
               ) : null}
-              <button type="button" className="profile-image__button" onClick={choose}>
+              <button type="button" className="profile-image__button" onClick={choose} disabled={uploadsOff}>
                 {copy.chooseAnother}
               </button>
             </>
@@ -351,14 +387,16 @@ function ReplaceRemove({
   copy,
   onReplace,
   onRemove,
+  replaceDisabled,
 }: {
   copy: (typeof COPY)[ProfileImageKind];
   onReplace: () => void;
   onRemove: () => void;
+  replaceDisabled: boolean;
 }) {
   return (
     <div className="profile-image__actions">
-      <button type="button" className="profile-image__button" onClick={onReplace}>
+      <button type="button" className="profile-image__button" onClick={onReplace} disabled={replaceDisabled}>
         {copy.replaceLabel}
       </button>
       <button type="button" className="profile-image__button" onClick={onRemove}>

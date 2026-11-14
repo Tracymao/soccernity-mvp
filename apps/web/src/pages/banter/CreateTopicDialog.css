@@ -1,0 +1,118 @@
+/* "Create a topic" dialog (Figma pass Y). Reuses the shared .banter-modal look; tokens only. */
+
+.create-topic {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.create-topic__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.create-topic__close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: 400 16px/1 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.create-topic__close:hover {
+  background: var(--sn-green-tint-12);
+}
+
+.create-topic__close:focus-visible,
+.create-topic__emoji:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.create-topic__close:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.create-topic__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.create-topic__avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--sn-green-tint-12);
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.create-topic__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.create-topic__select {
+  appearance: auto;
+}
+
+.create-topic__description {
+  height: auto;
+  min-height: 96px;
+  padding: 10px 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.create-topic__description-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.create-topic__emoji {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: 400 20px/1 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.create-topic__emoji:hover,
+.create-topic__emoji[aria-expanded="true"] {
+  background: var(--sn-green-tint-12);
+}
+
+.create-topic__counter {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.create-topic__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 820px) {
+  .create-topic__actions .banter-modal__primary {
+    width: 100%;
+  }
+}
