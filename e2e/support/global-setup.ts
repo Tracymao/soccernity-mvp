@@ -82,6 +82,16 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const redisBase = (process.env.QA_BASE_REDIS_URL ?? rootEnv.REDIS_URL ?? 'redis://localhost:6379').replace(/\/\d+$/, '');
   const redisUrl = `${redisBase}/${QA_REDIS_DB}`;
 
+  // --- 0. Generate the Prisma client (idempotent) --------------------------
+  // `npm ci` here runs without install scripts, so a clean clone has no generated client and the require of
+  // @prisma/client below fails ("did not initialize yet"). Generating is cheap and a no-op when it is current; it
+  // never connects to a database and never touches the scratch database below.
+  execSync('npx prisma generate', {
+    cwd: path.join(REPO, 'services', 'api'),
+    env: { ...process.env, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl },
+    stdio: 'inherit',
+  });
+
   // --- 1. Fresh scratch database ------------------------------------------
   const { PrismaClient } = requireFromApi('@prisma/client');
   const adminUrl = new URL(baseDb);

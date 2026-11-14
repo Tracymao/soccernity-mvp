@@ -90,6 +90,10 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     AUTH_IP_CEILING_WINDOW_MS: '600000',
     AUTH_FORGOT_PASSWORD_EMAIL_MAX: '1000000',
     AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS: '3600000',
+    // Admin sign-in (Decision Log #190): 5 attempts per 15 minutes per IP in production, on its own counter. One whole run
+    // signs in as many admins from one IP, so the QA stack raises the number of attempts. QA ONLY: the API refuses to
+    // start in production with this variable set (validate-runtime-env.ts). adminToken() still caches one real login.
+    ADMIN_LOGIN_RATE_LIMIT_MAX: '1000000',
     TRUST_PROXY_HOPS: '',
     // FC10 (B-240): the post media pipeline talks to the local stand-ins in support/fake-media-services.ts
     // (an S3-compatible store and Amazon Rekognition). The real code runs unchanged; only the vendors'

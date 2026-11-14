@@ -79,9 +79,13 @@ test.describe('Leaderboard: All-time, Club and 7-day change', () => {
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto('/leaderboard');
 
-    // Weekly is the default and nobody has points this week: the empty card, not a table.
-    await expect(page.getByText('No ranked players here yet')).toBeVisible();
-    await shot(page, 'overall-empty-desktop');
+    // Weekly is the default board. Earlier specs leave ranked players on the weekly board of the shared QA
+    // database, so this test cannot assume it is empty (the empty card itself is covered by the web unit tests).
+    // What it owns is that its own all-time rows are NOT on the weekly board: they were written to 'all-time' only.
+    await expect(page.getByRole('radio', { name: 'Weekly' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'All-time' })).not.toBeChecked();
+    await expect(page.getByText(up.username)).toHaveCount(0);
+    await shot(page, 'overall-weekly-desktop');
     await page.getByRole('radio', { name: 'All-time' }).click();
 
     const upRow = await row(page, up.username);
@@ -119,9 +123,10 @@ test.describe('Leaderboard: All-time, Club and 7-day change', () => {
     expect(scrollWidth).toBeLessThanOrEqual(390);
     await shot(page, 'overall-all-time-mobile');
 
-    // Back to Weekly: the empty card again, on mobile too.
+    // Back to Weekly: our all-time rows are gone from the board again, on mobile too.
     await page.getByRole('radio', { name: 'Weekly' }).click();
-    await expect(page.getByText('No ranked players here yet')).toBeVisible();
-    await shot(page, 'overall-empty-mobile');
+    await expect(page.getByRole('radio', { name: 'Weekly' })).toBeChecked();
+    await expect(page.getByText(up.username)).toHaveCount(0);
+    await shot(page, 'overall-weekly-mobile');
   });
 });

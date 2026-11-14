@@ -24,10 +24,18 @@ npx playwright test 04         # one spec
 E2E_KEEP_DB=1 npx playwright test 04   # keep the scratch database between runs
 ```
 
-`support/global-setup.ts` drops and recreates a scratch database `soccernity_qa` (never your `soccernity` dev
-database), runs the repo's migrations on it, seeds the one admin account that cannot self-register, flushes Redis
+`support/global-setup.ts` first runs `npx prisma generate` in `services/api` (idempotent; `npm ci --ignore-scripts` never
+generates the client, so a clean clone needs it), then drops and recreates a scratch database `soccernity_qa` (never your
+`soccernity` dev database), runs the repo's migrations on it, seeds the one admin account that cannot self-register, flushes Redis
 logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
 on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
+
+**A run rewrites tracked files.** The suite saves screenshots under `docs/` (about 290 tracked files get overwritten, and
+new untracked ones appear), so a full run leaves `git status` dirty. Run it in a throwaway worktree, or put the tree back
+afterwards with `git checkout -- docs/` (and delete the untracked screenshots). Nothing here changes where they go.
+
+Spec 19 restarts the API without an object store to test the "uploads aren't available" message; its `afterAll` restarts
+the normal API (fake object store) when the file ends, even if the test fails, so it can sit anywhere in the order.
 
 ## Post media upload with a fake check (spec 18, FC10)
 
@@ -90,6 +98,7 @@ send path up to the provider call.
 | Change | Why |
 |---|---|
 | `AUTH_RATE_LIMIT_MAX=1000` | The default 5 requests/60 s auth throttle is far below what the suite needs. |
+| `ADMIN_LOGIN_RATE_LIMIT_MAX=1000000` | The Admin Console sign-in allows 5 attempts per 15 minutes per IP (Decision Log #190) and one run signs in as many admins. QA only: the API refuses to start in production when this is set. `adminToken()` still caches one real login per run. |
 | `STRIPE_*=replace-me`, `EMAIL_PROVIDER_API_KEY=replace-me` | Never reach Stripe or Postmark. Under-13 card verification therefore fails closed (503). |
 | One test lifts `Guardian.cardVerificationRequired` in SQL | Local runs have no GeoLite2 database, so every under-13 needs the card step (by design). Marked `WORKAROUND` in the spec. |
 

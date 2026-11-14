@@ -142,6 +142,27 @@ describe('assertProductionEnv: the QA test clock (backend/test-clock-qa)', () =>
   });
 });
 
+describe('assertProductionEnv: the QA admin login limit (ADMIN_LOGIN_RATE_LIMIT_MAX)', () => {
+  const PROD = { NODE_ENV: 'production', ...GOOD };
+
+  it('passes in production when the variable is unset or blank', () => {
+    expect(() => assertProductionEnv(PROD)).not.toThrow();
+    expect(() => assertProductionEnv({ ...PROD, ADMIN_LOGIN_RATE_LIMIT_MAX: '' })).not.toThrow();
+    expect(() => assertProductionEnv({ ...PROD, ADMIN_LOGIN_RATE_LIMIT_MAX: '   ' })).not.toThrow();
+  });
+
+  it.each(['1000000', '5', '3', '0', 'abc'])('REFUSES TO START in production when it is set to %j', (value) => {
+    const env = { ...PROD, ADMIN_LOGIN_RATE_LIMIT_MAX: value };
+    expect(() => assertProductionEnv(env)).toThrow(/Refusing to start: the QA admin login limit/);
+    expect(() => assertProductionEnv(env)).toThrow('ADMIN_LOGIN_RATE_LIMIT_MAX');
+  });
+
+  it('does not touch non-production processes', () => {
+    expect(() => assertProductionEnv({ NODE_ENV: 'test', ADMIN_LOGIN_RATE_LIMIT_MAX: '1000000' })).not.toThrow();
+    expect(() => assertProductionEnv({ NODE_ENV: 'development', ADMIN_LOGIN_RATE_LIMIT_MAX: '1000000' })).not.toThrow();
+  });
+});
+
 
 describe('assertProductionEnv: DOB_ENCRYPTION_KEY (B-252, Decision Log #425)', () => {
   const production = (key: string | undefined) => {
