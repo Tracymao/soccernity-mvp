@@ -36,7 +36,7 @@ interface Seeded {
 }
 
 async function putObject(key: string, body: Buffer) {
-  const res = await fetch(`${FAKE_MEDIA.storage}/${BUCKET}/${key}`, { method: 'PUT', headers: { 'content-type': 'image/png' }, body });
+  const res = await fetch(`${FAKE_MEDIA.storage}/${BUCKET}/${key}`, { method: 'PUT', headers: { 'content-type': 'image/png' }, body: new Uint8Array(body) });
   if (!res.ok) throw new Error(`fake store PUT ${key} failed ${res.status}`);
 }
 async function deleteObject(key: string) {
