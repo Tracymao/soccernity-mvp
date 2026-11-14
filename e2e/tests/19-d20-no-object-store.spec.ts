@@ -8,9 +8,10 @@ import { URLS } from '../support/stack';
 // sentence; the S3_* detail stays in the server log. (The admin media upload keeps its own message.)
 //
 // This used to live in spec 15 and relied on the harness API having no object store. Since FC10 the harness
-// gives the API a fake one (support/fake-media-services.ts), so this file restarts the API WITHOUT a store. It
-// is the LAST spec on purpose: the restarted API is owned by this worker, and global teardown stops whichever
-// API is running (api.pid), so nothing after it needs the default API back.
+// gives the API a fake one (support/fake-media-services.ts), so this file restarts the API WITHOUT a store.
+// It puts the normal API (the harness default, with the fake object store) back when the file ends, in an
+// afterAll, so a failing test cannot leave later specs (34, 40, 59, 62 ...) on an API with no store. It is no
+// longer the last spec, and it does not need to be.
 
 function solidPng(width: number, height: number): Uint8Array {
   const zlib = require('zlib') as typeof import('zlib');
@@ -46,6 +47,12 @@ function solidPng(width: number, height: number): Uint8Array {
 
 
 test.describe('image upload without an object store', () => {
+  // Runs whether the test passed, failed or timed out: restore the default API (fake object store, real clock).
+  test.afterAll(async () => {
+    test.setTimeout(180_000);
+    await restartApi({});
+  });
+
   test("D-20: the 503 shown to a user says uploads aren't available and names no configuration", async () => {
     test.setTimeout(180_000);
     await restartApi({ noObjectStore: true });
