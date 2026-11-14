@@ -1126,6 +1126,12 @@ model BanterRoom {
   // re-resolved from the real entity and written back, so a rename
   // doesn't leave a permanently wrong label. Null whenever scopeRef is.
   scopeName   String?
+  // Optional, text-only room description (Decision Log #404 item 10: the room is the
+  // thread, room posts are the comments; founder decision 2026-11-14). Set once at
+  // creation (POST /banter-rooms), trimmed, 1-500 characters when present; blank is
+  // stored as NULL, as is every room created before this column existed. No edit path
+  // exists (not decided). No attachment, GIF or poll.
+  description String?
   // The user who created the room. Kept as a bare String (not a User
   // @relation) exactly as Section 3 scaffolded it — making it a real FK
   // would pull room creation into the Decision Log #44 account-deletion

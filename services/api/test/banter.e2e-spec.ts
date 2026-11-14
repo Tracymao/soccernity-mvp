@@ -164,6 +164,7 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
       expect(create.body).toEqual({
         id: expect.any(String),
         name: 'Gooners Only',
+        description: null, // no description sent
         scopeType: 'club',
         scopeRef: club.id,
         scopeName: 'Arsenal',
@@ -1195,6 +1196,106 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         expect(res.status).toBe(403);
         expect(res.body.code).toBe('under_16_restricted');
       }
+    });
+  });
+
+  // Founder decision 2026-11-14 (Decision Log #404 item 10): optional text-only room description.
+  describe('BanterRoom.description', () => {
+    const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    it('create with a description returns it, and every read path returns it too', async () => {
+      const creator = await createUser('desc-creator');
+      const viewer = await createUser('desc-viewer');
+      const create = await request(server())
+        .post('/banter-rooms')
+        .set(bearer(creator.accessToken))
+        .send({ name: 'Offside Debates', scopeType: 'topic', description: '  Where we settle the offside rule.  ' })
+        .expect(201);
+      expect(create.body.description).toBe('Where we settle the offside rule.');
+      const id = create.body.id as string;
+
+      const byId = await request(server()).get(`/banter-rooms/${id}`).set(bearer(viewer.accessToken)).expect(200);
+      expect(byId.body.description).toBe('Where we settle the offside rule.');
+
+      const list = await request(server()).get('/banter-rooms').set(bearer(viewer.accessToken)).expect(200);
+      expect(list.body.items.find((r: { id: string }) => r.id === id).description).toBe(
+        'Where we settle the offside rule.',
+      );
+
+      const search = await request(server())
+        .get('/banter-rooms/search?q=Offside')
+        .set(bearer(viewer.accessToken))
+        .expect(200);
+      expect(search.body.items[0].description).toBe('Where we settle the offside rule.');
+
+      const mine = await request(server()).get('/banter-rooms/mine').set(bearer(creator.accessToken)).expect(200);
+      expect(mine.body.items[0].description).toBe('Where we settle the offside rule.');
+
+      expect((await getTestPrismaClient().banterRoom.findUniqueOrThrow({ where: { id } })).description).toBe(
+        'Where we settle the offside rule.',
+      );
+    });
+
+    it('create without a description behaves exactly as before: description is null everywhere', async () => {
+      const creator = await createUser('desc-none');
+      const room = await createRoom(creator.accessToken, { name: 'No Words Here' });
+      const byId = await request(server()).get(`/banter-rooms/${room.id}`).set(bearer(creator.accessToken)).expect(200);
+      expect(byId.body).toHaveProperty('description', null);
+      const list = await request(server()).get('/banter-rooms').set(bearer(creator.accessToken)).expect(200);
+      expect(list.body.items[0]).toHaveProperty('description', null);
+    });
+
+    it.each(['', '    ', '\n\t'])('a blank description (%j) is stored as NULL, never an empty string', async (blank) => {
+      const creator = await createUser('desc-blank');
+      const res = await request(server())
+        .post('/banter-rooms')
+        .set(bearer(creator.accessToken))
+        .send({ name: 'Blank Desc', scopeType: 'topic', description: blank })
+        .expect(201);
+      expect(res.body.description).toBeNull();
+      expect(
+        (await getTestPrismaClient().banterRoom.findUniqueOrThrow({ where: { id: res.body.id } })).description,
+      ).toBeNull();
+    });
+
+    it('accepts exactly 500 characters and rejects 501 (400, nothing created)', async () => {
+      const creator = await createUser('desc-limit');
+      await request(server())
+        .post('/banter-rooms')
+        .set(bearer(creator.accessToken))
+        .send({ name: 'Max Desc', scopeType: 'topic', description: 'a'.repeat(500) })
+        .expect(201);
+      await request(server())
+        .post('/banter-rooms')
+        .set(bearer(creator.accessToken))
+        .send({ name: 'Too Long', scopeType: 'topic', description: 'a'.repeat(501) })
+        .expect(400);
+      expect(await getTestPrismaClient().banterRoom.count({ where: { name: 'Too Long' } })).toBe(0);
+    });
+
+    it('a room created before the column existed reads null (row inserted with the column omitted)', async () => {
+      const viewer = await createUser('desc-legacy');
+      const prisma = getTestPrismaClient();
+      // Raw INSERT naming no description column: exactly the shape of a pre-migration row.
+      const id = '00000000-0000-4000-8000-0000000000aa';
+      await prisma.$executeRaw`INSERT INTO "BanterRoom" ("id", "name", "scopeType", "createdBy", "memberCount")
+        VALUES (${id}, 'Legacy Room', 'topic', 'someone', 0)`;
+      const byId = await request(server()).get(`/banter-rooms/${id}`).set(bearer(viewer.accessToken)).expect(200);
+      expect(byId.body.name).toBe('Legacy Room');
+      expect(byId.body).toHaveProperty('description', null);
+    });
+
+    it('the description cannot be set after creation: the status route rejects it and nothing changes', async () => {
+      const creator = await createUser('desc-noedit');
+      const room = await createRoom(creator.accessToken, { name: 'Fixed Words' });
+      await request(server())
+        .patch(`/banter-rooms/${room.id}/status`)
+        .set(bearer(creator.accessToken))
+        .send({ status: 'inactive', description: 'sneaky' })
+        .expect(400);
+      expect(
+        (await getTestPrismaClient().banterRoom.findUniqueOrThrow({ where: { id: room.id } })).description,
+      ).toBeNull();
     });
   });
 });

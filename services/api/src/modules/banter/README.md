@@ -332,6 +332,39 @@ topicId } } }`), ANDed alongside the existing `scopeType`/`q` filters. An
 unknown/bad `topicId` is not a `400` — it simply matches zero rooms, the
 same behavior a `q` that matches nothing already has.
 
+## Room description (`backend/bants-room-description`, founder decision 2026-11-14)
+
+A room is the thread and its posts are the comments (Decision Log #404 item 10), so the room
+can now carry a short text-only description, as the Figma "Create a topic" frames draw it
+(a Title and a Description).
+
+- **Schema:** `BanterRoom.description String?` — nullable, no default, no backfill, one
+  additive migration (`20261201090000_add_banter_room_description`). Every room created
+  before the migration reads `null`.
+- **Create:** `POST /banter-rooms` takes an optional `description`. It is trimmed before
+  validation (`@Transform`, the `CreateContactEnquiryDto` approach); a blank or
+  whitespace-only value is treated as absent and stored as `NULL`, never `""`; 1 to 500
+  characters when present (**DEFAULT, founder-veto-able** — the Dev session chose 500, the
+  founder did not state it; `BANTER_ROOM_DESCRIPTION_MAX_LENGTH`). `BanterService.createRoom`
+  also trims, so a direct service caller cannot store spaces.
+- **Read:** `description: string | null` is part of the shared `ROOM_SELECT`, so it is on the
+  create response, `GET /banter-rooms`, `GET /banter-rooms/search`, `GET /banter-rooms/mine`
+  and `GET /banter-rooms/:id`.
+- **Screening:** none. The room `name` goes through no text screening of any kind in this
+  module (no profanity, sensitive-content or moderation hook), so the description gets the
+  same: none. Rooms are moderated after the fact through the `banter_room` report type.
+- **Not built:** editing a description after creation (no edit path exists for the room
+  `name` either — the only update routes are `PATCH .../status` and the topic attach/detach
+  calls; adding one is not decided), attachments on a room, GIF, polls.
+- **Deletion / retention:** a room survives its creator (`BanterRoom.createdBy` is a bare
+  string with no FK; classified `'content'` in `anonymized-row-purge.references.ts`), so a
+  room's `name` and `description` are not touched when the creator is anonymised or purged.
+  No retention rule exists for the room name, so none was invented for the description
+  (finding, not decided).
+- **Admin / export:** no admin screen or endpoint returns a room's fields (moderation reads
+  only `id` and `createdBy` of a `banter_room` target), and the personal-data export selects
+  no room fields, so nothing else changed.
+
 ## Endpoints
 
 Section 4.4 lists: `GET /banter-rooms`, `GET /banter-rooms/:id`, `POST
@@ -340,7 +373,7 @@ Section 4.4 lists: `GET /banter-rooms`, `GET /banter-rooms/:id`, `POST
 
 | Method & path | Guards | Notes |
 |---|---|---|
-| `POST /banter-rooms` | `JwtAuthGuard` + `GuardianConsentGuard` | Create. `{ name, scopeType }`; `scopeType` `@IsIn(['club','league','country','topic'])`. `createdBy` = caller. **Creator is auto-joined** (`memberCount` starts at 1). Default `201`. |
+| `POST /banter-rooms` | `JwtAuthGuard` + `GuardianConsentGuard` | Create. `{ name, scopeType, scopeRef?, description? }`; `scopeType` `@IsIn(['club','league','country','topic'])`. `createdBy` = caller. **Creator is auto-joined** (`memberCount` starts at 1). Default `201`. |
 | `GET /banter-rooms` | `JwtAuthGuard` | List, keyset alphabetical by `name` (`id` tiebreak). Optional `?scopeType=` exact filter, optional `?q=` name substring (ILIKE). Per-caller `joined` boolean (batched — no N+1). |
 | `GET /banter-rooms/search?q=` | `JwtAuthGuard` | Section 4.4's literal search route. **Shares `BanterService.listRooms`** with `GET /banter-rooms` — same `scopeType` + `q` mechanism (the `GrassrootsPage`/`?city=` server-side-filter precedent this task points at). Exists because Section 4.4 names it. |
 | `GET /banter-rooms/mine` | `JwtAuthGuard` | "My Bants" — rooms the caller has joined, keyset by `joinedAt desc` (`banterRoomId` tiebreak). |
