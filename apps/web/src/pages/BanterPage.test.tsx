@@ -242,8 +242,8 @@ describe("BanterPage", () => {
     await screen.findByText(/no rooms match that search/i);
 
     fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
-    fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "Sunday League Talk" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Sunday League Talk" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(createRoom).toHaveBeenCalledWith(expect.any(String), { name: "Sunday League Talk", scopeType: "topic" }),
@@ -299,9 +299,9 @@ describe("BanterPage", () => {
 
       await waitFor(() => expect(clubOption().disabled).toBe(false));
       fireEvent.change(scopeSelect(), { target: { value: "club" } });
-      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "Stamford Bridge Talk" } });
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Stamford Bridge Talk" } });
       expect((screen.getByLabelText("Club") as HTMLSelectElement).value).toBe("club-1");
-      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+      fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
       await waitFor(() =>
         expect(createRoom).toHaveBeenCalledWith(expect.any(String), {
@@ -360,8 +360,8 @@ describe("BanterPage", () => {
       await waitFor(() => expect(clubOption().disabled).toBe(false));
 
       fireEvent.change(scopeSelect(), { target: { value: "league" } });
-      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "NPFL Talk" } });
-      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "NPFL Talk" } });
+      fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
       await waitFor(() =>
         expect(createRoom).toHaveBeenCalledWith(expect.any(String), { name: "NPFL Talk", scopeType: "league" }),
@@ -382,8 +382,8 @@ describe("BanterPage", () => {
       await waitFor(() => expect(clubOption().disabled).toBe(false));
 
       fireEvent.change(scopeSelect(), { target: { value: "club" } });
-      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "Ghost Club Room" } });
-      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Ghost Club Room" } });
+      fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
       const alert = await screen.findByRole("alert");
       expect(alert.textContent).toContain("You can only create a club-scoped Banter Room");
@@ -400,8 +400,8 @@ describe("BanterPage", () => {
 
       fireEvent.change(scopeSelect(), { target: { value: "club" } });
       fireEvent.change(screen.getByLabelText("Club"), { target: { value: "" } });
-      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "No Club Room" } });
-      expect((screen.getByRole("button", { name: "Create room" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "No Club Room" } });
+      expect((screen.getByRole("button", { name: "Post" }) as HTMLButtonElement).disabled).toBe(true);
       expect(createRoom).not.toHaveBeenCalled();
     });
   });

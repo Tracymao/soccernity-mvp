@@ -22,7 +22,11 @@ interface BanterModalProps {
   children: ReactNode;
 }
 
-const FOCUSABLE = "button:not([disabled]), input:not([disabled]), a[href]";
+// Tab order inside the overlay. select and textarea are included (the create-topic dialog has both);
+// roving-tabindex children (tabindex="-1", the emoji picker cells) are left out: they are reached with
+// the arrow keys and must not become the "last" element of the trap.
+const FOCUSABLE =
+  'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]';
 
 export default function BanterModal({ titleId, variant, busy, onClose, children }: BanterModalProps) {
   const ref = useRef<HTMLDivElement | null>(null);

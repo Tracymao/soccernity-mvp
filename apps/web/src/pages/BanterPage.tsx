@@ -31,17 +31,9 @@
 // server-side q param (GET /banter-rooms/mine takes none) -- that tab
 // filters the already-loaded "mine" page client-side instead, the same
 // judgment call ClubsPage.tsx makes for its own client-side name filter.
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import {
-  listRooms,
-  getMyRooms,
-  createRoom,
-  BanterApiError,
-  type BanterRoom,
-  type BanterRoomScopeType,
-} from "../api/banter";
-import { listJoinedClubs, type ClubSummary } from "../api/clubs";
+import { listRooms, getMyRooms, BanterApiError, type BanterRoom, type BanterRoomScopeType } from "../api/banter";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
@@ -49,6 +41,7 @@ import { useIsMobile } from "../layout/useIsMobile";
 import BanterJoinButton from "./banter/BanterJoinButton";
 import BanterStatusDot from "./banter/BanterStatusDot";
 import BanterFilterForm from "./banter/BanterFilterForm";
+import CreateTopicDialog from "./banter/CreateTopicDialog";
 import {
   NO_BANTER_FILTERS,
   SCOPE_OPTIONS,
@@ -62,7 +55,6 @@ import "./banter/BanterPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Category = "all" | "mine";
-type ClubsState = "idle" | "loading" | "loaded" | "error";
 // Mobile only: the results list, or the full-screen filter panel
 // (Figma 5803:8876) it opens. Applying the panel returns to results.
 type MobileView = "results" | "filter";
@@ -100,26 +92,6 @@ export default function BanterPage() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createScope, setCreateScope] = useState<BanterRoomScopeType>("topic");
-  const [createPending, setCreatePending] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [myClubs, setMyClubs] = useState<ClubSummary[]>([]);
-  const [clubsState, setClubsState] = useState<ClubsState>("idle");
-  const [createClubId, setCreateClubId] = useState("");
-
-  const loadMyClubs = useCallback(async () => {
-    if (!token) return;
-    setClubsState("loading");
-    try {
-      const clubs = await listJoinedClubs(token);
-      setMyClubs(clubs);
-      setCreateClubId((prev) => (clubs.some((c) => c.id === prev) ? prev : (clubs[0]?.id ?? "")));
-      setClubsState("loaded");
-    } catch {
-      setClubsState("error");
-    }
-  }, [token]);
 
   useEffect(() => {
     if (!token || !decoded) return;
@@ -237,35 +209,6 @@ export default function BanterPage() {
     setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, joined: next.joined, memberCount: next.memberCount } : r)));
   }
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
-    if (!token || createPending) return;
-    const name = createName.trim();
-    if (!name) return;
-    const isClubScope = createScope === "club";
-    if (isClubScope && !createClubId) {
-      setCreateError("Choose a club you're a member of to create a club room.");
-      return;
-    }
-    setCreatePending(true);
-    setCreateError(null);
-    try {
-      const room = await createRoom(token, {
-        name,
-        scopeType: createScope,
-        ...(isClubScope ? { scopeRef: createClubId } : {}),
-      });
-      navigate(`/banter/${room.id}`);
-    } catch (err) {
-      setCreateError(err instanceof BanterApiError ? err.message : "Couldn't create that room.");
-      // The server rejected a club room (e.g. the membership ended since the
-      // list loaded) -- re-read memberships so the picker stops offering it.
-      if (isClubScope) void loadMyClubs();
-    } finally {
-      setCreatePending(false);
-    }
-  }
-
   if (!token || !decoded) {
     return (
       <div className="banter-status" role="status">
@@ -274,7 +217,6 @@ export default function BanterPage() {
     );
   }
 
-  const canCreateClubRoom = clubsState === "loaded" && myClubs.length > 0;
   const term = queryInput.trim().toLowerCase();
   // "All" rooms are already server-filtered by activeQuery; "My Bants"
   // has no server-side q param, so it's filtered client-side here.
@@ -341,104 +283,10 @@ export default function BanterPage() {
           <p className="banter-hero__lede">
             Have fun, create and engage in conversations around your favourite teams, events and players.
           </p>
-          {!createOpen && (
-            <button
-              type="button"
-              className="banter-hero__cta"
-              onClick={() => {
-                setCreateOpen(true);
-                if (clubsState === "idle" || clubsState === "error") void loadMyClubs();
-              }}
-            >
-              Create a room
-            </button>
-          )}
+          <button type="button" className="banter-hero__cta" onClick={() => setCreateOpen(true)}>
+            Create a room
+          </button>
         </div>
-
-        {createOpen && (
-          <form className="banter-create" onSubmit={handleCreate}>
-            <label className="banter-create__field">
-              Room name
-              <input
-                type="text"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                placeholder="e.g. Chelsea vs Arsenal — Matchday Chat"
-                minLength={2}
-                maxLength={120}
-                required
-              />
-            </label>
-            <label className="banter-create__field">
-              Scope
-              <select
-                aria-label="Scope"
-                value={createScope}
-                onChange={(e) => setCreateScope(e.target.value as BanterRoomScopeType)}
-              >
-                {SCOPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value} disabled={o.value === "club" && !canCreateClubRoom}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {createScope === "club" && clubsState === "loaded" && myClubs.length > 0 && (
-              <label className="banter-create__field">
-                Club
-                <select
-                  aria-label="Club"
-                  value={createClubId}
-                  onChange={(e) => setCreateClubId(e.target.value)}
-                >
-                  {myClubs.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {clubsState === "loading" && <p className="banter-create__note">Checking your club memberships…</p>}
-            {clubsState === "loaded" && myClubs.length === 0 && (
-              <p className="banter-create__note">
-                Club rooms are only for clubs you&rsquo;re a member of. Join a club to create one.
-              </p>
-            )}
-            {clubsState === "error" && (
-              <p className="banter-create__note" role="alert">
-                Couldn&rsquo;t check your club memberships, so club rooms are unavailable.{" "}
-                <button type="button" className="banter-create__retry" onClick={() => void loadMyClubs()}>
-                  Try again
-                </button>
-              </p>
-            )}
-            <div className="banter-create__actions">
-              <button
-                type="submit"
-                className="banter-create__submit"
-                disabled={createPending || !createName.trim() || (createScope === "club" && !createClubId)}
-              >
-                {createPending ? "Creating…" : "Create room"}
-              </button>
-              <button
-                type="button"
-                className="banter-create__cancel"
-                onClick={() => {
-                  setCreateOpen(false);
-                  setCreateError(null);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-            {createError && (
-              <p className="banter-create__error" role="alert">
-                {createError}
-              </p>
-            )}
-          </form>
-        )}
 
         <div className="banter-search">
           <span className="banter-search__icon" aria-hidden="true">
@@ -597,6 +445,15 @@ export default function BanterPage() {
           ))}
         </div>
       </div>
+
+      {createOpen && (
+        <CreateTopicDialog
+          accessToken={token}
+          displayName={displayName}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(room) => navigate(`/banter/${room.id}`)}
+        />
+      )}
 
       {filtersOpen && !isMobile && (
         <div

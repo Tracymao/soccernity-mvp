@@ -510,4 +510,57 @@ describe("BanterRoomPage", () => {
 
     expect(screen.queryByRole("list", { name: "Topics" })).toBeNull();
   });
+
+  describe("room description (B-042)", () => {
+    it("shows the description under the title when there is one", async () => {
+      seedSession(fakeAccessToken());
+      vi.mocked(getRoomById).mockResolvedValueOnce(room({ description: "Who wins the derby?\nPredictions only." }));
+      emptyFeed();
+
+      renderPage();
+
+      const text = await screen.findByText(/who wins the derby\?/i);
+      expect(text.tagName).toBe("P");
+      expect(text.className).toContain("banter-room-page__description");
+      // Under the title, before the composer.
+      const title = screen.getByRole("heading", { name: /Chelsea vs Arsenal — Matchday Chat/ });
+      expect(title.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("shows nothing for a room with no description (null or absent)", async () => {
+      seedSession(fakeAccessToken());
+      vi.mocked(getRoomById).mockResolvedValueOnce(room({ description: null }));
+      emptyFeed();
+      const { container } = render(
+        <MemoryRouter initialEntries={["/banter/room-1"]}>
+          <Routes>
+            <Route path="/banter/:roomId" element={<BanterRoomPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await screen.findByPlaceholderText(/say something/i);
+      expect(container.querySelector(".banter-room-page__description")).toBeNull();
+    });
+
+    it("renders the description as text, never as HTML", async () => {
+      seedSession(fakeAccessToken());
+      vi.mocked(getRoomById).mockResolvedValueOnce(room({ description: '<img src=x onerror="alert(1)"><b>bold</b>' }));
+      emptyFeed();
+      const { container } = render(
+        <MemoryRouter initialEntries={["/banter/room-1"]}>
+          <Routes>
+            <Route path="/banter/:roomId" element={<BanterRoomPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      const p = await waitFor(() => {
+        const el = container.querySelector(".banter-room-page__description");
+        if (!el) throw new Error("no description yet");
+        return el;
+      });
+      expect(p.textContent).toBe('<img src=x onerror="alert(1)"><b>bold</b>');
+      expect(p.querySelector("img")).toBeNull();
+      expect(p.querySelector("b")).toBeNull();
+    });
+  });
 });
