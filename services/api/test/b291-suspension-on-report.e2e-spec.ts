@@ -83,6 +83,7 @@ describe('Suspension on a report e2e (b291-suspension-on-report)', () => {
     const target = await createUser('target');
     const mod1 = await createAdmin('one');
     const mod2 = await createAdmin('two');
+    const mod3 = await createAdmin('five');
 
     const report = (await fileReport(reporter.accessToken, 'user', target.userId).expect(201)).body;
     const res = await action(mod1.accessToken, report.id, 'user_suspended').expect(200);
@@ -98,13 +99,19 @@ describe('Suspension on a report e2e (b291-suspension-on-report)', () => {
     const login = await request(server()).post('/auth/login').send({ email: target.email, password: PASSWORD }).expect(401);
     expect(login.body.message).toMatch(/invalid credentials/i);
 
-    // the suspended person can appeal (appeal routes need only a signed-in token)
-    await request(server()).post(`/reports/${report.id}/appeal`).set(auth(target.accessToken)).send({ reason: 'this was a mistake' }).expect(201);
+    // A suspension revokes every session (B-305), so the suspended person's pre-suspension access token is dead from the
+    // next whole second: using it here made this test pass or fail on which second the steps landed in (it failed on a
+    // slow CI runner). A suspended person cannot sign in, so staff record the appeal for them (B-292).
+    await request(server())
+      .post(`/admin/moderation/reports/${report.id}/appeal`)
+      .set(auth(mod2.accessToken))
+      .send({ reason: 'They emailed support to appeal the suspension.' })
+      .expect(201);
 
-    // a second moderator overturns it: active again, link cleared, sign-in works
+    // a third moderator (neither the actioner nor the recorder may decide) overturns it: active again, link cleared, sign-in works
     await request(server())
       .patch(`/admin/moderation/reports/${report.id}/appeal`)
-      .set(auth(mod2.accessToken))
+      .set(auth(mod3.accessToken))
       .send({ decision: 'overturned' })
       .expect(200);
 
@@ -120,14 +127,20 @@ describe('Suspension on a report e2e (b291-suspension-on-report)', () => {
     const author = await createUser('author2');
     const mod1 = await createAdmin('three');
     const mod2 = await createAdmin('four');
+    const mod3 = await createAdmin('six');
     const post = await prisma.post.create({ data: { authorId: author.userId, contentText: 'b291 post' } });
 
     const report = (await fileReport(reporter.accessToken, 'post', post.id).expect(201)).body;
     await action(mod1.accessToken, report.id, 'user_suspended').expect(200);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: author.userId } })).accountStatus).toBe('suspended');
 
-    await request(server()).post(`/reports/${report.id}/appeal`).set(auth(author.accessToken)).send({ reason: 'please look again' }).expect(201);
-    await request(server()).patch(`/admin/moderation/reports/${report.id}/appeal`).set(auth(mod2.accessToken)).send({ decision: 'upheld' }).expect(200);
+    // staff record the appeal (the suspended author's session is revoked); a third moderator decides it (B-292)
+    await request(server())
+      .post(`/admin/moderation/reports/${report.id}/appeal`)
+      .set(auth(mod2.accessToken))
+      .send({ reason: 'They emailed support to appeal the suspension.' })
+      .expect(201);
+    await request(server()).patch(`/admin/moderation/reports/${report.id}/appeal`).set(auth(mod3.accessToken)).send({ decision: 'upheld' }).expect(200);
 
     const still = await prisma.user.findUniqueOrThrow({ where: { id: author.userId } });
     expect(still.accountStatus).toBe('suspended');
