@@ -15,6 +15,12 @@
 export const BANTER_ROOM_SCOPE_TYPES = ['club', 'league', 'country', 'topic'] as const;
 export type BanterRoomScopeType = (typeof BANTER_ROOM_SCOPE_TYPES)[number];
 
+// BanterRoom.description (founder decision 2026-11-14, Decision Log #404 item 10).
+// Optional, text-only, set at creation. 1-500 characters when present (blank = absent).
+// DEFAULT, founder-veto-able: the Dev session chose 500 (the same figure as a report
+// description / CreatePublicReportDto.reason); the founder did not state it.
+export const BANTER_ROOM_DESCRIPTION_MAX_LENGTH = 500;
+
 // Section 5.5: every list endpoint is paginated. Same default 20 / max 50
 // the rest of this codebase's list endpoints use (feed, clubs,
 // grassroots) — Section 5.5 doesn't specify numbers, so these are reused
