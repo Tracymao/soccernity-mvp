@@ -1,0 +1,185 @@
+name: E2E Playwright (on demand)
+
+# ON DEMAND ONLY. This workflow runs when somebody presses "Run workflow" in the Actions tab, and at no other time.
+#
+# WHY there is no pull_request, push or schedule trigger (founder decision 2026-11-14, build-register B-134):
+# the suite is about 40 minutes with one worker and no retries, it drives real Chrome against the real API, and the
+# unit and API e2e checks in ci.yml already gate every pull request. A 40-minute browser run on every pull request
+# would slow every merge for a suite that is run by hand before a launch, so it is started by a person when they want
+# it. It is deliberately NOT a required check and ci.yml is not touched by it.
+# services/api/src/e2e-playwright-workflow.spec.ts fails the build if a trigger other than workflow_dispatch is added.
+#
+# No secrets are used. The suite talks to local fakes (an S3-compatible store and a Rekognition answer, support/
+# fake-media-services.ts) and never to Postmark, Stripe, AWS or any other vendor. The three secrets below are the same
+# obviously-fake test values ci.yml uses; they protect nothing.
+#
+# What it runs: the exact harness a developer runs locally (e2e/README.md): global setup creates the scratch database
+# `soccernity_qa`, migrates it, starts the real API, apps/web and apps/admin, then `npm test` runs every spec.
+# It tests the branch you pick in "Use workflow from".
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec_filter:
+        description: >-
+          Optional. One or more Playwright file names or patterns separated by spaces, for example "06-login-routing"
+          or "52 53". Empty runs the whole suite (about 40 minutes). The filter is a substring match on the file path.
+        required: false
+        default: ''
+        type: string
+      test_clock_iso:
+        description: >-
+          Optional. Pins the API clock to an ISO-8601 instant with a zone, for example 2026-11-26T10:00:00Z, so the
+          date-gated spec 16 (Final week) can run on any day. A pin applies to the WHOLE run and spec 17 skips under
+          it, so use it together with spec_filter (16-fc8-final-week). Empty uses the real clock.
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+# Two dispatches must not overlap: the harness drops and recreates the scratch database and listens on fixed ports.
+# A second dispatch waits for the first (it is queued, not cancelled).
+concurrency:
+  group: e2e-playwright
+  cancel-in-progress: false
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    # The suite takes about 40 minutes (docs/qa-full-run-after-b310-report.md: 38.4 and 38.6 minutes). 100 leaves room for
+    # setup and a slow runner; the test step has its own, tighter limit so the artifact upload below still runs.
+    timeout-minutes: 100
+    env:
+      # The harness takes the host and credentials from these and always uses its own database name (soccernity_qa)
+      # and Redis logical database 5 (e2e/support/stack.ts).
+      QA_BASE_DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity
+      QA_BASE_REDIS_URL: redis://localhost:6379
+      # Required by the API (no code-level default). Fake, test-only values, the same ones ci.yml uses.
+      JWT_SECRET: ci-test-only-jwt-secret-do-not-use-in-any-real-environment
+      ADMIN_JWT_SECRET: ci-test-only-admin-jwt-secret-do-not-use-in-any-real-environment
+      DOB_ENCRYPTION_KEY: ZTJlLXRlc3Qtb25seS1kb2Ita2V5LTMyLWJ5dGVzISE=
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: soccernity
+          POSTGRES_PASSWORD: soccernity
+          POSTGRES_DB: soccernity
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            e2e/package-lock.json
+
+      - name: Install dependencies (root)
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Install the e2e harness
+        working-directory: e2e
+        # e2e/ is not an npm workspace; --ignore-scripts as e2e/README.md says, which is why ffmpeg is fetched by hand next.
+        run: npm ci --ignore-scripts
+
+      - name: Fetch the ffmpeg binary
+        working-directory: e2e
+        # `npm ci --ignore-scripts` never downloads it (its download is an install script). Without it the video upload
+        # tests skip or fail closed (e2e/README.md).
+        run: node node_modules/ffmpeg-static/install.js
+
+      - name: Check ffmpeg and ffprobe run
+        working-directory: e2e
+        # A warning, not a failure: the rest of the suite is still worth running if only the video tools are broken.
+        run: |
+          node -e "
+            const { execFileSync } = require('child_process');
+            const tools = { ffmpeg: require('ffmpeg-static'), ffprobe: require('ffprobe-static').path };
+            let bad = false;
+            for (const [name, bin] of Object.entries(tools)) {
+              try {
+                console.log(name, bin, execFileSync(bin, ['-version']).toString().split('\n')[0]);
+              } catch (err) {
+                bad = true;
+                console.log('::warning::' + name + ' at ' + bin + ' did not run: ' + err.message);
+              }
+            }
+            if (bad) console.log('::warning::Video upload specs will skip or fail closed.');
+          "
+
+      - name: Chrome
+        # playwright.config.ts uses `channel: 'chrome'` (real Google Chrome, no browser download from Playwright). GitHub's
+        # ubuntu runners normally have it; install it through Playwright only if it is missing.
+        run: |
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            echo "google-chrome not found on this runner; installing through Playwright"
+            (cd e2e && npx playwright install --with-deps chrome)
+          fi
+          google-chrome --version
+
+      - name: Run the Playwright suite
+        working-directory: e2e
+        # About 40 minutes for the whole suite. A tighter limit than the job's, so a hang is cut off with the logs intact.
+        timeout-minutes: 80
+        env:
+          SPEC_FILTER: ${{ inputs.spec_filter }}
+          QA_TEST_CLOCK_ISO: ${{ inputs.test_clock_iso }}
+          # Only meaningful with a pin: lets the pinned clock run on from that instant (e2e/README.md, "Spec 16").
+          QA_TEST_CLOCK_ADVANCE: ${{ inputs.test_clock_iso != '' && '1' || '' }}
+        run: |
+          if [ -n "$QA_TEST_CLOCK_ISO" ] && [ -z "$SPEC_FILTER" ]; then
+            echo "::warning::The API clock is pinned to $QA_TEST_CLOCK_ISO for the WHOLE suite and spec 17 skips under a pin. Set spec_filter (for example 16-fc8-final-week) to run only the spec that needs the pin."
+          fi
+          # The filter comes from an input, so it goes through an environment variable (never pasted into the script),
+          # is split on spaces only, and file-name globbing is switched off.
+          set -f
+          read -r -a spec_args <<< "$SPEC_FILTER" || true
+          npm test -- "${spec_args[@]}"
+
+      - name: Summary
+        if: always()
+        working-directory: e2e
+        run: |
+          node -e "
+            const fs = require('fs');
+            const f = '.run/results.json';
+            if (!fs.existsSync(f)) { console.log('No results.json (the run did not reach the tests).'); process.exit(0); }
+            const s = JSON.parse(fs.readFileSync(f, 'utf8')).stats || {};
+            const mins = ((s.duration || 0) / 60000).toFixed(1);
+            const line = 'Playwright: ' + (s.expected || 0) + ' passed, ' + (s.unexpected || 0) + ' failed, ' + (s.flaky || 0) + ' flaky, ' + (s.skipped || 0) + ' skipped, ' + mins + ' min';
+            console.log(line);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### E2E Playwright\n\n' + line + '\n');
+          "
+
+      - name: Upload results, logs and failure artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-${{ github.run_id }}
+          # e2e/.run is a HIDDEN directory: upload-artifact skips those unless asked.
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            e2e/.run/results.json
+            e2e/.run/*.log
+            e2e/.run/artifacts/

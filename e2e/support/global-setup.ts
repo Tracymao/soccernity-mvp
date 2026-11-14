@@ -16,6 +16,7 @@ import {
 import { apiEnvironment, spawnApi, stopApi, waitForApiHealth } from './api-process';
 import { pinnedClockInstant } from './contest-clock';
 import { startFakeMediaServices } from './fake-media-services';
+import { acquireRunGuard } from './run-guard';
 
 // Everything below is TEST HARNESS, not product code: it creates a scratch
 // database, migrates it with the repo's own migrations, seeds the one
@@ -72,7 +73,7 @@ function waitForPort(port: number, label: string, timeoutMs = 120_000): Promise<
 const children: ChildProcess[] = [];
 const closers: Array<() => Promise<void>> = [];
 
-export default async function globalSetup(): Promise<() => Promise<void>> {
+async function startStack(): Promise<() => Promise<void>> {
   fs.mkdirSync(RUN_DIR, { recursive: true });
   fs.rmSync(path.join(RUN_DIR, 'admin-token.json'), { force: true }); // a stale token belongs to a dropped database
   const rootEnv = readRootEnv();
@@ -180,16 +181,41 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.QA_DATABASE_URL = dbUrl;
   process.env.QA_REDIS_URL = redisUrl;
 
-  return async () => {
-    for (const close of closers) await close().catch(() => undefined);
-    for (const c of children) {
-      try {
-        c.kill();
-      } catch {
-        /* already gone */
-      }
+  return stopStack;
+}
+
+async function stopStack(): Promise<void> {
+  for (const close of closers) await close().catch(() => undefined);
+  for (const c of children) {
+    try {
+      c.kill();
+    } catch {
+      /* already gone */
     }
-    // Spec 17 restarts the API on test-clock instants; whichever one is running now is the one in api.pid.
-    await stopApi().catch(() => undefined);
+  }
+  // Spec 17 restarts the API on test-clock instants; whichever one is running now is the one in api.pid.
+  await stopApi().catch(() => undefined);
+}
+
+// The run guard (support/run-guard.ts, B-273) is taken BEFORE anything else happens: a second run started while
+// another holds the machine-wide lock, or while the fixed ports are busy, stops here with one clear line and has
+// touched nothing (no database dropped, no Redis flushed, no process started or killed).
+// The lock is released at teardown, and also when setup fails: a half-started stack is stopped first, otherwise its
+// servers would keep the ports and refuse every later run.
+export default async function globalSetup(): Promise<() => Promise<void>> {
+  const guard = await acquireRunGuard();
+  try {
+    await startStack();
+  } catch (err) {
+    await stopStack().catch(() => undefined);
+    guard.release();
+    throw err;
+  }
+  return async () => {
+    try {
+      await stopStack();
+    } finally {
+      guard.release();
+    }
   };
 }

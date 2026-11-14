@@ -130,3 +130,41 @@ QA_TEST_CLOCK_ISO=2026-11-26T10:00:00Z QA_TEST_CLOCK_ADVANCE=1 npx playwright te
 - A pin before day 25 skips the live tests with a message that names the pinned instant.
 - The leaderboard test in the same file keeps the REAL week on purpose: the rollup follows the test clock, but
   `GET /leaderboard` picks its default week from the wall clock.
+
+## Running the suite in GitHub Actions (on demand only)
+
+`.github/workflows/e2e-playwright.yml` runs this same harness on a Linux runner. It starts ONLY when someone presses the
+button: it has no pull request, push or schedule trigger, it is not a required check, and `ci.yml` does not mention it
+(`services/api/src/e2e-playwright-workflow.spec.ts` fails the build if that changes).
+
+1. Open the repository on GitHub, Actions tab, "E2E Playwright (on demand)", "Run workflow".
+2. Pick the branch in "Use workflow from". It tests that branch.
+3. Optional inputs:
+   - `spec_filter`: file names or patterns separated by spaces, for example `06-login-routing` or `52 53`. Empty runs
+     everything.
+   - `test_clock_iso`: pins the API clock, for example `2026-11-26T10:00:00Z`, so the date-gated spec 16 runs on any day. Use
+     it together with `spec_filter` = `16-fc8-final-week` (see the section above: a pin applies to the whole run).
+4. Expected duration: about 40 minutes for the whole suite, a few minutes for one spec. The job stops itself at 100 minutes.
+5. Afterwards open the run: the summary shows passed, failed and skipped counts, and the artifact `e2e-playwright-<run id>`
+   (kept 14 days) holds `results.json`, the API and Vite logs and the failure screenshots, traces and videos.
+
+What it does NOT do: it never runs by itself, it gates no merge, it uses no secrets and talks to no real vendor (the suite
+uses local fakes), and it does not retry a failed test. Two runs never overlap: a second dispatch waits in a queue.
+
+### The run guard (one run at a time)
+
+A run drops and recreates the scratch database `soccernity_qa`, flushes Redis DB 5 and listens on fixed ports (3100, 5273,
+5274, 3191, 3192). Two runs on one machine, for example from two worktrees, would wreck each other. So global setup first takes
+a lock file, `soccernity-e2e-qa.lock` in the OS temp directory (machine-wide, not per worktree), and checks that the ports are
+free. A second run stops before changing anything and prints one line such as:
+
+```
+E2E run guard: another QA run is active (pid 1234, started 2026-11-14T10:00:00.000Z, from D:\Projects\other-worktree\e2e). It owns the scratch database "soccernity_qa" and ports 3100/5273/5274/3191/3192; a second run would drop that database under it. Wait for it to finish. If that process is not running, delete C:\Users\you\AppData\Local\Temp\soccernity-e2e-qa.lock and start again. Nothing was changed or stopped.
+```
+
+- The lock is released at teardown, when setup fails, and when the process exits. A hard kill leaves the file behind; the next
+  run sees that its owner pid is gone (or that the lock is over 6 hours old) and takes it over by itself.
+- If the message names a pid that is NOT running and the run still refuses, delete the lock file it names.
+- If a port is in use the message says which one and how to find the program (`netstat -ano | findstr :3100` on Windows,
+  `lsof -i :3100` on Linux or macOS). The guard never stops anything for you.
+- A normal single run is unaffected.

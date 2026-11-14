@@ -368,9 +368,14 @@ export async function getAdminToken(): Promise<string> {
 // Making one "expire" = letting Redis expire it, which is exactly what time does.
 export async function expireEmailVerifyToken(token: string): Promise<void> {
   const Redis = requireFromApi('ioredis');
-  const text = fs.readFileSync(path.join(REPO, '.env'), 'utf8');
-  const line = text.split(/\r?\n/).find((l) => l.startsWith('REDIS_URL='));
-  const raw = line ? line.slice('REDIS_URL='.length).replace(/^"|"$/g, '') : 'redis://localhost:6379';
+  // Same order as global-setup.ts: QA_BASE_REDIS_URL (set by the on-demand CI workflow, which has no root .env),
+  // then the root .env, then localhost.
+  let raw = process.env.QA_BASE_REDIS_URL;
+  if (!raw) {
+    const text = fs.existsSync(path.join(REPO, '.env')) ? fs.readFileSync(path.join(REPO, '.env'), 'utf8') : '';
+    const line = text.split(/\r?\n/).find((l) => l.startsWith('REDIS_URL='));
+    raw = line ? line.slice('REDIS_URL='.length).replace(/^"|"$/g, '') : 'redis://localhost:6379';
+  }
   const base = raw.replace(/\/\d+$/, '');
   const redis = new Redis(`${base}/${QA_REDIS_DB}`);
   try {
