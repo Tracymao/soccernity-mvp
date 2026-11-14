@@ -36,7 +36,16 @@
 //     like/comment/save/follow.
 //   - one Add to My Bants / In My Bants button (BanterJoinButton,
 //     bookmark variant)
-//   - a plain composer -> POST /banter-rooms/:id/posts, contentText only.
+//   - a composer -> POST /banter-rooms/:id/posts: contentText (required, 1 to
+//     3,000 characters) plus optional `mediaIds`. B-042 (founder decision
+//     2026-11-14): Bants takes photos and video EXACTLY like Create Post -- the
+//     same attach buttons, the same tray and states, the same limits (up to 10
+//     pictures and one video, uploaded straight to storage through one-time
+//     links, services/api POST /media/uploads), the same "Uploads aren't
+//     available right now" state when the server has uploads switched off
+//     (useMediaUploads.ts, MediaAttach.tsx, MediaUploadTray.tsx are shared with
+//     PostComposer). A post whose file is still being checked shows to its
+//     author only until it is approved -- the API and PostCard handle that.
 //     Open to any eligible signed-in account; a refusal (e.g. guardian
 //     consent) is shown as the server's own message.
 //
@@ -64,6 +73,8 @@ import BanterStatusDot from "./banter/BanterStatusDot";
 import RoomStatusControls from "./banter/RoomStatusControls";
 import RoomTopicsEditor from "./banter/RoomTopicsEditor";
 import PostCard from "./community/PostCard";
+import { MediaAttachButtons, MediaUploadStatus } from "./community/MediaAttach";
+import { useMediaUploads } from "./community/useMediaUploads";
 import "./banter/BanterPage.css";
 import "./banter/BanterRoomPage.css";
 import "./banter/BanterRoomControls.css";
@@ -102,6 +113,8 @@ export default function BanterRoomPage() {
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  // Hooks run before the early returns below; with no session the hook is simply never used.
+  const uploads = useMediaUploads({ accessToken: token ?? "" });
 
   const load = useCallback(async () => {
     if (!token) {
@@ -158,11 +171,14 @@ export default function BanterRoomPage() {
     e.preventDefault();
     if (!token || !roomId || posting) return;
     const contentText = draft.trim();
-    if (!contentText) return;
+    if (!contentText || !uploads.canPublish) return;
     setPosting(true);
     setPostError(null);
     try {
-      const created = await postToRoom(token, roomId, { contentText });
+      const created = await postToRoom(token, roomId, {
+        contentText,
+        ...(uploads.mediaIds.length > 0 ? { mediaIds: uploads.mediaIds } : {}),
+      });
       // POST /banter-rooms/:id/posts (like POST /posts) doesn't return the
       // per-caller viewer-state fields (Decision Log #153) -- for a post
       // you just created they're all deterministically false.
@@ -171,6 +187,7 @@ export default function BanterRoomPage() {
         ...prev,
       ]);
       setDraft("");
+      uploads.clear();
     } catch (err) {
       setPostError(err instanceof BanterApiError ? err.message : "Couldn't post in this room.");
     } finally {
@@ -308,18 +325,16 @@ export default function BanterRoomPage() {
             rows={3}
           />
           <div className="banter-room-composer__row">
+            <MediaAttachButtons uploads={uploads} />
             <button
-              type="button"
-              className="banter-room-composer__attach"
-              disabled
-              title="Attaching photos or videos isn't available yet"
+              type="submit"
+              className="banter-room-composer__submit"
+              disabled={posting || !draft.trim() || !uploads.canPublish}
             >
-              Attach photo/video
-            </button>
-            <button type="submit" className="banter-room-composer__submit" disabled={posting || !draft.trim()}>
               {posting ? "Posting…" : "Post"}
             </button>
           </div>
+          <MediaUploadStatus uploads={uploads} />
           {postError && (
             <p className="banter-room-composer__error" role="alert">
               {postError}

@@ -34,12 +34,12 @@
 // weekly flow above does not apply (POST /contest/entries is refused outside the weekly windows).
 // FinalWeekPanel renders instead: a finalist uploads a final entry (POST /contest/final-entry, which
 // creates the hidden post itself), a non-finalist sees the "finalists only" closed state.
-import { useEffect, useRef, useState, type ChangeEvent, type ElementType, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ElementType, type FormEvent } from "react";
 import { Link } from "react-router";
 import { createPost, FeedApiError, type CreatedPost } from "../../api/feed";
 import { submitContestEntry, ContestApiError, type CurrentContestResponse } from "../../api/contest";
 import FinalWeekPanel from "./FinalWeekPanel";
-import MediaUploadTray from "./MediaUploadTray";
+import { MediaAttachButtons, MediaUploadStatus } from "./MediaAttach";
 import { useMediaUploads } from "./useMediaUploads";
 
 const MAX_LENGTH = 3000;
@@ -98,14 +98,6 @@ export default function PostComposer({
   const effectiveMode: Mode = contestOpen ? mode : "post";
 
   const uploads = useMediaUploads({ accessToken, only: effectiveMode === "contest" ? "video" : undefined });
-  const pictureInput = useRef<HTMLInputElement>(null);
-  const videoInput = useRef<HTMLInputElement>(null);
-
-  function onPicked(event: ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(event.target.files ?? []);
-    event.target.value = ""; // so choosing the same file again works
-    if (picked.length > 0) uploads.addFiles(picked);
-  }
 
   const trimmed = text.trim();
   const over = text.length > MAX_LENGTH;
@@ -246,49 +238,7 @@ export default function PostComposer({
             />
             <div className="composer__foot">
               <div className="composer__attachments">
-                <div className="media-attach">
-                  {effectiveMode !== "contest" && (
-                    <>
-                      <input
-                        ref={pictureInput}
-                        className="media-attach__input"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        multiple
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        data-testid="picture-input"
-                        onChange={onPicked}
-                      />
-                      <button
-                        type="button"
-                        className="media-attach__btn"
-                        disabled={uploads.uploadsUnavailable}
-                        onClick={() => pictureInput.current?.click()}
-                      >
-                        &#128247; Picture
-                      </button>
-                    </>
-                  )}
-                  <input
-                    ref={videoInput}
-                    className="media-attach__input"
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    data-testid="video-input"
-                    onChange={onPicked}
-                  />
-                  <button
-                    type="button"
-                    className="media-attach__btn"
-                    disabled={uploads.uploadsUnavailable}
-                    onClick={() => videoInput.current?.click()}
-                  >
-                    &#127909; {effectiveMode === "contest" ? "Upload a video" : "Video"}
-                  </button>
-                </div>
+                <MediaAttachButtons uploads={uploads} only={effectiveMode === "contest" ? "video" : undefined} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <span className={over ? "composer__count composer__count--over" : "composer__count"}>
@@ -305,25 +255,7 @@ export default function PostComposer({
                 </button>
               </div>
             </div>
-            <MediaUploadTray
-              items={uploads.items}
-              notice={uploads.notice}
-              onCancel={uploads.cancel}
-              onRemove={uploads.remove}
-              onRetry={uploads.retry}
-            />
-            {uploads.uploadsUnavailable ? (
-              <p className="media-unavailable" role="status">
-                <strong>Uploads aren&rsquo;t available right now.</strong> You can still post text. Try adding pictures or
-                video again later.
-              </p>
-            ) : (
-              uploads.items.length === 0 && (
-                <p className="composer__note">
-                  Everything you upload is checked before other people can see it. [COPY PENDING LEGAL REVIEW]
-                </p>
-              )
-            )}
+            <MediaUploadStatus uploads={uploads} />
             {effectiveMode === "contest" && (
               <p className="composer__note">
                 Your caption is posted to the feed and entered into this week&rsquo;s contest.
