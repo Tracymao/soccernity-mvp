@@ -99,6 +99,36 @@ describe('BanterController (HTTP layer)', () => {
       expect(consentGuardCalls).toBe(1);
     });
 
+    it('passes an optional description to the service, trimmed; blank is dropped', async () => {
+      banter.createRoom.mockResolvedValue({ id: 'r-1' });
+      await request(app.getHttpServer())
+        .post('/banter-rooms')
+        .send({ name: 'Gooners Only', scopeType: 'topic', description: '  Hello  ' })
+        .expect(201);
+      expect(banter.createRoom).toHaveBeenLastCalledWith('user-1', {
+        name: 'Gooners Only',
+        scopeType: 'topic',
+        description: 'Hello',
+      });
+      await request(app.getHttpServer())
+        .post('/banter-rooms')
+        .send({ name: 'Gooners Only', scopeType: 'topic', description: '   ' })
+        .expect(201);
+      expect(banter.createRoom).toHaveBeenLastCalledWith('user-1', {
+        name: 'Gooners Only',
+        scopeType: 'topic',
+        description: undefined,
+      });
+    });
+
+    it('rejects a 501-character description with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/banter-rooms')
+        .send({ name: 'Gooners Only', scopeType: 'topic', description: 'a'.repeat(501) })
+        .expect(400);
+      expect(banter.createRoom).not.toHaveBeenCalled();
+    });
+
     it('rejects an unknown scopeType with 400', async () => {
       await request(app.getHttpServer())
         .post('/banter-rooms')

@@ -93,6 +93,7 @@ function room(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'room-1',
     name: 'Gooners Only',
+    description: null,
     scopeType: 'club',
     scopeRef: 'club-1',
     scopeName: 'Arsenal',
@@ -122,6 +123,7 @@ describe('BanterService', () => {
       expect(prisma.banterRoom.create).toHaveBeenCalledWith({
         data: {
           name: 'Gooners Only',
+          description: null,
           scopeType: 'topic',
           scopeRef: null,
           scopeName: null,
@@ -136,6 +138,52 @@ describe('BanterService', () => {
       expect(result).toEqual({ ...room({ id: 'room-9', memberCount: 1 }), joined: true });
       // Both writes went through the interactive transaction.
       expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('createRoom description (founder decision 2026-11-14)', () => {
+    async function create(description: string | undefined, returned: string | null) {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.create as jest.Mock).mockResolvedValue(room({ id: 'room-9', description: returned }));
+      (prisma.banterRoomMember.create as jest.Mock).mockResolvedValue({});
+      const service = new BanterService(prisma, buildFeedMock());
+      const result = await service.createRoom('user-1', {
+        name: 'Gooners Only',
+        scopeType: 'topic',
+        ...(description === undefined ? {} : { description }),
+      });
+      return { prisma, result };
+    }
+
+    it('stores the description and returns it on the create response', async () => {
+      const { prisma, result } = await create('Where we argue about the offside rule.', 'Where we argue about the offside rule.');
+      expect((prisma.banterRoom.create as jest.Mock).mock.calls[0][0].data.description).toBe(
+        'Where we argue about the offside rule.',
+      );
+      expect(result.description).toBe('Where we argue about the offside rule.');
+    });
+
+    it('stores null when no description is sent, and the response carries description: null', async () => {
+      const { prisma, result } = await create(undefined, null);
+      expect((prisma.banterRoom.create as jest.Mock).mock.calls[0][0].data.description).toBeNull();
+      expect(result).toHaveProperty('description', null);
+    });
+
+    it.each(['', '   ', '\n\t '])('stores a blank description (%j) as null, never an empty string', async (blank) => {
+      const { prisma } = await create(blank, null);
+      expect((prisma.banterRoom.create as jest.Mock).mock.calls[0][0].data.description).toBeNull();
+    });
+
+    it('trims surrounding whitespace even when called directly (not through the DTO pipe)', async () => {
+      const { prisma } = await create('  padded  ', 'padded');
+      expect((prisma.banterRoom.create as jest.Mock).mock.calls[0][0].data.description).toBe('padded');
+    });
+
+    it('selects description on every read path (it is part of the shared ROOM_SELECT)', async () => {
+      const { prisma } = await create('x', 'x');
+      expect((prisma.banterRoom.create as jest.Mock).mock.calls[0][0].select).toEqual(
+        expect.objectContaining({ description: true }),
+      );
     });
   });
 
