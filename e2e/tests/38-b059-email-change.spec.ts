@@ -16,7 +16,7 @@ import {
   verifyEmailViaApi,
   type Account,
 } from '../support/helpers';
-import { USER_PASSWORD } from '../support/stack';
+import { API_LOG, USER_PASSWORD } from '../support/stack';
 
 // B-059 (Decision Log #472): Account Information and the email-change steps, in real Chrome against the real API,
 // Postgres and Redis. Scoped to this work; no other Playwright spec is run by it.
@@ -82,10 +82,35 @@ async function emailRowsFor(userId: string): Promise<any[]> {
   return db().emailChangeRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
 }
 
+// Since Decision Log #476 the API answers 202 first and does the work (the lookup, the pending row, the emails) in a
+// background step, so the page can say "Check your inbox" before the row exists. Anything that READS what that step
+// wrote therefore waits for it (a bounded poll); a negative check must first see a clean signal that the step ran.
+const BACKGROUND_WAIT = { timeout: 15_000, intervals: [100, 250, 500] };
+
+/** The user's pending rows once the background step has written exactly `count` of them, none of them `notId`. */
+async function waitForRows(userId: string, count = 1, notId?: string): Promise<any[]> {
+  await expect
+    .poll(async () => {
+      const rows = await emailRowsFor(userId);
+      return rows.length === count && (!notId || rows.every((r) => r.id !== notId));
+    }, BACKGROUND_WAIT)
+    .toBe(true);
+  return emailRowsFor(userId);
+}
+
+/**
+ * How many times the API log says it would send this QUIET template. Quiet templates log no recipient, so the count is
+ * the only signal; it is exact here because the suite runs one worker and only the taken-address case sends this one.
+ */
+function quietSendCount(template: string): number {
+  if (!fs.existsSync(API_LOG)) return 0;
+  const needle = `Would send "${template}" (recipient and content are not logged`;
+  return fs.readFileSync(API_LOG, 'utf8').split('\n').filter((l) => l.includes(needle)).length;
+}
+
 /** Gives the user's one pending REAL request a secret this spec knows; returns the path of its link. */
-async function knownLinkFor(userId: string): Promise<string> {
-  const rows = await emailRowsFor(userId);
-  expect(rows).toHaveLength(1);
+async function knownLinkFor(userId: string, notId?: string): Promise<string> {
+  const rows = await waitForRows(userId, 1, notId);
   const secret = `qa-${randomBytes(16).toString('hex')}`;
   await db().emailChangeRequest.update({
     where: { id: rows[0].id },
@@ -140,6 +165,7 @@ test.describe.serial('Account Information and email change', () => {
 
   test('a taken address gets the same "Check your inbox" screen as any other (Decision Log #476)', async ({ page }) => {
     const taken = await registerViaApi({ age: 30, label: 'ec-taken' });
+    const unavailableBefore = quietSendCount('email-change-unavailable');
     await signIn(page, acct.email);
     await openInfo(page);
     await startFlow(page);
@@ -150,7 +176,10 @@ test.describe.serial('Account Information and email change', () => {
     await expect(page.getByText(`We sent a link to ${taken.email}.`)).toBeVisible();
     await expect(page.getByText('We couldn’t use that email address.')).toHaveCount(0);
     await shot(page, '04-taken-address-same-screen-desktop');
-    // Nothing is linked to the account: the taken address gets a different email, not a confirm link.
+    // Nothing is linked to the account: the taken address gets a different email, not a confirm link. Wait until the
+    // background step has really run (it logs the "cannot be used" email) before asserting that it wrote no row, so the
+    // assertion cannot pass just because the step had not run yet.
+    await expect.poll(() => quietSendCount('email-change-unavailable'), BACKGROUND_WAIT).toBe(unavailableBefore + 1);
     expect(await emailRowsFor(acct.userId)).toHaveLength(0);
   });
 
@@ -175,17 +204,18 @@ test.describe.serial('Account Information and email change', () => {
     await shot(page, '05-check-your-inbox-desktop');
 
     // The server really did it: one pending request, the link went to the NEW address, the notice to the OLD one.
-    const rows = await emailRowsFor(acct.userId);
-    expect(rows).toHaveLength(1);
+    const rows = await waitForRows(acct.userId);
     expect(rows[0].newEmail).toBe(newEmail.toLowerCase());
     expect((await userByEmail(acct.email)).email).toBe(acct.email); // unchanged until the link is used
+    const firstRowId = rows[0].id;
     const firstLink = await knownLinkFor(acct.userId);
 
-    // Send the link again: a new request replaces the first, the first link stops working.
+    // Send the link again: a new request replaces the first, the first link stops working. The replacement happens in
+    // the background step, so wait for the first row to be gone and a new one to be there before touching it.
     await page.getByRole('button', { name: 'Send the link again' }).click();
     await expect(page.getByText('We sent the link again.')).toBeVisible();
-    expect(await emailRowsFor(acct.userId)).toHaveLength(1);
-    const secondLink = await knownLinkFor(acct.userId);
+    await waitForRows(acct.userId, 1, firstRowId);
+    const secondLink = await knownLinkFor(acct.userId, firstRowId);
 
     // The first (superseded) link is dead: Link expired, nothing changed.
     const stale = await context.newPage();
@@ -291,7 +321,7 @@ test.describe.serial('email change with two-factor on', () => {
     await page.getByLabel('Authenticator code').fill(totp(secret, 1)); // the next step: the enrolment used this one
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
-    expect(await emailRowsFor(acct.userId)).toHaveLength(1);
+    await waitForRows(acct.userId);
   });
 });
 
@@ -314,7 +344,7 @@ test.describe.serial('email change for a minor', () => {
     await shot(page, '11-check-your-inbox-under-18-desktop');
 
     // Using the link tells the guardian (the one real guardian notice of this event).
-    const link = await knownLinkFor(minor.userId);
+    const link = await knownLinkFor(minor.userId); // waits for the background step's row
     const before = emailsFor(minor.guardianEmail!, 'guardian-security-notice').length;
     await page.goto(link);
     await expect(page.getByRole('heading', { name: 'Your email is changed' })).toBeVisible();
