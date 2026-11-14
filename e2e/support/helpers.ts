@@ -139,10 +139,10 @@ export async function api(
   }
   return { status: res.status, body };
 }
-// The admin login is limited to 5 per 15 minutes per IP (Decision Log #190). That limit is a hard-coded per-handler
-// override in the API (admin-auth.controller.ts, @AuthRateLimit({ limit: 5, windowMs: 15 min })), NOT an environment
-// variable, so the QA stack cannot relax it without an app code change. So the harness spends as few real admin logins
-// as it can: one per (email, password) per run. A cached token is reused for 10 minutes (the API's access token lives
+// The admin login is limited to 5 per 15 minutes per IP in production (Decision Log #190). The QA stack raises the
+// number of attempts with ADMIN_LOGIN_RATE_LIMIT_MAX (support/api-process.ts; the API refuses to start in production
+// with it set), but the harness still spends as few real admin logins as it can: one per (email, password) per run,
+// so a run that is pointed at an API without that variable still fits the limit. A cached token is reused for 10 minutes (the API's access token lives
 // 15 minutes); a different password for the same email is a different key, so a test that changes an admin's password
 // and signs in again still gets a real new login. Pass `fresh: true` to force a real login (a test that is ABOUT the
 // sign-in itself should call api('POST', '/admin/auth/login') directly instead).
