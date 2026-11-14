@@ -14,7 +14,7 @@ import {
   qaDatabaseUrl,
 } from './stack';
 import { apiEnvironment, spawnApi, stopApi, waitForApiHealth } from './api-process';
-import { contestPhaseInstant, isContestPhase, CONTEST_PHASES } from './contest-clock';
+import { pinnedClockInstant } from './contest-clock';
 import { startFakeMediaServices } from './fake-media-services';
 
 // Everything below is TEST HARNESS, not product code: it creates a scratch
@@ -135,12 +135,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   // QA_CONTEST_MONTH (default 2026-11); QA_TEST_CLOCK_ISO sets it explicitly; QA_TEST_CLOCK_ADVANCE=1
   // lets it run on from there. Nothing set = the real clock. The three variables are always written
   // explicitly (blank when unused) so a stray value in the developer's shell can never reach the API.
-  let testClockIso = process.env.QA_TEST_CLOCK_ISO?.trim() || '';
-  const qaPhase = process.env.QA_CONTEST_PHASE?.trim();
-  if (!testClockIso && qaPhase) {
-    if (!isContestPhase(qaPhase)) throw new Error(`QA_CONTEST_PHASE must be one of: ${CONTEST_PHASES.join(', ')} (got "${qaPhase}")`);
-    testClockIso = contestPhaseInstant(qaPhase, process.env.QA_CONTEST_MONTH).toISOString();
-  }
+  // The resolution lives in contest-clock.ts (pinnedClockInstant) so specs derive "now" from the same instant.
+  // QA_TEST_CLOCK_ISO is passed through verbatim (as before); a phase becomes its ISO instant.
+  const pinned = pinnedClockInstant();
+  const testClockIso = process.env.QA_TEST_CLOCK_ISO?.trim() || (pinned ? pinned.toISOString() : '');
   if (testClockIso) console.log(`[e2e global-setup] API test clock: ${testClockIso}${process.env.QA_TEST_CLOCK_ADVANCE === '1' ? ' (advancing)' : ' (frozen)'}`);
   // FC10 (B-240): the object store and the Rekognition stand-ins the API's media pipeline talks to.
   const fakeMedia = await startFakeMediaServices();

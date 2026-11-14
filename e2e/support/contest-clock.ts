@@ -73,6 +73,25 @@ export function contestPhaseInstant(phase: ContestPhase, monthKey = DEFAULT_CONT
   throw new Error(`Unknown contest phase "${phase}". Use one of: ${CONTEST_PHASES.join(', ')}`);
 }
 
+/**
+ * The instant the harness pins the API clock to, or null when the API runs on the real clock.
+ * ONE place for the resolution order, used by global-setup (to start the API) and by any spec that
+ * must derive "now" from the same instant: QA_TEST_CLOCK_ISO wins; else QA_CONTEST_PHASE (month from
+ * QA_CONTEST_MONTH, default 2026-11). Blank values count as unset.
+ */
+export function pinnedClockInstant(env: NodeJS.ProcessEnv = process.env): Date | null {
+  const iso = env.QA_TEST_CLOCK_ISO?.trim();
+  if (iso) {
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) throw new Error(`QA_TEST_CLOCK_ISO is not a valid instant: "${iso}"`);
+    return at;
+  }
+  const phase = env.QA_CONTEST_PHASE?.trim();
+  if (!phase) return null;
+  if (!isContestPhase(phase)) throw new Error(`QA_CONTEST_PHASE must be one of: ${CONTEST_PHASES.join(', ')} (got "${phase}")`);
+  return contestPhaseInstant(phase, env.QA_CONTEST_MONTH);
+}
+
 /** What GET /contest/current's calendarState.kind must say at each phase. */
 const EXPECTED_KIND: Record<string, string> = {
   phase1: 'week_entries',
