@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
+import { ADMIN_LOGIN_RATE_LIMIT_ENV } from './modules/admin/admin-login-rate-limit';
 import { DEFAULT_MESSAGE_RETENTION_MONTHS } from './modules/messaging/messaging.constants';
 import {
   DEFAULT_REPORT_RETENTION_CONCERNS_MINOR_YEARS,
@@ -35,10 +36,12 @@ const SRC = path.resolve(__dirname);
 //  - PORT: Render injects it.
 //  - TEST_CLOCK_ISO / TEST_CLOCK_ADVANCE / E2E_TEST_CLOCK: QA only; the process REFUSES TO START if any
 //    is set in production (validate-runtime-env.ts), so they must never appear in render.yaml.
+//  - ADMIN_LOGIN_RATE_LIMIT_MAX: QA only (raises the admin sign-in limit so one whole Playwright run is not refused);
+//    the process REFUSES TO START if it is set in production, so it must never appear in render.yaml.
 //  Nothing else is exempt. The four Contact Us variables (B-046) were exempt until
 //  backend/b018-render-env-completion added them to both services; the exemption is gone, so any NEW variable
 //  has to be in render.yaml.
-const NOT_IN_RENDER = new Set<string>(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS]);
+const NOT_IN_RENDER = new Set<string>(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS, ADMIN_LOGIN_RATE_LIMIT_ENV]);
 // Not in .env.example on purpose: NODE_ENV has a comment-only entry there.
 const NOT_IN_EXAMPLE = new Set(['NODE_ENV']);
 
@@ -124,6 +127,19 @@ describe('environment completeness (B-018)', () => {
     const declarations = [...yaml.matchAll(/-\s+key:\s+MEDIA_UPLOADS_ENABLED\s*\r?\n\s+(sync: false|value:[^\r\n]*)/g)];
     expect(declarations).toHaveLength(2);
     for (const d of declarations) expect(d[1]).toBe('sync: false');
+  });
+
+  // QA only: ADMIN_LOGIN_RATE_LIMIT_MAX raises the admin sign-in limit for the Playwright stack. It is read with a
+  // literal name (so this scanner sees it), documented in .env.example, and MUST NOT be in render.yaml: the API
+  // refuses to start in production when it is set (validate-runtime-env.ts).
+  it('knows about ADMIN_LOGIN_RATE_LIMIT_MAX: read in code, documented in .env.example, and NOT in render.yaml', () => {
+    expect(ADMIN_LOGIN_RATE_LIMIT_ENV).toBe('ADMIN_LOGIN_RATE_LIMIT_MAX');
+    expect(read.has('ADMIN_LOGIN_RATE_LIMIT_MAX')).toBe(true);
+    expect(example.has('ADMIN_LOGIN_RATE_LIMIT_MAX')).toBe(true);
+    expect(NOT_IN_RENDER.has('ADMIN_LOGIN_RATE_LIMIT_MAX')).toBe(true);
+    expect(services.some((keys) => keys.has('ADMIN_LOGIN_RATE_LIMIT_MAX'))).toBe(false);
+    const yaml = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+    expect(yaml).not.toContain('ADMIN_LOGIN_RATE_LIMIT_MAX');
   });
 
   it('every variable the code reads is declared in render.yaml for BOTH services', () => {

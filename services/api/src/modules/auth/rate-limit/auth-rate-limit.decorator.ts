@@ -30,7 +30,11 @@ import { AUTH_THROTTLER_NAME } from './rate-limit.constants';
 // defaults instead. An explicit override is now opt-in via the
 // `override` param, not the default path — pass one only if a specific
 // route genuinely needs a limit different from the shared auth default.
-export function AuthRateLimit(override?: { limit: number; windowMs: number }) {
+//
+// `limit` may be a function: @nestjs/throttler calls it on every request, which is how
+// POST /admin/auth/login reads its QA-only ADMIN_LOGIN_RATE_LIMIT_MAX (admin-login-rate-limit.ts) at request time
+// instead of at import time. A plain number behaves exactly as before.
+export function AuthRateLimit(override?: { limit: number | (() => number); windowMs: number }) {
   return override
     ? applyDecorators(
         UseGuards(AuthThrottlerGuard),

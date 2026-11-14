@@ -335,6 +335,19 @@ gate), so these are the settings to apply **when that site is created**:
 - The API needs the VAPID key pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) before
   the Push page can turn on; until then it shows "not supported on this device".
 
+### QA-only variables that must never be set on Render
+
+Two groups of variables exist only so the Playwright QA stack (`e2e/`) can run, and the API **refuses to start**
+when `NODE_ENV=production` and any of them is set to a non-blank value (`validate-runtime-env.ts`). They are
+deliberately absent from `render.yaml`; do not add them in the dashboard either.
+
+- The QA test clock: `TEST_CLOCK_ISO`, `TEST_CLOCK_ADVANCE`, `E2E_TEST_CLOCK`.
+- `ADMIN_LOGIN_RATE_LIMIT_MAX`: raises the Admin Console sign-in limit (normally 5 attempts per 15 minutes per IP,
+  Decision Log #190) so one whole QA run is not refused. Production always keeps the limit of 5.
+
+If a deploy fails with "Refusing to start: the QA admin login limit is configured in production", remove that
+variable from the service's environment.
+
 ## 5. After the first successful deploy
 
 1. Confirm each service's own URL from Render's dashboard (e.g.

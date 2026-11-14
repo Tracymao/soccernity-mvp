@@ -110,7 +110,17 @@ describe('Admin login rate limit (Decision Log #190)', () => {
 
   it('declares a 5-attempt / 15-minute throttle on the admin login handler', () => {
     const handler = AdminAuthController.prototype.login;
-    expect(Reflect.getMetadata('THROTTLER:LIMITauth', handler)).toBe(ADMIN_LIMIT);
+    // The limit is a function resolved per request (admin-login-rate-limit.ts), so the QA-only
+    // ADMIN_LOGIN_RATE_LIMIT_MAX can be read at request time; with the variable unset it must be 5.
+    const limit = Reflect.getMetadata('THROTTLER:LIMITauth', handler);
+    expect(typeof limit).toBe('function');
+    const saved = process.env.ADMIN_LOGIN_RATE_LIMIT_MAX;
+    delete process.env.ADMIN_LOGIN_RATE_LIMIT_MAX;
+    try {
+      expect(limit()).toBe(ADMIN_LIMIT);
+    } finally {
+      if (saved !== undefined) process.env.ADMIN_LOGIN_RATE_LIMIT_MAX = saved;
+    }
     expect(Reflect.getMetadata('THROTTLER:TTLauth', handler)).toBe(15 * 60 * 1000);
   });
 });

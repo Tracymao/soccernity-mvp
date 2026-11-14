@@ -23,6 +23,7 @@ import {
 } from '../../session-cookie/session-cookie';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { AdminAuthService } from './admin-auth.service';
+import { ADMIN_LOGIN_RATE_LIMIT } from './admin-login-rate-limit';
 import { AdminAuthResponse, AdminTokenPairResponse } from './admin-response.mapper';
 import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -74,7 +75,9 @@ export class AdminAuthController {
   // independent of AuthController.login's — admin traffic never exhausts
   // the User login bucket and vice versa.
   @SkipGlobalWriteLimit()
-  @AuthRateLimit({ limit: 5, windowMs: 15 * 60 * 1000 })
+  // The 5 is read per request through ADMIN_LOGIN_RATE_LIMIT (admin-login-rate-limit.ts): production keeps 5; a QA run
+  // may raise it with ADMIN_LOGIN_RATE_LIMIT_MAX, which the API refuses to start with in production.
+  @AuthRateLimit(ADMIN_LOGIN_RATE_LIMIT)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(

@@ -19,7 +19,7 @@ export interface AuthLimitNumbers {
 
 // A positive whole number, else the default. A blank, zero, negative or non-numeric value falls back to the
 // default instead of silently disabling a limit.
-function positiveInt(raw: string | undefined, fallback: number): number {
+export function positiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n > 0 ? n : fallback;
 }

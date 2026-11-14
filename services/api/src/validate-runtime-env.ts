@@ -1,6 +1,7 @@
 import { testClockVarsSet } from './clock/clock';
 import { originFromBaseUrl } from './cors-options';
 import { DOB_KEY_BYTES, parseDobKey, parseDobKeyRing } from './crypto/dob-crypto';
+import { ADMIN_LOGIN_RATE_LIMIT_ENV } from './modules/admin/admin-login-rate-limit';
 
 // B-018. Refuse to start a PRODUCTION process with signing secrets that are
 // missing or still the .env.example placeholder.
@@ -99,6 +100,14 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: the QA test clock is configured in production (${testClock.join(', ')}). ` +
         'Remove these variables; they are only for QA runs (see docs/deployment.md).',
+    );
+  }
+  // The QA admin login limit (admin-login-rate-limit.ts) must never reach a real deployment: any non-blank value
+  // would loosen the 5-per-15-minutes limit on the Admin Console sign-in (Decision Log #190).
+  if ((env[ADMIN_LOGIN_RATE_LIMIT_ENV]?.trim() ?? '') !== '') {
+    throw new Error(
+      `Refusing to start: the QA admin login limit is configured in production (${ADMIN_LOGIN_RATE_LIMIT_ENV}). ` +
+        'Remove this variable; it is only for QA runs (see docs/deployment.md).',
     );
   }
   const badOrigins = findInvalidProductionOrigins(env);
