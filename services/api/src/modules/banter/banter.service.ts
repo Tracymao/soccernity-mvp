@@ -68,6 +68,8 @@ export interface AttachTopicsResult {
 const ROOM_SELECT = {
   id: true,
   name: true,
+  // Optional text-only description (founder decision 2026-11-14); null when absent.
+  description: true,
   scopeType: true,
   // sprint-3/banter-room-scope-ref (Decision Log #276 item b). Exposed on
   // every room read — public and the only room serialization in this
@@ -173,6 +175,9 @@ export class BanterService {
       const room = await tx.banterRoom.create({
         data: {
           name: dto.name,
+          // Trimmed here too so a direct service caller (not only the DTO pipe) never stores
+          // spaces or an empty string: blank is NULL.
+          description: dto.description?.trim() || null,
           scopeType: dto.scopeType,
           scopeRef: scope.scopeRef,
           scopeName: scope.scopeName,
