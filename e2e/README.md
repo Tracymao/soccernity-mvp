@@ -101,3 +101,23 @@ fixed - that is the cue to delete the `test.fail()` line.
 Fixed so far (Decision Log #407, backend/w3e): **D-01** (CORS; the CORS proxy is deleted, the browsers talk to the API
 directly), **D-02** (age-5 floor) and **D-06** (username CONTAINS match). Their tests stay as ordinary regression tests
 without `test.fail()`.
+
+## Spec 16 (the Final week) on any day
+
+`tests/16-fc8-final-week.spec.ts` needs a day from 25 to the month end (Europe/London). On the real clock its eight live
+tests skip on every other day. To run them on any day, pin the API clock to a day-25+ instant; the spec then derives
+"now", the month key and the dates it seeds from that same instant (`pinnedClockInstant` in `support/contest-clock.ts`,
+the one resolver `global-setup.ts` also uses):
+
+```
+QA_TEST_CLOCK_ISO=2026-11-26T10:00:00Z QA_TEST_CLOCK_ADVANCE=1 npx playwright test 16-fc8-final-week
+```
+
+- Use the file name, not just `16`: the filter is a substring match and also catches `57-...under16`.
+- Run it ALONE this way. A pin applies to the whole API process, so every spec in that run sees the same clock, and spec 17
+  skips under a pin because it moves the clock itself.
+- `QA_TEST_CLOCK_ADVANCE=1` lets the clock run on from the instant; leaving it out freezes it. Both pass.
+  `QA_CONTEST_PHASE=final_live` also pins to a day-25+ instant.
+- A pin before day 25 skips the live tests with a message that names the pinned instant.
+- The leaderboard test in the same file keeps the REAL week on purpose: the rollup follows the test clock, but
+  `GET /leaderboard` picks its default week from the wall clock.

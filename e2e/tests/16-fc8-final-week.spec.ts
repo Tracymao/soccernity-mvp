@@ -14,18 +14,30 @@ import {
 } from '../support/helpers';
 import { adminPage } from '../support/admin-ui';
 import { URLS } from '../support/stack';
+import { pinnedClockInstant } from '../support/contest-clock';
 
 // FC8 (build register B-092 / B-093 front-end legs; Decision Log #388, #400, #403 item 11, #404 items 6
 // and 15, #405 item 7, #406 item 6): the Community-feed "Final week" carousel, the entry a tile opens,
 // the impression event, the view heartbeat, the pinned final entry on a finalist's profile, the admin
 // impression-distribution view and the rounded leaderboard points.
 //
-// THE FINAL WEEK IS DRIVEN BY THE REAL CLOCK. The API under test runs on the system clock, and the
-// carousel is live from 00:00 on day 25 (Europe/London) to the month end. A contest cycle for the
+// THE FINAL WEEK FOLLOWS THE API'S CLOCK. By default the API under test runs on the system clock, and
+// the carousel is live from 00:00 on day 25 (Europe/London) to the month end. A contest cycle for the
 // CURRENT London month is seeded directly (the admin API refuses a month that has started), with four
-// finalist entries whose posts are already revealed. Outside days 25..month end the live tests SKIP
-// (they do not fail): run the suite inside the window to exercise them. The rounded-points test does
-// not depend on the date.
+// finalist entries whose posts are already revealed. On the real clock, outside days 25..month end the
+// live tests SKIP (they do not fail).
+//
+// RUN IT ON ANY DAY by pinning the API clock to a day-25+ instant; this spec then derives "now", the
+// month key and every seeded date from that same instant (support/contest-clock.ts pinnedClockInstant,
+// the one resolver global-setup also uses). Run THIS SPEC ALONE that way: a pin applies to the whole API
+// process and every spec in the run, and spec 17 skips under a pin (it moves the clock itself).
+//
+//   QA_TEST_CLOCK_ISO=2026-11-26T10:00:00Z QA_TEST_CLOCK_ADVANCE=1 npx playwright test 16-fc8-final-week
+//
+// (QA_TEST_CLOCK_ADVANCE=1 lets the clock run on from the instant, so time-based server rules behave
+// normally; omit it for a frozen clock. QA_CONTEST_PHASE=final_live also pins to a day-25+ instant.)
+// The rounded-points test does not depend on the date; it keeps the real week on purpose (see the comment
+// in that test).
 //
 // Every assertion states what the decision records say should happen; a red test is a finding.
 
@@ -40,10 +52,15 @@ function londonParts(now = new Date()): { year: number; month: number; day: numb
   return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
 }
 
-const NOW = londonParts();
+// The API's "now": the pinned instant when the harness pinned the clock, else the real clock.
+const PINNED = pinnedClockInstant();
+const clockNowMs = (): number => (PINNED ? PINNED.getTime() : Date.now());
+const NOW = londonParts(new Date(clockNowMs()));
 const MONTH_KEY = `${NOW.year}-${String(NOW.month).padStart(2, '0')}`;
 const IN_FINAL_WEEK = NOW.day >= 25;
-const LIVE_SKIP = 'The final week is live only from day 25 (Europe/London) to the month end; run the suite inside that window.';
+const LIVE_SKIP = PINNED
+  ? `The API clock is pinned to ${PINNED.toISOString()}, which is before day 25 (Europe/London); pin an instant from day 25 to the month end.`
+  : 'The final week is live only from day 25 (Europe/London) to the month end; run the suite inside that window.';
 
 type Member = Account & { token: string; username: string };
 
@@ -89,7 +106,7 @@ test.describe.serial('Final week: carousel, entry page, impressions, pinned entr
   test.beforeAll(async () => {
     viewer = await member('fwviewer', 'Vera Viewer');
     const monthEnd = new Date(Date.UTC(NOW.year, NOW.month, 1)); // the 1st of next month, close enough for the pin
-    const revealed = new Date(Date.now() - 3_600_000);
+    const revealed = new Date(clockNowMs() - 3_600_000);
     const cycle = await db().contestCycle.create({
       data: {
         title: 'QA Final Week',
@@ -132,6 +149,27 @@ test.describe.serial('Final week: carousel, entry page, impressions, pinned entr
       });
       const entry = await db().contestEntry.create({
         data: { cycleId, roundId: round4.id, postId: post.id, userId: user.userId, pinnedUntil: monthEnd },
+      });
+      // The web draws a post's video only from its PostMedia rows (B-259 / B-260: "nothing is read out of a
+      // URL"), so the entry needs an approved, published video row; a bare mediaUrls entry renders nothing.
+      const videoUrl = `https://cdn.example.com/final-${i + 1}.mp4`;
+      await db().postMedia.create({
+        data: {
+          uploaderId: user.userId,
+          postId: post.id,
+          kind: 'video',
+          declaredContentType: 'video/mp4',
+          declaredSize: 1000,
+          uploadState: 'ready',
+          status: 'approved',
+          decisionSource: 'auto',
+          decidedAt: revealed,
+          publishedAt: revealed,
+          publicUrl: videoUrl,
+          publicKey: `post-media/${user.userId}/final-${i + 1}.mp4`,
+          contentType: 'video/mp4',
+          byteSize: 1000,
+        },
       });
       finalists.push({ user, entryId: entry.id, postId: post.id, text });
     }
@@ -321,6 +359,10 @@ test.describe('Leaderboard points are shown rounded; ranking uses the exact tota
   test('two players who show the same whole points hold different ranks, with the note that says so', async ({ page }) => {
     const a = await member('lbfrac1', 'Pia Fractional');
     const b = await member('lbfrac2', 'Quin Fractional');
+    // The REAL week, even under a pinned API clock: the rollup follows the test clock, but
+    // LeaderboardService.getLeaderboard picks its default period from the wall clock
+    // (getCurrentIsoWeekPeriod() with no argument), and this page asks for the default. Seeding the
+    // pinned week would make the page show a different, empty week.
     const period = isoWeek(new Date());
     // 13273 quarter-points = 3318.25 (shows 3,318); 13271 = 3317.75 (also shows 3,318, ranks lower).
     await db().leaderboardEntry.create({ data: { userId: a.userId, period, quarterPoints: 13273, rank: 1 } });

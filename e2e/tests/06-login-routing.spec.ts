@@ -121,6 +121,12 @@ test.describe('/continue and deep links', () => {
     const a = await registerViaApi({ age: 30, label: 'cont2' });
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/verify-email\/prompt$/);
+    // The prompt reads the account once on mount and, by design, redirects an already-verified account
+    // straight on (VerifyEmailPromptPage: alreadyVerified -> <Navigate>). The address is printed only
+    // after that read has answered, so wait for it BEFORE flipping the state through the API; otherwise
+    // the read can land after the flip, the page redirects itself and the link this test clicks is gone
+    // (measured: 5 of 40 repeats failed that way, every one ending on /create-profile).
+    await expect(page.getByText(`We sent a verification link to ${a.email}`)).toBeVisible();
     await verifyEmailViaApi(a);
     await page.getByRole('link', { name: /I.ve verified/ }).click();
     await expect(page).toHaveURL(/\/create-profile$/);
