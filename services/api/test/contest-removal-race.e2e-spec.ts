@@ -38,6 +38,12 @@ import { seedDob } from './dob-seed';
 //   4. V's vote slot is free: V can then vote on a base entry (200, voted: true).
 //   5. E's tally is 0, and every base entry's tally is what it was before.
 //   6. no Postgres deadlock (pg_stat_database.deadlocks unchanged across the whole run) and no logged error.
+//   7. (backend/contest-release-timestamp) the release event is never stamped EARLIER than the cast it frees. Both
+//      requests take their clock reading before they wait for the locks, so a removal that started first but waited
+//      longer used to stamp the release before the cast; releaseOccurredAt now clamps it to the cast time.
+//   8. (same) in every iteration where the vote was accepted and then released, restoring E's post through the real
+//      moderation path (the author appeals, a second moderator overturns) brings V's vote back with its ORIGINAL
+//      createdAt, and V then holds exactly one vote in the round.
 //
 // The Week-4 (final) case is not run here: the final has no vote (a vote on a week-4 entry is a clean 409 whatever
 // happens), so a vote-versus-removal race does not exist there. contest-removal.e2e-spec.ts already covers week-4
@@ -67,6 +73,8 @@ interface Outcome {
   casts: number;
   releases: number;
   releaseBeforeCast: boolean;
+  releaseAtCast: boolean;
+  restoredVote: boolean;
 }
 
 describe('Contest vote vs entry removal race e2e (qa/contest-removal-vote-race)', () => {
@@ -167,6 +175,7 @@ describe('Contest vote vs entry removal race e2e (qa/contest-removal-vote-race)'
 
     // ---- setup (frozen clock): a cycle, four base entries qualified at the end of Phase 1, three fixed votes ------
     const mod = await createAdmin('mod');
+    const mod2 = await createAdmin('mod2'); // overturns the appeal: the original reviewer may not (Decision Log #138)
     const reporter = await createUser('reporter');
     const entrant = await createUser('entrant'); // authors every iteration's entry E (one at a time)
     const V = await createUser('voter'); // the voter that races the removal, every iteration
@@ -297,10 +306,38 @@ describe('Contest vote vs entry removal race e2e (qa/contest-removal-vote-race)'
       if (voteRes.status === 200 && casts.length !== 1) violations.push(`${label}: vote answered 200 but ${casts.length} cast event(s) exist`);
       if (voteRes.status !== 200 && casts.length !== 0) violations.push(`${label}: vote answered ${voteRes.status} but ${casts.length} cast event(s) exist`);
       const releaseBeforeCast = casts.length === 1 && releases.length === 1 && releases[0].occurredAt.getTime() < casts[0].occurredAt.getTime();
+      const releaseAtCast = casts.length === 1 && releases.length === 1 && releases[0].occurredAt.getTime() === casts[0].occurredAt.getTime();
+      // 7. the release is never earlier than the cast it frees
+      if (releaseBeforeCast) {
+        violations.push(
+          `${label}: release stamped ${casts[0].occurredAt.getTime() - releases[0].occurredAt.getTime()}ms BEFORE its cast`,
+        );
+      }
 
       // 5. tallies: E is zero (checked in 2), every base entry unchanged -- BEFORE the slot check below adds a vote
       const tally = await baseTally();
       if (JSON.stringify(tally) !== JSON.stringify([2, 1, 0, 0])) violations.push(`${label}: base tallies changed to ${JSON.stringify(tally)}`);
+
+      // 8. restore E's post (author appeals, a second moderator overturns): a released vote comes back, with its
+      // original timestamp, and V then holds exactly one vote. Done BEFORE the slot check below, which makes V vote.
+      let restoredVote = false;
+      if (casts.length === 1 && releases.length === 1) {
+        await request(server()).post(`/reports/${report.id}/appeal`).set(auth(entrant.token)).send({ reason: 'please look again' }).expect(201);
+        await request(server())
+          .patch(`/admin/moderation/reports/${report.id}/appeal`)
+          .set(auth(mod2.token))
+          .send({ decision: 'overturned' })
+          .expect(200);
+        const back = await prisma().contestVote.findMany({ where: { roundId, voterId: V.userId } });
+        restoredVote = back.length === 1 && back[0].entryId === entry.id;
+        if (back.length !== 1) violations.push(`${label}: after the restore V holds ${back.length} vote(s) in the round, expected 1`);
+        else if (back[0].entryId !== entry.id) violations.push(`${label}: after the restore V's vote is on ${back[0].entryId}, not on E`);
+        else if (back[0].createdAt.getTime() !== casts[0].occurredAt.getTime()) {
+          violations.push(`${label}: restored vote createdAt ${back[0].createdAt.toISOString()} != original cast ${casts[0].occurredAt.toISOString()}`);
+        }
+        // give the slot back so the check below still means what it did
+        await request(server()).delete(`/contest/entries/${entry.id}/vote`).set(auth(V.token)).expect(200);
+      }
 
       // 4. V's slot is free: V can vote on a base entry now
       const slot = await vote(V, base[3].entryId);
@@ -312,7 +349,7 @@ describe('Contest vote vs entry removal race e2e (qa/contest-removal-vote-race)'
         order, i, staggerMs,
         voteStatus: voteRes.status, voteCode,
         removeStatus: removeRes.status,
-        casts: casts.length, releases: releases.length, releaseBeforeCast,
+        casts: casts.length, releases: releases.length, releaseBeforeCast, releaseAtCast, restoredVote,
       });
 
       // reset only what this iteration created
@@ -342,6 +379,8 @@ describe('Contest vote vs entry removal race e2e (qa/contest-removal-vote-race)'
       voteRefusedBecauseRemoved: tally((o) => o.voteStatus === 409),
       vote404: tally((o) => o.voteStatus === 404),
       releaseBeforeCast: tally((o) => o.releaseBeforeCast),
+      releaseAtCast: tally((o) => o.releaseAtCast),
+      restoredVote: tally((o) => o.restoredVote),
       perOrder: (['vote-first', 'removal-first'] as const).map((order) => ({
         order,
         accepted: tally((o) => o.order === order && o.voteStatus === 200),

@@ -20,6 +20,7 @@ import {
   planPlacementPoints,
   planPodium,
   PodiumRow,
+  releaseOccurredAt,
   votesToRestore,
   weekHasTooFewEntries,
 } from './contest-removal.rules';
@@ -230,11 +231,12 @@ async function rerankAndQualify(tx: Tx, roundId: string, week: ContestWeekWindow
 
 /** Frees every vote for the removed entry: the row is deleted (the voter's slot is free) and a `release` event kept. */
 async function releaseVotes(tx: Tx, roundId: string, entryId: string, now: Date): Promise<void> {
-  const votes = await tx.contestVote.findMany({ where: { roundId, entryId }, select: { voterId: true } });
+  const votes = await tx.contestVote.findMany({ where: { roundId, entryId }, select: { voterId: true, createdAt: true } });
   if (votes.length === 0) return;
   await tx.contestVote.deleteMany({ where: { roundId, entryId } });
   await tx.contestVoteEvent.createMany({
-    data: votes.map((v) => ({ roundId, voterId: v.voterId, entryId, action: 'release', occurredAt: now })),
+    // Never earlier than the cast it frees (see releaseOccurredAt): both `now`s were taken before the locks.
+    data: votes.map((v) => ({ roundId, voterId: v.voterId, entryId, action: 'release', occurredAt: releaseOccurredAt(now, v.createdAt) })),
   });
 }
 
