@@ -22,7 +22,11 @@ export const POST_MEDIA_CODES = {
   uploadNotReceived: "upload_not_received",
   uploadInProgress: "upload_in_progress",
   uploadRateLimited: "upload_rate_limited",
+  // 503: no object store is configured on the server (the original "uploads aren't available right now").
   uploadsUnavailable: "uploads_unavailable",
+  // 403: the upload switch (MEDIA_UPLOADS_ENABLED, B-306, Decision Log #501) is off, which is the production
+  // default. Guards POST /media/uploads and its confirm step. Same product state as the 503 above.
+  uploadsDisabled: "media_uploads_disabled",
   mediaInContestEntry: "media_in_contest_entry",
   cannotReportOwn: "cannot_report_own_media",
   // POST /media/:id/report: the per-account daily limit (429). Stable code from the API (B-258).
@@ -42,6 +46,14 @@ export class PostMediaApiError extends Error {
     this.status = options?.status;
     this.code = options?.code;
   }
+}
+
+/** True when an upload route answered "uploads are off": the switch (403) or no object store (503). */
+export function isUploadsOffError(err: unknown): boolean {
+  return (
+    err instanceof PostMediaApiError &&
+    (err.code === POST_MEDIA_CODES.uploadsUnavailable || err.code === POST_MEDIA_CODES.uploadsDisabled)
+  );
 }
 
 /** The uploader's own view of one upload (PostMediaView). */
