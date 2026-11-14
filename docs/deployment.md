@@ -1,7 +1,11 @@
 # Deployment setup (Render + Neon + Upstash, all in the EU)
 
+**`docs/launch-gate-runbook.md` is the launch procedure; this file is the Render setup reference.** Follow the runbook
+for the order of the whole launch, the checks, the switches and the rollback; use this file for the detail of what each
+Render, Neon and Upstash setting means.
+
 Decision Log #26 (Build Plan Section 9 / CLAUDE.md) resolves Decision Log
-#9 (hosting): **Render** runs `services/api`, **Neon** is the managed
+#9 (hosting): **Render** runs `services/api` and the two static sites (`apps/web`, `apps/admin`), **Neon** is the managed
 Postgres, **Upstash** is the managed Redis — three separate, unbundled
 providers rather than one all-in-one platform. Everything is hosted in the
 **EU**: Render's Frankfurt region, with Neon and Upstash created in EU regions.
@@ -23,8 +27,8 @@ You'll need:
   Upstash's free tiers are sufficient for this step.
 - A terminal that has `openssl` (to generate secrets).
 
-**Region matters and cannot be fixed later.** `render.yaml` puts both services
-in **Frankfurt** (`region: frankfurt`). Render cannot change a service's region
+**Region matters and cannot be fixed later.** `render.yaml` puts both API services
+in **Frankfurt** (`region: frankfurt`; the static sites have no region). Render cannot change a service's region
 after it is created, so check it on the import screen. Neon and Upstash must
 also be created in an **EU region**, in or near the same area as Render's
 Frankfurt region. Nothing in this repo can check that for you; pick the region
@@ -137,16 +141,22 @@ No two may be the same.
    GitHub account so Render can access this repository.
 2. From Render's dashboard, choose **New > Blueprint**.
 3. Point it at this repository. Render will detect `render.yaml` at the
-   repo root and show you the two services it defines:
+   repo root and show you the six services it defines: the two API services,
    `soccernity-api-staging` (tracks the `staging` branch) and
-   `soccernity-api` (tracks the `main` branch, production). Both should show
-   the Frankfurt region.
+   `soccernity-api` (tracks the `main` branch, production), both in the
+   Frankfurt region, and the four static sites for `apps/web` and `apps/admin`
+   (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`,
+   `soccernity-admin`; section 4b), which have no region.
    **Update 2026-11-14:** the Blueprint now also defines four static sites for `apps/web` and `apps/admin`
    (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`, `soccernity-admin`; section 4b), so it shows six
    services, not two. The static sites have no region (Render does not support one for static sites).
 4. Render prompts for every variable marked `sync: false` in `render.yaml`
    (only at the first import; later edits are made on each service's
-   "Environment" tab). For **each** of the two services, set:
+   "Environment" tab). Only the two API services have any (37 each; the four
+   static sites have none). The full list with its source is Appendix A of
+   `docs/launch-gate-runbook.md`; the runbook's Part 3 says when each value is
+   made and step 4.2 when it is entered. For **each** of the two API
+   services, set:
    - `DATABASE_URL` / `DIRECT_URL` — the pooled / direct Neon strings for
      that service's branch.
    - `REDIS_URL` — the matching Upstash `rediss://` URL.
@@ -162,33 +172,11 @@ No two may be the same.
      then use the `.env.example` placeholders; verification, guardian-consent
      and password-reset emails are then logged, not sent, so sign-up cannot
      complete for anyone who needs an email.
-   - `WEB_APP_BASE_URL` — the real deployed **https** URL of `apps/web` for
-     that environment, no trailing path. Used to build the links in the
-     verify-email, guardian-consent and withdrawal emails. If it is unset, a
-     placeholder, or plain `http` (outside localhost), those emails are **not
-     sent at all** and an error naming `WEB_APP_BASE_URL` is logged: an email
-     whose only call to action is a dead link is worse than none. (In
-     production an unusable value now stops the API from starting at all.) (The
-     password-reset email still falls back to a placeholder address; it is a
-     known follow-up.) `WEB_APP_BASE_URL` is also the **CORS allowlist** entry
-     for `apps/web`: the API answers cross-origin browser requests only from
-     this origin and from `ADMIN_APP_BASE_URL`, never `*`.
-   - `ADMIN_APP_BASE_URL` — the real deployed **https** URL of `apps/admin` for
-     that environment. Used **only** for the CORS allowlist (QA D-01, Decision
-     Log #407). In production each of the two must be a real https URL, not a
-     placeholder and not localhost. **A value that is unset, not a URL, a
-     placeholder host, `http`, or localhost makes the API refuse to start**
-     (`assertProductionEnv`, B-163; Decision Log #408). Outside production
-     nothing is checked and localhost origins on any port are allowed.
-     **Update 2026-11-14:** `render.yaml` now sets both `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL` as plain values
-     (they are no longer `sync: false`), equal to the origins of the new static sites (section 4b): staging
-     `https://staging.soccernity.com` / `https://admin.staging.soccernity.com`, production `https://soccernity.com` /
-     `https://admin.soccernity.com`. Render therefore no longer prompts for them; change them in `render.yaml` if a
-     final domain differs.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding
-     control) when unset. Leave `GEOLITE2_DB_PATH` blank.
+     control) when unset. Leave `GEOLITE2_DB_PATH` blank. `TRUST_PROXY_HOPS`
+     stays unset until it has been checked on staging (runbook step 6.3).
    - `SPORTS_DATA_API_KEY` — your Highlightly API key. A placeholder until a
      real account exists; Sports Hub then serves only cached data.
    - `SPORTS_DATA_RAPIDAPI_HOST` — leave blank unless the Highlightly account
@@ -245,7 +233,48 @@ No two may be the same.
      under-13 US guardians fails closed (that guardian cannot complete
      consent); nothing else is affected.
    - `SENTRY_DSN` — placeholder until a Sentry project exists; error
-     monitoring is then simply off.
+     monitoring is then simply off. (Runbook steps 1.8 and 6.6.)
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — the web-push key
+     pair, made once per environment with `npx web-push generate-vapid-keys`
+     (named in the `render.yaml` comments), and `VAPID_SUBJECT`, a `mailto:` or
+     `https://` contact address. Unset or `replace-me` means web push reports
+     itself unavailable; nothing else breaks. (Runbook steps 3.4 and 8.2.)
+   - `REKOGNITION_ACCESS_KEY_ID`, `REKOGNITION_SECRET_ACCESS_KEY` — the AWS IAM
+     user's keys for the automatic picture and video check (see the post-media
+     paragraph above; the region is `REKOGNITION_REGION`, a plain value). Until
+     they are real nothing is checked and nothing is ever approved
+     automatically. Set the AWS opt-out of AI-services data use **before** you
+     paste any key. (Runbook step 1.9.)
+   - `MEDIA_UPLOADS_ENABLED` — the user-upload switch described in step 3.
+     Leave it unset, or anything other than the exact text `true`, in production
+     until counsel has answered B-206. (Runbook steps 7.5 and 8.7.)
+   - `ADMIN_2FA_ENFORCED` — the admin two-factor switch described in step 3.
+     The exact text `true` turns it on; it must be `true` on production at
+     launch. (Runbook steps 6.2 and 8.6.)
+   - `DOB_ENCRYPTION_KEY_VERSION`, `DOB_ENCRYPTION_KEY_PREVIOUS` — leave both
+     **unset** until a key rotation (step 3 above). (Runbook step 6.1.)
+
+   **Plain values you check, not enter.** `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL`
+   are plain values in `render.yaml` (they are no longer `sync: false`), equal to the
+   origins of the static sites (section 4b): staging `https://staging.soccernity.com`
+   and `https://admin.staging.soccernity.com`, production `https://soccernity.com` and
+   `https://admin.soccernity.com`. Render does not prompt for them; change them in
+   `render.yaml` only if a final domain differs. What they do:
+   - `WEB_APP_BASE_URL` — the deployed **https** URL of `apps/web`, no trailing path.
+     Used to build the links in the verify-email, guardian-consent, withdrawal and
+     password-reset emails. If it is unset, a placeholder, or plain `http` (outside
+     localhost), those emails are **not sent at all** and an error naming
+     `WEB_APP_BASE_URL` is logged: an email whose only call to action is a dead link
+     is worse than none. (In production an unusable value stops the API from
+     starting at all.) It is also the **CORS allowlist** entry for `apps/web`: the
+     API answers cross-origin browser requests only from this origin and from
+     `ADMIN_APP_BASE_URL`, never `*`.
+   - `ADMIN_APP_BASE_URL` — the deployed **https** URL of `apps/admin`. Used **only**
+     for the CORS allowlist (QA D-01, Decision Log #407). In production each of the
+     two must be a real https URL, not a placeholder and not localhost. **A value that
+     is unset, not a URL, a placeholder host, `http`, or localhost makes the API refuse
+     to start** (`assertProductionEnv`, B-163; Decision Log #408). Outside production
+     nothing is checked and localhost origins on any port are allowed.
 
    Variables that already carry a value in `render.yaml` (for example
    `S3_REGION`, the `SPORTS_*` cache timings, `COPPA_VERIFICATION_AMOUNT_CENTS`,
@@ -326,9 +355,8 @@ How to tell what happened on any account: `User.countryDerivationMethod` is
 ### The web app's service worker (`/sw.js`) — web push, build register B-062 / B-285
 
 `apps/web/public/sw.js` is the push service worker. Vite copies it to the web build's root, so it
-must be served at **`/sw.js`** (scope `/`). This repo has no web static-site definition yet
-(`render.yaml` defines only the two API services; the static sites are row B-179, done at the launch
-gate), so these are the settings to apply **when that site is created**:
+must be served at **`/sw.js`** (scope `/`). `render.yaml` defines the web static sites (section 4b,
+row B-179), and these are the settings that definition applies; check them on the first deploy:
 
 - Serve `/sw.js` with a **JavaScript content type** (`application/javascript` or `text/javascript`)
   and **`Cache-Control: no-cache`** (or `max-age=0, must-revalidate`) so browsers always check for a
@@ -532,6 +560,23 @@ everything about domains, DNS, Cloudflare and the bucket.
    workflow from GitHub Actions' "Run workflow" button, choosing
    `staging` or `production`, to confirm the live deployment is actually
    healthy.
+
+## Before and after go-live: where it is written
+
+Everything about going live is in `docs/launch-gate-runbook.md`, not here:
+
+- **Smoke test:** runbook Part 10 (step 10.1 is the manual health-check workflow of step 5.3 above; the rest are the
+  manual checks after go-live).
+- **Rollback:** runbook Part 11, one row per risky step (migration, key backfill, key rotation, switches). Read it
+  **before** Part 9 (going live).
+- **Backup:** take a Neon backup or restore point before the first production migration (runbook step 5.4; the Neon
+  screen is not written down) and keep the old `DOB_ENCRYPTION_KEY` as long as any older backup exists
+  (`docs/dob-encryption-rollback.md`).
+- **Monitoring:** Sentry (runbook steps 1.8 and 6.6, alert rules on the `rate_limiter` tag) and "watch the first day"
+  (runbook step 10.3: Sentry, Render logs, Upstash usage, Neon connections).
+- **No Stripe webhook exists.** The code reads no Stripe webhook (nothing in `services/api/src`, `apps/*/src`,
+  `render.yaml` or `.env.example` mentions one), so none has to be created in Stripe. Only the two keys
+  (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`) are needed.
 
 ## What this repo still can't do for you
 
