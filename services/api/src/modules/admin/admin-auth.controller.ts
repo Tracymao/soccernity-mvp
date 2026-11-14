@@ -74,9 +74,10 @@ export class AdminAuthController {
   // The override is applied per-handler, so this route's counter is
   // independent of AuthController.login's — admin traffic never exhausts
   // the User login bucket and vice versa.
-  @SkipGlobalWriteLimit()
   // The 5 is read per request through ADMIN_LOGIN_RATE_LIMIT (admin-login-rate-limit.ts): production keeps 5; a QA run
   // may raise it with ADMIN_LOGIN_RATE_LIMIT_MAX, which the API refuses to start with in production.
+  // (Keep the decorators below as one unbroken run: global-rate-limit.coverage.spec.ts scans them textually.)
+  @SkipGlobalWriteLimit()
   @AuthRateLimit(ADMIN_LOGIN_RATE_LIMIT)
   @Post('login')
   @HttpCode(HttpStatus.OK)
