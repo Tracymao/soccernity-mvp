@@ -116,7 +116,7 @@
   gap: 12px;
 }
 
-/* --- plain composer (contentText only -- no media-upload endpoint) --- */
+/* --- composer (text plus photo/video attachments, shared with Create Post, B-042) --- */
 
 .banter-room-composer {
   display: flex;
@@ -144,17 +144,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.banter-room-composer__attach {
-  border: 1px solid var(--sn-icon-inactive);
-  background: transparent;
-  color: var(--sn-text-secondary);
-  border-radius: 6px;
-  height: 38px;
-  padding: 0 14px;
-  font: 600 13px "Inter", sans-serif;
-  cursor: not-allowed;
 }
 
 .banter-room-composer__submit {

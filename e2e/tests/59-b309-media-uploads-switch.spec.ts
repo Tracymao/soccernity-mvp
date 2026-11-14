@@ -11,7 +11,8 @@ import { URLS } from '../support/stack';
 //   POST /media/uploads, POST /media/uploads/:id/confirm, POST /users/:id/avatar, POST /users/:id/cover
 // with 403 { code: 'media_uploads_disabled' }, before any database write or storage call. Reading and deleting what exists,
 // reporting media and every other route are not gated. The switch is read on every request.
-//   web composer : apps/web MediaUploadTray / useMediaUploads (an unknown code -> the generic "Upload failed" card)
+//   web composer : apps/web useMediaUploads maps 403 media_uploads_disabled to the "Uploads aren't available right now" state
+//                  (B-042; Figma pass Q state 11): attach controls disabled, text posts still go out
 //   web profile  : apps/web ProfileImageControl (shows the server sentence)
 // What the person SEES with the switch off is recorded in docs/qa-b309-playwright-specs-report.md; the assertions here only
 // require that the screen ends in a readable state: no endless spinner, no raw JSON.
@@ -166,17 +167,16 @@ test.describe.serial('MEDIA_UPLOADS_ENABLED=false closes the upload routes and n
     await page.goto('/community');
     await page.getByLabel("What's happening?").fill(`b309 switch off ${RUN}`);
     await page.getByTestId('picture-input').setInputFiles({ name: 'qa.png', mimeType: 'image/png', buffer: pngOfWidth(WIDTH_CLEAR) });
-    // B-306's report: the composer maps the unknown code to the generic card "Upload failed" /
-    // "Check your connection and try again." with Try again and Remove (misleading wording, recorded in the QA report).
-    await expect(page.getByText('Upload failed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    // B-042: the composer reads 403 media_uploads_disabled as "uploads are off" (the same state as 503 uploads_unavailable):
+    // the item is dropped, the attach controls are disabled, and the text post can still be sent.
+    await expect(page.getByText("Uploads aren’t available right now.")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('progressbar')).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('media_uploads_disabled');
     await expect(page.locator('body')).not.toContainText('statusCode');
-    const card = page.locator('.media-item').first();
-    await expect(card).toBeVisible();
-    // The page is not stuck: Remove clears the card, and the text post can still be sent.
-    await card.getByRole('button', { name: 'Remove' }).click();
     await expect(page.locator('.media-item')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Picture/ })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /Video/ })).toBeDisabled();
+    // The page is not stuck: the text post can still be sent.
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByText(`b309 switch off ${RUN}`).first()).toBeVisible();
     expect(await db().postMedia.count({ where: { uploaderId: browserUser.userId } })).toBe(0);

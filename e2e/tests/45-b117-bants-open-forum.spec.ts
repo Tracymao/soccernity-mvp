@@ -72,8 +72,10 @@ test.describe.serial('Bants open forum: room page', () => {
     const composer = page.getByPlaceholder(/say something to/i);
     await expect(composer).toBeVisible();
     await expect(composer).toBeEnabled();
-    // The attach button is still disabled (no photos or video in Bants).
-    await expect(page.getByRole('button', { name: /attach photo\/video/i })).toBeDisabled();
+    // B-042: the room composer takes pictures and video like Create Post (the old disabled attach button is gone).
+    await expect(page.getByRole('button', { name: /attach photo\/video/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Picture/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /Video/ })).toBeEnabled();
     // Topic chips are read only, for the outsider and for everyone else in this PR.
     const topics = page.getByRole('list', { name: 'Topics' });
     await expect(topics.getByText('Premier League')).toBeVisible();

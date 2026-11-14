@@ -13,16 +13,18 @@
 // none is still `uploading` (a file that is merely under review still attaches: the post is then visible to
 // its author only until the file is approved, services/api post-media-visibility.util.ts).
 //
-// "Uploads aren't available right now" (Figma state 11) is the server's 503 `uploads_unavailable`: the
-// attach controls are disabled for the rest of the session and a plain text post still works.
+// "Uploads aren't available right now" (Figma state 11) is the server saying uploads are off, in either of its two
+// forms: 503 `uploads_unavailable` (no object store) or 403 `media_uploads_disabled` (the MEDIA_UPLOADS_ENABLED
+// switch, off by default in production, B-306). Either can arrive from the link request or from the confirm step:
+// the attach controls are disabled for the rest of the session and a plain text post still works.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  POST_MEDIA_CODES,
   PostMediaApiError,
   confirmUpload,
   createUpload,
   deleteUpload,
   getUpload,
+  isUploadsOffError,
   putFile,
   type PostMediaKind,
   type PostMediaView,
@@ -117,8 +119,10 @@ export function useMediaUploads({ accessToken, only, maxImages = 10 }: Options) 
       const controller = new AbortController();
       controllers.current.set(key, controller);
       patch(key, { phase: "uploading", progress: 0, processing: false, errorCode: null, errorMessage: null });
+      let issuedId: string | null = null;
       try {
         const link = await createUpload(accessToken, { contentType: file.type, size: file.size });
+        issuedId = link.id;
         patch(key, { id: link.id });
         await putFile(link, file, (fraction) => patch(key, { progress: fraction }), controller.signal);
         patch(key, { processing: true, progress: 1 });
@@ -126,9 +130,12 @@ export function useMediaUploads({ accessToken, only, maxImages = 10 }: Options) 
         patch(key, { processing: false, ...fromView(view) });
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return; // Cancel removes the item itself
-        if (err instanceof PostMediaApiError && err.code === POST_MEDIA_CODES.uploadsUnavailable) {
+        if (isUploadsOffError(err)) {
           if (mounted.current) setUploadsUnavailable(true);
-          // Nothing was stored; drop the item rather than leave a failed card behind.
+          // Nothing the person can use was stored; drop the item rather than leave a failed card behind. If a
+          // link had already been issued (the switch went off between the two steps), clean that upload up too
+          // -- DELETE is not gated by the switch.
+          if (issuedId) void deleteUpload(accessToken, issuedId).catch(() => undefined);
           removeLocal(key);
           return;
         }

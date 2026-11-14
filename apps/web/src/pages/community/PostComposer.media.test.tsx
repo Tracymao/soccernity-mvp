@@ -221,15 +221,21 @@ describe("composer — attach controls", () => {
     expect(screen.getByRole("button", { name: "Choose another file" })).not.toBeNull();
   });
 
-  it("shows 'Uploads aren't available right now' on a 503, disables the attach controls, and text posts still work", async () => {
+  // "Uploads aren't available right now" has two server forms: 503 uploads_unavailable (no object store) and,
+  // since B-306, 403 media_uploads_disabled (the MEDIA_UPLOADS_ENABLED switch, off by default in production).
+  it.each([
+    ["a 503 uploads_unavailable", 503, "uploads_unavailable"],
+    ["a 403 media_uploads_disabled", 403, "media_uploads_disabled"],
+  ])("shows 'Uploads aren't available right now' on %s, disables the attach controls, and text posts still work", async (_label, status, code) => {
     vi.mocked(createUpload).mockRejectedValueOnce(
-      new PostMediaApiError("Uploads aren't available right now. Please try again later.", { status: 503, code: "uploads_unavailable" }),
+      new PostMediaApiError("Uploads aren't available right now. Please try again later.", { status, code }),
     );
     const onCreated = renderComposer();
     choosePicture();
 
     await screen.findByText(/Uploads aren’t available right now\./);
     expect(screen.getByText(/You can still post text/)).not.toBeNull();
+    expect(screen.queryByText("Upload failed")).toBeNull();
     expect((screen.getByRole("button", { name: /picture/i }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /video/i }) as HTMLButtonElement).disabled).toBe(true);
 
@@ -237,6 +243,19 @@ describe("composer — attach controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() => expect(createPost).toHaveBeenCalledWith("tok", { contentText: "Just words" }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
+  });
+
+  it("shows the same state when the switch is off at the confirm step (403 media_uploads_disabled), and cleans the upload up", async () => {
+    vi.mocked(confirmUpload).mockRejectedValueOnce(
+      new PostMediaApiError("Uploads are not available right now.", { status: 403, code: "media_uploads_disabled" }),
+    );
+    renderComposer();
+    choosePicture();
+
+    await screen.findByText(/Uploads aren’t available right now\./);
+    expect(screen.queryByText("Upload failed")).toBeNull();
+    expect((screen.getByRole("button", { name: /picture/i }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(deleteUpload).toHaveBeenCalledWith("tok", "m1"));
   });
 
   it("allows only one video per post", async () => {
