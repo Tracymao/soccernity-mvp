@@ -11,7 +11,8 @@
     "test:e2e": "jest --config test/jest-e2e.config.js --runInBand",
     "lint": "eslint \"src/**/*.ts\" --no-error-on-unmatched-pattern",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "create-first-superadmin": "node dist/scripts/create-first-superadmin.js"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1158.0",
