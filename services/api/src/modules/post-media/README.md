@@ -83,10 +83,24 @@ the public object): a file held by reports, and a file whose post a moderator re
 **Known narrow race:** a moderator "keep" landing in the same instant as an automatic withdraw of the same item can leave an
 approved row whose public object was just removed; the reconciler heals it from the retained private copy.
 
-**Deployment caveat (human step):** "private" only holds if no public base URL serves the private prefix. With Cloudflare R2
-the bucket's `r2.dev` address or a custom domain serves the *whole bucket* unless a rule limits it. `S3_PUBLIC_BASE_URL` must
-map **only** `post-media/` (a path rule or Worker), or the private files must live in a separate bucket. Not verified against a real
-R2 bucket; belongs to the launch-gate runbook (B-180).
+**Two buckets (B-265; replaces the earlier "deployment caveat").** "Private" is enforced by storage, not by a rule on a shared
+address. `S3_BUCKET` is the **public** bucket, served at `S3_PUBLIC_BASE_URL` (a custom domain, `https://media.soccernity.com`),
+and holds only the allow-listed prefixes `post-media/`, `profile-media/` and `media/`. `S3_PRIVATE_BUCKET` is a **separate**
+bucket with no public address of any kind; it holds everything else (`private-media/`, `private-profile/`, `quarantine/`,
+`data-export/`, the legacy `avatars/` and `covers/`, and any prefix added later). The routing is inside `S3StorageService`, by
+key prefix, with an explicit public allow-list in `storage/storage-prefixes.ts` and **default-private**: a new prefix is private
+until someone adds it to that list. Callers pass keys only and are unchanged. The two moves above are now **cross-bucket**
+copies: publish copies private -> public, withdraw/hold copies public -> private (`CopyObject` with the destination as `Bucket`
+and `<source bucket>/<key>` as `CopySource`). Cloudflare's R2 S3 documentation lists `CopyObject` and `x-amz-copy-source` as
+supported but does not say whether the source may be in another bucket; if the store refuses, `S3StorageService.copyObject` falls
+back to reading the object and writing it to the destination through the API (via a temp file). Neither path has been run against
+a real R2 account. The browser's presigned PUT to `quarantine/` is signed against the **private** bucket, so the bucket CORS rule
+for browser uploads goes on the private bucket only. One R2 token with Object Read & Write **and** list permission on both
+buckets serves both (the B-283 stray sweep lists them). Without `S3_PRIVATE_BUCKET` the service runs in single-bucket mode (the
+earlier behaviour, with a start-up warning) for local development and tests only: `assertProductionEnv` refuses to start in
+production when `S3_BUCKET` is set and `S3_PRIVATE_BUCKET` is missing, blank, `replace-me` or the same as `S3_BUCKET`.
+Render sets `NODE_ENV=production` on staging as well, so staging is covered by the same refusal. The launch-gate steps are in
+`docs/deployment.md` and `docs/launch-gate-runbook.md`.
 
 ### The automatic check (`MediaCheckService`, `PostMediaSweepService`)
 

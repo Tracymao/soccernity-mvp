@@ -24,7 +24,8 @@ fs.mkdirSync(OUT, { recursive: true });
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(OUT, `${name}.png`) });
 
 const RUN = Date.now().toString(36);
-const BUCKET = FAKE_MEDIA.bucket;
+// B-265: a pending picture's file lives in the PRIVATE bucket (private-profile/ is not on the public allow-list).
+const BUCKET = FAKE_MEDIA.privateBucket;
 
 interface Seeded {
   userId: string;

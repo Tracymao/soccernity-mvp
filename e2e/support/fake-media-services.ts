@@ -5,7 +5,10 @@ import * as http from 'http';
 // API process:
 //
 //   1. an S3-compatible object store (path-style: /<bucket>/<key>) that accepts the browser's PUT to the
-//      one-time link, HEAD / GET / DELETE from the API, and answers the CORS preflight the browser sends;
+//      one-time link, HEAD / GET / DELETE / CopyObject from the API, and answers the CORS preflight the browser
+//      sends. B-265 (two buckets): it holds TWO buckets, a public one and a private one, as production does
+//      (the API routes each key by prefix; see services/api/src/storage/storage-prefixes.ts). A key lives in
+//      exactly the bucket the API wrote it to, and a copy between the two buckets is a real cross-bucket copy;
 //   2. an Amazon Rekognition stand-in (DetectModerationLabels) -- the "fake check". The API's own check
 //      code, thresholds and decision rule run unchanged; only the vendor's answer is fixed.
 //
@@ -18,6 +21,9 @@ import * as http from 'http';
 // keeps -- is a stable signal; no marker survives in the bytes.)
 
 export const FAKE_BUCKET = 'qa-media';
+/** B-265: the private bucket (pending / rejected media, quarantine, data exports). Never served publicly. */
+export const FAKE_PRIVATE_BUCKET = 'qa-media-private';
+const BUCKETS = [FAKE_BUCKET, FAKE_PRIVATE_BUCKET] as const;
 export const FAKE_STORAGE_PORT = 3191;
 export const FAKE_REKOGNITION_PORT = 3192;
 
@@ -64,8 +70,12 @@ function decodeAwsChunked(raw: Buffer): Buffer {
 }
 
 export interface FakeMediaServices {
-  /** Every object currently in the fake store (key -> size), for assertions. */
+  /** Every object currently in the fake store across both buckets (key -> object), for assertions. A snapshot. */
   objects(): Map<string, StoredObject>;
+  /** The objects of ONE bucket (FAKE_BUCKET or FAKE_PRIVATE_BUCKET), a snapshot. */
+  objectsIn(bucket: string): Map<string, StoredObject>;
+  /** Which buckets currently hold this key (so a test can prove a file is in exactly one). */
+  bucketsHolding(key: string): string[];
   /** How many DetectModerationLabels calls arrived (proof the real check ran). */
   rekognitionCalls(): number;
   close(): Promise<void>;
@@ -97,8 +107,12 @@ function labelsFor(width: number | null): Array<{ Name: string; ParentName: stri
 }
 
 export async function startFakeMediaServices(): Promise<FakeMediaServices> {
-  const store = new Map<string, StoredObject>();
+  const stores = new Map<string, Map<string, StoredObject>>(BUCKETS.map((b) => [b, new Map<string, StoredObject>()]));
   let rekognitionCalls = 0;
+  const noSuchKey = (res: http.ServerResponse, code = 'NoSuchKey') =>
+    res
+      .writeHead(404, { ...CORS, 'Content-Type': 'application/xml' })
+      .end(`<?xml version="1.0"?><Error><Code>${code}</Code><Message>not found</Message></Error>`);
 
   const storage = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -106,26 +120,28 @@ export async function startFakeMediaServices(): Promise<FakeMediaServices> {
       res.writeHead(204, CORS).end();
       return;
     }
-    // Path style: /<bucket>/<key...>
-    const prefix = `/${FAKE_BUCKET}/`;
-    if (!url.pathname.startsWith(prefix)) {
-      res.writeHead(404, CORS).end();
+    // Path style: /<bucket>/<key...>. An unknown bucket is a NoSuchBucket error, like a real store.
+    const bucket = BUCKETS.find((b) => url.pathname.startsWith(`/${b}/`));
+    if (!bucket) {
+      noSuchKey(res, 'NoSuchBucket');
       return;
     }
-    const key = decodeURIComponent(url.pathname.slice(prefix.length));
+    const store = stores.get(bucket)!;
+    const key = decodeURIComponent(url.pathname.slice(bucket.length + 2));
 
     // backend/media-privacy-vetting-followups (B-257): CopyObject is a PUT carrying x-amz-copy-source
     // ("<bucket>/<key>", URL-encoded). The API copies a file from the private prefix to the public one when it
-    // is approved, and back when a report holds it, so the stand-in must do the same.
+    // is approved, and back when a report holds it, so the stand-in must do the same. B-265: with two buckets
+    // the source names its OWN bucket ("<source-bucket>/<key>") and the destination is the bucket in the path,
+    // so this is a real cross-bucket copy; a source in an unknown bucket or with a missing key is NoSuchKey.
     const copySource = req.headers['x-amz-copy-source'];
     if (req.method === 'PUT' && copySource) {
       const decoded = decodeURIComponent(String(copySource)).replace(/^\//, '');
-      const sourceKey = decoded.startsWith(`${FAKE_BUCKET}/`) ? decoded.slice(FAKE_BUCKET.length + 1) : null;
-      const source = sourceKey ? store.get(sourceKey) : undefined;
+      const sourceBucket = BUCKETS.find((b) => decoded.startsWith(`${b}/`));
+      const sourceKey = sourceBucket ? decoded.slice(sourceBucket.length + 1) : null;
+      const source = sourceBucket && sourceKey ? stores.get(sourceBucket)!.get(sourceKey) : undefined;
       if (!source) {
-        res
-          .writeHead(404, { ...CORS, 'Content-Type': 'application/xml' })
-          .end('<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>not found</Message></Error>');
+        noSuchKey(res);
         return;
       }
       store.set(key, { body: Buffer.from(source.body), contentType: String(req.headers['content-type'] ?? source.contentType) });
@@ -152,9 +168,7 @@ export async function startFakeMediaServices(): Promise<FakeMediaServices> {
     }
     if (req.method === 'GET') {
       if (!found) {
-        res
-          .writeHead(404, { ...CORS, 'Content-Type': 'application/xml' })
-          .end('<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>not found</Message></Error>');
+        noSuchKey(res);
       } else {
         res.writeHead(200, { ...CORS, 'Content-Length': String(found.body.length), 'Content-Type': found.contentType }).end(found.body);
       }
@@ -192,7 +206,9 @@ export async function startFakeMediaServices(): Promise<FakeMediaServices> {
   ]);
 
   return {
-    objects: () => store,
+    objects: () => new Map([...stores.values()].flatMap((m) => [...m.entries()])),
+    objectsIn: (bucket) => new Map(stores.get(bucket) ?? []),
+    bucketsHolding: (key) => BUCKETS.filter((b) => stores.get(b)!.has(key)),
     rekognitionCalls: () => rekognitionCalls,
     close: () =>
       new Promise<void>((resolve) => {

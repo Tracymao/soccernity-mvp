@@ -1,7 +1,11 @@
 # Deployment setup (Render + Neon + Upstash, all in the EU)
 
+**`docs/launch-gate-runbook.md` is the launch procedure; this file is the Render setup reference.** Follow the runbook
+for the order of the whole launch, the checks, the switches and the rollback; use this file for the detail of what each
+Render, Neon and Upstash setting means.
+
 Decision Log #26 (Build Plan Section 9 / CLAUDE.md) resolves Decision Log
-#9 (hosting): **Render** runs `services/api`, **Neon** is the managed
+#9 (hosting): **Render** runs `services/api` and the two static sites (`apps/web`, `apps/admin`), **Neon** is the managed
 Postgres, **Upstash** is the managed Redis — three separate, unbundled
 providers rather than one all-in-one platform. Everything is hosted in the
 **EU**: Render's Frankfurt region, with Neon and Upstash created in EU regions.
@@ -23,8 +27,8 @@ You'll need:
   Upstash's free tiers are sufficient for this step.
 - A terminal that has `openssl` (to generate secrets).
 
-**Region matters and cannot be fixed later.** `render.yaml` puts both services
-in **Frankfurt** (`region: frankfurt`). Render cannot change a service's region
+**Region matters and cannot be fixed later.** `render.yaml` puts both API services
+in **Frankfurt** (`region: frankfurt`; the static sites have no region). Render cannot change a service's region
 after it is created, so check it on the import screen. Neon and Upstash must
 also be created in an **EU region**, in or near the same area as Render's
 Frankfurt region. Nothing in this repo can check that for you; pick the region
@@ -32,8 +36,7 @@ on each provider's "create" screen.
 
 ## 1. Neon (Postgres)
 
-1. Go to https://neon.tech and create an account (GitHub sign-in is the
-   fastest option).
+1. Sign in at https://neon.tech: the Neon account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a project already exists; if not, create one (create an account only if you cannot sign in).
 2. Create a new **Project**, choosing an **EU region** when asked. Name it
    something recognizable, e.g. `soccernity`.
 3. Within that project, Neon gives you a default database and branch
@@ -53,7 +56,7 @@ on each provider's "create" screen.
 
 ## 2. Upstash (Redis)
 
-1. Go to https://upstash.com and create an account.
+1. Sign in at https://upstash.com: the Upstash account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a database already exists before creating one.
 2. Create a new **Redis database**, choosing an **EU region** close to
    Render's Frankfurt region.
 3. Create two databases, one for staging and one for production, so a
@@ -133,20 +136,26 @@ No two may be the same.
 
 ## 4. Render (the API host)
 
-1. Go to https://render.com and create an account, then connect your
+1. Sign in at https://render.com: the Render account already exists but is NOT configured, on purpose (corrected 2026-11-14 from the founder's own record); nothing is connected until the launch gate. At the gate, connect your
    GitHub account so Render can access this repository.
 2. From Render's dashboard, choose **New > Blueprint**.
 3. Point it at this repository. Render will detect `render.yaml` at the
-   repo root and show you the two services it defines:
+   repo root and show you the six services it defines: the two API services,
    `soccernity-api-staging` (tracks the `staging` branch) and
-   `soccernity-api` (tracks the `main` branch, production). Both should show
-   the Frankfurt region.
+   `soccernity-api` (tracks the `main` branch, production), both in the
+   Frankfurt region, and the four static sites for `apps/web` and `apps/admin`
+   (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`,
+   `soccernity-admin`; section 4b), which have no region.
    **Update 2026-11-14:** the Blueprint now also defines four static sites for `apps/web` and `apps/admin`
    (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`, `soccernity-admin`; section 4b), so it shows six
    services, not two. The static sites have no region (Render does not support one for static sites).
 4. Render prompts for every variable marked `sync: false` in `render.yaml`
    (only at the first import; later edits are made on each service's
-   "Environment" tab). For **each** of the two services, set:
+   "Environment" tab). Only the two API services have any (37 each; the four
+   static sites have none). The full list with its source is Appendix A of
+   `docs/launch-gate-runbook.md`; the runbook's Part 3 says when each value is
+   made and step 4.2 when it is entered. For **each** of the two API
+   services, set:
    - `DATABASE_URL` / `DIRECT_URL` — the pooled / direct Neon strings for
      that service's branch.
    - `REDIS_URL` — the matching Upstash `rediss://` URL.
@@ -162,71 +171,59 @@ No two may be the same.
      then use the `.env.example` placeholders; verification, guardian-consent
      and password-reset emails are then logged, not sent, so sign-up cannot
      complete for anyone who needs an email.
-   - `WEB_APP_BASE_URL` — the real deployed **https** URL of `apps/web` for
-     that environment, no trailing path. Used to build the links in the
-     verify-email, guardian-consent and withdrawal emails. If it is unset, a
-     placeholder, or plain `http` (outside localhost), those emails are **not
-     sent at all** and an error naming `WEB_APP_BASE_URL` is logged: an email
-     whose only call to action is a dead link is worse than none. (In
-     production an unusable value now stops the API from starting at all.) (The
-     password-reset email still falls back to a placeholder address; it is a
-     known follow-up.) `WEB_APP_BASE_URL` is also the **CORS allowlist** entry
-     for `apps/web`: the API answers cross-origin browser requests only from
-     this origin and from `ADMIN_APP_BASE_URL`, never `*`.
-   - `ADMIN_APP_BASE_URL` — the real deployed **https** URL of `apps/admin` for
-     that environment. Used **only** for the CORS allowlist (QA D-01, Decision
-     Log #407). In production each of the two must be a real https URL, not a
-     placeholder and not localhost. **A value that is unset, not a URL, a
-     placeholder host, `http`, or localhost makes the API refuse to start**
-     (`assertProductionEnv`, B-163; Decision Log #408). Outside production
-     nothing is checked and localhost origins on any port are allowed.
-     **Update 2026-11-14:** `render.yaml` now sets both `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL` as plain values
-     (they are no longer `sync: false`), equal to the origins of the new static sites (section 4b): staging
-     `https://staging.soccernity.com` / `https://admin.staging.soccernity.com`, production `https://soccernity.com` /
-     `https://admin.soccernity.com`. Render therefore no longer prompts for them; change them in `render.yaml` if a
-     final domain differs.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding
-     control) when unset. Leave `GEOLITE2_DB_PATH` blank.
+     control) when unset. Leave `GEOLITE2_DB_PATH` blank. `TRUST_PROXY_HOPS`
+     stays unset until it has been checked on staging (runbook step 6.3).
    - `SPORTS_DATA_API_KEY` — your Highlightly API key. A placeholder until a
-     real account exists; Sports Hub then serves only cached data.
+     real key is set (whether a Highlightly account exists: the founder to confirm, corrected 2026-11-14 from the founder's own record); Sports Hub then serves only cached data.
    - `SPORTS_DATA_RAPIDAPI_HOST` — leave blank unless the Highlightly account
      is a RapidAPI subscription.
-   - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT` — your
-     Cloudflare R2 bucket, API token and
-     `https://<account-id>.r2.cloudflarestorage.com` endpoint. Placeholders for
-     now. The API **does** read these (Admin Console media upload and the
-     profile-picture upload); until they are real, uploads return a clear
-     "storage not configured" error (503) and everything else keeps working.
-   - `S3_PUBLIC_BASE_URL` — optional; the public address of the bucket (its
-     r2.dev subdomain or a custom domain). The R2 endpoint above is not
-     publicly readable, so until this is set stored files get a URL nobody can
-     open. Leave blank until the bucket has a public address.
+   - `S3_BUCKET`, `S3_PRIVATE_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+     `S3_ENDPOINT` — your Cloudflare R2 storage (B-265). **Two buckets, one
+     token.** `S3_BUCKET` is the **public** bucket: the only one that
+     `S3_PUBLIC_BASE_URL` serves. `S3_PRIVATE_BUCKET` is the **private** bucket
+     and has no public address of any kind. They must be two different
+     buckets. `S3_ENDPOINT` is `https://<account-id>.r2.cloudflarestorage.com`
+     and the same for both, and one API token (with Object Read & Write and
+     the right to list objects) covers both buckets. The API sends a file to
+     the bucket its folder says: `post-media/`, `profile-media/` and `media/`
+     go to the public bucket, everything else (`private-media/`,
+     `private-profile/`, `quarantine/`, `data-export/`, anything new) goes to
+     the private bucket. **In production the API refuses to start** if a bucket
+     is configured and `S3_PRIVATE_BUCKET` is unset, blank, `replace-me` or the
+     same as `S3_BUCKET`. (Render sets `NODE_ENV=production` on staging too, so
+     staging is covered.) The API **does** read these (Admin Console media
+     upload, profile pictures and covers, post media, data exports); with no
+     bucket configured at all, uploads return a clear "storage not
+     configured" error (503) and everything else keeps working.
+   - `S3_PUBLIC_BASE_URL` — the public address of the **public** bucket only:
+     use a custom domain on that bucket, `https://media.soccernity.com`. The
+     R2 endpoint above is not publicly readable, so until this is set stored
+     files get a URL nobody can open. Never point it at the private bucket.
    - **Post and contest-entry media** (backend/w14-post-media-pipeline,
-     Decision Log #419). Users upload photos and videos straight to the same R2
-     bucket through a one-time link. Five things are a human job and are not
-     in `render.yaml`: (1) a **CORS rule on the R2 bucket** that allows `PUT`
+     Decision Log #419). Users upload photos and videos straight to the **private** R2
+     bucket (the `quarantine/` folder) through a one-time link. Five things are a human job and are not
+     in `render.yaml`: (1) a **CORS rule on the private R2 bucket** that allows `PUT`
      from your web app's address (without it every browser upload is blocked);
-     (2) **keep the private prefix private** (Decision Log #436, row B-265;
+     (2) **keep the private bucket private** (Decision Log #436, row B-265;
      `services/api/src/modules/post-media/README.md`, "Deployment caveat").
      The API keeps every file that is waiting for a decision, held by reports
-     or rejected under the **private prefix** `private-media/` (the name
-     deliberately does not start with `post-media`), and copies a file to the
-     public prefix `post-media/` only when it is approved. That only works if
-     nothing public serves `private-media/`. With Cloudflare R2 the bucket's
-     `r2.dev` address or a custom domain serves the *whole bucket* unless a
-     rule limits it. So `S3_PUBLIC_BASE_URL` must map **only** `post-media/`
-     **and `profile-media/`** (a path rule or a Worker), **or** the private
-     files must live in a separate bucket. `profile-media/` is where an
-     *approved* profile picture or cover photo is served from; its private
-     counterpart is `private-profile/` (backend/b036-avatar-cover-check,
-     B-036), which the public address must not serve either. Then prove it:
-     request a `private-media/` object **and a `private-profile/` object**
-     through the public address and check you are refused (not served), and
-     that a `profile-media/` object is served. This has not
-     been verified against a real bucket; until it is done, a pending or
-     rejected file is fetchable by anyone who holds its URL;
+     or rejected in the **private bucket** (`private-media/`, and
+     `private-profile/` for profile pictures and covers), and copies a file to
+     the **public bucket** (`post-media/`, `profile-media/`) only when it is
+     approved. That only works if the private bucket has **no public access of
+     any kind**: do not enable its `r2.dev` address, do not attach a custom
+     domain to it, add no public rule. The public bucket gets the custom domain
+     `media.soccernity.com` (`S3_PUBLIC_BASE_URL`). Then prove it: request an
+     object that lives in the private bucket through the public address and
+     check you are refused (not served), and that a `post-media/` and a
+     `profile-media/` object are served. This has not been verified against a
+     real bucket. Moving a file between the two buckets uses R2's CopyObject
+     with the source in the other bucket; Cloudflare's documentation lists
+     CopyObject but does not say whether it works across buckets, so the API
+     falls back to copying through itself if R2 refuses (also unverified);
      (3) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
      does not include them, so until they are installed (for example by moving
      the API to a Docker image that has them) every video upload is refused
@@ -241,11 +238,52 @@ No two may be the same.
      (`POST_MEDIA_*`, `MEDIA_CHECK_*`) already carry their defaults in
      `render.yaml`.
    - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` — Stripe **test** keys until
-     a real account exists. Placeholders mean the card-check step for
+     real keys are set (the Stripe account exists, corrected 2026-11-14 from the founder's own record; the founder confirms at that step whether the keys exist yet). Placeholders mean the card-check step for
      under-13 US guardians fails closed (that guardian cannot complete
      consent); nothing else is affected.
-   - `SENTRY_DSN` — placeholder until a Sentry project exists; error
-     monitoring is then simply off.
+   - `SENTRY_DSN` — placeholder until a Sentry project and DSN are set (the Sentry account exists, corrected 2026-11-14 from the founder's own record; the founder confirms at that step whether the project exists); error
+     monitoring is then simply off. (Runbook steps 1.8 and 6.6.)
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — the web-push key
+     pair, made once per environment with `npx web-push generate-vapid-keys`
+     (named in the `render.yaml` comments), and `VAPID_SUBJECT`, a `mailto:` or
+     `https://` contact address. Unset or `replace-me` means web push reports
+     itself unavailable; nothing else breaks. (Runbook steps 3.4 and 8.2.)
+   - `REKOGNITION_ACCESS_KEY_ID`, `REKOGNITION_SECRET_ACCESS_KEY` — the AWS IAM
+     user's keys for the automatic picture and video check (see the post-media
+     paragraph above; the region is `REKOGNITION_REGION`, a plain value). Until
+     they are real nothing is checked and nothing is ever approved
+     automatically. Set the AWS opt-out of AI-services data use **before** you
+     paste any key. (Runbook step 1.9.)
+   - `MEDIA_UPLOADS_ENABLED` — the user-upload switch described in step 3.
+     Leave it unset, or anything other than the exact text `true`, in production
+     until counsel has answered B-206. (Runbook steps 7.5 and 8.7.)
+   - `ADMIN_2FA_ENFORCED` — the admin two-factor switch described in step 3.
+     The exact text `true` turns it on; it must be `true` on production at
+     launch. (Runbook steps 6.2 and 8.6.)
+   - `DOB_ENCRYPTION_KEY_VERSION`, `DOB_ENCRYPTION_KEY_PREVIOUS` — leave both
+     **unset** until a key rotation (step 3 above). (Runbook step 6.1.)
+
+   **Plain values you check, not enter.** `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL`
+   are plain values in `render.yaml` (they are no longer `sync: false`), equal to the
+   origins of the static sites (section 4b): staging `https://staging.soccernity.com`
+   and `https://admin.staging.soccernity.com`, production `https://soccernity.com` and
+   `https://admin.soccernity.com`. Render does not prompt for them; change them in
+   `render.yaml` only if a final domain differs. What they do:
+   - `WEB_APP_BASE_URL` — the deployed **https** URL of `apps/web`, no trailing path.
+     Used to build the links in the verify-email, guardian-consent, withdrawal and
+     password-reset emails. If it is unset, a placeholder, or plain `http` (outside
+     localhost), those emails are **not sent at all** and an error naming
+     `WEB_APP_BASE_URL` is logged: an email whose only call to action is a dead link
+     is worse than none. (In production an unusable value stops the API from
+     starting at all.) It is also the **CORS allowlist** entry for `apps/web`: the
+     API answers cross-origin browser requests only from this origin and from
+     `ADMIN_APP_BASE_URL`, never `*`.
+   - `ADMIN_APP_BASE_URL` — the deployed **https** URL of `apps/admin`. Used **only**
+     for the CORS allowlist (QA D-01, Decision Log #407). In production each of the
+     two must be a real https URL, not a placeholder and not localhost. **A value that
+     is unset, not a URL, a placeholder host, `http`, or localhost makes the API refuse
+     to start** (`assertProductionEnv`, B-163; Decision Log #408). Outside production
+     nothing is checked and localhost origins on any port are allowed.
 
    Variables that already carry a value in `render.yaml` (for example
    `S3_REGION`, the `SPORTS_*` cache timings, `COPPA_VERIFICATION_AMOUNT_CENTS`,
@@ -326,9 +364,8 @@ How to tell what happened on any account: `User.countryDerivationMethod` is
 ### The web app's service worker (`/sw.js`) — web push, build register B-062 / B-285
 
 `apps/web/public/sw.js` is the push service worker. Vite copies it to the web build's root, so it
-must be served at **`/sw.js`** (scope `/`). This repo has no web static-site definition yet
-(`render.yaml` defines only the two API services; the static sites are row B-179, done at the launch
-gate), so these are the settings to apply **when that site is created**:
+must be served at **`/sw.js`** (scope `/`). `render.yaml` defines the web static sites (section 4b,
+row B-179), and these are the settings that definition applies; check them on the first deploy:
 
 - Serve `/sw.js` with a **JavaScript content type** (`application/javascript` or `text/javascript`)
   and **`Cache-Control: no-cache`** (or `max-age=0, must-revalidate`) so browsers always check for a
@@ -415,18 +452,17 @@ described in step 4. If a final domain differs from this layout, change the API'
   an attribute. The rest is per app:
   - **web:** `connect-src` the API origin, `https://*.r2.cloudflarestorage.com` (the browser PUTs uploads to a signed link on
     the S3 endpoint) and `https://api.stripe.com`; `img-src` `data:`, `blob:` (cover-crop and upload previews) and
-    `https://*.r2.dev` (the public bucket); `media-src` the same bucket; `script-src` and `frame-src` Stripe
+    `https://media.soccernity.com` (the public media bucket); `media-src` the same host; `script-src` and `frame-src` Stripe
     (`js.stripe.com`, `*.js.stripe.com`, `hooks.stripe.com`), which loads **only on the guardian card step**;
     `worker-src 'self'` for the push service worker. `/sw.js` is also sent with `Cache-Control: no-cache` so browsers always
     re-check it.
-  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://*.r2.dev` **and**
+  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://media.soccernity.com` **and**
     `https://*.r2.cloudflarestorage.com` (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
     frames, no service worker.
-  - The two R2 wildcards stand in for `S3_PUBLIC_BASE_URL` (the public bucket address) and `S3_ENDPOINT` (the API's own S3
-    variable) because neither exists yet. **At the launch gate, tighten them to the exact hosts** (your account-specific
-    `<account-id>.r2.cloudflarestorage.com`; the real `pub-<hash>.r2.dev`), and **add a custom public domain** to `img-src`
-    and `media-src` if `S3_PUBLIC_BASE_URL` uses one. A wildcard `r2.dev` allows any Cloudflare R2 public bucket, which is
-    broader than intended.
+  - The public media host is `https://media.soccernity.com` (the custom domain on the public bucket, B-265). The one R2
+    wildcard that remains, `https://*.r2.cloudflarestorage.com`, stands in for `S3_ENDPOINT` (the API's own S3 endpoint,
+    used for browser uploads and the admin review link) because the account id does not exist yet. **At the launch gate,
+    tighten it to your exact `<account-id>.r2.cloudflarestorage.com`.**
 
 ### Pending-copy gate (B-124) — which build runs where
 
@@ -474,14 +510,14 @@ Staging and production never share an origin.
    then create the DNS records at the registrar (GoDaddy) exactly as Render shows. Keep the records **"DNS only"** (not
    proxied) until the edge-protection step. The registrar and DNS records are not in the repo. Render's custom-domain and
    verification steps change; write them into the launch-gate runbook (B-180) from Render's documentation on the day.
-3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the bucket through a signed link, so the R2
-   bucket needs a CORS rule allowing `PUT` from the web origin(s) (`https://soccernity.com`,
-   `https://staging.soccernity.com`). See the post-media paragraph in step 4. Without it, uploads fail in the browser even
-   though the API side works.
-4. **`S3_PUBLIC_BASE_URL` serves `post-media/` and `profile-media/` only** (B-265): the public address must refuse
-   `private-media/` and `private-profile/`, or the private files must live in a separate bucket. Prove it by requesting an
-   object under each private prefix through the public address and checking you are refused. This also decides the exact
-   `img-src` / `media-src` host: put that same host in the headers (above).
+3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the **private** bucket through a signed
+   link, so the private R2 bucket needs a CORS rule allowing `PUT` from the web origin(s) (`https://soccernity.com`,
+   `https://staging.soccernity.com`). The public bucket needs none. See the post-media paragraph in step 4. Without it,
+   uploads fail in the browser even though the API side works.
+4. **Two buckets, the private one with no public address** (B-265): `S3_BUCKET` is the public bucket (custom domain
+   `media.soccernity.com` = `S3_PUBLIC_BASE_URL`), `S3_PRIVATE_BUCKET` the private one with no public access of any kind.
+   Prove it by requesting an object that lives in the private bucket through the public address and checking you are
+   refused. The host in `S3_PUBLIC_BASE_URL` is the same one in the headers (above).
 5. **Set the production API's** `WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` only if a final domain differs from the layout above.
 6. **Check the deployed headers and the service worker** once a site is live: open the site, then
    `curl -sI https://<origin>/` for the headers, `curl -sI https://<origin>/sw.js` for the JavaScript content type and
@@ -490,7 +526,7 @@ Staging and production never share an origin.
 
 ### Inputs for the launch-gate runbook (B-180) that cannot be expressed in `render.yaml`
 
-- The exact S3 endpoint host and the exact public bucket host (and any custom public domain), to replace the two wildcards.
+- The exact S3 endpoint host (your account id), to replace the one remaining wildcard.
 - The custom domains, the DNS records and the registrar steps.
 - The Cloudflare proxy, WAF and origin lock (B-251), and which side then owns the headers.
 - Redirects: `www.soccernity.com` to the root, and any http to https redirect Render does not do itself.
@@ -500,10 +536,10 @@ Staging and production never share an origin.
 
 ### What is NOT verified
 
-There is **no Render account** and the Blueprint was **not imported**. The field names (`type: web` with `runtime: static`,
+The Render account exists but is NOT configured, on purpose (corrected 2026-11-14 from the founder's own record), and the Blueprint was **not imported**. The field names (`type: web` with `runtime: static`,
 `buildCommand`, `staticPublishPath`, `routes`, `headers`) were checked against Render's documentation on 2026-11-14
 (`https://render.com/docs/blueprint-spec`, `/docs/redirects-rewrites`, `/docs/static-site-headers`), **not against a live
-Render account**. In particular **not verified**: that Render accepts the file as written; that several header rules for one
+Render deployment**. In particular **not verified**: that Render accepts the file as written; that several header rules for one
 path (CSP plus the others) all apply; that Render does not also set `Strict-Transport-Security` itself (a duplicate); that
 `/sw.js` is served as JavaScript; that user-set environment variables are available to the static build; that
 `npm install` at the repository root (which installs every workspace, including `apps/mobile`) fits Render's static build
@@ -532,6 +568,23 @@ everything about domains, DNS, Cloudflare and the bucket.
    workflow from GitHub Actions' "Run workflow" button, choosing
    `staging` or `production`, to confirm the live deployment is actually
    healthy.
+
+## Before and after go-live: where it is written
+
+Everything about going live is in `docs/launch-gate-runbook.md`, not here:
+
+- **Smoke test:** runbook Part 10 (step 10.1 is the manual health-check workflow of step 5.3 above; the rest are the
+  manual checks after go-live).
+- **Rollback:** runbook Part 11, one row per risky step (migration, key backfill, key rotation, switches). Read it
+  **before** Part 9 (going live).
+- **Backup:** take a Neon backup or restore point before the first production migration (runbook step 5.4; the Neon
+  screen is not written down) and keep the old `DOB_ENCRYPTION_KEY` as long as any older backup exists
+  (`docs/dob-encryption-rollback.md`).
+- **Monitoring:** Sentry (runbook steps 1.8 and 6.6, alert rules on the `rate_limiter` tag) and "watch the first day"
+  (runbook step 10.3: Sentry, Render logs, Upstash usage, Neon connections).
+- **No Stripe webhook exists.** The code reads no Stripe webhook (nothing in `services/api/src`, `apps/*/src`,
+  `render.yaml` or `.env.example` mentions one), so none has to be created in Stripe. Only the two keys
+  (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`) are needed.
 
 ## What this repo still can't do for you
 

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PUBLIC_ADMIN_MEDIA_PREFIX } from '../../storage/storage-prefixes';
 import { StorageService } from '../../storage/storage.service';
 import { decodeMediaCursor, encodeMediaCursor } from './cursor.util';
 import { ListMediaQueryDto } from './dto/list-media-query.dto';
@@ -61,7 +62,7 @@ function sanitizeFileNameSegment(originalName: string): string {
 }
 
 function buildMediaKey(uploaderId: string, originalName: string): string {
-  return `media/${uploaderId}/${randomUUID()}-${sanitizeFileNameSegment(originalName)}`;
+  return `${PUBLIC_ADMIN_MEDIA_PREFIX}/${uploaderId}/${randomUUID()}-${sanitizeFileNameSegment(originalName)}`;
 }
 
 function deriveMediaType(mimetype: string): MediaType {

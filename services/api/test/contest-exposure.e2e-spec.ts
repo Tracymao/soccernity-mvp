@@ -199,7 +199,7 @@ describe('Contest exposure e2e: the Final-week carousel', () => {
       expect(res.body.live).toBe(true);
       expect(res.body.items.map((i: { entryId: string }) => i.entryId).sort()).toEqual(finalists.map((f) => f.entryId).sort());
       const tile = res.body.items[0];
-      expect(Object.keys(tile).sort()).toEqual(['club', 'entryId', 'finalist', 'post', 'postId']);
+      expect(Object.keys(tile).sort()).toEqual(['entryId', 'finalist', 'post', 'postId']);
       expect(JSON.stringify(res.body)).not.toMatch(/impression|Real Name|likeCount|commentCount|viewCount/i);
 
       // a finalist does not see their own video in the carousel
@@ -208,7 +208,7 @@ describe('Contest exposure e2e: the Final-week carousel', () => {
       expect(own.body.items).toHaveLength(3);
     });
 
-    it('B-234: each tile carries the finalist’s represented club ({ id, name } or null); a MINOR finalist’s is always null', async () => {
+    it('no tile carries a club for anyone (founder decision 2026-11-14), even an adult who represents one', async () => {
       const admin = await adminToken();
       const { cycleId, round4Id } = await createCycle(admin);
       const club = await prisma().clubPage.create({ data: { name: 'Yaba Athletic', league: 'Lagos Sunday League', country: 'NG' } });
@@ -232,15 +232,16 @@ describe('Contest exposure e2e: the Final-week carousel', () => {
       const viewer = await createUser('viewer');
       at(LIVE);
 
-      const tiles = (await carousel(viewer).expect(200)).body.items as { finalist: { userId: string }; club: unknown }[];
-      const clubOf = (u: TestUser) => tiles.find((t) => t.finalist.userId === u.userId)?.club;
-      expect(clubOf(adultWithClub)).toEqual({ id: club.id, name: 'Yaba Athletic' });
-      expect(clubOf(adultNoClub)).toBeNull();
-      expect(clubOf(minorWithClub)).toBeNull();
+      const res = await carousel(viewer).expect(200);
+      const tiles = res.body.items as { finalist: { userId: string } }[];
       expect(tiles.find((t) => t.finalist.userId === gone.userId)).toBeUndefined();
       expect(tiles).toHaveLength(3);
-      // the only club fields are id and name; nothing else about the club rides along
-      expect(Object.keys(clubOf(adultWithClub) as object).sort()).toEqual(['id', 'name']);
+      for (const t of tiles) {
+        expect(t).not.toHaveProperty('club');
+        expect(Object.keys(t).sort()).toEqual(['entryId', 'finalist', 'post', 'postId']);
+      }
+      expect(JSON.stringify(res.body)).not.toMatch(/Yaba Athletic/);
+      expect(JSON.stringify(res.body)).not.toContain(club.id);
     });
 
     it('honours the limit (default 6, at most 9)', async () => {

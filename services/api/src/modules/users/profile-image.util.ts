@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
+import { PUBLIC_PROFILE_MEDIA_PREFIX } from '../../storage/storage-prefixes';
 import { StorageService } from '../../storage/storage.service';
 import { MediaProcessor, UnprocessableMediaError } from '../post-media/media-processor';
 import { PostMediaContentType } from '../post-media/media-signature.util';
@@ -54,7 +55,7 @@ export type ProfileImageMime = keyof typeof PROFILE_IMAGE_TYPES;
 // destroy profile pictures. LAUNCH-GATE CONSEQUENCE (B-265): the public address must serve post-media/ AND
 // profile-media/ (and nothing else), or the private files must live in a separate bucket.
 export const PRIVATE_PROFILE_PREFIX = 'private-profile';
-export const PUBLIC_PROFILE_PREFIX = 'profile-media';
+export const PUBLIC_PROFILE_PREFIX = PUBLIC_PROFILE_MEDIA_PREFIX;
 
 /** The private key a new upload is stored under. */
 export function privateProfileKey(userId: string, uuid: string, ext: string): string {

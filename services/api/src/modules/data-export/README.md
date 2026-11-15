@@ -22,8 +22,9 @@ the daily sweep marks it `failed` after 60 minutes so the person can ask again.
 
 ## The file
 
-JSON, stored privately under `data-export/<userId>/<requestId>.json` -- a prefix that is NOT one of the two the
-public address serves (`post-media/`, `profile-media/`, see B-265). Every query has an explicit `select` and
+JSON, stored privately under `data-export/<userId>/<requestId>.json` -- a prefix that is not on the public
+allow-list (`post-media/`, `profile-media/`, `media/`), so it lives in the **private bucket** (`S3_PRIVATE_BUCKET`, B-265),
+which has no public address. Every query has an explicit `select` and
 every row is mapped field by field (never a spread). Contains: the profile as the owner sees it (not the
 password hash, tokens, two-factor secret or backup codes), posts (text, media references, timestamps), comments,
 accounts followed as **id and public name only**, and messages the person **sent** (current text of edited
