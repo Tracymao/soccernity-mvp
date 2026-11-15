@@ -713,12 +713,25 @@ export class BanterService {
     await this.prisma.banterRoomTopic.deleteMany({ where: { banterRoomId: roomId, topicId } });
   }
 
+  // The creator's controls (status, attach and detach topics) belong to the creator ONLY while the creator's account
+  // is active (backend/room-staff-reactivation, Decision Log #515): an anonymised, deleted, suspended, deactivated or
+  // missing creator account gets the SAME 403 a non-creator gets, so nothing about the creator leaks. Before this, the
+  // controls lapsed only because such an account's sessions were dead; a token for the id would still have worked.
+  // The room itself carries on and staff moderate it (they may reactivate a room staff deactivated:
+  // BanterRoomReactivationService). A dangling createdBy (no User row) is treated the same way.
   private async assertRoomCreator(userId: string, roomId: string, message: string): Promise<void> {
     const room = await this.prisma.banterRoom.findUniqueOrThrow({
       where: { id: roomId },
       select: { createdBy: true },
     });
     if (room.createdBy !== userId) {
+      throw new ForbiddenException(message);
+    }
+    const creator = await this.prisma.user.findUnique({
+      where: { id: room.createdBy },
+      select: { accountStatus: true },
+    });
+    if (!creator || creator.accountStatus !== 'active') {
       throw new ForbiddenException(message);
     }
   }

@@ -95,6 +95,10 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // contains an '@' (a possible email address). targetType 'search', targetId the KIND of search ('email'); notes
   // are 'kind=email results=<n>'. The text typed is personal data and is NEVER recorded.
   ADMIN_SEARCH_PERFORMED: 'admin.search_performed',
+  // POST /admin/banter-rooms/:id/reactivate (backend/room-staff-reactivation, Decision Log #515) -- staff set a Bants
+  // room back to active that STAFF had deactivated (room_deactivated on a report). targetType 'banter_room', targetId
+  // the room; notes carry the report that deactivated it and the optional note. The room's creator is never told.
+  BANTER_ROOM_REACTIVATED: 'banter_room.reactivated',
 } as const;
 
 export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
@@ -116,6 +120,7 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   PROFILE_IMAGE: 'profile_image',
   CONTACT_ENQUIRY: 'contact_enquiry',
   SEARCH: 'search',
+  BANTER_ROOM: 'banter_room',
 } as const;
 
 export type AdminActionLogTargetType =
