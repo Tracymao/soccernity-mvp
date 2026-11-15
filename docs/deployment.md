@@ -181,40 +181,50 @@ No two may be the same.
      real account exists; Sports Hub then serves only cached data.
    - `SPORTS_DATA_RAPIDAPI_HOST` — leave blank unless the Highlightly account
      is a RapidAPI subscription.
-   - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT` — your
-     Cloudflare R2 bucket, API token and
-     `https://<account-id>.r2.cloudflarestorage.com` endpoint. Placeholders for
-     now. The API **does** read these (Admin Console media upload and the
-     profile-picture upload); until they are real, uploads return a clear
-     "storage not configured" error (503) and everything else keeps working.
-   - `S3_PUBLIC_BASE_URL` — optional; the public address of the bucket (its
-     r2.dev subdomain or a custom domain). The R2 endpoint above is not
-     publicly readable, so until this is set stored files get a URL nobody can
-     open. Leave blank until the bucket has a public address.
+   - `S3_BUCKET`, `S3_PRIVATE_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+     `S3_ENDPOINT` — your Cloudflare R2 storage (B-265). **Two buckets, one
+     token.** `S3_BUCKET` is the **public** bucket: the only one that
+     `S3_PUBLIC_BASE_URL` serves. `S3_PRIVATE_BUCKET` is the **private** bucket
+     and has no public address of any kind. They must be two different
+     buckets. `S3_ENDPOINT` is `https://<account-id>.r2.cloudflarestorage.com`
+     and the same for both, and one API token (with Object Read & Write and
+     the right to list objects) covers both buckets. The API sends a file to
+     the bucket its folder says: `post-media/`, `profile-media/` and `media/`
+     go to the public bucket, everything else (`private-media/`,
+     `private-profile/`, `quarantine/`, `data-export/`, anything new) goes to
+     the private bucket. **In production the API refuses to start** if a bucket
+     is configured and `S3_PRIVATE_BUCKET` is unset, blank, `replace-me` or the
+     same as `S3_BUCKET`. (Render sets `NODE_ENV=production` on staging too, so
+     staging is covered.) The API **does** read these (Admin Console media
+     upload, profile pictures and covers, post media, data exports); with no
+     bucket configured at all, uploads return a clear "storage not
+     configured" error (503) and everything else keeps working.
+   - `S3_PUBLIC_BASE_URL` — the public address of the **public** bucket only:
+     use a custom domain on that bucket, `https://media.soccernity.com`. The
+     R2 endpoint above is not publicly readable, so until this is set stored
+     files get a URL nobody can open. Never point it at the private bucket.
    - **Post and contest-entry media** (backend/w14-post-media-pipeline,
-     Decision Log #419). Users upload photos and videos straight to the same R2
-     bucket through a one-time link. Five things are a human job and are not
-     in `render.yaml`: (1) a **CORS rule on the R2 bucket** that allows `PUT`
+     Decision Log #419). Users upload photos and videos straight to the **private** R2
+     bucket (the `quarantine/` folder) through a one-time link. Five things are a human job and are not
+     in `render.yaml`: (1) a **CORS rule on the private R2 bucket** that allows `PUT`
      from your web app's address (without it every browser upload is blocked);
-     (2) **keep the private prefix private** (Decision Log #436, row B-265;
+     (2) **keep the private bucket private** (Decision Log #436, row B-265;
      `services/api/src/modules/post-media/README.md`, "Deployment caveat").
      The API keeps every file that is waiting for a decision, held by reports
-     or rejected under the **private prefix** `private-media/` (the name
-     deliberately does not start with `post-media`), and copies a file to the
-     public prefix `post-media/` only when it is approved. That only works if
-     nothing public serves `private-media/`. With Cloudflare R2 the bucket's
-     `r2.dev` address or a custom domain serves the *whole bucket* unless a
-     rule limits it. So `S3_PUBLIC_BASE_URL` must map **only** `post-media/`
-     **and `profile-media/`** (a path rule or a Worker), **or** the private
-     files must live in a separate bucket. `profile-media/` is where an
-     *approved* profile picture or cover photo is served from; its private
-     counterpart is `private-profile/` (backend/b036-avatar-cover-check,
-     B-036), which the public address must not serve either. Then prove it:
-     request a `private-media/` object **and a `private-profile/` object**
-     through the public address and check you are refused (not served), and
-     that a `profile-media/` object is served. This has not
-     been verified against a real bucket; until it is done, a pending or
-     rejected file is fetchable by anyone who holds its URL;
+     or rejected in the **private bucket** (`private-media/`, and
+     `private-profile/` for profile pictures and covers), and copies a file to
+     the **public bucket** (`post-media/`, `profile-media/`) only when it is
+     approved. That only works if the private bucket has **no public access of
+     any kind**: do not enable its `r2.dev` address, do not attach a custom
+     domain to it, add no public rule. The public bucket gets the custom domain
+     `media.soccernity.com` (`S3_PUBLIC_BASE_URL`). Then prove it: request an
+     object that lives in the private bucket through the public address and
+     check you are refused (not served), and that a `post-media/` and a
+     `profile-media/` object are served. This has not been verified against a
+     real bucket. Moving a file between the two buckets uses R2's CopyObject
+     with the source in the other bucket; Cloudflare's documentation lists
+     CopyObject but does not say whether it works across buckets, so the API
+     falls back to copying through itself if R2 refuses (also unverified);
      (3) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
      does not include them, so until they are installed (for example by moving
      the API to a Docker image that has them) every video upload is refused
@@ -443,18 +453,17 @@ described in step 4. If a final domain differs from this layout, change the API'
   an attribute. The rest is per app:
   - **web:** `connect-src` the API origin, `https://*.r2.cloudflarestorage.com` (the browser PUTs uploads to a signed link on
     the S3 endpoint) and `https://api.stripe.com`; `img-src` `data:`, `blob:` (cover-crop and upload previews) and
-    `https://*.r2.dev` (the public bucket); `media-src` the same bucket; `script-src` and `frame-src` Stripe
+    `https://media.soccernity.com` (the public media bucket); `media-src` the same host; `script-src` and `frame-src` Stripe
     (`js.stripe.com`, `*.js.stripe.com`, `hooks.stripe.com`), which loads **only on the guardian card step**;
     `worker-src 'self'` for the push service worker. `/sw.js` is also sent with `Cache-Control: no-cache` so browsers always
     re-check it.
-  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://*.r2.dev` **and**
+  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://media.soccernity.com` **and**
     `https://*.r2.cloudflarestorage.com` (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
     frames, no service worker.
-  - The two R2 wildcards stand in for `S3_PUBLIC_BASE_URL` (the public bucket address) and `S3_ENDPOINT` (the API's own S3
-    variable) because neither exists yet. **At the launch gate, tighten them to the exact hosts** (your account-specific
-    `<account-id>.r2.cloudflarestorage.com`; the real `pub-<hash>.r2.dev`), and **add a custom public domain** to `img-src`
-    and `media-src` if `S3_PUBLIC_BASE_URL` uses one. A wildcard `r2.dev` allows any Cloudflare R2 public bucket, which is
-    broader than intended.
+  - The public media host is `https://media.soccernity.com` (the custom domain on the public bucket, B-265). The one R2
+    wildcard that remains, `https://*.r2.cloudflarestorage.com`, stands in for `S3_ENDPOINT` (the API's own S3 endpoint,
+    used for browser uploads and the admin review link) because the account id does not exist yet. **At the launch gate,
+    tighten it to your exact `<account-id>.r2.cloudflarestorage.com`.**
 
 ### Pending-copy gate (B-124) — which build runs where
 
@@ -502,14 +511,14 @@ Staging and production never share an origin.
    then create the DNS records at the registrar (GoDaddy) exactly as Render shows. Keep the records **"DNS only"** (not
    proxied) until the edge-protection step. The registrar and DNS records are not in the repo. Render's custom-domain and
    verification steps change; write them into the launch-gate runbook (B-180) from Render's documentation on the day.
-3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the bucket through a signed link, so the R2
-   bucket needs a CORS rule allowing `PUT` from the web origin(s) (`https://soccernity.com`,
-   `https://staging.soccernity.com`). See the post-media paragraph in step 4. Without it, uploads fail in the browser even
-   though the API side works.
-4. **`S3_PUBLIC_BASE_URL` serves `post-media/` and `profile-media/` only** (B-265): the public address must refuse
-   `private-media/` and `private-profile/`, or the private files must live in a separate bucket. Prove it by requesting an
-   object under each private prefix through the public address and checking you are refused. This also decides the exact
-   `img-src` / `media-src` host: put that same host in the headers (above).
+3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the **private** bucket through a signed
+   link, so the private R2 bucket needs a CORS rule allowing `PUT` from the web origin(s) (`https://soccernity.com`,
+   `https://staging.soccernity.com`). The public bucket needs none. See the post-media paragraph in step 4. Without it,
+   uploads fail in the browser even though the API side works.
+4. **Two buckets, the private one with no public address** (B-265): `S3_BUCKET` is the public bucket (custom domain
+   `media.soccernity.com` = `S3_PUBLIC_BASE_URL`), `S3_PRIVATE_BUCKET` the private one with no public access of any kind.
+   Prove it by requesting an object that lives in the private bucket through the public address and checking you are
+   refused. The host in `S3_PUBLIC_BASE_URL` is the same one in the headers (above).
 5. **Set the production API's** `WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` only if a final domain differs from the layout above.
 6. **Check the deployed headers and the service worker** once a site is live: open the site, then
    `curl -sI https://<origin>/` for the headers, `curl -sI https://<origin>/sw.js` for the JavaScript content type and
@@ -518,7 +527,7 @@ Staging and production never share an origin.
 
 ### Inputs for the launch-gate runbook (B-180) that cannot be expressed in `render.yaml`
 
-- The exact S3 endpoint host and the exact public bucket host (and any custom public domain), to replace the two wildcards.
+- The exact S3 endpoint host (your account id), to replace the one remaining wildcard.
 - The custom domains, the DNS records and the registrar steps.
 - The Cloudflare proxy, WAF and origin lock (B-251), and which side then owns the headers.
 - Redirects: `www.soccernity.com` to the root, and any http to https redirect Render does not do itself.
