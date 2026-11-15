@@ -52,11 +52,13 @@ import {
   type HoldView,
   type Report,
   type ReportAction,
+  type ReportedRoom,
 } from "../../api/moderation";
 import EnquiryReportView from "./EnquiryReportView";
 import ReportedMessageFields from "./ReportedMessageFields";
 import ContextMessagesCard from "./ContextMessagesCard";
 import RecordAppealDialog from "./RecordAppealDialog";
+import ReportedRoomCard from "./ReportedRoomCard";
 import SuspendAccountDialog from "./SuspendAccountDialog";
 import {
   CaseLevelHoldButtons,
@@ -96,8 +98,15 @@ export default function ReportDetailPage() {
     // queue hands over has none. So a handed-over report is read once more, only to
     // add its holds; a failure there changes nothing on screen.
     const handedOver = report !== null;
-    // A message report also needs the message itself, which only the single-report read carries.
-    if (handedOver && report.holds !== undefined && (report.targetType !== "message" || report.reportedMessage !== undefined)) return;
+    // A message report also needs the message itself, and a Banter Room report the room's status, which only the
+    // single-report read carries.
+    if (
+      handedOver &&
+      report.holds !== undefined &&
+      (report.targetType !== "message" || report.reportedMessage !== undefined) &&
+      (report.targetType !== "banter_room" || report.reportedRoom !== undefined)
+    )
+      return;
     let cancelled = false;
     getReportById(id)
       .then((found) => {
@@ -119,6 +128,7 @@ export default function ReportDetailPage() {
                         contextHidden: found.contextHidden,
                       }
                     : {}),
+                  ...(prev.targetType === "banter_room" ? { reportedRoom: found.reportedRoom } : {}),
                 }
               : found,
           );
@@ -206,6 +216,11 @@ export default function ReportDetailPage() {
     const updated = await recordAppeal(id, reason);
     setAppealOpen(false);
     setReport((prev) => (prev ? { ...prev, ...updated } : updated));
+  }
+
+  // Reactivating (or learning the page was stale) changes only the room's own state; nothing else on the page moves.
+  function handleRoomChanged(next: ReportedRoom) {
+    setReport((prev) => (prev ? { ...prev, reportedRoom: next } : prev));
   }
 
   function handleHoldsPlaced(holds: HoldView[]) {
@@ -326,6 +341,10 @@ export default function ReportDetailPage() {
           ) : null}
           {report.targetType === "message" ? <ReportedMessageFields message={report.reportedMessage} /> : null}
         </div>
+
+        {report.targetType === "banter_room" ? (
+          <ReportedRoomCard room={report.reportedRoom} onChanged={handleRoomChanged} />
+        ) : null}
 
         {report.targetType === "message" ? (
           <ContextMessagesCard
