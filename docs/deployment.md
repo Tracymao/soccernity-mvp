@@ -126,7 +126,8 @@ No two may be the same.
   CSAM and statutory-reporting question (B-206)**; the founder turns it on at the
   launch gate (check B-267 item (l)), together with the post-media setup steps
   below. Locally and in tests it is on unless set to `false`.
-- None of these three has a code default. In production (`NODE_ENV=production`,
+- None of the three generated secrets (`JWT_SECRET`, `ADMIN_JWT_SECRET` and
+  `DOB_ENCRYPTION_KEY`) has a code default. In production (`NODE_ENV=production`,
   which Render sets) the app now **refuses to start** if `JWT_SECRET` or
   `ADMIN_JWT_SECRET` is unset, still a placeholder such as `replace-me`, or if
   the two are the same value. The deploy then fails and the previous version
@@ -232,8 +233,8 @@ No two may be the same.
      whose keys go in `REKOGNITION_ACCESS_KEY_ID` and
      `REKOGNITION_SECRET_ACCESS_KEY` (region `eu-west-1`); until then no
      automatic check runs and every upload waits for a moderator (nothing is
-     ever approved automatically); (5) optionally a bucket lifecycle rule that
-     expires the `quarantine/` prefix after 1 day, as a backstop to the API's
+     ever approved automatically); (5) optionally a bucket lifecycle rule, on the
+     private bucket, that expires the `quarantine/` prefix after 1 day, as a backstop to the API's
      own hourly cleanup. The size, length and moderation limits
      (`POST_MEDIA_*`, `MEDIA_CHECK_*`) already carry their defaults in
      `render.yaml`.
@@ -568,6 +569,13 @@ everything about domains, DNS, Cloudflare and the bucket.
    workflow from GitHub Actions' "Run workflow" button, choosing
    `staging` or `production`, to confirm the live deployment is actually
    healthy.
+4. **The four static sites** (`soccernity-web-staging`, `soccernity-admin-staging`, `soccernity-web`,
+   `soccernity-admin`; section 4b). Open each site's own URL from Render's dashboard (the
+   `*.onrender.com` address, until its custom domain works). YOU SHOULD SEE the app's sign-in or sign-up
+   page, not a Render error page or a blank screen, and a deep link (any path inside the app) opening the
+   app instead of a 404. The header, `/sw.js` and CSP checks are not repeated here: they are in section 4b
+   ("Manual steps that stay human", item 6), and the staged and go-live versions are in
+   `docs/launch-gate-runbook.md` Parts 6 and 10.
 
 ## Before and after go-live: where it is written
 
