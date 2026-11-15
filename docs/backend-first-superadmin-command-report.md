@@ -36,7 +36,7 @@ All run on `origin/main` `a31dec6` plus this change, on my **own scratch Postgre
 | Check | Result |
 |---|---|
 | `tsc --noEmit` (services/api) | exit 0 |
-| `eslint` on the script and its spec | clean |
+| `eslint` on the script and its spec | clean after a CI fix (see the note below) |
 | Unit: `src/scripts/create-first-superadmin.spec.ts` | 1 suite / 33 tests, 0 failures (validation, `describeDatabase`, real argon2id success path, refusals, dry run, `--password` refusal, no secrets in output, DB connection closing, interactive path with fake streams) |
 | e2e: `test/create-first-superadmin.e2e-spec.ts` (real Postgres, real `AppModule`) | 1 suite / 7 tests, 0 failures: dry run writes nothing; created admin signs in through `POST /admin/auth/login` and a wrong password gets 401; second run refuses; refuses when the email belongs to an editor; two simultaneous runs create exactly one superadmin; invalid input writes nothing |
 | `nest build` | exit 0 (took about 15 minutes, the machine was heavily loaded by other sessions); `dist/scripts/create-first-superadmin.js` exists |
@@ -44,7 +44,9 @@ All run on `origin/main` `a31dec6` plus this change, on my **own scratch Postgre
 
 Notes: the first e2e attempt failed with 7 hook timeouts at the default 30 s inside `resetDatabase()` (the machine's slow disk, a known issue) and passed 7/7 with `--testTimeout=900000 --forceExit`. The by-hand run covers the three lines of `main()` wiring the e2e does not (it calls the exported `runCli`). The `dotenv` start-up banner (`injected env (27) from ..\..\.env`) is printed by the library and shows no values. The hand run left one admin row in the scratch database only.
 
-Not run: the full API suites, Playwright, CI (cannot be read from here).
+**CI correction:** the first push failed the Lint step with 4 `no-undef` errors (`NodeJS` and `BufferEncoding` are not defined under the repo's ESLint 9 flat config). My earlier "eslint clean" was wrong; I had not run the repo's config on it. Fixed by typing the streams with `Readable`/`Writable` from `stream` and dropping the encoding argument; the old version now fails the same lint locally and the new one passes. `tsc` exit 0 and the unit spec 33/33 were re-run after the fix; the e2e and the by-hand run were not repeated (the change is types plus one write argument).
+
+Not run: the full API suites, Playwright.
 
 ## Not done / flagged
 

@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as readline from 'readline';
-import { Writable } from 'stream';
+import { Readable, Writable } from 'stream';
 import { isEmail } from 'class-validator';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PasswordService } from '../modules/auth/password/password.service';
@@ -201,9 +201,9 @@ export function createPrismaStore(prisma: PrismaClient): AdminBootstrapStore {
 export interface CliIo {
   argv: string[];
   env: Record<string, string | undefined>;
-  stdin: NodeJS.ReadableStream;
-  stdout: NodeJS.WritableStream;
-  stderr: NodeJS.WritableStream;
+  stdin: Readable;
+  stdout: Writable;
+  stderr: Writable;
   // True when the run can prompt (a real terminal). A run without one must give everything by variable and --yes.
   interactive: boolean;
 }
@@ -268,8 +268,9 @@ export function askLine(
   return new Promise((resolve) => {
     let muted = false;
     const output = new Writable({
-      write(chunk, encoding, callback) {
-        if (!muted) io.stdout.write(chunk, encoding as BufferEncoding);
+      write(chunk, _encoding, callback) {
+        // chunk is a Buffer here (decodeStrings is on), so no encoding needs passing on.
+        if (!muted) io.stdout.write(chunk);
         callback();
       },
     });
