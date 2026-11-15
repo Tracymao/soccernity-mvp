@@ -5,9 +5,9 @@
 export const DATA_EXPORT_STATUSES = ['preparing', 'ready', 'failed'] as const;
 export type DataExportStatus = (typeof DATA_EXPORT_STATUSES)[number];
 
-// Where the JSON file lives: PRIVATE storage, under a prefix that is NOT one of the two the public address serves
-// (post-media/ and profile-media/, B-265), so the file is never publicly fetchable even if the bucket's public
-// address is misconfigured to serve more. Read back only by the server, for the owner.
+// Where the JSON file lives: PRIVATE storage. Not in the public allow-list (storage-prefixes.ts), so in two-bucket
+// mode (B-265) it is in the private bucket, which has no public address at all. Read back only by the server, for
+// the owner.
 export const DATA_EXPORT_STORAGE_PREFIX = 'data-export/';
 
 // One successful request per account per 24 hours. DEFAULT, founder-veto-able (stated by the founder as a

@@ -1,6 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { assertProductionEnv, findInvalidProductionOrigins, findInvalidProductionSecrets } from './validate-runtime-env';
+import {
+  assertProductionEnv,
+  findInvalidProductionOrigins,
+  findInvalidProductionSecrets,
+  privateBucketProblem,
+} from './validate-runtime-env';
 
 const GOOD_SECRETS = { JWT_SECRET: 'a'.repeat(44), ADMIN_JWT_SECRET: 'b'.repeat(44) };
 const GOOD_URLS = { WEB_APP_BASE_URL: 'https://soccernity.com', ADMIN_APP_BASE_URL: 'https://admin.soccernity.com' };
@@ -286,6 +291,52 @@ describe('assertProductionEnv: key rotation settings (DOB_ENCRYPTION_KEY_VERSION
 
 // B-018: the check only protects anything if the process runs it BEFORE it starts serving. The unit tests above
 // prove assertProductionEnv refuses an unset ADMIN_JWT_SECRET; this pins that main.ts really calls it, first.
+describe('assertProductionEnv: the private bucket (B-265)', () => {
+  const prod = { NODE_ENV: 'production', ...GOOD };
+  const withStore = { ...prod, S3_BUCKET: 'soccernity-media', S3_ACCESS_KEY: 'k', S3_SECRET_KEY: 's' };
+
+  it('passes in production with two different real bucket names', () => {
+    expect(() => assertProductionEnv({ ...withStore, S3_PRIVATE_BUCKET: 'soccernity-private' })).not.toThrow();
+  });
+
+  it.each([[undefined], [''], ['   '], ['replace-me']])('refuses to start when the store is configured and S3_PRIVATE_BUCKET is %p', (value) => {
+    expect(() => assertProductionEnv({ ...withStore, S3_PRIVATE_BUCKET: value })).toThrow(/S3_PRIVATE_BUCKET/);
+  });
+
+  it('refuses when S3_PRIVATE_BUCKET is the same bucket as S3_BUCKET (a single bucket under two names is still public)', () => {
+    expect(() => assertProductionEnv({ ...withStore, S3_PRIVATE_BUCKET: 'soccernity-media' })).toThrow(/same as S3_BUCKET/);
+    expect(() => assertProductionEnv({ ...withStore, S3_PRIVATE_BUCKET: ' soccernity-media ' })).toThrow(/same as S3_BUCKET/);
+  });
+
+  it('the message says private files need a bucket with no public address and never prints a bucket name', () => {
+    let message = '';
+    try {
+      assertProductionEnv({ ...withStore, S3_PRIVATE_BUCKET: 'soccernity-media' });
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/no public address/);
+    expect(message).not.toContain('soccernity-media');
+  });
+
+  it.each([[undefined], [''], ['replace-me']])('does not refuse when no store is configured at all (S3_BUCKET=%p): uploads answer 503 instead', (bucket) => {
+    expect(() => assertProductionEnv({ ...prod, S3_BUCKET: bucket })).not.toThrow();
+    expect(() => assertProductionEnv({ ...prod, S3_BUCKET: bucket, S3_PRIVATE_BUCKET: 'replace-me' })).not.toThrow();
+  });
+
+  it('does not check anything outside production (local development and tests run single-bucket)', () => {
+    expect(() => assertProductionEnv({ NODE_ENV: 'development', S3_BUCKET: 'soccernity-media' })).not.toThrow();
+    expect(() => assertProductionEnv({ NODE_ENV: 'test', S3_BUCKET: 'soccernity-media', S3_PRIVATE_BUCKET: 'soccernity-media' })).not.toThrow();
+  });
+
+  it('privateBucketProblem is null for a good pair and names the problem otherwise', () => {
+    expect(privateBucketProblem({ S3_BUCKET: 'a', S3_PRIVATE_BUCKET: 'b' })).toBeNull();
+    expect(privateBucketProblem({ S3_BUCKET: 'a' })).toMatch(/missing/);
+    expect(privateBucketProblem({ S3_BUCKET: 'a', S3_PRIVATE_BUCKET: 'a' })).toMatch(/same as S3_BUCKET/);
+    expect(privateBucketProblem({})).toBeNull();
+  });
+});
+
 describe('main.ts boot wiring (B-018)', () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.ts'), 'utf8');
 

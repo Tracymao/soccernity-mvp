@@ -61,7 +61,7 @@ Do these first; most take time (billing, domain checks). For each, follow the ve
 
 **1.3 Upstash (Redis).** WHO: FOUNDER. DO: create one Redis database per environment in an EU region. You need the `rediss://` URL (with the double s). Launch on the existing free plan was decided (Decision Log #439); check the plan's current quotas and price yourself (step 6.8). YOU SHOULD SEE: a `rediss://...` URL. ROW/SOURCE: B-088, B-267 (d), Decision Log #439; `.env.example`. KNOWN RISK (read from the code): sign-in, token refresh, registration and password reset all store tokens in Redis with no fallback, so a Redis outage blocks them until it returns. The rate limiters fail open or fall back to memory.
 
-**1.4 Cloudflare account and R2 bucket (media storage).** WHO: FOUNDER. DO: create the account and an R2 bucket. Create an API token and keep its access key id and secret. Note your account id: the bucket's S3 address has the form `https://<account-id>.r2.cloudflarestorage.com` (`.env.example`). The token must be allowed to READ, WRITE and LIST objects (listing is needed by the nightly stray-file sweep, B-283). YOU SHOULD SEE: bucket name, endpoint, access key id, secret. ROW/SOURCE: B-207, B-265, B-283; `.env.example` lines 305 to 330. UNKNOWN: the exact token permission names in Cloudflare's screen (B-207 records only that "Object Read & Write" is believed to include listing; not checked against Cloudflare's documentation).
+**1.4 Cloudflare account and two R2 buckets (media storage).** WHO: FOUNDER. DO: create the account and TWO R2 buckets: a public one (this is `S3_BUCKET`) and a private one (this is `S3_PRIVATE_BUCKET`). The private bucket must have no public address of any kind: do not turn on its `r2.dev` address and attach no custom domain to it. Create ONE API token that covers both buckets and keep its access key id and secret. Note your account id: the S3 address, the same for both buckets, has the form `https://<account-id>.r2.cloudflarestorage.com` (`.env.example`). The token must be allowed to READ, WRITE and LIST objects in both buckets (listing is needed by the nightly stray-file sweep, B-283, which lists both). YOU SHOULD SEE: the two bucket names, the endpoint, access key id, secret. ROW/SOURCE: B-207, B-265, B-283; `.env.example` lines 305 to 330. UNKNOWN: the exact token permission names in Cloudflare's screen (B-207 records only that "Object Read & Write" is believed to include listing; not checked against Cloudflare's documentation).
 
 **1.5 Postmark (email).** WHO: FOUNDER. DO: create an account, add billing, and verify a sending domain (SPF and DKIM DNS records that Postmark gives you; these go in Part 2). Choose the "from" address on that domain. YOU SHOULD SEE: a server token and a verified sender. ROW/SOURCE: Decision Log #17; `.env.example` lines 207 to 217. The placeholder `POSTMARK_FROM_EMAIL` must be replaced by a real address on the verified domain, "not left as-is alongside a real API key" (`.env.example`).
 
@@ -199,13 +199,13 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 
 **6.7 Upstash plan.** WHO: FOUNDER. ROW: B-267 (d), Decision Log #439. Check the current quotas and price of the plan in your Upstash account against your expected traffic; the register recorded the Prod Pack at 200 dollars per month per database and declined it for launch (the figures are the founder's, not re-fetched). UNKNOWN: what happens at the free plan's limits (QUESTION F13).
 
-**6.8 R2 bucket: CORS and the private-prefix check.** WHO: FOUNDER with AGENT. ROW: B-265, B-207. DO:
+**6.8 R2 buckets: CORS and the private-bucket check.** WHO: FOUNDER with AGENT. ROW: B-265, B-207. DO:
 
-1. Set the bucket's CORS rule to allow `PUT` from the web origins (`https://staging.soccernity.com`, then production), so browsers can upload to the one-time links. The screen: UNKNOWN (Cloudflare documentation). This is a human step (`docs/deployment.md`).
-2. Choose how files are served publicly. `S3_PUBLIC_BASE_URL` must be an address that serves ONLY the folders `post-media/` and `profile-media/`, **never** `private-media/` or `private-profile/` (or use a separate bucket for the private folders). On R2 the `r2.dev` address or a custom domain serves the whole bucket unless a path rule or Worker limits it (`modules/post-media/README.md`). NOT DECIDED: r2.dev or a custom domain, and the exact host (QUESTION F10).
-3. **Prove it:** ask for an object that lives under `private-media/` through the public address; it must be REFUSED. YOU SHOULD SEE a refusal (a 403 or 404 page, not the file). IF NOT: stop; do not turn uploads on.
+1. Set the CORS rule on the PRIVATE bucket (the browser uploads to it through a one-time link) to allow `PUT` from the web origins (`https://staging.soccernity.com`, then production). The public bucket needs no CORS rule. The screen: UNKNOWN (Cloudflare documentation). This is a human step (`docs/deployment.md`).
+2. Serve the PUBLIC bucket (`S3_BUCKET`) at the custom domain `media.soccernity.com` (`S3_PUBLIC_BASE_URL`). The PRIVATE bucket (`S3_PRIVATE_BUCKET`) stays with no public address at all: no `r2.dev` address, no custom domain, no public rule. The API puts `post-media/`, `profile-media/` and `media/` files in the public bucket and everything else (including `private-media/`, `private-profile/` and `quarantine/`) in the private one (`modules/post-media/README.md`). The domain screens: UNKNOWN (Cloudflare documentation).
+3. **Prove it:** ask for an object that lives in the private bucket through the public address; it must be REFUSED. YOU SHOULD SEE a refusal (a 403 or 404 page, not the file). IF NOT: stop; do not turn uploads on.
 4. Optional: a bucket lifecycle rule on `quarantine/` of one day (a safety net; the app also purges it).
-5. After the exact R2 host is known, tighten the two wildcards in the static sites' CSP in `render.yaml` (`https://*.r2.dev`, `https://*.r2.cloudflarestorage.com`) to exact hosts, and add a custom public domain if used (AGENT; `docs/infra-static-site-hosting-report.md`).
+5. After your account id is known, tighten the one wildcard in the static sites' CSP in `render.yaml` (`https://*.r2.cloudflarestorage.com`) to your exact host (AGENT; `docs/infra-static-site-hosting-report.md`). The public media host in the CSP is already `https://media.soccernity.com`.
 
 **6.9 Sports data live check.** WHO: AGENT. ROW: Decision Log #328, #323, B-090. With a real `SPORTS_DATA_API_KEY` on staging, request the live scores and one match page and confirm real data (not just an empty page). Until this is done no real Highlightly data has ever flowed through the app.
 
@@ -354,7 +354,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 | 1.1 Render account | Founder | B-088, B-179 | |
 | 1.2 Neon (pooled + direct strings) | Founder | B-088 | |
 | 1.3 Upstash (rediss URL) | Founder | B-088, B-267 (d) | |
-| 1.4 Cloudflare + R2 (token incl. list) | Founder | B-207, B-265 | |
+| 1.4 Cloudflare + two R2 buckets (one token incl. list) | Founder | B-207, B-265 | |
 | 1.5 Postmark + verified domain | Founder | B-088 | |
 | 1.6 Stripe (test keys) | Founder | B-162 | |
 | 1.7 MaxMind | Founder | B-024 | |
@@ -379,7 +379,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 | 6.5 Cookie sign-in on real names | QA | B-267 (a), (h), (i) | |
 | 6.6 Sentry alert rules | Founder | B-267 (c) | |
 | 6.7 Upstash plan check | Founder | B-267 (d) | |
-| 6.8 R2 CORS + private-prefix refused | Founder, agent | B-265, B-207 | |
+| 6.8 R2 CORS + private bucket refused | Founder, agent | B-265, B-207 | |
 | 6.9 Sports data live | Agent | B-090 | |
 | 6.10 Full Playwright run clean | QA | B-134, B-219, B-267 (e) | |
 | 6.11 B-221, B-106, B-055 checks | QA | B-221, B-106, B-055 | |
@@ -445,9 +445,10 @@ Source: `render.yaml`. "From" is where the value comes from. Render asks for the
 | `POSTMARK_FROM_EMAIL` | sender on a verified domain | step 1.5 |
 | `SPORTS_DATA_API_KEY` | Highlightly key | step 1.10 |
 | `SPORTS_DATA_RAPIDAPI_HOST` | blank for a direct account | step 1.10 |
-| `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | R2 bucket name and token | step 1.4 |
+| `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | R2 PUBLIC bucket name, and the token (one token for both buckets) | step 1.4 |
+| `S3_PRIVATE_BUCKET` | R2 PRIVATE bucket name (no public address; production refuses to start without it) | step 1.4 |
 | `S3_ENDPOINT` | `https://<account-id>.r2.cloudflarestorage.com` | step 1.4 |
-| `S3_PUBLIC_BASE_URL` | address serving only `post-media/` and `profile-media/` | step 6.8 |
+| `S3_PUBLIC_BASE_URL` | `https://media.soccernity.com`, the custom domain on the public bucket only | step 6.8 |
 | `REKOGNITION_ACCESS_KEY_ID`, `REKOGNITION_SECRET_ACCESS_KEY` | AWS IAM user | step 1.9 |
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` | Stripe (test until decided) | step 1.6 |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | web push | step 3.4 |

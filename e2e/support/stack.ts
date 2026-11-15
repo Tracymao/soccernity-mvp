@@ -11,7 +11,13 @@ export const RUN_DIR = path.resolve(__dirname, '..', '.run');
 export const PORTS = { api: 3100, web: 5273, admin: 5274 } as const;
 
 // FC10 (B-240): the stand-ins for the object store and for Amazon Rekognition (support/fake-media-services.ts).
-export const FAKE_MEDIA = { storage: 'http://localhost:3191', rekognition: 'http://localhost:3192', bucket: 'qa-media' } as const;
+// B-265: two buckets, as in production. `bucket` is the PUBLIC one (S3_BUCKET), `privateBucket` the private one (S3_PRIVATE_BUCKET).
+export const FAKE_MEDIA = {
+  storage: 'http://localhost:3191',
+  rekognition: 'http://localhost:3192',
+  bucket: 'qa-media',
+  privateBucket: 'qa-media-private',
+} as const;
 export const URLS = {
   api: `http://localhost:${PORTS.api}`,
   web: `http://localhost:${PORTS.web}`,
