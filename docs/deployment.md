@@ -36,8 +36,7 @@ on each provider's "create" screen.
 
 ## 1. Neon (Postgres)
 
-1. Go to https://neon.tech and create an account (GitHub sign-in is the
-   fastest option).
+1. Sign in at https://neon.tech: the Neon account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a project already exists; if not, create one (create an account only if you cannot sign in).
 2. Create a new **Project**, choosing an **EU region** when asked. Name it
    something recognizable, e.g. `soccernity`.
 3. Within that project, Neon gives you a default database and branch
@@ -57,7 +56,7 @@ on each provider's "create" screen.
 
 ## 2. Upstash (Redis)
 
-1. Go to https://upstash.com and create an account.
+1. Sign in at https://upstash.com: the Upstash account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a database already exists before creating one.
 2. Create a new **Redis database**, choosing an **EU region** close to
    Render's Frankfurt region.
 3. Create two databases, one for staging and one for production, so a
@@ -137,7 +136,7 @@ No two may be the same.
 
 ## 4. Render (the API host)
 
-1. Go to https://render.com and create an account, then connect your
+1. Sign in at https://render.com: the Render account already exists but is NOT configured, on purpose (corrected 2026-11-14 from the founder's own record); nothing is connected until the launch gate. At the gate, connect your
    GitHub account so Render can access this repository.
 2. From Render's dashboard, choose **New > Blueprint**.
 3. Point it at this repository. Render will detect `render.yaml` at the
@@ -178,7 +177,7 @@ No two may be the same.
      control) when unset. Leave `GEOLITE2_DB_PATH` blank. `TRUST_PROXY_HOPS`
      stays unset until it has been checked on staging (runbook step 6.3).
    - `SPORTS_DATA_API_KEY` — your Highlightly API key. A placeholder until a
-     real account exists; Sports Hub then serves only cached data.
+     real key is set (whether a Highlightly account exists: the founder to confirm, corrected 2026-11-14 from the founder's own record); Sports Hub then serves only cached data.
    - `SPORTS_DATA_RAPIDAPI_HOST` — leave blank unless the Highlightly account
      is a RapidAPI subscription.
    - `S3_BUCKET`, `S3_PRIVATE_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
@@ -239,10 +238,10 @@ No two may be the same.
      (`POST_MEDIA_*`, `MEDIA_CHECK_*`) already carry their defaults in
      `render.yaml`.
    - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` — Stripe **test** keys until
-     a real account exists. Placeholders mean the card-check step for
+     real keys are set (the Stripe account exists, corrected 2026-11-14 from the founder's own record; the founder confirms at that step whether the keys exist yet). Placeholders mean the card-check step for
      under-13 US guardians fails closed (that guardian cannot complete
      consent); nothing else is affected.
-   - `SENTRY_DSN` — placeholder until a Sentry project exists; error
+   - `SENTRY_DSN` — placeholder until a Sentry project and DSN are set (the Sentry account exists, corrected 2026-11-14 from the founder's own record; the founder confirms at that step whether the project exists); error
      monitoring is then simply off. (Runbook steps 1.8 and 6.6.)
    - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — the web-push key
      pair, made once per environment with `npx web-push generate-vapid-keys`
@@ -537,10 +536,10 @@ Staging and production never share an origin.
 
 ### What is NOT verified
 
-There is **no Render account** and the Blueprint was **not imported**. The field names (`type: web` with `runtime: static`,
+The Render account exists but is NOT configured, on purpose (corrected 2026-11-14 from the founder's own record), and the Blueprint was **not imported**. The field names (`type: web` with `runtime: static`,
 `buildCommand`, `staticPublishPath`, `routes`, `headers`) were checked against Render's documentation on 2026-11-14
 (`https://render.com/docs/blueprint-spec`, `/docs/redirects-rewrites`, `/docs/static-site-headers`), **not against a live
-Render account**. In particular **not verified**: that Render accepts the file as written; that several header rules for one
+Render deployment**. In particular **not verified**: that Render accepts the file as written; that several header rules for one
 path (CSP plus the others) all apply; that Render does not also set `Strict-Transport-Security` itself (a duplicate); that
 `/sw.js` is served as JavaScript; that user-set environment variables are available to the static build; that
 `npm install` at the repository root (which installs every workspace, including `apps/mobile`) fits Render's static build
