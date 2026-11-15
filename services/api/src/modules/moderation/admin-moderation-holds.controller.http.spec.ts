@@ -7,6 +7,7 @@ import { HoldService } from '../account-hold/hold.service';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminModerationController } from './admin-moderation.controller';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { CHILD_SAFETY_VETTING_REQUIRED_CODE } from './moderation.constants';
 import { ModerationService } from './moderation.service';
@@ -82,6 +83,7 @@ describe('Admin hold routes (HTTP layer)', () => {
         { provide: ModerationService, useValue: moderationService },
         HoldService,
         ModerationHoldsService,
+        { provide: BanterRoomReactivationService, useValue: { describeRoom: jest.fn() } },
         AdminRolesGuard,
       ],
     })

@@ -10,6 +10,7 @@ import { RegistrationEmailService } from '../auth/registration/email/registratio
 import { BanterService } from '../banter/banter.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { AdminModerationController } from './admin-moderation.controller';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { CHILD_SAFETY_VETTING_REQUIRED_CODE } from './moderation.constants';
 import { ModerationService } from './moderation.service';
@@ -57,6 +58,7 @@ describe('AdminModerationController: vetting to act on a child-involved message 
         { provide: GuardianSecurityNoticeService, useValue: { notifyInBackground: jest.fn() } },
         { provide: AccountSuspensionService, useValue: {} },
         { provide: ModerationHoldsService, useValue: { listActiveHoldsForReport: jest.fn() } },
+        { provide: BanterRoomReactivationService, useValue: { describeRoom: jest.fn() } },
       ],
     })
       .overrideGuard(AdminJwtAuthGuard)
