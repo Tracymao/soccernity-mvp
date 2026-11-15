@@ -12,7 +12,9 @@ import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
 import { BanterModule } from '../banter/banter.module';
 import { PostMediaModule } from '../post-media/post-media.module';
 import { StorageModule } from '../../storage/storage.module';
+import { AdminBanterRoomsController } from './admin-banter-rooms.controller';
 import { AdminModerationController } from './admin-moderation.controller';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 import { PublicReportsController } from './public-reports.controller';
@@ -80,7 +82,7 @@ import { ReportsController } from './reports.controller';
     // B-294 (Decision Log #487): ReportRetentionService deletes a removed post's stored objects after the commit.
     StorageModule,
   ],
-  controllers: [ReportsController, PublicReportsController, AdminModerationController],
-  providers: [ModerationService, ModerationHoldsService, RegistrationEmailService, ReportRetentionService],
+  controllers: [ReportsController, PublicReportsController, AdminModerationController, AdminBanterRoomsController],
+  providers: [ModerationService, ModerationHoldsService, RegistrationEmailService, ReportRetentionService, BanterRoomReactivationService],
 })
 export class ModerationModule {}

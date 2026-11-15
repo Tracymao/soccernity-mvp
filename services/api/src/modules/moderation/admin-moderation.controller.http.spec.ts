@@ -10,6 +10,7 @@ import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminModerationController } from './admin-moderation.controller';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 
@@ -39,6 +40,9 @@ describe('AdminModerationController (HTTP layer)', () => {
     lift: jest.fn(),
   };
 
+  // backend/room-staff-reactivation (Decision Log #515): the room state a Banter Room report's detail carries.
+  const roomReactivation = { describeRoom: jest.fn() };
+
   let currentAdmin: { sub: string; role: string; aud: string };
 
   beforeAll(async () => {
@@ -47,6 +51,7 @@ describe('AdminModerationController (HTTP layer)', () => {
       providers: [
         { provide: ModerationService, useValue: moderationService },
         { provide: ModerationHoldsService, useValue: holdsService },
+        { provide: BanterRoomReactivationService, useValue: roomReactivation },
         AdminRolesGuard,
       ],
     })
@@ -178,6 +183,34 @@ describe('AdminModerationController (HTTP layer)', () => {
 
       expect(res.body).toEqual({ id: 'report-1', status: 'open', concernsMinor: false, reason: 'r', holds: [hold] });
       expect(holdsService.listActiveHoldsForReport).toHaveBeenCalledWith('report-1');
+    });
+
+    it('a Banter Room report also carries the room state and whether this admin may reactivate it', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'banter_room', targetId: 'room-1' });
+      roomReactivation.describeRoom.mockResolvedValue({ id: 'room-1', status: 'inactive', staffMayReactivate: true });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.reportedRoom).toEqual({ id: 'room-1', status: 'inactive', staffMayReactivate: true });
+      expect(roomReactivation.describeRoom).toHaveBeenCalledWith('room-1', 'admin-1');
+    });
+
+    it('a Banter Room report whose room is gone reports reportedRoom as null', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'banter_room', targetId: 'room-1' });
+      roomReactivation.describeRoom.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.reportedRoom).toBeNull();
+    });
+
+    it('every other report keeps its shape: no reportedRoom key, no room lookup', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'post', targetId: 'post-1' });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body).not.toHaveProperty('reportedRoom');
+      expect(roomReactivation.describeRoom).not.toHaveBeenCalled();
     });
 
     it('returns an empty holds array when nothing is held', async () => {

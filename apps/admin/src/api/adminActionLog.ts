@@ -99,6 +99,7 @@ export const ACTION_KINDS: { value: string; label: string }[] = [
   { value: "media.approved", label: "Media approved" },
   { value: "media.rejected", label: "Media rejected" },
   { value: "admin.search_performed", label: "Search performed" },
+  { value: "banter_room.reactivated", label: "Bants room reactivated" },
 ];
 
 // The actions the server never returns to an admin who is not child-safety vetted (guardian notices, date of
@@ -126,6 +127,7 @@ export const TARGET_TYPE_LABELS: Record<string, string> = {
   profile_image: "Profile picture",
   contact_enquiry: "Contact enquiry",
   search: "Search",
+  banter_room: "Bants room",
 };
 
 export function targetTypeLabel(targetType: string): string {

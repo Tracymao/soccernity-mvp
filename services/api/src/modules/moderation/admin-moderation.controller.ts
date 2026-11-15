@@ -10,6 +10,7 @@ import { AppealReportDto } from './dto/appeal-report.dto';
 import { EscalateReportDto } from './dto/escalate-report.dto';
 import { HoldReasonDto } from './dto/hold-reason.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
 import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 
@@ -32,6 +33,7 @@ export class AdminModerationController {
   constructor(
     private readonly moderationService: ModerationService,
     private readonly holdsService: ModerationHoldsService,
+    private readonly roomReactivation: BanterRoomReactivationService,
   ) {}
 
   @Get('reports')
@@ -51,6 +53,12 @@ export class AdminModerationController {
     // so the screen can show a hold-active state and a Lift control. The 404 and the child-safety-vetting gate
     // were already settled by getReportById above.
     const holds = await this.holdsService.listActiveHoldsForReport(report.id);
+    // backend/room-staff-reactivation (Decision Log #515): on a Banter Room report, the room's current state and whether
+    // THIS admin may reactivate it (read-only; no admin room screen exists). The key is absent on every other report.
+    if (report.targetType === 'banter_room') {
+      const reportedRoom = await this.roomReactivation.describeRoom(report.targetId, admin.sub);
+      return { ...report, holds, reportedRoom };
+    }
     return { ...report, holds };
   }
 

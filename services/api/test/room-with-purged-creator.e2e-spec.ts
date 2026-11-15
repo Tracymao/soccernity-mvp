@@ -258,20 +258,21 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
       expect(room.topics).toHaveLength(1);
     });
 
-    it('FINDING PROBE: a token issued AFTER anonymisation is still the creator by id (the lapse is the dead account, not a code check)', async () => {
+    it('FORMER FINDING PROBE, NOW A GUARD (Decision Log #515): a token issued AFTER anonymisation is refused by the code, not only by the dead session', async () => {
       const { creator, roomId } = await seedRoomWithMembers();
       await anonymiseThroughRealSweep(creator.userId);
-      // A real person cannot get this token (login refuses a 'deleted' account); it is minted here directly to see
-      // whether any code, rather than the dead session, refuses the anonymised creator.
+      // A real person cannot get this token (login refuses a 'deleted' account); it is minted here directly to prove
+      // that the CODE (BanterService.assertRoomCreator needs an ACTIVE creator account), not only the dead session,
+      // refuses the anonymised creator. Before backend/room-staff-reactivation this probe returned 200 or 403 and
+      // only logged it (PR #788 finding 2).
       await new Promise((r) => setTimeout(r, 1100)); // B-305 marker is whole seconds
       const { accessToken } = await app.get(TokenService).issueTokenPair(creator.userId, 'user');
       const res = await request(server())
         .patch(`/banter-rooms/${roomId}/status`)
         .set(auth(accessToken.token))
         .send({ status: 'inactive' });
-      // Pin the CURRENT behaviour so a change to it is noticed; see the report.
-      expect([200, 403]).toContain(res.status);
-      console.log(`[room-with-purged-creator] probe: anonymised creator with a fresh token -> PATCH status ${res.status}`);
+      expect(res.status).toBe(403);
+      expect((await getTestPrismaClient().banterRoom.findUniqueOrThrow({ where: { id: roomId } })).status).toBe('active');
     });
 
     it('the purge job keeps the anonymised creator row for as long as the room exists, so the creator is never purged', async () => {
@@ -367,7 +368,7 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
       expectNoPersonalData(one.body, creator);
     });
 
-    it('an inactive room whose creator is gone stays inactive: no member, no admin token and no appeal can reactivate it', async () => {
+    it('an inactive room whose creator is gone: no member, no creator route and no appeal can reactivate it; STAFF can, through the staff route (Decision Log #515)', async () => {
       const prisma = getTestPrismaClient();
       const { creator, m1, roomId } = await seedRoomWithMembers();
       await anonymiseThroughRealSweep(creator.userId);
@@ -385,9 +386,7 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
         .set(auth(m1.accessToken))
         .send({ status: 'active' })
         .expect(403);
-      // Staff have NO reactivation path today: the admin token is not accepted by the user-facing route, and no
-      // admin route writes BanterRoom.status other than room_deactivated (grep of services/api/src: only
-      // BanterService.updateRoomStatus, the creator's route, and ModerationService's room_deactivated branch).
+      // The admin token is still not accepted by the user-facing (creator) route.
       await request(server())
         .patch(`/banter-rooms/${roomId}/status`)
         .set(auth(moderator.accessToken))
@@ -400,6 +399,14 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
         .send({ reason: 'I disagree with this' })
         .expect(403);
       expect((await prisma.banterRoom.findUniqueOrThrow({ where: { id: roomId } })).status).toBe('inactive');
+
+      // The staff route (POST /admin/banter-rooms/:id/reactivate) is the way back.
+      await request(server())
+        .post(`/admin/banter-rooms/${roomId}/reactivate`)
+        .set(auth(moderator.accessToken))
+        .send({})
+        .expect(200);
+      expect((await prisma.banterRoom.findUniqueOrThrow({ where: { id: roomId } })).status).toBe('active');
     });
 
     it("FINDING: the room report notifies the anonymised creator's account (a row for an account nobody can read)", async () => {
@@ -552,7 +559,8 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
       expect(await prisma.notification.count({ where: { type: 'moderation_decision' } })).toBe(1);
       expect(await prisma.notification.count({ where: { userId: m2.userId, type: 'moderation_decision' } })).toBe(1);
 
-      // Nobody can appeal it (no reported user), and nothing reactivates it.
+      // Nobody can appeal it (no reported user), and no member can reactivate it (staff can: see
+      // room-staff-reactivation.e2e-spec.ts).
       await request(server())
         .post(`/reports/${reportId}/appeal`)
         .set(auth(m2.accessToken))

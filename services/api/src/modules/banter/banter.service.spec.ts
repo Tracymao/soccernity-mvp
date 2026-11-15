@@ -62,6 +62,8 @@ function buildPrismaMock() {
       deleteMany: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // backend/room-staff-reactivation (Decision Log #515): the creator guard reads the creator's account status.
+    user: { findUnique: jest.fn().mockResolvedValue({ accountStatus: 'active' }) },
     $queryRaw: jest.fn().mockResolvedValue([]),
   } as unknown as PrismaService;
 
@@ -990,6 +992,77 @@ describe('BanterService', () => {
         data: { status: 'inactive' },
       });
       expect(result.status).toBe('inactive');
+    });
+  });
+
+  // backend/room-staff-reactivation (Decision Log #515): the creator's controls need an ACTIVE creator account.
+  // Same 403 a non-creator gets, for every control (status, attach topic, detach topic), whatever the reason.
+  describe('creator controls need an active creator account (Decision Log #515)', () => {
+    const controls: Array<[string, (service: BanterService) => Promise<unknown>]> = [
+      ['updateRoomStatus', (service) => service.updateRoomStatus('user-1', 'room-1', { status: 'inactive' })],
+      ['attachTopics', (service) => service.attachTopics('user-1', 'room-1', { names: ['Transfers'] })],
+      ['detachTopic', (service) => service.detachTopic('user-1', 'room-1', 't-1')],
+    ];
+
+    it.each(['deleted', 'suspended', 'deactivated', 'pending_deletion'])(
+      'refuses the creator whose account is %s, for every control, writing nothing',
+      async (accountStatus) => {
+        for (const [, run] of controls) {
+          const prisma = buildPrismaMock();
+          (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+          (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+          (prisma.user.findUnique as jest.Mock).mockResolvedValue({ accountStatus });
+          const service = new BanterService(prisma, buildFeedMock());
+
+          await expect(run(service)).rejects.toBeInstanceOf(ForbiddenException);
+          expect(prisma.banterRoom.updateMany).not.toHaveBeenCalled();
+          expect(prisma.topic.upsert).not.toHaveBeenCalled();
+          expect(prisma.banterRoomTopic.deleteMany).not.toHaveBeenCalled();
+        }
+      },
+    );
+
+    it('refuses when the creator row is gone (a dangling createdBy), the same 403 and message as a non-creator', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new BanterService(prisma, buildFeedMock());
+      const gone = await service
+        .updateRoomStatus('user-1', 'room-1', { status: 'inactive' })
+        .then(() => undefined as unknown as ForbiddenException, (e: ForbiddenException) => e);
+
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'someone-else' });
+      const other = await service
+        .updateRoomStatus('user-1', 'room-1', { status: 'inactive' })
+        .then(() => undefined as unknown as ForbiddenException, (e: ForbiddenException) => e);
+
+      expect(gone).toBeInstanceOf(ForbiddenException);
+      expect(gone.getResponse()).toEqual(other.getResponse());
+    });
+
+    it('does not look the creator up for a caller who is not the creator', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'someone-else' });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.updateRoomStatus('user-1', 'room-1', { status: 'inactive' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('an active creator still passes the guard', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.banterRoom.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await service.updateRoomStatus('user-1', 'room-1', { status: 'inactive' }).catch(() => undefined);
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' }, select: { accountStatus: true } });
+      expect(prisma.banterRoom.updateMany).toHaveBeenCalled();
     });
   });
 
