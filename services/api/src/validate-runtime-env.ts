@@ -84,6 +84,20 @@ export function dobKeyRingProblem(env: Record<string, string | undefined>): stri
   }
 }
 
+/**
+ * B-265: with object storage configured, production needs a SEPARATE private bucket. Returns the problem as a
+ * sentence (no values in it), or null when fine or when storage is not configured at all (S3_BUCKET unset,
+ * blank or the placeholder: the app stays "wired but inactive" and every upload answers 503).
+ */
+export function privateBucketProblem(env: Record<string, string | undefined>): string | null {
+  const bucket = env.S3_BUCKET?.trim() ?? '';
+  if (bucket === '' || bucket === 'replace-me') return null;
+  const priv = env.S3_PRIVATE_BUCKET?.trim() ?? '';
+  if (priv === '' || priv === 'replace-me') return 'S3_PRIVATE_BUCKET is missing, blank or still the placeholder.';
+  if (priv === bucket) return 'S3_PRIVATE_BUCKET is the same as S3_BUCKET; the private bucket must be a different bucket.';
+  return null;
+}
+
 export function assertProductionEnv(env: Record<string, string | undefined> = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   const bad = findInvalidProductionSecrets(env);
@@ -122,6 +136,13 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: DOB_ENCRYPTION_KEY is missing, blank, still the placeholder, or not valid base64 for exactly ${DOB_KEY_BYTES} bytes. ` +
         'Generate one with `openssl rand -base64 32` and set it in the Render dashboard (see docs/deployment.md).',
+    );
+  }
+  const bucketProblem = privateBucketProblem(env);
+  if (bucketProblem) {
+    throw new Error(
+      `Refusing to start: ${bucketProblem} Private files (pending and rejected media, uploads in quarantine, data exports) ` +
+        'must live in a bucket with no public address (see docs/deployment.md).',
     );
   }
   const keyRingProblem = dobKeyRingProblem(env);

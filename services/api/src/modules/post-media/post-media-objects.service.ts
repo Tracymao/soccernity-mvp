@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
+import { PUBLIC_POST_MEDIA_PREFIX } from '../../storage/storage-prefixes';
 
 // backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2). WHERE a processed media file
 // lives, and the moves between the two prefixes. The rule:
@@ -40,7 +41,7 @@ import { DirectUploadStorageService } from '../../storage/direct-upload-storage.
 // updateMany (status in the WHERE) on every write.
 
 export const PRIVATE_PREFIX = 'private-media';
-export const PUBLIC_PREFIX = 'post-media';
+export const PUBLIC_PREFIX = PUBLIC_POST_MEDIA_PREFIX;
 
 /** The private key for a media row: same shape as the public key, different prefix. */
 export function privateKeyFor(uploaderId: string, id: string, ext: string): string {

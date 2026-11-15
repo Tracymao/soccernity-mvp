@@ -11,6 +11,7 @@ import {
 } from '../support/helpers';
 import { adminPage } from '../support/admin-ui';
 import { WIDTH_CLEAR, WIDTH_REJECT, WIDTH_UNSURE } from '../support/fake-media-services';
+import { FAKE_MEDIA } from '../support/stack';
 import { makeMp4, pngOfWidth } from '../support/media-fixtures';
 
 // FC10 (build register B-240; Decision Log #419): post media upload, the whole path in real Chrome against the
@@ -54,6 +55,21 @@ async function postId(authorId: string, text: string): Promise<string> {
 
 async function mediaOf(uploaderId: string, id: string): Promise<{ status: string; reviewEnteredAt: Date | null; rejectionReason: string | null }> {
   return db().postMedia.findFirst({ where: { uploaderId, postId: id }, select: { status: true, reviewEnteredAt: true, rejectionReason: true } });
+}
+
+// B-265 (two buckets): which fake-store buckets hold a key right now. The fake store answers HEAD per bucket, so this
+// asks it directly: a key is in a bucket if HEAD /<bucket>/<key> is 200. Returns bucket names, e.g. ['qa-media'].
+async function bucketsHolding(key: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const bucket of [FAKE_MEDIA.bucket, FAKE_MEDIA.privateBucket]) {
+    const res = await fetch(`${FAKE_MEDIA.storage}/${bucket}/${key}`, { method: 'HEAD' });
+    if (res.status === 200) found.push(bucket);
+  }
+  return found;
+}
+
+async function keysOf(uploaderId: string, id: string): Promise<{ privateKey: string | null; publicKey: string | null }> {
+  return db().postMedia.findFirst({ where: { uploaderId, postId: id }, select: { privateKey: true, publicKey: true } });
 }
 
 test.describe.serial('FC10: media upload, the whole path with the fake check', () => {
@@ -139,6 +155,29 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     expect((await api('GET', `/posts/${posts.reject}`, { token: viewer.token })).status).toBe(404);
     expect((await api('GET', `/posts/${posts.unsure}`, { token: viewer.token })).status).toBe(404);
     if (posts.video) expect((await api('GET', `/posts/${posts.video}`, { token: viewer.token })).status).toBe(200);
+  });
+
+  test('2b. B-265: every file is in the bucket its prefix says, and in exactly one', async () => {
+    // A file the check approved: public copy in the PUBLIC bucket, the private original deleted after approval.
+    const clear = await keysOf(uploader.userId, posts.clear);
+    expect(clear.publicKey, 'an approved file has a public key').toMatch(/^post-media\//);
+    expect(await bucketsHolding(clear.publicKey!)).toEqual([FAKE_MEDIA.bucket]);
+    if (clear.privateKey) expect(await bucketsHolding(clear.privateKey)).toEqual([]);
+
+    // A file that was rejected, and one that waits for a person: only in the PRIVATE bucket, never the public one.
+    for (const id of [posts.reject, posts.unsure]) {
+      const k = await keysOf(uploader.userId, id);
+      expect(k.privateKey, 'a not-approved file keeps a private key').toMatch(/^private-media\//);
+      expect(await bucketsHolding(k.privateKey!)).toEqual([FAKE_MEDIA.privateBucket]);
+      // The public location it WOULD have is empty: nothing was published.
+      if (k.publicKey) expect(await bucketsHolding(k.publicKey)).toEqual([]);
+    }
+
+    if (posts.video) {
+      const v = await keysOf(uploader.userId, posts.video);
+      expect(v.publicKey).toMatch(/^post-media\//);
+      expect(await bucketsHolding(v.publicKey!)).toEqual([FAKE_MEDIA.bucket]);
+    }
   });
 
   test('3. the author sees each file\'s state on their own posts, and Remove-and-resubmit makes the rejected post visible', async ({ page }) => {

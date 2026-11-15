@@ -100,6 +100,9 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     // answers are fixed. The sweeps run every minute, so the media specs wait up to ~70 s for a decision.
     S3_ENDPOINT: FAKE_MEDIA.storage,
     S3_BUCKET: clock.noObjectStore ? 'replace-me' : FAKE_MEDIA.bucket,
+    // B-265: the private bucket. Production refuses to start with a store and no private bucket, so the QA stack runs
+    // the same two-bucket layout (and, like S3_BUCKET, goes inactive together with the store for spec 19).
+    S3_PRIVATE_BUCKET: clock.noObjectStore ? 'replace-me' : FAKE_MEDIA.privateBucket,
     S3_ACCESS_KEY: clock.noObjectStore ? 'replace-me' : 'qa-access-key',
     S3_SECRET_KEY: clock.noObjectStore ? 'replace-me' : 'qa-secret-key',
     S3_REGION: 'us-east-1',

@@ -415,7 +415,7 @@ export class RejectedMediaSweepService {
   private listFailureOutcome(err: unknown): ListOutcome {
     if (err instanceof StorageListNotPermittedError) {
       this.logger.error(
-        'Stray media sweep cannot run: the storage key is not allowed to LIST objects. Give the R2/S3 key a list permission (B-207, launch gate). Nothing was deleted.',
+        'Stray media sweep cannot run: the storage key is not allowed to LIST objects. Give the R2/S3 key a list permission on BOTH buckets, public and private (B-207, B-265, launch gate). Nothing was deleted.',
       );
       return 'list_not_permitted';
     }

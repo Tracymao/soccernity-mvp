@@ -53,13 +53,16 @@ into a real `.env`, storage stays **wired-but-inactive** and
 **Known gap, flagged not fixed (docs-only PR):** `S3StorageService`
 builds `MediaAsset.url` as `<endpoint>/<bucket>/<key>`. On R2 that is the
 authenticated S3-API endpoint, **not publicly readable** — public access
-needs the bucket's `r2.dev` subdomain or a custom domain, whose URLs also
+needs a custom domain on the public bucket (`https://media.soccernity.com`), whose URLs also
 omit the bucket segment. **Update (backend/w5-profile-block, B-035):**
 the optional `S3_PUBLIC_BASE_URL` variable now exists. When set, every URL
 `S3StorageService.upload` returns is `<S3_PUBLIC_BASE_URL>/<key>`; unset
-keeps the behaviour above. It must still be set (to the real r2.dev
-subdomain or custom domain) by a human before any uploaded media is
-publicly viewable.
+keeps the behaviour above. It must still be set (to the custom domain
+on the public bucket) by a human before any uploaded media is
+publicly viewable. **B-265:** admin media (`media/<uploaderId>/...`) is on the
+public allow-list, so it lives in the public bucket (`S3_BUCKET`); everything private
+(pending and rejected media, quarantine, exports) lives in `S3_PRIVATE_BUCKET`,
+which has no public address. See `storage/storage-prefixes.ts`.
 
 `S3_ENDPOINT` is the one env var that changes *behaviour*, not just a
 value: leaving it unset targets real AWS S3 (virtual-hosted-style URLs
