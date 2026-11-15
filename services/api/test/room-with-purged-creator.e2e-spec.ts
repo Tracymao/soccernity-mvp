@@ -135,6 +135,10 @@ describe('A Bants room continues after its creator is anonymised or gone (e2e)',
   /** The REAL deletion path: the self-service request (ends sessions), the 31-day wait, the sweep. */
   async function anonymiseThroughRealSweep(userId: string) {
     const prisma = getTestPrismaClient();
+    // The B-305 session-revocation marker is whole seconds and accepts a token issued in the same second as the
+    // revocation (a known, accepted edge). Seeding is fast on CI, so wait past the second boundary first; otherwise
+    // the creator's pre-deletion token can still be valid and the lapse assertions become timing-dependent.
+    await new Promise((r) => setTimeout(r, 1100));
     await app.get(AuthService).startPendingDeletion(userId);
     await prisma.user.update({ where: { id: userId }, data: { pendingDeletionAt: new Date(Date.now() - 31 * DAY) } });
     const result = await sweep.sweepPendingDeletions(new Date());
