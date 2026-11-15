@@ -203,9 +203,10 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 
 1. Set the CORS rule on the PRIVATE bucket (the browser uploads to it through a one-time link) to allow `PUT` from the web origins (`https://staging.soccernity.com`, then production). The public bucket needs no CORS rule. The screen: UNKNOWN (Cloudflare documentation). This is a human step (`docs/deployment.md`).
 2. Serve the PUBLIC bucket (`S3_BUCKET`) at the custom domain `media.soccernity.com` (`S3_PUBLIC_BASE_URL`). The PRIVATE bucket (`S3_PRIVATE_BUCKET`) stays with no public address at all: no `r2.dev` address, no custom domain, no public rule. The API puts `post-media/`, `profile-media/` and `media/` files in the public bucket and everything else (including `private-media/`, `private-profile/` and `quarantine/`) in the private one (`modules/post-media/README.md`). The domain screens: UNKNOWN (Cloudflare documentation).
-3. **Prove it:** ask for an object that lives in the private bucket through the public address; it must be REFUSED. YOU SHOULD SEE a refusal (a 403 or 404 page, not the file). IF NOT: stop; do not turn uploads on.
-4. Optional: a bucket lifecycle rule on `quarantine/` of one day (a safety net; the app also purges it).
-5. After your account id is known, tighten the one wildcard in the static sites' CSP in `render.yaml` (`https://*.r2.cloudflarestorage.com`) to your exact host (AGENT; `docs/infra-static-site-hosting-report.md`). The public media host in the CSP is already `https://media.soccernity.com`.
+3. **Prove it**, in three parts. (a) Through the public address (`media.soccernity.com`), ask for one object from each PRIVATE prefix (`private-media/`, `private-profile/`, `quarantine/`, `data-export/`); each must be REFUSED. (b) Through the same address, ask for one object from each PUBLIC prefix (`post-media/`, `profile-media/`, `media/`); each must be SERVED from `media.soccernity.com`. (c) In the Cloudflare dashboard, check that the private bucket has public access off (the screen: UNKNOWN, Cloudflare documentation). YOU SHOULD SEE: a refusal (a 403 or 404 page, not the file) for every private prefix, the file for every public prefix, and public access off on the private bucket. IF NOT: stop; do not turn uploads on.
+4. Optional: a bucket lifecycle rule of one day on the `quarantine/` prefix of the PRIVATE bucket (`quarantine/` is a private prefix; a safety net, the app also purges it).
+5. **R2's copy between two buckets is UNPROVEN.** When a photo is approved, the API copies it from the private bucket to the public one. Cloudflare's S3-compatibility page lists CopyObject as supported but does not say it works from one bucket to another. The first real approval on staging is the test. If R2 refuses, the API logs the warning `[storage] cross-bucket CopyObject refused (<error name>); copying through the API instead` and copies the file through itself, so approval works either way. YOU SHOULD SEE: an approved test photo served from `media.soccernity.com` and gone from the private bucket.
+6. After your account id is known, tighten the one wildcard in the static sites' CSP in `render.yaml` (`https://*.r2.cloudflarestorage.com`) to your exact host (AGENT; `docs/infra-static-site-hosting-report.md`). The public media host in the CSP is already `https://media.soccernity.com`.
 
 **6.9 Sports data live check.** WHO: AGENT. ROW: Decision Log #328, #323, B-090. With a real `SPORTS_DATA_API_KEY` on staging, request the live scores and one match page and confirm real data (not just an empty page). Until this is done no real Highlightly data has ever flowed through the app.
 
@@ -306,7 +307,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 4. Post some text; like and comment; report a post; the report appears in the admin queue.
 5. Open the Terms and Privacy pages.
 6. Cookie behaviour on the real domain: reload keeps the session; sign-out ends it (B-267 (a)).
-7. If uploads are on: upload a picture; it appears only after the check; a private-prefix address is refused (step 6.8).
+7. If uploads are on: upload a picture; it appears only after the check; the approved picture is served from `media.soccernity.com`, and the private bucket has no public address (step 6.8).
 8. A lockout email arrives after repeated bad sign-ins (also proves email).
 
 **10.3 Watch the first day.** Sentry events (once a DSN is live), Render logs, Upstash usage, Neon connections.
