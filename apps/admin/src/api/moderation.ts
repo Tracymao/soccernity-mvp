@@ -269,6 +269,19 @@ export interface Report {
   // admin is not child-safety vetted. The server then returns no context messages and no original text of an edited
   // message; this only says why. Present only on the single-report read of a message report.
   contextHidden?: boolean;
+  // Staff reactivation of a Bants room (backend/room-staff-reactivation): on the single-report read of a
+  // "banter_room" report, the room the report is about and whether THIS admin may reactivate it now. Absent on
+  // the queue rows and on every other kind of report; null when the room row is gone.
+  reportedRoom?: ReportedRoom | null;
+}
+
+// services/api's `reportedRoom` on a banter_room report. `staffMayReactivate` is decided by the server for the
+// calling admin (the room is inactive, staff deactivated it and nobody has reactivated it since, and the vetting rule
+// holds). The page only mirrors it; it works out nothing from the room's status.
+export interface ReportedRoom {
+  id: string;
+  status: "active" | "inactive";
+  staffMayReactivate: boolean;
 }
 
 // The one message behind a "message" report (services/api ReportedMessageView). contentText is what is
@@ -352,6 +365,22 @@ export function actionReport(id: string, action: ReportAction): Promise<Report> 
   return adminFetch<Report>(`/admin/moderation/reports/${id}`, {
     method: "PATCH",
     body: { action },
+  });
+}
+
+// Staff reactivation of a Bants room (backend/room-staff-reactivation). Stable codes of the two 409s the page tells
+// apart, never by message text. The vetting 403 uses CHILD_SAFETY_VETTING_REQUIRED_CODE like every other action.
+export const BANTER_ROOM_ALREADY_ACTIVE_CODE = "banter_room_already_active";
+export const BANTER_ROOM_NOT_STAFF_DEACTIVATED_CODE = "banter_room_not_staff_deactivated";
+
+// POST /admin/banter-rooms/:id/reactivate — moderator / superadmin. Only a room STAFF deactivated (through a
+// room_deactivated report action) and nobody has reactivated since; a room the creator switched off, or one that is
+// already active, is a 409. A report that concerns a minor also needs a child-safety-vetted admin (403
+// child_safety_vetting_required). Sends no body: the route also takes an optional note (up to 500 characters) which
+// this screen does not offer, matching Deactivate Room, which has none either. Notifies nobody.
+export function reactivateRoom(roomId: string): Promise<{ id: string; status: "active" }> {
+  return adminFetch<{ id: string; status: "active" }>(`/admin/banter-rooms/${roomId}/reactivate`, {
+    method: "POST",
   });
 }
 
