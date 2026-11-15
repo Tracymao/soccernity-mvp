@@ -323,8 +323,7 @@ export interface FinalWeekCarouselItem {
   entryId: string;
   postId: string;
   finalist: { userId: string; publicName: string };
-  // B-234: the finalist's represented club, or null (always null for a minor). The web does not draw it yet.
-  club: { id: string; name: string } | null;
+  // No club field: a contest tile never shows anyone's club (founder decision 2026-11-14).
   post: { id: string; contentText: string; mediaUrls: string[]; createdAt: string };
 }
 
