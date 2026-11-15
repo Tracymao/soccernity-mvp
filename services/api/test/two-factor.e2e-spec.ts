@@ -738,10 +738,20 @@ describe('Two-factor e2e (B-086, B-270)', () => {
 
     it('access tokens already issued stay valid until they expire (no per-request check): an unenrolled admin access token still works after the refresh was refused', async () => {
       const gated = await seedAdmin('editor');
-      const session = await issue(gated.id);
-      process.env.ADMIN_2FA_ENFORCED = 'true';
-      await http().post('/admin/auth/refresh').send({ refreshToken: session.refreshToken.token }).expect(401);
-      await http().get('/admin/auth/two-factor/status').set(bearer(session.accessToken.token)).expect(200);
+      // B-305 (Decision Log #500): the refused refresh ends every session of this admin and writes the revocation
+      // marker, a WHOLE-SECOND timestamp; a token whose `iat` is an earlier second is refused afterwards. The claim
+      // under test holds only inside the documented one-second edge, so this test pins the clock (Date.now is read by
+      // both the token's `iat` and the marker) from before the token is issued until the last request, instead of
+      // passing or failing on which second the steps happened to land in. Nothing else about the test changes.
+      const frozen = jest.spyOn(Date, 'now').mockReturnValue(Math.floor(Date.now() / 1000) * 1000 + 500);
+      try {
+        const session = await issue(gated.id);
+        process.env.ADMIN_2FA_ENFORCED = 'true';
+        await http().post('/admin/auth/refresh').send({ refreshToken: session.refreshToken.token }).expect(401);
+        await http().get('/admin/auth/two-factor/status').set(bearer(session.accessToken.token)).expect(200);
+      } finally {
+        frozen.mockRestore();
+      }
     });
   });
 

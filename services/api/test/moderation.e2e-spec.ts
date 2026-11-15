@@ -367,9 +367,15 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
       .expect(403);
 
     // The reported user may.
+    // B-305 (Decision Log #500): the suspension above ended every session of the reported user and wrote the
+    // revocation marker (whole seconds), so their token from BEFORE the suspension is refused from the next whole
+    // second. Using it here passed only when every step happened to fall in one second and failed (401) when the
+    // clock ticked over. A token issued AFTER the marker always passes, so wait past the second and mint a fresh one.
+    await new Promise((r) => setTimeout(r, 1000 - (Date.now() % 1000) + 40));
+    const { accessToken: afterSuspension } = await app.get(TokenService).issueTokenPair(reportedUser.userId, 'user');
     await request(server())
       .post(`/reports/${reportId}/appeal`)
-      .set(auth(reportedUser.accessToken))
+      .set(auth(afterSuspension.token))
       .send({ reason: 'this was unfair' })
       .expect(201);
   });
