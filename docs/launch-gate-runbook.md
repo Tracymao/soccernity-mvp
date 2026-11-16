@@ -47,7 +47,7 @@ A step marked **GATE** must be finished before the next part starts. A step mark
 **Two hard blockers to know now, before you spend money:**
 
 - **The production web and admin sites cannot be built while any tagged string remains.** Their build command runs the pending-copy check, which fails today with 246 places (web 145, admin 101). Counsel has to clear them (Part 7). Staging builds do not run that check. (`render.yaml`, `docs/infra-static-site-hosting-report.md`, `docs/qa-launch-gate-full-run-report.md`)
-- **User uploads (pictures and video) stay OFF in production until counsel gives a written answer on B-206**, and the founder then sets `MEDIA_UPLOADS_ENABLED` to `true` (step 8.9). While it is off, Contest entries cannot be made, because a final entry needs a video. (`.env.example`, Decision Log #501, B-306, B-267 (l))
+- **User uploads (pictures and video) stay OFF in production until the launch condition in step 8.7 is met**, and the founder then sets `MEDIA_UPLOADS_ENABLED` to `true` (step 8.9). Since 2026-11-15 the condition is NOT a written answer from counsel (Decision Log #524 reversed that): it is (a) the suspected-illegal-imagery reporting path tried once on staging, (b) the founder's own registrations with the receiving bodies done, and (c) video working on staging with a real upload. While the switch is off, Contest entries cannot be made, because a final entry needs a video. (`.env.example`, Decision Log #501, #524, B-306, B-267 (l), B-206, B-321)
 
 ---
 
@@ -67,7 +67,7 @@ Do these first; most take time (billing, domain checks). For each, follow the ve
 
 **1.6 Stripe.** WHO: FOUNDER. DO: sign in to the existing Stripe account (corrected 2026-11-14 from the founder's own record). Use TEST keys until the founder decides otherwise (QUESTION F8). YOU SHOULD SEE: a secret key and a publishable key. ROW/SOURCE: B-162, B-088; `.env.example` lines 397 to 402. This is only for the card step on guardian consent for under-13 US children. The code reads no Stripe webhook (searched `services/api/src`), so no webhook has to be set up. The charge is 50 cents by default and refunded at once (`COPPA_VERIFICATION_AMOUNT_CENTS`).
 
-**1.7 MaxMind (country from IP).** WHO: FOUNDER. DO: sign in to the existing MaxMind account (corrected 2026-11-14 from the founder's own record) and confirm a GeoLite2 licence exists, creating it if not. You need the account id and the licence key. ROW/SOURCE: B-024, B-020; `.env.example`; `services/api/src/scripts/fetch-geolite2.ts`. UNKNOWN: the download address the build uses has never been run against a real account (register B-024).
+**1.7 MaxMind (country from IP).** WHO: FOUNDER. DO: sign in to the existing MaxMind account (corrected 2026-11-14 from the founder's own record) and confirm a GeoLite2 licence exists, creating it if not. You need the account id and the licence key. ROW/SOURCE: B-024, B-020; `.env.example`; `services/api/src/scripts/fetch-geolite2.ts`. UNKNOWN: the download address the API's start-up fetch uses has never been run against a real account (register B-024).
 
 **1.8 Sentry.** WHO: FOUNDER. DO: sign in to the existing Sentry account (corrected 2026-11-14 from the founder's own record); confirm whether a project for the API already exists, create it if not, and copy its DSN. YOU SHOULD SEE: a `https://...@...sentry.io/...` DSN. ROW/SOURCE: B-267 (c); `.env.example` lines 416 to 420. Until a real DSN exists, Sentry does nothing (so every "alert goes to Sentry" statement in the register is not yet true). Alert rules are step 6.7.
 
@@ -138,13 +138,15 @@ You need SIX different outputs: `JWT_SECRET`, `ADMIN_JWT_SECRET` and `DOB_ENCRYP
 - `soccernity-api-staging` (branch `staging`, plan `free`) and `soccernity-api` (branch `main`, plan `starter`), region Frankfurt.
 - Static sites `soccernity-web-staging` and `soccernity-admin-staging` (branch `staging`), `soccernity-web` and `soccernity-admin` (branch `main`).
 
-YOU SHOULD SEE: six services created and a prompt for each `sync: false` value of the two API services. IF NOT: UNKNOWN. **The Blueprint has never been imported, and `render.yaml` has never been validated by Render** (the Render account exists but nothing is connected or configured, on purpose; corrected 2026-11-14 from the founder's own record). Unverified, from the hosting report: that Render accepts the file; that several header rules per path all apply; that Render adds no second HSTS header; that `/sw.js` is served as JavaScript; that `VITE_API_BASE_URL` reaches the static build; that a root `npm install` (which installs every workspace including `apps/mobile`) fits the static build; the Node version (the root requires `>=22.22.0` with no upper limit, and nothing pins it). If any fails, STOP and tell an agent; do not edit around it.
+YOU SHOULD SEE: six services created and a prompt for each `sync: false` value of the two API services. IF NOT: UNKNOWN. **The Blueprint has never been imported, and `render.yaml` has never been validated by Render** (the Render account exists but nothing is connected or configured, on purpose; corrected 2026-11-14 from the founder's own record). Unverified, from the hosting report: that Render accepts the file; that several header rules per path all apply; that Render adds no second HSTS header; that `/sw.js` is served as JavaScript; that `VITE_API_BASE_URL` reaches the static build; that a root `npm install` (which installs every workspace including `apps/mobile`) fits the static build; the Node version of the four static sites (the root requires `>=22.22.0` with no upper limit, and nothing pins it; the API's Docker image pins 22.22.0, Decision Log #527). If any fails, STOP and tell an agent; do not edit around it.
 
 **4.2 Fill the `sync: false` values.** WHO: FOUNDER. DO: enter every value of Appendix A for each API service (staging values on staging, production values on production). YOU SHOULD SEE: both API services list all 37 keys with values. Plain-value variables (83 of them) already carry their defaults in the file; leave them unless a step says otherwise.
 
 **4.3 Check the two web addresses on the API.** `WEB_APP_BASE_URL` and `ADMIN_APP_BASE_URL` are plain values in `render.yaml` (staging `https://staging.soccernity.com` and `https://admin.staging.soccernity.com`; production `https://soccernity.com` and `https://admin.soccernity.com`). In production the API refuses to start if either is missing, http, localhost or a placeholder. ROW/SOURCE: B-163. Note: `docs/deployment.md` still says these two are asked for at import; they are not (it carries an update note, see the report).
 
 **4.4 Staging first.** WHO: FOUNDER. DO: let the staging services deploy first. Do not deploy production until Parts 5 to 7 pass on staging.
+
+**4.5 The API is a Docker image, and how to read its build log.** WHO: FOUNDER (read), AGENT (fix). ROW: B-322, Decision Log #527. Both API services are `runtime: docker` in `render.yaml`: Render builds `services/api/Dockerfile` (the repository root is the build context) instead of running an install and build command, and the container starts with `services/api/docker-start.sh`. The image carries ffmpeg and ffprobe, so video upload works (step 6.15). The first deploy builds the whole image, which is slower than the old native build. DO: in Render, open the service's deploy log (the screen: UNKNOWN (Render documentation)). YOU SHOULD SEE: the three stages of the Dockerfile in order (build, prod-deps, runtime), `npm ci`, the Prisma client being generated, the TypeScript build, the system packages (ffmpeg among them) being installed, then the pre-deploy command output (step 5.1), then the service going live. IF NOT: copy the first red error line and give it to an agent; do not edit `render.yaml` around it. **UNKNOWN (Render documentation, never tried): whether Render's FREE plan accepts the Docker runtime for the staging API.** If Render refuses it, staging needs a paid plan or a different arrangement: tell an agent. The Dockerfile and image were proven locally only; no Render deploy has ever happened (`docs/infra-api-docker-ffmpeg-report.md`).
 
 **GATE:** the staging API shows live in Render.
 
@@ -154,9 +156,9 @@ YOU SHOULD SEE: six services created and a prompt for each `sync: false` value o
 
 **5.1 What happens at every API deploy** (read from `render.yaml`):
 
-- Build: `npm install && npm run prisma:generate && npm run build --workspace=services/api && node services/api/dist/scripts/fetch-geolite2.js`. The last step downloads the country database; it never fails the build, and if it cannot, country comes back "unresolved" and the stronger safeguarding control is applied.
+- Build: Render builds the Docker image from `services/api/Dockerfile` (step 4.5); there is no build command. The country database is NOT downloaded at build: it is fetched when the container STARTS (`services/api/docker-start.sh` runs `node services/api/dist/scripts/fetch-geolite2.js` in the background, so the API serves from the first second). The download never stops the API; with no keys, or if it fails, country comes back "unresolved" and the stronger safeguarding control is applied. It is downloaded again on every start, including every restart and deploy (MaxMind's rate limits for that are unverified).
 - Before the new version takes traffic (`preDeployCommand`): `npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js`. The first applies every database migration not yet applied, using the direct connection (`DIRECT_URL`). The second encrypts any date of birth still in plain text, and leaves already-encrypted values alone.
-- Start: `npm run start:prod --workspace=services/api`. Health: Render checks `/health`.
+- Start: the Dockerfile's own command, `services/api/docker-start.sh` (it starts the country download in the background, then the API). Health: Render checks `/health`.
 
 On a brand-new empty database, every migration is applied from the first one. The backfill then finds no rows. ROW/SOURCE: B-018, B-252, B-272.
 
@@ -191,7 +193,7 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 
 **6.3 `TRUST_PROXY_HOPS` and the two-network sign-in check.** WHO: FOUNDER with AGENT. ROW: B-267 (b), B-256, B-022. This number is how many proxies sit in front of the API; get it wrong and every child looks like the same person. DO: set `TRUST_PROXY_HOPS` to 1 on staging (the starting guess; verify, do not trust it). Then: from **network A** (for example your home connection), fail one test account's sign-in five times; the sixth attempt should be blocked. Then from **network B** (for example a phone on mobile data), one sign-in attempt on a different test account must succeed. Use an email address you can read (a lockout email is sent). IF the second network is also blocked, the hop count is wrong (the API sees the proxy's address). Try 2. Repeat the whole check if Cloudflare is added later (step 8.1). Also (country check): register a throw-away account, read `User.derivedCountry` and `countryDerivationMethod` in the database; if it is "unresolved", try the other hop count. (`.env.example` lines 231 to 238; register B-267 (b).)
 
-**6.4 Country database.** WHO: AGENT. DO: confirm the staging build log shows the country database downloaded (needs `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`). IF NOT: the app still works but treats every country as unresolved and applies the stronger control. ROW: B-024, B-025.
+**6.4 Country database.** WHO: AGENT. DO: confirm the staging API's RUNTIME log (not the build log: the download happens when the container starts) shows a `[geolite2]` line saying the country database was downloaded (needs `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`). IF NOT: the app still works but treats every country as unresolved and applies the stronger control. ROW: B-024, B-025.
 
 **6.5 Cookie sign-in on the real names.** WHO: QA/AGENT with FOUNDER. ROW: B-267 (a), B-248, B-246, B-247, B-249. On staging's real domains: sign in on the web and the admin site, reload (still signed in), sign out (really signed out), and let an access token expire (about 15 minutes) to confirm silent refresh works (B-267 (i)). Open two tabs at the same moment after expiry and confirm neither is signed out (B-267 (h)). Also run the full Playwright suite on a same-site setup (step 6.10). Until this passes, cookie sign-in is verified only on localhost.
 
@@ -221,11 +223,17 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 
 **6.11 Launch checks not yet recorded.** WHO: QA. ROW: B-221, B-106, B-055. (a) B-221: the guardian withdrawal page check. The pass condition is met in code but **no run is recorded**, so it is not recorded as passed; run it and write the result down. (b) B-106 and B-055: one QA pass of the six frames that were never inspected: `5802:9183`, `5815:8948`, `5542:7344`, `5542:7695`, `5803:8917`, `2896:4837` (Figma node ids). Decided (Decision Log #462) to be done once, at the launch gate.
 
-**6.12 Under-13 approval end to end.** WHO: QA. ROW: B-162. With a Stripe TEST key and the country database on staging, register a child under 13 declaring the US, and take the guardian through the card step to approval. The code is built; this has not been run end to end against Stripe.
+**6.12 Under-13 approval end to end (B-162).** WHO: QA, with FOUNDER for the keys. ROW: B-162, B-025, Decision Log #528. This is a launch-gate check on STAGING with Stripe TEST keys and the GeoLite2 country database; there is no test seam in the product code and none will be added (Decision Log #528). DO: with a Stripe TEST key set on staging and the country database present (step 6.4), register a child under 13 declaring the US, and take the guardian through the card step to approval, using a Stripe test card from Stripe's own documentation. YOU SHOULD SEE: the guardian reaches the card step; the test charge and its immediate refund show in the Stripe TEST dashboard; the guardian's approval then completes and the child's account is approved. Also register one child under 13 declaring a non-US country: no card step. IF NOT: if the card step answers 503, the Stripe key is missing or still a placeholder (it fails closed); if no card step appears for a US child, the country database did not load (step 6.4). Stop and tell an agent; do not skip this step. The code is built; this has never been run end to end against Stripe.
 
 **6.13 Smoke test workflow.** See Part 10.
 
-**GATE:** 6.1 to 6.12 all pass on staging.
+**6.14 The suspected-illegal-imagery reporting path, tried once (B-206, B-321).** WHO: AGENT with FOUNDER. ROW: B-206, B-321, Decision Log #524, #525. This is condition (a) of the launch condition in step 8.7. Use a HARMLESS test picture only; never any real or suspected illegal material, in any test. DO: (1) on STAGING only, set `MEDIA_UPLOADS_ENABLED` to exactly `true`; (2) as a test account, upload a harmless picture so it reaches the admin Media review queue (or have an agent seed one); (3) sign in to the staging admin site as a child-safety-vetted moderator, open the item and press "Suspected illegal imagery", enter a reason of 10 to 500 characters and confirm; (4) open "Suspected illegal imagery" from Media review: the record is listed as "Not filed"; open it and use "Record that this was filed" with made-up test values (a made-up reference), then see it listed as "Filed"; (5) delete the test uploader's account on the staging Users page (an admin delete anonymises at once, with no waiting period); (6) in the PRIVATE R2 bucket for staging confirm the file is STILL there (the screen: UNKNOWN (Cloudflare documentation)) and that the record is still listed. YOU SHOULD SEE: the picture gone from public view and rejected with the standard rejection; the record kept; the file kept after the account is deleted. IF NOT: stop; do not turn uploads on in production; give the first thing that differed to an agent. Nothing in this path contacts any authority: the filing itself is made by a person with the receiving body, outside Soccernity (step 7.5, step 8.7 (b)).
+
+**6.15 Video on staging with a real upload (F15, B-322).** WHO: QA or FOUNDER. ROW: B-322, B-238, B-257, Decision Log #527. This is condition (c) of the launch condition in step 8.7. With uploads on in staging (step 6.14), upload a short real video (mp4, under 100 MB and 120 seconds) through the post composer as a test account. YOU SHOULD SEE: the upload accepted, "Checking", then either approved or waiting for a moderator; the video plays for the author. IF NOT: if you see "Uploads aren't available right now" or the API answers 503 `uploads_unavailable`, look in the API's runtime log for ffmpeg or ffprobe missing and check the Docker build log (step 4.5); the image is meant to carry both. Photos must also be tried once (they need no ffmpeg).
+
+**6.16 The static sites' headers, service worker and CSP (both staging sites).** WHO: AGENT with FOUNDER. ROW: B-179, B-180, B-088, B-250; `docs/deployment.md` section 4b ("Manual steps that stay human", item 6). Once a site is live: `curl -sI https://<origin>/` and check the headers (a Content-Security-Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, a Permissions-Policy; no HSTS on staging, HSTS on production); `curl -sI https://<origin>/sw.js` for the JavaScript content type and `Cache-Control: no-cache` (web site only); and `curl -sI https://<origin>/some/deep/link` for `200 text/html` (the rewrite works). Then open the browser console on the sign-up, guardian-card and upload pages and look for any CSP violation. YOU SHOULD SEE: every header present, `/sw.js` served as JavaScript, the deep link giving the app, and no violation in the console. IF NOT: a violation names the blocked address; give it to an agent (the policy lives in `render.yaml`; do not weaken it by hand). UNKNOWN (Render documentation, never tried): that several header rules on one path all apply, and that Render adds no second HSTS header.
+
+**GATE:** 6.1 to 6.16 all pass on staging.
 
 ---
 
@@ -241,7 +249,7 @@ None of these is decided by this runbook. They are the things that need a person
 
 **7.4 Guardian withdrawal wording.** WHO: COUNSEL. ROW: B-200. One inconsistency for counsel: the frames, the code email and the legal draft disagree on whether withdrawal means "deleted after 30 days", "permanently deleted" or "anonymised with a consent record kept 6 months".
 
-**7.5 CSAM and statutory reporting (B-206).** WHO: COUNSEL. ROW: B-206, B-306, B-267 (l). OPEN. Counsel's written answer on how to handle suspected child-abuse imagery and any reporting duty. **Uploads stay off until this answer exists in writing** (step 8.9).
+**7.5 Suspected illegal imagery: questions for counsel (B-206). NON-BLOCKING.** WHO: COUNSEL, with FOUNDER. ROW: B-206, B-321, B-323; Decision Log #524, #525, #526. **This no longer holds up launch.** Decision Log #524 reversed the earlier rule that uploads stay off until counsel answers in writing; the launch condition is now in step 8.7. The founder has accepted launching before automatic image matching (hash-matching) exists; that is the founder's own risk decision and is NOT counsel's view. Counsel has NOT been recorded as saying proactive detection is required; the position counsel took is the one in `docs/legal-copy-draft-tos-privacy-policy.md` (Decision Log #4). What is built: a vetted moderator can set a file aside, which keeps it (private, not deleted with the account) and opens a record; the filing itself is made by a person with the receiving body, outside Soccernity. The questions below are for counsel to answer when they can, in plain words. Their answers may change wording, retention figures or the receiving-body list; they do not stop launch. (1) For each country Soccernity launches in, which body receives a report of suspected illegal imagery, what is the founder's legal duty to report, and by when? (The built list is: GB the IWF and the NCA, US NCMEC, EU member states the national hotline in the INHOPE network, Nigeria none; every entry is marked pending counsel and no web address is stored.) (2) How long must a set-aside file and its record be kept (the built default is 365 days, after which ordinary deletion resumes), and when may evidence be released? (3) Is the plain wording shown to the person whose file was removed, and to a guardian, acceptable? (4) Does counsel advise adding automatic image matching, and how soon (step 12.6 and Decision Log #526)?
 
 **7.6 Contest Rules copy.** WHO: FOUNDER, then COUNSEL. ROW: B-220. The Contest Rules modal shows a clearly marked placeholder until the founder writes the rules and counsel reviews them (Decision Log #413, #227).
 
@@ -263,15 +271,15 @@ None of these is decided by this runbook. They are the things that need a person
 
 **8.4 Stripe, MaxMind, Rekognition keys.** See steps 1.6, 1.7, 1.9 and 6.12. With no AWS keys nothing is auto-approved; with no Stripe keys the under-13 US card step answers 503 (fails closed).
 
-**8.5 Video (ffmpeg).** WHO: FOUNDER decides; AGENT. ROW: B-306, B-238, B-257. ffmpeg and ffprobe are **not** on Render's native Node runtime, so video upload answers 503 until they exist (`FFMPEG_PATH`, `FFPROBE_PATH`, `modules/post-media/README.md`). UNKNOWN / NOT DECIDED (QUESTION F15): how video will be hosted for launch. Pictures work without it.
+**8.5 Video (ffmpeg).** WHO: AGENT; FOUNDER reads the result. ROW: B-306, B-238, B-257, B-322, Decision Log #527. ANSWERED (QUESTION F15): the API now runs as a Docker image that carries ffmpeg and ffprobe (Debian ffmpeg 5.1.9; step 4.5), so video upload no longer fails closed for lack of them. What is still open is only whether Render's free plan accepts the Docker runtime for staging (step 4.5) and a real video upload on staging (step 6.15). If ffmpeg or ffprobe were ever missing, video upload would answer 503 and store nothing (`FFMPEG_PATH`, `FFPROBE_PATH`, `modules/post-media/README.md`); pictures need neither.
 
 **8.6 `ADMIN_2FA_ENFORCED`.** Set to exactly `true` on production at launch (B-267 (j)). Any other value is off. Do it only after the first production superadmin has enrolled the day-one way (step 9.5) or have the recovery document ready (step 6.2).
 
-**8.7 `MEDIA_UPLOADS_ENABLED`.** WHO: FOUNDER. ROW: B-306, B-267 (l), B-206. Leave it unset in production until step 7.5 has a written answer. Set to exactly `true` only then. While off: pictures, videos, profile picture, cover photo and Contest final entries cannot be uploaded (the API answers 403 `media_uploads_disabled`); text posts, reading, reporting and staff uploads still work. The web composer shows "Uploads aren't available right now."
+**8.7 `MEDIA_UPLOADS_ENABLED`.** WHO: FOUNDER. ROW: B-306, B-267 (l), B-206, B-321, B-322. Leave it unset in production until ALL THREE parts of the launch condition are met (Decision Log #524; counsel's written answer is NOT a condition, step 7.5 is non-blocking), then set it to exactly `true`. (a) The suspected-illegal-imagery reporting path has been tried once on staging (step 6.14: a test file set aside, a record opened, a filing recorded, and the file still present after the test account is deleted). (b) The founder's own steps are done: the founder has registered with the receiving bodies, for the US the NCMEC CyberTipline and for the UK the UK body (the exact names and addresses are the founder's to confirm with counsel and are not invented here; Decision Log #525). (c) Video works on staging with a real upload (step 6.15). While off: pictures, videos, profile picture, cover photo and Contest final entries cannot be uploaded (the API answers 403 `media_uploads_disabled`); text posts, reading, reporting and staff uploads still work. The web composer shows "Uploads aren't available right now."
 
 **8.8 Highlightly budget.** `HIGHLIGHTLY_DAILY_REQUEST_BUDGET` stays 100 (free tier). Revisit only after real usage (Decision Log #323).
 
-**8.9 Switches summary.** `ADMIN_2FA_ENFORCED` (exact `true`), `MEDIA_UPLOADS_ENABLED` (exact `true`). Every other tuning value is a plain default in `render.yaml`.
+**8.9 Switches summary.** `ADMIN_2FA_ENFORCED` (exact `true`), `MEDIA_UPLOADS_ENABLED` (exact `true`, only after the launch condition in step 8.7). Every other tuning value is a plain default in `render.yaml`.
 
 ---
 
@@ -346,6 +354,8 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 
 **12.5 Nightly jobs to know about.** They run on their own: rejected-media and stray-file sweep (04:00; the first night, set `POST_MEDIA_STRAY_SWEEP_DRY_RUN=true` so it only counts; B-283 needs the R2 token to LIST), account anonymisation sweep, report and message retention, Contact Us retention, consent expiry, age reclassification, leaderboard rollups. Their settings are plain values in `render.yaml`.
 
+**12.6 Detection layer for illegal imagery (B-323; NOT BUILT, after launch).** WHO: FOUNDER first. ROW: B-323, Decision Log #526. After launch, Soccernity adds automatic matching of uploaded images against lists of known illegal images. The order decided: apply to the IWF for Image Intercept first (UK); if that is not granted, apply to Hive as the fallback. PhotoDNA and the Cloudflare scanning tool are NOT used (dropped; reasons in Decision Log #526). The applications are the founder's own step and are not started by this runbook; nothing is built until an application is accepted. Until then the reporting path in step 6.14 and the manual set-aside are the only controls, and the founder has accepted that risk (Decision Log #524). IF the founder is asked in writing by counsel or a regulator to add matching sooner, bring this step forward.
+
 ---
 
 ## One-page checklist
@@ -384,21 +394,24 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 | 6.9 Sports data live | Agent | B-090 | |
 | 6.10 Full Playwright run clean | QA | B-134, B-219, B-267 (e) | |
 | 6.11 B-221, B-106, B-055 checks | QA | B-221, B-106, B-055 | |
-| 6.12 Under-13 end to end | QA | B-162 | |
+| 6.12 Under-13 end to end (staging, Stripe test keys) | QA | B-162 | |
+| 6.14 Suspected-imagery reporting path tried on staging | Agent, founder | B-206, B-321 | |
+| 6.15 Video on staging with a real upload | QA, founder | B-322, B-238 | |
+| 6.16 Static-site headers, `/sw.js`, CSP | Agent, founder | B-179, B-180 | |
 | 7.1 246 tagged strings cleared | Counsel, agent | B-124, B-208, B-301 | |
 | 7.2 Legal copy | Counsel | B-089, B-159 | |
 | 7.3 DPIA + addenda | Counsel | B-159, B-236, B-241 | |
 | 7.4 Withdrawal wording | Counsel | B-200 | |
-| 7.5 CSAM answer in writing | Counsel | B-206 | |
+| 7.5 Suspected-imagery questions for counsel (NON-BLOCKING) | Counsel | B-206 | |
 | 7.6 Contest Rules copy | Founder, counsel | B-220 | |
 | 7.7 Incident plan | Counsel, founder | B-253 | |
 | 7.8 Pen test | Founder | B-254 | |
 | 8.1 Cloudflare proxy: WAITS until after launch (Decision Log #518) | Founder | B-251 | |
 | 8.2 Web push test | Founder, agent | B-285 | |
 | 8.3 Email live | Founder | B-115 | |
-| 8.5 Video / ffmpeg decision | Founder | B-306 | |
+| 8.5 Video / ffmpeg (Docker image; checked in 6.15) | Agent | B-306, B-322 | |
 | 8.6 ADMIN_2FA_ENFORCED = true | Founder | B-267 (j) | |
-| 8.7 MEDIA_UPLOADS_ENABLED (after 7.5) | Founder | B-306, B-267 (l) | |
+| 8.7 MEDIA_UPLOADS_ENABLED (after the three-part launch condition: 6.14, founder's registrations, 6.15) | Founder | B-306, B-267 (l), B-206 | |
 | 9.1-9.7 Go live | Founder, agent | B-090 | |
 | 10.1-10.3 Smoke tests | Founder, QA | B-090 | |
 | 12.1 Dependabot re-enabled | Founder | B-267 (f) | |
@@ -412,12 +425,12 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 - **F5** Pen test: vendor, budget, scope sign-off, severity scale, retest window. (step 7.8; B-254)
 - **F7** ANSWERED 2026-11-14 (Decision Log #519): keep public until launch, Analyze stays required, ask again at the launch gate. (step 12.3)
 - **F8** Stripe at launch: test keys only, or live? (step 1.6)
-- **F10** ANSWERED IN PART 2026-11-14 (Decision Log #520, #521): the public address is the custom domain `media.soccernity.com`, not `r2.dev`, and there are two R2 buckets (public and private). STILL OPEN: the exact S3-endpoint host for the CSP (it holds the Cloudflare account id), and whether the account that holds the DNS for soccernity.com is the account that will hold the R2 buckets. (step 6.8)
+- **F10** ANSWERED IN PART 2026-11-14 (Decision Log #520, #521): the public address is the custom domain `media.soccernity.com`, not `r2.dev`, and there are two R2 buckets (public and private). STILL OPEN: the exact S3-endpoint host for the CSP (it holds the Cloudflare account id), and whether the account that holds the DNS for soccernity.com is the account that will hold the R2 buckets. ALSO UNPROVEN: R2's copy of a file from the private bucket to the public one when it is approved (Cloudflare's page lists CopyObject but is silent on cross-bucket; the API falls back to copying through itself, with a logged warning; the first real approval on staging is the test). (step 6.8)
 - **F13** ANSWERED 2026-11-14 (Decision Log #517): free plan until full launch, pay-as-you-go when real users start coming on. (step 6.7)
-- **F15** Video hosting: ffmpeg is not on Render's Node runtime. (step 8.5)
+- **F15** ANSWERED 2026-11-15 (Decision Log #527): the API runs as a Docker image that carries ffmpeg and ffprobe. STILL OPEN: whether Render's free plan accepts the Docker runtime for staging. (steps 4.5, 6.15, 8.5)
 - **F17** Does `www` redirect to the root, and how? (step 2.4)
 - **F19** Same-site Playwright run on real domains: no written procedure exists. (step 6.10)
-- Also open and owned by counsel or the founder, not by this runbook: the 246 tagged strings (B-124), B-206, B-220, B-253, the DPIA and legal copy sign-off, the withdrawal wording (B-200), and the incident-plan question on guardian lockout notices (Decision Log #438).
+- Also open and owned by counsel or the founder, not by this runbook: the 246 tagged strings (B-124), counsel's non-blocking questions on suspected illegal imagery (step 7.5, B-206), B-220, B-253, the DPIA and legal copy sign-off, the withdrawal wording (B-200), and the incident-plan question on guardian lockout notices (Decision Log #438).
 
 ---
 
@@ -441,7 +454,7 @@ Source: `render.yaml`. "From" is where the value comes from. Render asks for the
 | `RESET_TOKEN_TTL_MINUTES` | optional; default 60 | leave blank or default |
 | `GUARDIAN_CONSENT_TOKEN_TTL_HOURS` | optional; default 72 | leave blank or default |
 | `ADMIN_2FA_ENFORCED` | exact `true` to require admin 2FA | step 8.6 |
-| `MEDIA_UPLOADS_ENABLED` | exact `true` to allow uploads | step 8.7 (after B-206) |
+| `MEDIA_UPLOADS_ENABLED` | exact `true` to allow uploads | step 8.7 (after the launch condition) |
 | `EMAIL_PROVIDER_API_KEY` | Postmark server token | step 1.5 |
 | `POSTMARK_FROM_EMAIL` | sender on a verified domain | step 1.5 |
 | `SPORTS_DATA_API_KEY` | Highlightly key | step 1.10 |
@@ -522,4 +535,4 @@ Exact names, one per line (kept so a name search finds each one; all are plain v
 
 ## Appendix C - rows covered
 
-Every Wave 11 and Wave 12 row is either a step above, or noted as built and needing only the check named: B-088, B-089, B-090, B-124, B-134, B-159, B-162, B-179, B-180, B-189 (typographic club marks only, no licence sought; nothing to do), B-193, B-200, B-206, B-207, B-208, B-219, B-220, B-221, B-231 (built; no launch step), B-235 (video upload decision record; see 8.5), B-236, B-241, B-265, B-267, B-273 (QA harness fix, built), B-285; and B-242, B-243 (API security headers; built in the API; the matching headers on the two static sites are in `render.yaml` and unverified, see step 4.1), B-244 (global rate limit; built; its in-memory counters per instance matter if a second API instance is ever added), B-245 (cookie session API; built), B-246 to B-248, B-250, B-252, B-255, B-256, B-262 to B-264, B-268, B-269, B-272 (built; checked in 6.1 to 6.5 and Part 12), B-249, B-251, B-253, B-254 (steps 2, 8.1, 7.7, 7.8). The full coverage table, with rows left out and why, is in `docs/launch-gate-runbook-report.md`.
+Every Wave 11 and Wave 12 row is either a step above, or noted as built and needing only the check named: B-088, B-089, B-090, B-124, B-134, B-159, B-162, B-179, B-180, B-189 (typographic club marks only, no licence sought; nothing to do), B-193, B-200, B-206 (steps 6.14, 7.5, 8.7), B-207, B-208, B-219, B-220, B-221, B-231 (built; no launch step), B-235 (video upload decision record; see 8.5), B-236, B-241, B-265, B-267, B-273 (QA harness fix, built), B-285, B-321 (suspected-imagery reporting path; built; tried once in step 6.14), B-322 (API Docker image; built; steps 4.5 and 6.15), B-323 (detection layer after launch; NOT built; a founder application step, step 12.6); and B-242, B-243 (API security headers; built in the API; the matching headers on the two static sites are in `render.yaml` and unverified, see step 4.1), B-244 (global rate limit; built; its in-memory counters per instance matter if a second API instance is ever added), B-245 (cookie session API; built), B-246 to B-248, B-250, B-252, B-255, B-256, B-262 to B-264, B-268, B-269, B-272 (built; checked in 6.1 to 6.5 and Part 12), B-249, B-251, B-253, B-254 (steps 2, 8.1, 7.7, 7.8). The full coverage table, with rows left out and why, is in `docs/launch-gate-runbook-report.md`.

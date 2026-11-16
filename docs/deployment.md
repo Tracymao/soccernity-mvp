@@ -122,10 +122,14 @@ No two may be the same.
   cover photos answer `403 media_uploads_disabled` (the Contest final entry
   needs a video, so Contests cannot take entries while it is off). Staff upload
   (`POST /admin/media/upload`), reading and deleting existing media and reporting
-  media are not affected. **Leave it off until counsel has answered the
-  CSAM and statutory-reporting question (B-206)**; the founder turns it on at the
-  launch gate (check B-267 item (l)), together with the post-media setup steps
-  below. Locally and in tests it is on unless set to `false`.
+  media are not affected. **Leave it off until the launch condition is met**
+  (Decision Log #524; runbook step 8.7): (a) the suspected-illegal-imagery
+  reporting path has been tried once on staging (runbook step 6.14), (b) the
+  founder's own registrations with the receiving bodies are done, and (c) video
+  works on staging with a real upload (runbook step 6.15). Counsel's answer on
+  B-206 is no longer a condition: it is a non-blocking list (runbook step 7.5).
+  The founder turns it on at the launch gate (check B-267 item (l)), together
+  with the post-media setup steps below. Locally and in tests it is on unless set to `false`.
 - None of the three generated secrets (`JWT_SECRET`, `ADMIN_JWT_SECRET` and
   `DOB_ENCRYPTION_KEY`) has a code default. In production (`NODE_ENV=production`,
   which Render sets) the app now **refuses to start** if `JWT_SECRET` or
@@ -226,9 +230,13 @@ No two may be the same.
      CopyObject but does not say whether it works across buckets, so the API
      falls back to copying through itself if R2 refuses (also unverified);
      (3) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
-     does not include them, so until they are installed (for example by moving
-     the API to a Docker image that has them) every video upload is refused
-     with a 503 and stores nothing; photos are unaffected; (4) an **AWS
+     does not include them, so the API now runs as a Docker image
+     (`services/api/Dockerfile`, `runtime: docker` in `render.yaml`; Decision
+     Log #527) that installs them (Debian ffmpeg 5.1.9). Were they ever missing,
+     every video upload would be refused with a 503 and store nothing; photos
+     are unaffected. Not yet proven on Render: whether the free plan accepts
+     the Docker runtime for staging, and a real video upload on staging
+     (runbook step 6.15); (4) an **AWS
      account and an IAM user** allowed `rekognition:DetectModerationLabels`,
      whose keys go in `REKOGNITION_ACCESS_KEY_ID` and
      `REKOGNITION_SECRET_ACCESS_KEY` (region `eu-west-1`); until then no
@@ -257,7 +265,8 @@ No two may be the same.
      paste any key. (Runbook step 1.9.)
    - `MEDIA_UPLOADS_ENABLED` — the user-upload switch described in step 3.
      Leave it unset, or anything other than the exact text `true`, in production
-     until counsel has answered B-206. (Runbook steps 7.5 and 8.7.)
+     until the launch condition in runbook step 8.7 is met (Decision Log #524;
+     counsel's answer on B-206 is no longer a condition, runbook step 7.5).
    - `ADMIN_2FA_ENFORCED` — the admin two-factor switch described in step 3.
      The exact text `true` turns it on; it must be `true` on production at
      launch. (Runbook steps 6.2 and 8.6.)
@@ -292,10 +301,14 @@ No two may be the same.
    touch them.
 5. Do **not** set `PORT` or `NODE_ENV`. Render supplies `NODE_ENV` itself, and
    setting it by hand would break the build (it would skip the build tools).
-6. Click through to finish the Blueprint import. Render runs the build
-   (install, generate the Prisma client, build), then the pre-deploy
-   command (database migration, then the date-of-birth encryption backfill),
-   then starts the service and polls `/health`.
+6. Click through to finish the Blueprint import. For each API service Render
+   builds the Docker image from `services/api/Dockerfile` (three stages: build,
+   production dependencies, runtime; the first deploy is slower than a native
+   build; Decision Log #527), then runs the pre-deploy command (database
+   migration, then the date-of-birth encryption backfill), then starts the
+   container (`services/api/docker-start.sh`) and polls `/health`. To read the
+   Docker build log see runbook step 4.5. Whether Render's free plan accepts the
+   Docker runtime for staging is UNKNOWN (Render documentation).
 
 ### Staging and the pre-deploy command
 
@@ -334,17 +347,21 @@ breaks; the platform is simply stricter.
    Licence Agreement, and generate a licence key. Someone must own those licence
    terms and the refresh process (still open in Decision Log #368). Set
    `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` on each Render service.
-2. **The database file.** `render.yaml`'s build command ends with
-   `node services/api/dist/scripts/fetch-geolite2.js`, which downloads the
-   database to `services/api/geoip/GeoLite2-Country.mmdb` using those two
-   values. It never fails the build: with no credentials, or if the download
-   fails, it logs `[geolite2] skipped/FAILED …` and carries on. The file is
+2. **The database file.** The API's Docker image has no build step that
+   downloads it. When the container **starts**, `services/api/docker-start.sh`
+   runs `node services/api/dist/scripts/fetch-geolite2.js` in the background,
+   which downloads the database to `services/api/geoip/GeoLite2-Country.mmdb`
+   using those two values (they are runtime variables only and never reach an
+   image layer). It never stops the API: with no credentials, or if the
+   download fails, it logs `[geolite2] skipped/FAILED …` and carries on. It is
+   downloaded again on every start, including every restart and deploy
+   (MaxMind's rate limits for that are unverified). The file is
    gitignored (MaxMind's terms don't allow redistributing it). To refresh it,
    redeploy, or run the script again; the API reloads the file when it changes
    on disk. MaxMind updates GeoLite2 on weekdays; a scheduled monthly redeploy
    is the simplest refresh until an owner decides otherwise. **The download URL
    and login scheme are taken from MaxMind's documented direct-download link but
-   have not been run against a real account — check the first build log.**
+   have not been run against a real account — check the first runtime log (not the build log).**
 3. **`TRUST_PROXY_HOPS`.** Behind Render's proxy every request's network peer is
    the proxy, so the API must be told how many proxy hops to trust to see the
    real client address. The right number is a property of Render's network and
@@ -517,8 +534,14 @@ Staging and production never share an origin.
    uploads fail in the browser even though the API side works.
 4. **Two buckets, the private one with no public address** (B-265): `S3_BUCKET` is the public bucket (custom domain
    `media.soccernity.com` = `S3_PUBLIC_BASE_URL`), `S3_PRIVATE_BUCKET` the private one with no public access of any kind.
-   Prove it by requesting an object that lives in the private bucket through the public address and checking you are
-   refused. The host in `S3_PUBLIC_BASE_URL` is the same one in the headers (above).
+   **Prove it, in three parts** (runbook step 6.8): (a) through the public address, ask for one object from each PRIVATE
+   prefix (`private-media/`, `private-profile/`, `quarantine/`, `data-export/`); each must be REFUSED; (b) through the
+   same address, ask for one object from each PUBLIC prefix (`post-media/`, `profile-media/`, `media/`); each must be
+   SERVED from `media.soccernity.com`; (c) in the Cloudflare dashboard check that the private bucket has public access off
+   (the screen: UNKNOWN, Cloudflare documentation). Stop and do not turn uploads on if any part fails. R2's copy of a
+   file from the private bucket to the public one on approval is UNPROVEN (the API falls back to copying through itself
+   and logs a warning); the first real approval on staging is the test. The host in `S3_PUBLIC_BASE_URL` is the same one
+   in the headers (above).
 5. **Set the production API's** `WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` only if a final domain differs from the layout above.
 6. **Check the deployed headers and the service worker** once a site is live: open the site, then
    `curl -sI https://<origin>/` for the headers, `curl -sI https://<origin>/sw.js` for the JavaScript content type and
@@ -531,8 +554,9 @@ Staging and production never share an origin.
 - The custom domains, the DNS records and the registrar steps.
 - The Cloudflare proxy, WAF and origin lock (B-251), and which side then owns the headers.
 - Redirects: `www.soccernity.com` to the root, and any http to https redirect Render does not do itself.
-- A `Node` pin: the root `package.json` `engines` is `>=22.22.0` with no upper bound; Render's documentation says to add an
-  upper bound, and to set `NODE_VERSION` if the platform default is not wanted. Decide this at the gate.
+- A `Node` pin for the four static sites: the root `package.json` `engines` is `>=22.22.0` with no upper bound; Render's
+  documentation says to add an upper bound, and to set `NODE_VERSION` if the platform default is not wanted. Decide this at
+  the gate. (The API is different: its Docker image pins Node 22.22.0, Decision Log #527.)
 - Whether the admin site is later restricted by IP.
 
 ### What is NOT verified
