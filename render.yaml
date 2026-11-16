@@ -167,7 +167,8 @@ services:
       # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
       # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
       # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
-      # "true" at the launch gate ONLY after counsel's written answer on B-206 (docs/deployment.md, B-267 item (l)).
+      # "true" at the launch gate. This is the off switch for uploads: the launch condition is in the launch-gate
+      # runbook (step 8.7) and Decision Log #524; counsel's question list is not a condition (docs/deployment.md).
       # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
       - key: MEDIA_UPLOADS_ENABLED
         sync: false
@@ -527,7 +528,8 @@ services:
       # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
       # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
       # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
-      # "true" at the launch gate ONLY after counsel's written answer on B-206 (docs/deployment.md, B-267 item (l)).
+      # "true" at the launch gate. This is the off switch for uploads: the launch condition is in the launch-gate
+      # runbook (step 8.7) and Decision Log #524; counsel's question list is not a condition (docs/deployment.md).
       # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
       - key: MEDIA_UPLOADS_ENABLED
         sync: false

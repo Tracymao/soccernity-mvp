@@ -22,8 +22,8 @@ export class MediaUploadsSwitchService implements OnModuleInit {
     if (!this.isEnabled()) {
       this.logger.warn(
         `${MEDIA_UPLOADS_ENABLED_ENV} is off: user image and video uploads (post media, avatar, cover) answer 403 ` +
-          `${MEDIA_UPLOADS_DISABLED_CODE}. In production it must be exactly "true" to turn them on, and the founder sets it ` +
-          'only after counsel has answered B-206.',
+          `${MEDIA_UPLOADS_DISABLED_CODE}. In production it must be exactly "true" to turn them on; the founder sets it ` +
+          'at the launch gate (launch-gate runbook step 8.7, Decision Log #524).',
       );
     }
   }
