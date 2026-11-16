@@ -736,13 +736,15 @@ describe('Two-factor e2e (B-086, B-270)', () => {
       expect(res.body.accessToken).toEqual(expect.any(String));
     });
 
-    it('access tokens already issued stay valid until they expire (no per-request check): an unenrolled admin access token still works after the refresh was refused', async () => {
+    it('an access token issued in the SAME second as the refused refresh still works (B-305 one-second edge; an earlier-second token is refused)', async () => {
       const gated = await seedAdmin('editor');
       // B-305 (Decision Log #500): the refused refresh ends every session of this admin and writes the revocation
-      // marker, a WHOLE-SECOND timestamp; a token whose `iat` is an earlier second is refused afterwards. The claim
-      // under test holds only inside the documented one-second edge, so this test pins the clock (Date.now is read by
-      // both the token's `iat` and the marker) from before the token is issued until the last request, instead of
-      // passing or failing on which second the steps happened to land in. Nothing else about the test changes.
+      // marker, a WHOLE-SECOND timestamp; a token whose `iat` is an earlier second is refused afterwards (checked on
+      // every request by AdminJwtAuthGuard), so "access tokens already issued stay valid until they expire" is NOT true
+      // in general any more. What this test pins is only the documented one-second edge: a token issued in the same
+      // whole second as the revocation (iat == marker) is still accepted. The test therefore pins the clock (Date.now
+      // is read by both the token's `iat` and the marker) from before the token is issued until the last request,
+      // instead of passing or failing on which second the steps happened to land in. The assertion is unchanged.
       const frozen = jest.spyOn(Date, 'now').mockReturnValue(Math.floor(Date.now() / 1000) * 1000 + 500);
       try {
         const session = await issue(gated.id);
