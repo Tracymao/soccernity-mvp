@@ -91,6 +91,14 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // it) is logged as MEDIA_APPROVED with a note. The reject note carries the reason the uploader reads.
   MEDIA_APPROVED: 'media.approved',
   MEDIA_REJECTED: 'media.rejected',
+  // backend/suspected-illegal-imagery-path (B-206, founder decision 2026-11-15). targetType 'post_media', targetId the
+  // media id. A child-safety-vetted admin set a file aside as suspected illegal imagery (written in the SAME
+  // transaction as the rejection and the record), then recorded that it WAS or WAS NOT filed with a receiving body.
+  // Notes never carry the free-text reason, the reference number or any content: only ids, the body key and (for not
+  // filed) that a reason was recorded. Child-safety rows: only a vetted admin reads them (the audit-log reader).
+  MEDIA_SUSPECTED_ILLEGAL_SET_ASIDE: 'media.suspected_illegal_set_aside',
+  MEDIA_SUSPECTED_ILLEGAL_FILED: 'media.suspected_illegal_filed',
+  MEDIA_SUSPECTED_ILLEGAL_NOT_FILED: 'media.suspected_illegal_not_filed',
   // GET /admin/search (backend/b114-admin-search, B-114, Decision Log #463) -- written ONLY for a search whose text
   // contains an '@' (a possible email address). targetType 'search', targetId the KIND of search ('email'); notes
   // are 'kind=email results=<n>'. The text typed is personal data and is NEVER recorded.

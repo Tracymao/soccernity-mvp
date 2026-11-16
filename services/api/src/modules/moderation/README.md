@@ -1073,3 +1073,10 @@ null` (the raw `appealRecordedByAdminId` is on every row, as `reviewedByAdminId`
 **Not built, flagged.** `apps/admin` screens (frames: Figma pass U, `docs/figma-pass-u-report.md`); the audit-log
 screen's client copy of the action list does not know `report.appeal_recorded` yet (it shows the raw key); there is no
 link from a Contact Us enquiry to the appeal it led to.
+
+## Report retention and suspected-illegal media (B-206)
+
+`ReportRetentionService` skips (reason `media`, counted as `skippedMedia`) a closed report that is the `reportId` of an
+active `SuspectedIllegalMedia` record, or that is on a post whose media has an active record (`set_aside`, or inside
+`preserveUntil`). The report is purged on a later run once the record is decided and its preservation date has passed.
+See `modules/suspected-illegal-media/README.md`.

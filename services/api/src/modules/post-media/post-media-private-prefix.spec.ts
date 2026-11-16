@@ -35,6 +35,7 @@ function build(env: Record<string, string> = {}) {
     },
     contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
     // B-283: the protection rule reads active admin holds and the reports on a post, and writes deferrals.
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
     report: { findMany: jest.fn().mockResolvedValue([]) },
     postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },

@@ -382,3 +382,15 @@ HEIC conversion; direct-message media (`Message.mediaUrl` is **removed from the 
 service no longer accept or return it, so a message is text only until DM upload exists; the database column is deliberately left);
 admin article/cover media (`MediaAsset`, the admin-only path, is unchanged); avatars and covers (they have their own pipeline).
 The AWS account, IAM user and AWS AI-services opt-out are founder-owned launch steps and are NOT done here.
+
+## Suspected illegal imagery: protection (B-206, `backend/suspected-illegal-imagery-path`)
+
+A file a vetted admin has set aside as suspected illegal imagery (module `suspected-illegal-media`) is PROTECTED by the one
+evidence rule in `rejected-media-evidence.util.ts`: while its `SuspectedIllegalMedia` record is `set_aside`, or
+`now < preserveUntil` (`SUSPECTED_MEDIA_PRESERVE_DAYS`, default 365). The record matches by `mediaId` and `objectKey`, so
+protection survives the `PostMedia` row being deleted. **This supersedes "a rejected file is deleted on every path" for
+those files only.** Paths that honour it: post deleted, upload deleted, quarantine purge, unattached purge, account
+anonymised, account purged, B-290 closure deletion, stray sweep (counted as `skippedSetAside`). A held-back deletion is
+written to `PostMediaDeferredDeletion` and finished by `processDeferred` once protection ends. Set-aside itself reuses
+`PostMediaDecisionService.rejectForSetAside` and the existing generic rejection reason; nothing new is sent to the user.
+Config: `SUSPECTED_MEDIA_PRESERVE_DAYS` (`post-media.config.ts`).

@@ -2972,6 +2972,49 @@ model PostMediaDeferredDeletion {
   @@index([createdAt])
 }
 
+// backend/suspected-illegal-imagery-path (B-206; founder decision 2026-11-15). A genuine new model, flagged per
+// CLAUDE.md's "fixed spec" rule. The record of ONE uploaded file a child-safety-vetted admin SET ASIDE as suspected
+// illegal imagery. It is evidence-handling bookkeeping, NOT a legal conclusion: it holds the file's private object out of
+// every deletion path (rejected-media-evidence.util.ts) until preserveUntil, and carries the filing record (who the
+// admin says it was reported to, the reference, when) written by hand after the filing was made OUTSIDE this system.
+// Nothing here contacts anyone. mediaId, uploaderId, postId and reportId are plain strings with NO foreign key on
+// purpose: the record must outlive the PostMedia row, the post, the account and the report it describes. mediaId is
+// unique: one record per file. status: set_aside (filing not yet decided) | filed | not_filed; the file stays protected
+// while status is set_aside OR now < preserveUntil. reason is the admin's internal note (never sent anywhere, never
+// copied into the audit log). uploaderCountry is a snapshot (derivedCountry, else declaredCountry) used only to
+// suggest receiving bodies; uploaderIsMinor is a snapshot too.
+model SuspectedIllegalMedia {
+  id                String    @id @default(uuid())
+  mediaId           String    @unique
+  uploaderId        String
+  postId            String?
+  reportId          String?
+  objectKey         String?
+  kind              String
+  reason            String
+  uploaderCountry   String?
+  uploaderIsMinor   Boolean   @default(false)
+  status            String    @default("set_aside")
+  setAsideByAdminId String
+  setAsideAt        DateTime  @default(now())
+  preserveUntil     DateTime
+  decidedByAdminId  String?
+  decidedAt         DateTime?
+  bodyKey           String?
+  bodyOther         String?
+  reference         String?
+  filedAt           DateTime?
+  note              String?
+  notFiledReason    String?
+  createdAt         DateTime  @default(now())
+
+  @@index([status])
+  @@index([preserveUntil])
+  @@index([reportId])
+  @@index([uploaderId])
+  @@index([postId])
+}
+
 // backend/b086-two-factor (B-086; Decision Log #404 item 7, #405 item 8, #446). A genuine new model, flagged per
 // CLAUDE.md's "fixed spec" rule. One of a user's 10 single-use recovery codes. codeHash is argon2id (PasswordService) of
 // the normalised 10-character code -- the plaintext is shown to the user once and never stored. usedAt is the single-use

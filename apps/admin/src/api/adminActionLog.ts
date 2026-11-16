@@ -98,6 +98,9 @@ export const ACTION_KINDS: { value: string; label: string }[] = [
   { value: "contest_cycle.updated", label: "Contest edited" },
   { value: "media.approved", label: "Media approved" },
   { value: "media.rejected", label: "Media rejected" },
+  { value: "media.suspected_illegal_set_aside", label: "File set aside as suspected illegal" },
+  { value: "media.suspected_illegal_filed", label: "Suspected illegal file: filing recorded" },
+  { value: "media.suspected_illegal_not_filed", label: "Suspected illegal file: not filed" },
   { value: "admin.search_performed", label: "Search performed" },
   { value: "banter_room.reactivated", label: "Bants room reactivated" },
 ];
@@ -106,6 +109,9 @@ export const ACTION_KINDS: { value: string; label: string }[] = [
 // birth, incorrect-details resolution). Used ONLY to leave them out of the Action dropdown for such an admin, so
 // the list does not offer a kind that can never have rows. It filters nothing the server returns.
 export const CHILD_SAFETY_ACTION_KINDS: readonly string[] = [
+  "media.suspected_illegal_set_aside",
+  "media.suspected_illegal_filed",
+  "media.suspected_illegal_not_filed",
   "user.guardian_notices_withheld",
   "user.guardian_notices_cleared",
   "user.guardian_notices_reviewed",

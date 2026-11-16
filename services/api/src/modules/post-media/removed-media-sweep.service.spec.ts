@@ -50,6 +50,7 @@ function build(env: Record<string, string> = {}, withStorage = true) {
         args.where.id ? args.where.id.in.map((id) => reportsById[id]).filter(Boolean) : [], // no OTHER report on the post
       ),
     },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: {
       findMany: jest.fn(async ({ where }: { where: { userId: string } }) =>
         held.has(where.userId) ? [{ id: 'h', type: 'legal_hold', reportId: null, expiresAt: null }] : [],
