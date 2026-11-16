@@ -80,6 +80,7 @@ function build(env: Record<string, string> = {}) {
         return { count: i >= 0 ? 1 : 0 };
       }),
     },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: {
       findMany: jest.fn(async ({ where }: { where: { userId: string } }) =>
         heldUploaders.has(where.userId) ? [{ id: 'h', type: 'legal_hold', reportId: null, expiresAt: null }] : [],
@@ -337,6 +338,50 @@ describe('sweepStrays', () => {
     t.store.add('post-media/u1/b.jpg', OLD);
     expect((await t.service.sweepStrays(NOW)).deleted).toBe(2);
     expect(await t.service.sweepStrays(NOW)).toMatchObject({ deleted: 0, scanned: 0 });
+  });
+});
+
+describe('suspected illegal media is never deleted while protected (B-206)', () => {
+  // The mock answers like the real query: the record protects while it is set_aside or before its preserveUntil.
+  function protect(t: ReturnType<typeof build>, mediaId: string, state: { active: boolean }) {
+    t.prisma.suspectedIllegalMedia.findMany.mockImplementation(async (args: { where: { mediaId: { in: string[] } } }) =>
+      state.active && args.where.mediaId.in.includes(mediaId) ? [{ mediaId }] : [],
+    );
+  }
+
+  it('a stray whose media id has an active record is skipped and counted, and goes once protection ends', async () => {
+    const t = build();
+    const state = { active: true };
+    protect(t, 'stray', state);
+    t.store.add('private-media/u1/stray.jpg', OLD);
+    const first = await t.service.sweepStrays(NOW);
+    expect(first).toMatchObject({ deleted: 0, skippedSetAside: 1 });
+    expect(t.store.objects.has('private-media/u1/stray.jpg')).toBe(true);
+    state.active = false; // decided and past preserveUntil
+    const second = await t.service.sweepStrays(NOW);
+    expect(second.deleted).toBe(1);
+  });
+
+  it('a deferred deletion stays recorded (object kept) while the record protects, and finishes afterwards', async () => {
+    const t = build();
+    const state = { active: true };
+    protect(t, 'd1', state);
+    t.store.add('private-media/u1/d1.jpg');
+    t.defer('d1', 'private-media/u1/d1.jpg');
+    expect(await t.service.processDeferred(NOW)).toEqual({ deleted: 0, stillProtected: 1, failed: 0, capped: false });
+    expect(t.store.deleted).toEqual([]);
+    expect(t.deferrals).toHaveLength(1);
+    state.active = false;
+    expect(await t.service.processDeferred(NOW)).toEqual({ deleted: 1, stillProtected: 0, failed: 0, capped: false });
+    expect(t.deferrals).toHaveLength(0);
+  });
+
+  it('the purged-account cleanup leaves a protected file alone', async () => {
+    const t = build();
+    protect(t, 'm9', { active: true });
+    t.store.add('private-media/u1/m9.jpg');
+    await t.service.deleteUploaderObjects('u1');
+    expect(t.store.objects.has('private-media/u1/m9.jpg')).toBe(true);
   });
 });
 

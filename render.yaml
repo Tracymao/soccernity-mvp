@@ -330,6 +330,10 @@ services:
         value: "200"
       - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
         value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -682,6 +686,10 @@ services:
         value: "200"
       - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
         value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false

@@ -104,4 +104,16 @@ describe('PostMediaConfig', () => {
     expect(c.checkBatchSize).toBe(10);
     expect(cfg({ MEDIA_CHECK_VIDEO_MAX_FRAMES: '12', MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS: '2' }).videoSampling).toEqual({ intervalSeconds: 2, maxFrames: 12 });
   });
+  describe('suspected-media preservation period (B-206)', () => {
+    it('defaults to 365 days and reads SUSPECTED_MEDIA_PRESERVE_DAYS', () => {
+      expect(cfg().suspectedMediaPreserveDays).toBe(365);
+      expect(cfg({ SUSPECTED_MEDIA_PRESERVE_DAYS: '30' }).suspectedMediaPreserveDays).toBe(30);
+    });
+
+    it('a value that is not a whole number in range falls back to 365', () => {
+      for (const bad of ['0', '-1', 'abc', '1.5', '99999', '']) {
+        expect(cfg({ SUSPECTED_MEDIA_PRESERVE_DAYS: bad }).suspectedMediaPreserveDays).toBe(365);
+      }
+    });
+  });
 });

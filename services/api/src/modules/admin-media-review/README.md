@@ -78,3 +78,10 @@ else gets the same 404 as a missing id.
 
 **Audit.** `media.approved` / `media.rejected`, target type `profile_image`, `targetId` the PERSON's user id (so the audit-log reader can
 hide a minor's rows from an unvetted admin by joining `User`), the kind in the notes (`avatar`, or `avatar: <reason>`).
+
+## Suspected illegal imagery (B-206)
+
+`GET /admin/media-review/:id` now also returns `suspectedIllegalRecord: { id, status } | null` (read only). The set-aside
+action itself is `POST /admin/media-review/:id/suspected-illegal`, built in module `suspected-illegal-media` (vetted admin
+only; a non-vetted admin gets the same 404 as an unknown id on a minor's file). Profile pictures and covers are not
+covered by it (404).

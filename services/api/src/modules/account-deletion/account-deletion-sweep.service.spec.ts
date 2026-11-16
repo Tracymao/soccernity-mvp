@@ -60,6 +60,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     contactEnquiry: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
     // B-044: admin holds (none by default) and the reports involving the user (findInvolvedReports).
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
     $queryRaw: jest.fn().mockResolvedValue(opts.held ? [OPEN_SUBJECT_REPORT] : []),
     // B-283: the rejected-media protection rule reads the reports on the media's posts and writes deferrals.

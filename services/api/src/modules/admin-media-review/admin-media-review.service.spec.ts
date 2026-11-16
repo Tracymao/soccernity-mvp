@@ -45,6 +45,7 @@ function build(opts: { vetted?: boolean } = {}) {
     adminUser: { findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: opts.vetted ?? true }) },
     postMediaReport: { groupBy: jest.fn().mockResolvedValue([]) },
     adminActionLog: { count: jest.fn().mockResolvedValue(0) },
+    suspectedIllegalMedia: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   const storage = { createDownloadUrl: jest.fn(async (key: string, ttl: number) => `https://view.test/${key}?ttl=${ttl}`) };
   const decisions = { approve: jest.fn(), reject: jest.fn() };

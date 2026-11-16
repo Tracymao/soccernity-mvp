@@ -18,6 +18,12 @@ import { findActiveAccountHold, reportClosedAt } from '../account-hold/account-h
 // as the delete, when the caller has one) and RejectedMediaSweepService.processDeferred finishes the job once
 // neither protection applies.
 //
+// backend/suspected-illegal-imagery-path (B-206; founder decision 2026-11-15). A THIRD protection, in this same one
+// place: a file with a SuspectedIllegalMedia record (a child-safety-vetted admin set it aside as suspected illegal
+// imagery) is protected while the record's status is 'set_aside' OR now < preserveUntil, whoever the uploader is and
+// whatever the state of the post or its reports. It is evidence-handling bookkeeping, not a legal conclusion. The
+// record has no foreign key, so it protects the file after the row, the post and the account are gone.
+//
 // WHAT THIS DOES NOT PROTECT: a stray object with no row and no record cannot be tied to a report (the key names
 // only the uploader and the media id), so for it the minimum object age is the only protection; its uploader's
 // hold IS checked, because the key names the uploader.
@@ -32,6 +38,26 @@ export interface EvidenceItem {
 type HoldDb = Pick<Prisma.TransactionClient, 'accountHold'>;
 type ReportDb = Pick<Prisma.TransactionClient, 'report'>;
 type DeferDb = Pick<Prisma.TransactionClient, 'postMediaDeferredDeletion'>;
+type SuspectedDb = Pick<Prisma.TransactionClient, 'suspectedIllegalMedia'>;
+
+/**
+ * The media ids (of those given) whose file is set aside as suspected illegal imagery and still protected: the record
+ * is 'set_aside', or its preserveUntil has not yet passed. A record that is decided AND past its preserveUntil
+ * protects nothing.
+ */
+export async function suspectedMediaUnderProtection(
+  db: SuspectedDb,
+  mediaIds: readonly string[],
+  now: Date,
+): Promise<Set<string>> {
+  const ids = [...new Set(mediaIds)];
+  if (ids.length === 0) return new Set();
+  const rows = await db.suspectedIllegalMedia.findMany({
+    where: { mediaId: { in: ids }, OR: [{ status: 'set_aside' }, { preserveUntil: { gt: now } }] },
+    select: { mediaId: true },
+  });
+  return new Set(rows.map((r) => r.mediaId));
+}
 
 /** The uploaders (of those given) that have an active admin hold right now. */
 export async function uploadersUnderHold(db: HoldDb, uploaderIds: readonly string[], now: Date): Promise<Set<string>> {
@@ -71,11 +97,16 @@ export interface EvidencePartition {
 }
 
 export async function partitionEvidence(
-  db: HoldDb & ReportDb,
+  db: HoldDb & ReportDb & SuspectedDb,
   items: readonly EvidenceItem[],
   now: Date,
 ): Promise<EvidencePartition> {
   if (items.length === 0) return { free: [], protectedItems: [] };
+  const setAside = await suspectedMediaUnderProtection(
+    db,
+    items.map((i) => i.mediaId),
+    now,
+  );
   const held = await uploadersUnderHold(
     db,
     items.map((i) => i.uploaderId),
@@ -89,8 +120,9 @@ export async function partitionEvidence(
   const free: EvidenceItem[] = [];
   const protectedItems: EvidenceItem[] = [];
   for (const item of items) {
-    if (held.has(item.uploaderId) || (item.postId !== null && reported.has(item.postId))) protectedItems.push(item);
-    else free.push(item);
+    if (setAside.has(item.mediaId) || held.has(item.uploaderId) || (item.postId !== null && reported.has(item.postId))) {
+      protectedItems.push(item);
+    } else free.push(item);
   }
   return { free, protectedItems };
 }
@@ -109,7 +141,7 @@ export async function recordDeferrals(db: DeferDb, items: readonly EvidenceItem[
  * deleted now, and records a deferral for every object the protection rule holds back.
  */
 export async function evidenceKeysToDeleteNow(
-  db: HoldDb & ReportDb & DeferDb,
+  db: HoldDb & ReportDb & DeferDb & SuspectedDb,
   items: readonly EvidenceItem[],
   now: Date,
 ): Promise<string[]> {
@@ -124,6 +156,8 @@ export async function evidenceKeysToDeleteNow(
 // the report that REMOVED the post must itself be closed (reportClosedAt, the one closure predicate: the appeal window
 // has lapsed, or the appeal was upheld). B-206 (statutory-reporting / evidence set-aside under counsel) is meant to hook
 // in HERE and nowhere else: a set-aside is one more reason to put an item in `waiting`.
+// BUILT (backend/suspected-illegal-imagery-path): the SuspectedIllegalMedia record is checked inside partitionEvidence,
+// which this function calls, so a set-aside file is `waiting` here too.
 
 export interface RemovedMediaItem extends EvidenceItem {
   /** Post.removedByReportId: the report whose closure starts the deletion clock. */
@@ -138,7 +172,7 @@ export interface RemovedMediaPartition {
 }
 
 export async function removedMediaDeletableNow(
-  db: HoldDb & ReportDb,
+  db: HoldDb & ReportDb & SuspectedDb,
   items: readonly RemovedMediaItem[],
   now: Date,
   appealWindowDays: number = resolveReportAppealWindowDays(),

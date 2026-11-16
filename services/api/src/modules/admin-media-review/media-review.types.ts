@@ -41,6 +41,11 @@ export interface MediaReviewItem {
   /** A short-lived link to the file; null if storage is unavailable. */
   viewUrl: string | null;
   viewUrlExpiresAt: Date | null;
+  /**
+   * B-206, read-only, set on GET /admin/media-review/:id for post media only: the suspected-illegal-imagery record for
+   * this file (id and status) or null when none. Absent on list items and on profile pictures.
+   */
+  suspectedIllegalRecord?: { id: string; status: string } | null;
 }
 
 export interface MediaReviewPage {

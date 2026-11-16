@@ -231,6 +231,9 @@ const CONTROLLERS = [
 // *.controller.ts that is in neither list fails the build.
 const NOT_INSPECTED_DIRS = [
   'admin', // every admin-* module: AdminJwtAuthGuard domain
+  // backend/suspected-illegal-imagery-path (B-206): set-aside and filing records, every route AdminJwtAuthGuard +
+  // AdminRolesGuard (moderator, superadmin) and a child-safety-vetted admin. The admin domain, like the entry above.
+  'suspected-illegal-media',
   'auth', // the open set by design
   // backend/b086-two-factor (B-086): the signed-in user's two-factor SETTINGS (enrol, backup codes, turn off). An
   // authentication setting, not a social or profile write, and JwtAuthGuard only by decision (#446): a restricted-
