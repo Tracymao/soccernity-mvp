@@ -40,6 +40,7 @@ import { AdminStaffRolesModule } from './modules/admin-staff-roles/admin-staff-r
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
 import { AdminMediaReviewModule } from './modules/admin-media-review/admin-media-review.module';
+import { SuspectedIllegalMediaModule } from './modules/suspected-illegal-media/suspected-illegal-media.module';
 import { PostMediaModule } from './modules/post-media/post-media.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { SportsModule } from './modules/sports/sports.module';
@@ -252,6 +253,7 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     PostMediaModule,
     // backend/w15-media-review-queue (B-037): the moderator media review queue.
     AdminMediaReviewModule,
+    SuspectedIllegalMediaModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New

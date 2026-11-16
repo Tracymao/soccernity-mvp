@@ -256,6 +256,26 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
+  // Suspected illegal imagery (B-206). The preserve-days variable must exist in code, in render.yaml for BOTH services
+  // and in .env.example, with the same value as the code default.
+  describe('suspected-media preserve variable', () => {
+    it('is read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      expect(read.has('SUSPECTED_MEDIA_PRESERVE_DAYS')).toBe(true);
+      for (const keys of services) expect(keys.has('SUSPECTED_MEDIA_PRESERVE_DAYS')).toBe(true);
+      expect(example.has('SUSPECTED_MEDIA_PRESERVE_DAYS')).toBe(true);
+    });
+
+    it('carries the code default (365) in render.yaml (both services) and .env.example', () => {
+      expect(POST_MEDIA_DEFAULTS.suspectedMediaPreserveDays).toBe(365);
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const matches = [...renderText.matchAll(/- key: SUSPECTED_MEDIA_PRESERVE_DAYS\s+value: "(\d+)"/g)];
+      expect(matches).toHaveLength(2);
+      for (const m of matches) expect(Number(m[1])).toBe(POST_MEDIA_DEFAULTS.suspectedMediaPreserveDays);
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      expect(exampleText).toMatch(/^SUSPECTED_MEDIA_PRESERVE_DAYS=365\s*$/m);
+    });
+  });
+
   // Rejected-media deletion (B-283; Decision Log #464). The three sweep variables must exist in code, in
   // render.yaml for BOTH services and in .env.example, with the same value as the code default.
   describe('rejected-media stray sweep variables', () => {

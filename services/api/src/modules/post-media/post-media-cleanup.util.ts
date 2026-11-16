@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { StorageService } from '../../storage/storage.service';
-import { evidenceKeysToDeleteNow } from './rejected-media-evidence.util';
+import { evidenceKeysToDeleteNow, suspectedMediaUnderProtection } from './rejected-media-evidence.util';
 
 // backend/w14-post-media-pipeline (B-041; Decision Log #419 item 9). When a post is deleted or an account
 // is anonymised, the media rows go with them in the database, and the stored OBJECTS are removed by the
@@ -26,7 +26,7 @@ import { evidenceKeysToDeleteNow } from './rejected-media-evidence.util';
 // report's private copy is deleted by RejectedMediaSweepService.confirmModerationRemovals, not by these paths.)
 
 type Db = Pick<Prisma.TransactionClient, 'postMedia'>;
-type EvidenceDb = Pick<Prisma.TransactionClient, 'accountHold' | 'report' | 'postMediaDeferredDeletion'>;
+type EvidenceDb = Pick<Prisma.TransactionClient, 'accountHold' | 'report' | 'postMediaDeferredDeletion' | 'suspectedIllegalMedia'>;
 
 export interface MediaObjectRow {
   status: string;
@@ -74,10 +74,20 @@ export function evidenceKeyOf(row: Pick<MediaObjectRow, 'status' | 'privateKey' 
  * transaction that deletes the rows).
  */
 export async function keysToDeleteNow(db: EvidenceDb, rows: readonly MediaCleanupRow[], now: Date): Promise<string[]> {
-  const keys = rows.flatMap(deletableKeys);
+  // B-206 (backend/suspected-illegal-imagery-path): a file set aside as suspected illegal imagery is protected in
+  // EVERY object it has (public, private, quarantined), not only the private one, so all of its keys go through the
+  // protection rule and are deferred, never deleted, while the record protects it.
+  const setAside = await suspectedMediaUnderProtection(
+    db,
+    rows.map((r) => r.id),
+    now,
+  );
+  const keys = rows.filter((r) => !setAside.has(r.id)).flatMap(deletableKeys);
   const evidence = rows.flatMap((r) => {
-    const key = evidenceKeyOf(r);
-    return key ? [{ mediaId: r.id, uploaderId: r.uploaderId, postId: r.postId, key }] : [];
+    const toCheck = setAside.has(r.id)
+      ? [...deletableKeys(r), ...(r.privateKey && evidenceKeyOf(r) !== null ? [r.privateKey] : [])]
+      : [evidenceKeyOf(r)];
+    return [...new Set(toCheck)].flatMap((key) => (key ? [{ mediaId: r.id, uploaderId: r.uploaderId, postId: r.postId, key }] : []));
   });
   return [...keys, ...(await evidenceKeysToDeleteNow(db, evidence, now))];
 }

@@ -7,6 +7,7 @@ import {
   POST_MEDIA_REJECTED_NOTIFICATION_TYPE,
 } from './post-media-review.constants';
 import { MEDIA_REVIEW_CODES, postMediaError } from './post-media.errors';
+import { AUTO_REJECTION_REASON } from './media-moderation-decision.util';
 import { POST_NOT_REMOVED_BY_MODERATION, PostMediaObjectsService } from './post-media-objects.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 
@@ -241,6 +242,66 @@ export class PostMediaDecisionService {
       await this.resolveReports(tx, mediaId, now);
       await writeDecisionNotification(tx, row.uploaderId, mediaId, 'rejected');
       return { result: { id: mediaId, outcome: 'rejected', status: 'rejected' } as const, uploaderId: row.uploaderId };
+    });
+  }
+
+  // backend/suspected-illegal-imagery-path (B-206). Rejecting a file a child-safety-vetted admin SET ASIDE as suspected
+  // illegal imagery. Unlike reject(), this works on a pending, an approved (published) and an already-rejected file
+  // and needs no queue entry: a person who sees such an image must be able to act at once, wherever it is.
+  //
+  // It runs INSIDE the caller's transaction (the set-aside route writes the record and the audit row in the same
+  // one) and returns what the record needs. The EFFECTS ARE EXACTLY THE EXISTING GENERIC REJECTION'S: status
+  // 'rejected', decisionSource 'moderator', the existing generic reason (never the admin's text), open reports
+  // resolved, and the uploader's ordinary "not approved" notification. A file that is ALREADY rejected is left as
+  // it is (nothing changes, no second notification). Nothing new is sent to anyone: no extra notification, no
+  // guardian notice beyond the one the generic rejection already sends, and no account hold.
+  async rejectForSetAside(
+    tx: Prisma.TransactionClient,
+    mediaId: string,
+    adminId: string,
+    now: Date,
+  ): Promise<{ changed: boolean; uploaderId: string; postId: string | null; kind: string; objectKey: string | null }> {
+    const row = await tx.postMedia.findFirst({
+      where: { id: mediaId, uploadState: 'ready' },
+      select: { id: true, uploaderId: true, postId: true, kind: true, status: true, publishedAt: true, publicKey: true, privateKey: true },
+    });
+    if (!row) throw postMediaError(404, 'media_not_found', 'Media not found');
+    let changed = false;
+    if (row.status !== 'rejected') {
+      const count = (
+        await tx.postMedia.updateMany({
+          where: { id: mediaId, status: { not: 'rejected' } },
+          data: {
+            status: 'rejected',
+            decisionSource: 'moderator',
+            decidedAt: now,
+            decidedBy: adminId,
+            rejectionReason: AUTO_REJECTION_REASON,
+            reportCount: 0,
+            hiddenPendingReview: false,
+          },
+        })
+      ).count;
+      changed = count === 1;
+      if (changed) {
+        await this.resolveReports(tx, mediaId, now);
+        await writeDecisionNotification(tx, row.uploaderId, mediaId, 'rejected');
+      }
+    }
+    return {
+      changed,
+      uploaderId: row.uploaderId,
+      postId: row.postId,
+      kind: row.kind,
+      objectKey: row.publishedAt && row.publicKey ? row.publicKey : row.privateKey,
+    };
+  }
+
+  /** After the set-aside transaction commits: the guardian notice the generic rejection sends, and the move back to private. */
+  async afterSetAside(mediaId: string, uploaderId: string, changed: boolean): Promise<void> {
+    if (changed) this.guardianNotices?.notifyInBackground(uploaderId, 'media_not_approved');
+    await this.objects.withdraw(mediaId).catch((err) => {
+      this.logger.warn(`Set-aside media ${mediaId} not yet moved back to the private prefix (${err instanceof Error ? err.message : String(err)}).`);
     });
   }
 
