@@ -20,6 +20,14 @@
 // who decided and when ("Another moderator approved this ... 3 minutes ago"); the API says neither, so
 // the text claims only what is known.
 //
+// Suspected illegal imagery (B-206; backend PR #800). A post or contest file also has a third action beside Approve and
+// Reject: "Suspected illegal imagery" (NO Figma frame exists; it reuses the Reject dialog's shell). It is offered only
+// when the signed-in admin could use it: when the admin session is present and says the admin is NOT child-safety
+// vetted, the button is not drawn at all. With no session provider (a test mounting the page alone) the server decides,
+// and its coded 403 child_safety_vetting_required shows the existing restricted notice. Once a record exists the page
+// shows its status and a link instead of the button. Profile pictures and covers have no such action (the server
+// refuses their ids with a 404).
+//
 // Deviations from the frames, because the API does not provide the data: the "Reason given" sample on the
 // user-report callout is not shown (reports carry no reason and never identify the reporter, only a count);
 // category labels are the check's names only, without percentages.
@@ -27,6 +35,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useLocation, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
+import { useOptionalAdminAuth } from "../../auth/AdminAuthContext";
 import {
   MEDIA_REVIEW_REJECT_REASON_MAX,
   approveMedia,
@@ -37,9 +46,12 @@ import {
   rejectMedia,
   type MediaReviewItem,
 } from "../../api/mediaReview";
+import { setAsideSuspectedIllegal, statusLabel } from "../../api/suspectedIllegal";
 import { useDialogFocus } from "../moderation/HoldDialog";
-import { formatDateTime } from "../moderation/moderationShared";
+import { VettingRestrictedNotice, formatDateTime } from "../moderation/moderationShared";
 import { formatAge, itemTypeLabel, sourceLabel } from "./MediaReviewQueuePage";
+import SetAsideDialog from "./SetAsideDialog";
+import "./suspectedIllegal.css";
 import "../moderation/moderation.css";
 import "./mediaReview.css";
 
@@ -151,7 +163,10 @@ export default function MediaReviewItemPage() {
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [profileOutcome, setProfileOutcome] = useState<ProfileOutcome | null>(null);
+  const [settingAside, setSettingAside] = useState(false);
+  const [restricted, setRestricted] = useState(false);
   const alive = useRef(true);
+  const auth = useOptionalAdminAuth();
 
   const fetchItem = useCallback(async () => {
     try {
@@ -225,6 +240,11 @@ export default function MediaReviewItemPage() {
   const noun = profile ? itemTypeLabel(item).toLowerCase() : item.kind === "video" ? "video" : "picture";
   const decided = profile ? profileOutcome !== null : !item.awaitingDecision;
   const reported = item.sources.includes("user_report") && item.reportCount > 0;
+  // Offered only to an admin who could use it. A known-not-vetted admin never sees it (a missing or false flag reads
+  // as not vetted, as the guardian-notices section does); with no session provider the server decides on press.
+  const knownNotVetted = auth !== null && auth.admin?.childSafetyVetted !== true;
+  const record = item.suspectedIllegalRecord ?? null;
+  const canSetAside = !profile && !knownNotVetted && record === null;
 
   async function approve() {
     if (!item || busy) return;
@@ -277,6 +297,15 @@ export default function MediaReviewItemPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function setAside(reason: string) {
+    if (!item) return;
+    const created = await setAsideSuspectedIllegal(item.id, reason);
+    // The file was rejected in the same step: re-read it so the page shows the decided state and the record.
+    setSettingAside(false);
+    setItem((prev) => (prev ? { ...prev, suspectedIllegalRecord: { id: created.id, status: created.status } } : prev));
+    await fetchItem();
   }
 
   if (profile) {
@@ -422,6 +451,20 @@ export default function MediaReviewItemPage() {
           </div>
         ) : null}
 
+        {record ? (
+          <div className="mod-callout" role="status" data-testid="suspected-illegal-record">
+            <span className="mod-callout__bar" aria-hidden />
+            <p>
+              <strong>Set aside as suspected illegal imagery.</strong> Status: {statusLabel(record.status)}.{" "}
+              <Link className="mod-link" to={`/moderation/suspected-illegal/${encodeURIComponent(record.id)}`}>
+                Open the record
+              </Link>
+            </p>
+          </div>
+        ) : null}
+
+        {restricted ? <VettingRestrictedNotice /> : null}
+
         <section className="mod-card">
           <h2 className="mod-card__title">Details</h2>
           <div className="media-details">
@@ -491,6 +534,16 @@ export default function MediaReviewItemPage() {
           >
             Reject
           </button>
+          {canSetAside ? (
+            <button
+              type="button"
+              className="mod-btn mod-btn--outline"
+              onClick={() => setSettingAside(true)}
+              disabled={decided || busy !== null}
+            >
+              Suspected illegal imagery
+            </button>
+          ) : null}
         </div>
 
         {rejecting ? (
@@ -500,6 +553,20 @@ export default function MediaReviewItemPage() {
             error={rejectError}
             onCancel={() => setRejecting(false)}
             onSubmit={reject}
+          />
+        ) : null}
+
+        {settingAside ? (
+          <SetAsideDialog
+            noun={noun}
+            onSubmit={setAside}
+            onClose={() => setSettingAside(false)}
+            onRestricted={() => {
+              setSettingAside(false);
+              setRestricted(true);
+              // The vetting flag may have been withdrawn since the page loaded: re-read it so the button goes away.
+              void auth?.refreshProfile();
+            }}
           />
         ) : null}
       </div>

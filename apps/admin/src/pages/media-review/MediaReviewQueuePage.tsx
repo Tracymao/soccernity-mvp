@@ -26,6 +26,7 @@ import {
   type MediaReviewSource,
   type MediaReviewStatusFilter,
 } from "../../api/mediaReview";
+import { useOptionalAdminAuth } from "../../auth/AdminAuthContext";
 import { useAsyncData } from "../moderation/moderationShared";
 import "../moderation/moderation.css";
 import "./mediaReview.css";
@@ -121,6 +122,10 @@ function QueueRow({ item }: { item: MediaReviewItem }) {
 }
 
 export default function MediaReviewQueuePage() {
+  const auth = useOptionalAdminAuth();
+  // The list is for child-safety-vetted staff. Hidden when the profile is known not to be vetted; with no provider
+  // (unit tests) it is shown and the server decides.
+  const showSuspectedLink = auth === null || auth.admin?.childSafetyVetted === true;
   const [status, setStatus] = useState<MediaReviewStatusFilter>("pending");
   const [source, setSource] = useState<MediaReviewSource | "">("");
   const { data, loading, error, reload } = useAsyncData(
@@ -161,6 +166,11 @@ export default function MediaReviewQueuePage() {
           <Link className="mod-link" to="/moderation">
             ← Moderation Queue
           </Link>
+          {showSuspectedLink ? (
+            <Link className="mod-link" to="/moderation/suspected-illegal">
+              Suspected illegal imagery
+            </Link>
+          ) : null}
           {status === "pending" && data ? (
             <span className="mod-pill mod-pill--strong" data-testid="pending-count">
               {items.length}
