@@ -49,6 +49,11 @@ export const POST_MEDIA_DEFAULTS = {
   strayMinAgeDays: 7,
   // The most objects one sweep run deletes (the cap convention of ANONYMIZED_PURGE_MAX_PER_RUN, 200 per run).
   straySweepMaxDeletes: 200,
+  // backend/suspected-illegal-imagery-path (B-206; founder decision 2026-11-15). ADOPTED DEFAULT, founder-veto-able:
+  // how many days a file set aside as suspected illegal imagery is kept from deletion after the set-aside, even once
+  // its filing is decided. The figure is the founder's placeholder for what counsel will confirm; the file is also
+  // protected for as long as its record is still 'set_aside' (undecided), whatever this value is.
+  suspectedMediaPreserveDays: 365,
 } as const;
 
 export interface PostMediaLimits {
@@ -195,6 +200,11 @@ export class PostMediaConfig {
   /** B-283: when "true" the stray sweep only counts and logs what it would delete; it deletes nothing. */
   get straySweepDryRun(): boolean {
     return this.config.get<string>('POST_MEDIA_STRAY_SWEEP_DRY_RUN')?.trim().toLowerCase() === 'true';
+  }
+
+  /** B-206: days a set-aside file is preserved after the set-aside (SUSPECTED_MEDIA_PRESERVE_DAYS, default 365). */
+  get suspectedMediaPreserveDays(): number {
+    return this.num('SUSPECTED_MEDIA_PRESERVE_DAYS', POST_MEDIA_DEFAULTS.suspectedMediaPreserveDays, 1, 3650);
   }
 
   get checkBatchSize(): number {

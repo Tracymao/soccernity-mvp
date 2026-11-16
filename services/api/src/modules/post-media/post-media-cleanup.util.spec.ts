@@ -39,6 +39,7 @@ interface DbOpts {
 function buildDb(opts: DbOpts = {}) {
   return {
     postMedia: { findMany: jest.fn().mockResolvedValue(opts.media ?? []), deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: {
       findMany: jest
         .fn()

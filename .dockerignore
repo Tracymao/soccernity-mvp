@@ -1,0 +1,27 @@
+# Docker build context is the REPO ROOT (services/api/Dockerfile).
+# Keep every workspace package.json (npm ci validates the whole lockfile)
+# but nothing else from the frontend workspaces.
+.git
+**/node_modules
+**/dist
+**/coverage
+docs
+e2e
+scripts
+.github
+.claude
+.env
+.env.*
+**/.env
+**/.env.*
+*.log
+apps/**
+!apps/*/package.json
+packages/**
+!packages/*/package.json
+services/api/test
+services/api/geoip
+**/*.spec.ts
+Dockerfile
+**/Dockerfile
+.dockerignore

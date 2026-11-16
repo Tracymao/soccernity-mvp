@@ -321,6 +321,20 @@ export class ReportRetentionService {
       return { outcome: { kind: 'blocked', reason: 'context_of_other_report' }, plan };
     }
 
+    // 5b. a suspected-illegal-imagery record (B-206) still protects its file: this report is its filing context (or is on
+    // the post that file belongs to), so deleting it would strip the context. Counted as 'media': the file is why.
+    const contextPostIds = [...plan.postIds, ...(r.targetType === 'post' ? [r.targetId] : [])];
+    const protectedRecord = await db.suspectedIllegalMedia.findFirst({
+      where: {
+        AND: [
+          { OR: [{ status: 'set_aside' }, { preserveUntil: { gt: now } }] },
+          { OR: [{ reportId: r.id }, ...(contextPostIds.length > 0 ? [{ postId: { in: contextPostIds } }] : [])] },
+        ],
+      },
+      select: { id: true },
+    });
+    if (protectedRecord) return { outcome: { kind: 'skip', reason: 'media' }, plan };
+
     // 6. another report, not yet closed, on something this deletion destroys.
     if (await this.otherUnclosedReport(db, r.id, plan, now, appealWindowDays)) {
       return { outcome: { kind: 'skip', reason: 'other_report_open' }, plan };

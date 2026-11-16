@@ -1,0 +1,53 @@
+name: API Docker image
+
+# Build-only check for the API image (infra/api-docker-ffmpeg). It builds
+# services/api/Dockerfile and then checks ffmpeg/ffprobe are in the image. It
+# never pushes an image and never deploys. It runs only when something the image
+# is built from changes, so most pull requests do not pay for it.
+#
+# Not a required check: nothing in the branch protection depends on it. Whether
+# to require it is the founder's call (DEFAULT: advisory).
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - "services/api/Dockerfile"
+      - "services/api/docker-start.sh"
+      - ".dockerignore"
+      - "render.yaml"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    branches: [main, staging]
+    paths:
+      - "services/api/Dockerfile"
+      - "services/api/docker-start.sh"
+      - ".dockerignore"
+      - "render.yaml"
+      - ".github/workflows/docker-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: Build API image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Build context is the repo root, as in render.yaml (dockerContext: .).
+      - name: Build image
+        run: docker build -f services/api/Dockerfile -t soccernity-api:ci .
+
+      - name: ffmpeg and ffprobe are in the image
+        run: |
+          docker run --rm --entrypoint ffmpeg soccernity-api:ci -version | head -n 1
+          docker run --rm --entrypoint ffprobe soccernity-api:ci -version | head -n 1
+
+      - name: Runs as a non-root user
+        run: |
+          user="$(docker run --rm --entrypoint id soccernity-api:ci -un)"
+          echo "user: $user"
+          test "$user" != "root"
