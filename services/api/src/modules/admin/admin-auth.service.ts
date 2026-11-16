@@ -167,8 +167,12 @@ export class AdminAuthService implements OnModuleInit {
   // is validated and consumed first (a bad or replayed token is the ordinary 401 and touches no account), the admin's
   // identity comes from the token that was actually consumed, and revoking the whole family then also removes the
   // replacement just issued -- it was never returned, so no usable refresh token is left behind. Off (anything but
-  // the literal "true") costs no query. Access tokens already issued stay valid until they expire (15 minutes by
-  // default); there is deliberately no per-request database check.
+  // the literal "true") costs no query. Access tokens already issued: since B-305 (Decision Log #500)
+  // revokeAllSessionsForAdmin also writes a per-admin "sessions revoked at" marker (whole seconds) and
+  // AdminJwtAuthGuard refuses, on every request, any token whose `iat` is an earlier second. So a token issued
+  // before this revocation is refused (same 401 as an invalid token). The one exception is the documented
+  // one-second edge: a token issued in the SAME whole second as the revocation is still accepted (iat == marker).
+  // The guard also fails open (accepts, logs, reports to Sentry) if Redis cannot be read.
   private async assertEnrolledWhenEnforced(newAccessToken: string): Promise<void> {
     if (!this.twoFactor.isAdminEnforced()) return;
     const { sub: adminId } = this.adminTokenService.verifyAccessToken(newAccessToken);
