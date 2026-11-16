@@ -1,0 +1,103 @@
+/* Suspected illegal imagery (B-206; backend PR #800). NO Figma frame exists: everything reuses moderation.css
+ * (mod-*, hi-*, ce-*) and the username-reviews table pattern. Tokens only; the alert colour is not used. */
+
+.si-consequences {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.si-table__row {
+  display: grid;
+  grid-template-columns: 110px 90px 150px 130px 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.si-table__row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.si-table__row + .si-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+/* A record nobody has filed or decided yet: a navy bar on its left edge. */
+.si-table__row--open {
+  box-shadow: inset 3px 0 0 var(--sn-brand-navy);
+}
+
+.si-pill--neutral {
+  background-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.si-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.si-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sn-text-primary);
+}
+
+.si-form input,
+.si-form select,
+.si-form textarea {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+}
+
+.si-form input[aria-invalid="true"],
+.si-form select[aria-invalid="true"],
+.si-form textarea[aria-invalid="true"] {
+  border-color: var(--sn-semantic-alert, var(--sn-brand-navy));
+}
+
+.si-field-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+.si-suggested {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.si-link-list {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}

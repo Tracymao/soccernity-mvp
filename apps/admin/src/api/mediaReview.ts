@@ -43,6 +43,11 @@ export interface MediaReviewItem {
   /** A 5-minute signed link to the file; null if storage is unavailable. */
   viewUrl: string | null;
   viewUrlExpiresAt: string | null;
+  /**
+   * Read-only (B-206): present once the file has been set aside as suspected illegal imagery. The page shows its
+   * status and links to the record. Absent or null on an older server, or when nothing was set aside.
+   */
+  suspectedIllegalRecord?: { id: string; status: string } | null;
 }
 
 export interface MediaReviewPage {

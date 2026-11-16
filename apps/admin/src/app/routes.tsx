@@ -60,6 +60,8 @@ import ContactEnquiriesPage from "../pages/moderation/ContactEnquiriesPage";
 import ContactEnquiryDetailPage from "../pages/moderation/ContactEnquiryDetailPage";
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
+import SuspectedIllegalListPage from "../pages/suspected-illegal/SuspectedIllegalListPage";
+import SuspectedIllegalDetailPage from "../pages/suspected-illegal/SuspectedIllegalDetailPage";
 import UsernameReviewsPage from "../pages/username-reviews/UsernameReviewsPage";
 import UsernameReviewDetailPage from "../pages/username-reviews/UsernameReviewDetailPage";
 import SearchPage from "../pages/search/SearchPage";
@@ -117,6 +119,9 @@ export const adminRoutes: RouteObject[] = [
           // pictures and videos the automatic check was unsure about, and files users reported.
           { path: "moderation/media", element: <MediaReviewQueuePage /> },
           { path: "moderation/media/:id", element: <MediaReviewItemPage /> },
+          // B-206: files a child-safety-vetted moderator set aside as suspected illegal imagery.
+          { path: "moderation/suspected-illegal", element: <SuspectedIllegalListPage /> },
+          { path: "moderation/suspected-illegal/:id", element: <SuspectedIllegalDetailPage /> },
           // Real screens (B-139 part (c), Decision Log #467): the review route for a removed username
           // (GET /admin/username-reviews, POST .../:id/decide). Moderator and superadmin; the nav row is
           // limited to those roles and the server answers an editor with a 403.
