@@ -139,6 +139,7 @@ function build(state: Partial<State> = {}) {
     banterRoom: { findUnique: jest.fn(async () => null) },
     grassrootsTeam: { findUnique: jest.fn(async () => null) },
     fixture: { findUnique: jest.fn(async () => null) },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: {
       findMany: jest.fn(async ({ where }: any) => {
         holdChecks += 1;
@@ -377,6 +378,42 @@ describe('ReportRetentionService - skip rules (the report and its content are ke
     expect((await b.service.purgeDue(NOW)).skippedOtherReportOpen).toBe(1);
     expect(a.db.post.delete).not.toHaveBeenCalled();
     expect(b.db.report.delete).not.toHaveBeenCalled();
+  });
+
+  describe('a suspected-illegal-imagery record (B-206) keeps its filing context', () => {
+    it("a report that is the record's reportId is kept, nothing is deleted", async () => {
+      const { service, db } = build({ candidates: [report({ targetType: 'post', targetId: 'p1' })], removedPosts: { r1: ['p1'] } });
+      db.suspectedIllegalMedia.findFirst.mockResolvedValue({ id: 'sim1' });
+      const r = await service.purgeDue(NOW);
+      expect(r.skippedMedia).toBe(1);
+      expect(db.post.delete).not.toHaveBeenCalled();
+      expect(db.report.delete).not.toHaveBeenCalled();
+      const where = JSON.stringify(db.suspectedIllegalMedia.findFirst.mock.calls[0][0].where);
+      expect(where).toContain('"reportId":"r1"');
+      expect(where).toContain('"status":"set_aside"');
+      expect(where).toContain('preserveUntil');
+    });
+
+    it('a report on a post whose media has an active record is kept (the post ids are in the lookup)', async () => {
+      const { service, db } = build({
+        candidates: [report({ targetType: 'post', targetId: 'p9' })],
+        removedPosts: { r1: ['p1'] },
+      });
+      db.suspectedIllegalMedia.findFirst.mockResolvedValue({ id: 'sim1' });
+      const r = await service.purgeDue(NOW);
+      expect(r.skippedMedia).toBe(1);
+      const where = JSON.stringify(db.suspectedIllegalMedia.findFirst.mock.calls[0][0].where);
+      expect(where).toContain('"postId":{"in":["p1","p9"]}');
+      expect(db.report.delete).not.toHaveBeenCalled();
+    });
+
+    it('with no active record the report is deleted as before', async () => {
+      const { service, db } = build({ candidates: [report()] });
+      db.suspectedIllegalMedia.findFirst.mockResolvedValue(null);
+      const r = await service.purgeDue(NOW);
+      expect(r.deletedReports).toBe(1);
+      expect(db.report.delete).toHaveBeenCalled();
+    });
   });
 
   it('another report that is already closed does not hold the deletion back', async () => {

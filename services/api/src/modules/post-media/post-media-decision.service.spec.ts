@@ -325,3 +325,74 @@ describe('PostMediaDecisionService: guardian notice (B-279)', () => {
     }
   });
 });
+
+// backend/suspected-illegal-imagery-path (B-206): rejecting a file that was SET ASIDE. Only the existing generic
+// rejection's effects, on a pending, approved or already-rejected file.
+describe('PostMediaDecisionService.rejectForSetAside / afterSetAside (B-206)', () => {
+  const setAsideRow = (over: Record<string, unknown> = {}) => ({
+    id: 'm1',
+    uploaderId: 'u1',
+    postId: 'p1',
+    kind: 'image',
+    status: 'pending',
+    publishedAt: null,
+    publicKey: 'post-media/u1/m1.jpg',
+    privateKey: 'private-media/u1/m1.jpg',
+    ...over,
+  });
+
+  it('rejects a pending file with the existing generic reason, resolves reports, notifies the uploader once', async () => {
+    const { service, prisma } = build(setAsideRow());
+    const out = await service.rejectForSetAside(prisma as never, 'm1', 'admin-1', NOW);
+    expect(out).toEqual({
+      changed: true,
+      uploaderId: 'u1',
+      postId: 'p1',
+      kind: 'image',
+      objectKey: 'private-media/u1/m1.jpg',
+    });
+    const data = prisma.postMedia.updateMany.mock.calls[0][0].data;
+    expect(data).toMatchObject({ status: 'rejected', decisionSource: 'moderator', decidedBy: 'admin-1', decidedAt: NOW });
+    expect(typeof data.rejectionReason).toBe('string');
+    expect(prisma.postMediaReport.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    expect(prisma.notification.create.mock.calls[0][0].data).toMatchObject({ userId: 'u1', type: 'post_media_rejected' });
+  });
+
+  it('an approved, published file is rejected too and its public key is the one reported', async () => {
+    const { service, prisma } = build(setAsideRow({ status: 'approved', publishedAt: NOW }));
+    const out = await service.rejectForSetAside(prisma as never, 'm1', 'admin-1', NOW);
+    expect(out.changed).toBe(true);
+    expect(out.objectKey).toBe('post-media/u1/m1.jpg');
+  });
+
+  it('an already-rejected file is left alone: nothing written, no second notification', async () => {
+    const { service, prisma } = build(setAsideRow({ status: 'rejected' }));
+    const out = await service.rejectForSetAside(prisma as never, 'm1', 'admin-1', NOW);
+    expect(out.changed).toBe(false);
+    expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('404 for an unknown file', async () => {
+    const { service, prisma } = build(null);
+    await expect(service.rejectForSetAside(prisma as never, 'm1', 'admin-1', NOW)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('afterSetAside: the guardian notice only when something changed, then the move back to private', async () => {
+    const changed = build(setAsideRow());
+    await changed.service.afterSetAside('m1', 'u1', true);
+    expect(changed.guardianNotices.notifyInBackground).toHaveBeenCalledWith('u1', 'media_not_approved');
+    expect(changed.objects.withdraw).toHaveBeenCalledWith('m1');
+    const same = build(setAsideRow());
+    await same.service.afterSetAside('m1', 'u1', false);
+    expect(same.guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+    expect(same.objects.withdraw).toHaveBeenCalledWith('m1');
+  });
+
+  it('afterSetAside never throws when the withdraw fails (the reconciler finishes it)', async () => {
+    const h = build(setAsideRow());
+    h.objects.withdraw.mockRejectedValue(new Error('storage down'));
+    await expect(h.service.afterSetAside('m1', 'u1', true)).resolves.toBeUndefined();
+  });
+});

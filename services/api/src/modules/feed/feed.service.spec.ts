@@ -95,6 +95,7 @@ function buildPrismaMock() {
     },
     // B-283: deletePost applies the rejected-media protection rule (active admin hold / unclosed report on the
     // post) and writes a deferral record when it holds an object back. Defaults: nothing protects anything.
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
     report: { findMany: jest.fn().mockResolvedValue([]) },
     postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },

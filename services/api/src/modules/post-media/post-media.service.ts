@@ -20,7 +20,7 @@ import {
 } from './media-signature.util';
 import { PostMediaConfig } from './post-media.config';
 import { deletableKeys, deleteStoredObjects, evidenceKeyOf, keysToDeleteNow } from './post-media-cleanup.util';
-import { partitionEvidence } from './rejected-media-evidence.util';
+import { partitionEvidence, suspectedMediaUnderProtection } from './rejected-media-evidence.util';
 import { PRIVATE_PREFIX, PUBLIC_PREFIX, privateKeyFor, publicKeyFor } from './post-media-objects.service';
 import { HEIC_NOT_SUPPORTED_MESSAGE, POST_MEDIA_CODES, UPLOADS_UNAVAILABLE_MESSAGE, postMediaError } from './post-media.errors';
 
@@ -466,7 +466,17 @@ export class PostMediaService {
         orderBy: { createdAt: 'asc' },
       });
       if (batch.length === 0) break;
+      // B-206 (backend/suspected-illegal-imagery-path): a file set aside as suspected illegal imagery is never touched.
+      const setAside = await suspectedMediaUnderProtection(
+        this.prisma,
+        batch.map((r) => r.id),
+        now,
+      );
       for (const r of batch) {
+        if (setAside.has(r.id)) {
+          heldBackIds.push(r.id);
+          continue;
+        }
         const key = r.quarantineKey as string;
         // B-283: when this row is a REJECTED file that is already processed, its private object goes with the
         // leftover original, unless the uploader is under an active hold or the post has a report not yet
@@ -545,6 +555,14 @@ export class PostMediaService {
       });
       const { protectedItems } = await partitionEvidence(this.prisma, evidenceItems, now);
       const protectedIds = new Set(protectedItems.map((i) => i.mediaId));
+      // B-206: a set-aside file is held back whatever its keys are (the record protects every object it has).
+      for (const id of await suspectedMediaUnderProtection(
+        this.prisma,
+        batch.map((r) => r.id),
+        now,
+      )) {
+        protectedIds.add(id);
+      }
       for (const r of batch) {
         if (protectedIds.has(r.id)) {
           heldBackIds.push(r.id);

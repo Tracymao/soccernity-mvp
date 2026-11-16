@@ -32,6 +32,7 @@ function db(opts: { reports?: Record<string, unknown>[]; held?: boolean } = {}) 
         args.where.id ? reports.filter((r) => args.where.id!.in.includes(r.id as string)) : reports.filter(() => args.where.targetType === 'post'),
       ),
     },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     accountHold: {
       findMany: jest.fn().mockResolvedValue(opts.held ? [{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }] : []),
     },

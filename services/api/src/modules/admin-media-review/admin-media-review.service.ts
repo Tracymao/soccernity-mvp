@@ -234,7 +234,13 @@ export class AdminMediaReviewService {
       select: ROW_SELECT,
     });
     if (!row) throw postMediaError(404, 'media_not_found', 'Media not found');
-    return this.toItem(row);
+    const item = await this.toItem(row);
+    // B-206: read-only, whether this file has been set aside as suspected illegal imagery.
+    const record = await this.prisma.suspectedIllegalMedia.findUnique({
+      where: { mediaId: row.id },
+      select: { id: true, status: true },
+    });
+    return { ...item, suspectedIllegalRecord: record ?? null };
   }
 
   /**
@@ -392,6 +398,11 @@ export class AdminMediaReviewService {
       viewUrl: url,
       viewUrlExpiresAt: expiresAt,
     };
+  }
+
+  /** The same signed-link helper for other admin modules (B-206 suspected-illegal-media detail). */
+  viewLinkForObject(objectKey: string | null): Promise<{ url: string | null; expiresAt: Date | null }> {
+    return this.viewLink(objectKey);
   }
 
   /** A short-lived signed link to the CURRENT object, never stored. A storage outage degrades the item to "no link", not an error. */

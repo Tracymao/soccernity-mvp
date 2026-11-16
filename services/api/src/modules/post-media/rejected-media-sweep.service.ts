@@ -5,7 +5,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService, StorageListNotPermittedError } from '../../storage/direct-upload-storage.service';
 import { PostMediaConfig } from './post-media.config';
 import { PRIVATE_PREFIX, PUBLIC_PREFIX } from './post-media-objects.service';
-import { partitionEvidence, removedMediaDeletableNow, uploadersUnderHold } from './rejected-media-evidence.util';
+import {
+  partitionEvidence,
+  removedMediaDeletableNow,
+  suspectedMediaUnderProtection,
+  uploadersUnderHold,
+} from './rejected-media-evidence.util';
 
 // backend/b283-delete-rejected-media (B-283; Decision Log #462 (g), #464). The second half of rejected-file
 // deletion. The lifecycle paths (post deleted, upload deleted, purges, account anonymised) delete a rejected
@@ -25,6 +30,9 @@ import { partitionEvidence, removedMediaDeletableNow, uploadersUnderHold } from 
 //                            * nothing whose uploader is under an active hold (the key names the uploader);
 //                            * nothing that has a PostMedia row (rows follow the lifecycle rules above);
 //                            * nothing with a deferral record (processDeferred owns it);
+//                            * nothing set aside as suspected illegal imagery (a SuspectedIllegalMedia record whose
+//                              status is set_aside or whose preserveUntil has not passed, matched by the media id in
+//                              the key; the record has no foreign key and outlives the row) -- B-206;
 //                            * nothing it cannot attribute to an uploader (an unrecognised key shape is counted
 //                              and reported, never deleted).
 //                          At most POST_MEDIA_STRAY_SWEEP_MAX_DELETES per run (the cap convention of
@@ -64,6 +72,8 @@ export interface StraySweepResult {
   skippedHasRow: number;
   skippedDeferred: number;
   skippedUploaderHeld: number;
+  /** Set aside as suspected illegal imagery (B-206): protected until the record allows deletion. */
+  skippedSetAside: number;
   /** Keys whose shape does not name an uploader and a media id: never deleted. */
   unrecognised: number;
   failed: number;
@@ -146,7 +156,7 @@ export class RejectedMediaSweepService {
       const r = await this.sweepStrays(this.clock.now());
       this.logger.log(
         `Stray media sweep: outcome=${r.outcome} dryRun=${r.dryRun} scanned=${r.scanned} deleted=${r.deleted} wouldDelete=${r.wouldDelete} ` +
-          `tooYoung=${r.skippedTooYoung} hasRow=${r.skippedHasRow} deferred=${r.skippedDeferred} uploaderHeld=${r.skippedUploaderHeld} ` +
+          `tooYoung=${r.skippedTooYoung} hasRow=${r.skippedHasRow} deferred=${r.skippedDeferred} uploaderHeld=${r.skippedUploaderHeld} setAside=${r.skippedSetAside} ` +
           `unrecognised=${r.unrecognised} failed=${r.failed} capped=${r.capped}`,
       );
     } catch (err) {
@@ -262,6 +272,7 @@ export class RejectedMediaSweepService {
       skippedHasRow: 0,
       skippedDeferred: 0,
       skippedUploaderHeld: 0,
+      skippedSetAside: 0,
       unrecognised: 0,
       failed: 0,
       capped: false,
@@ -315,6 +326,11 @@ export class RejectedMediaSweepService {
               })
             ).map((d) => d.objectKey),
           );
+          const setAside = await suspectedMediaUnderProtection(
+            this.prisma,
+            parsed.map((p) => p.ref.mediaId),
+            now,
+          );
           const unseen = [...new Set(parsed.map((p) => p.ref.uploaderId))].filter((u) => !heldCache.has(u));
           for (const u of unseen) heldCache.set(u, (await uploadersUnderHold(this.prisma, [u], now)).has(u));
 
@@ -325,6 +341,10 @@ export class RejectedMediaSweepService {
             }
             if (deferred.has(p.key)) {
               result.skippedDeferred += 1;
+              continue;
+            }
+            if (setAside.has(p.ref.mediaId)) {
+              result.skippedSetAside += 1;
               continue;
             }
             if (heldCache.get(p.ref.uploaderId)) {
@@ -391,9 +411,15 @@ export class RejectedMediaSweepService {
               (d) => d.objectKey,
             ),
           );
+          // B-206: a file set aside as suspected illegal imagery is kept even though its account is purged.
+          const setAside = await suspectedMediaUnderProtection(
+            this.prisma,
+            keys.flatMap((k) => (parseMediaKey(k) ? [parseMediaKey(k)!.mediaId] : [])),
+            this.clock.now(),
+          );
           for (const key of keys) {
             const ref = parseMediaKey(key);
-            if (!ref || rows.has(ref.mediaId) || deferred.has(key)) continue;
+            if (!ref || rows.has(ref.mediaId) || deferred.has(key) || setAside.has(ref.mediaId)) continue;
             try {
               await this.storage.delete(key);
               result.deleted += 1;

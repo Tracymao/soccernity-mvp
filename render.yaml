@@ -37,29 +37,30 @@
 # they change nothing; they exist so the setting is visible and editable.
 # PORT is not listed: services/api reads process.env.PORT ?? 3000.
 #
-# GEOLITE2 (B-024): the buildCommand ends with fetch-geolite2.js, which
-# downloads MaxMind's GeoLite2-Country database next to the build so the API can
+# GEOLITE2 (B-024): the container start script runs fetch-geolite2.js in the background, which
+# downloads MaxMind's GeoLite2-Country database next to the app so the API can
 # derive a registrant's country from their IP locally. It needs MAXMIND_ACCOUNT_ID
 # and MAXMIND_LICENSE_KEY; WITHOUT them (or if the download fails) it logs and
-# exits 0, the build still succeeds, and every country lookup is "unresolved",
+# exits 0, the start still succeeds, and every country lookup is "unresolved",
 # which applies the STRONGER safeguarding control. See docs/deployment.md.
 
 services:
   - type: web
     name: soccernity-api-staging
-    runtime: node
+    runtime: docker
     branch: staging
     plan: free
     # Free for staging: no guardian-consent traffic depends on its cold start.
     region: frankfurt
-    # No rootDir: every command runs from the repo root and targets
-    # services/api via --workspace or an explicit --schema path, the same
-    # pattern .github/workflows/ci.yml uses.
-    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api && node services/api/dist/scripts/fetch-geolite2.js
+    # DOCKER (infra/api-docker-ffmpeg): the image carries ffmpeg/ffprobe, which Render's native Node runtime lacks.
+    # buildCommand and startCommand are gone on purpose (Render: "You can't set a build command for services that use
+    # Docker"; the start command is the Dockerfile's CMD). The build context is the repo ROOT (npm workspaces, one lockfile).
+    # WORKDIR is /app, so the preDeployCommand below runs unchanged. See services/api/Dockerfile.
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
     # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
     # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
-    startCommand: npm run start:prod --workspace=services/api
     healthCheckPath: /health
     envVars:
       # --- Database / cache (Neon + Upstash, EU regions; see header) ---
@@ -273,8 +274,9 @@ services:
         value: "3600"
       - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
         value: "24"
-      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. NOT installed on Render's
-      # native Node runtime: until they are on the host, every video upload fails closed (503).
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. They are installed in the Docker
+      # image (Debian bookworm package, services/api/Dockerfile) and are on PATH, so the defaults below work as they are.
+      # If they were ever missing, every video upload would fail closed (503).
       - key: FFMPEG_PATH
         value: "ffmpeg"
       - key: FFPROBE_PATH
@@ -330,6 +332,10 @@ services:
         value: "200"
       - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
         value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -357,10 +363,12 @@ services:
       # its IP. See docs/deployment.md before setting.
       - key: TRUST_PROXY_HOPS
         sync: false
-      # GEOLITE2_DB_PATH: leave blank to use the default (services/api/geoip/GeoLite2-Country.mmdb, where fetch-geolite2.js puts it)
+      # GEOLITE2_DB_PATH: leave blank (default /app/services/api/geoip/GeoLite2-Country.mmdb, owned by the container's non-root user;
+      # a custom path must be writable by that user)
       - key: GEOLITE2_DB_PATH
         sync: false
-      # MaxMind account for the build-time GeoLite2 download (fetch-geolite2.js).
+      # MaxMind account for the GeoLite2 download (fetch-geolite2.js). In the Docker image this runs at CONTAINER START,
+      # not at build, so these keys are runtime variables only and never reach an image layer. Without them it logs and exits 0.
       - key: MAXMIND_ACCOUNT_ID
         sync: false
       - key: MAXMIND_LICENSE_KEY
@@ -399,19 +407,20 @@ services:
 
   - type: web
     name: soccernity-api
-    runtime: node
+    runtime: docker
     branch: main
     plan: starter
     # Starter (not Free) for production: avoids cold-start delay on the guardian-consent email link (Decision Log #26, Build Plan 8.3).
     region: frankfurt
-    # No rootDir: every command runs from the repo root and targets
-    # services/api via --workspace or an explicit --schema path, the same
-    # pattern .github/workflows/ci.yml uses.
-    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api && node services/api/dist/scripts/fetch-geolite2.js
+    # DOCKER (infra/api-docker-ffmpeg): the image carries ffmpeg/ffprobe, which Render's native Node runtime lacks.
+    # buildCommand and startCommand are gone on purpose (Render: "You can't set a build command for services that use
+    # Docker"; the start command is the Dockerfile's CMD). The build context is the repo ROOT (npm workspaces, one lockfile).
+    # WORKDIR is /app, so the preDeployCommand below runs unchanged. See services/api/Dockerfile.
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
     # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
     # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
-    startCommand: npm run start:prod --workspace=services/api
     healthCheckPath: /health
     envVars:
       # --- Database / cache (Neon + Upstash, EU regions; see header) ---
@@ -625,8 +634,9 @@ services:
         value: "3600"
       - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
         value: "24"
-      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. NOT installed on Render's
-      # native Node runtime: until they are on the host, every video upload fails closed (503).
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. They are installed in the Docker
+      # image (Debian bookworm package, services/api/Dockerfile) and are on PATH, so the defaults below work as they are.
+      # If they were ever missing, every video upload would fail closed (503).
       - key: FFMPEG_PATH
         value: "ffmpeg"
       - key: FFPROBE_PATH
@@ -682,6 +692,10 @@ services:
         value: "200"
       - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
         value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -709,10 +723,12 @@ services:
       # its IP. See docs/deployment.md before setting.
       - key: TRUST_PROXY_HOPS
         sync: false
-      # GEOLITE2_DB_PATH: leave blank to use the default (services/api/geoip/GeoLite2-Country.mmdb, where fetch-geolite2.js puts it)
+      # GEOLITE2_DB_PATH: leave blank (default /app/services/api/geoip/GeoLite2-Country.mmdb, owned by the container's non-root user;
+      # a custom path must be writable by that user)
       - key: GEOLITE2_DB_PATH
         sync: false
-      # MaxMind account for the build-time GeoLite2 download (fetch-geolite2.js).
+      # MaxMind account for the GeoLite2 download (fetch-geolite2.js). In the Docker image this runs at CONTAINER START,
+      # not at build, so these keys are runtime variables only and never reach an image layer. Without them it logs and exits 0.
       - key: MAXMIND_ACCOUNT_ID
         sync: false
       - key: MAXMIND_LICENSE_KEY
