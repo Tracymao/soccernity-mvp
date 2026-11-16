@@ -13,6 +13,7 @@ Branch `backend/suspected-illegal-imagery-path`, cut from `origin/main` `59016bc
 | Filing routes: `GET /admin/suspected-illegal-media`, `GET .../:id` (with `suggestedBodies` and a signed view link), `POST .../:id/filed`, `POST .../:id/not-filed` | same module |
 | Receiving-bodies table (all `pendingCounsel: true`, no URLs) | `receiving-bodies.constants.ts` |
 | One evidence rule extended: a file is protected while its record is `set_aside` OR `now < preserveUntil` | `post-media/rejected-media-evidence.util.ts` |
+| Audit-log labels for the three new actions in `apps/admin/src/api/adminActionLog.ts` (display only; also listed as child-safety kinds so an unvetted admin's dropdown omits them). Added after CI failed on the B-303 drift guard `actionLogKinds.test.ts` | `apps/admin` |
 | `GET /admin/media-review/:id` returns `suspectedIllegalRecord` (id, status), read-only | `admin-media-review.service.ts` |
 | `SUSPECTED_MEDIA_PRESERVE_DAYS` (default 365) | `.env.example`, both API services in `render.yaml`, `env-completeness.spec.ts`, `post-media.config.ts` |
 | Audit actions `media.suspected_illegal_set_aside`, `_filed`, `_not_filed` | `admin-action-log` constants |
