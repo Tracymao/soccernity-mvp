@@ -107,3 +107,20 @@ These are in `docs/counsel-pack-left-out.md` section 3 (34 entries). The main on
 ## 10. DOCX round-trip
 
 `docs/counsel-review-pack.docx` was built from the markdown with pandoc 3.9 (`pipe_tables`), 47,881 bytes. The zip is intact (`testzip` clean) and pandoc reads it back. Converted back to plain text, 61 of the 62 markdown headings match exactly. The 62nd ("Group 2: Automated rejection of a child's file ...") differs only because pandoc turned the straight apostrophe into a curly one. The converted text has all 75 questions and all 150 string numbers (S1 to S150). I did not open the file in Word, so layout (table widths, page breaks) is unchecked; the three-column tick table in section 4 may need widths adjusted by hand.
+
+## 11. Version 1.1 (task D9, 2026-11-17)
+
+Branch `legal/counsel-review-pack-v11`, cut from `origin/main` `c7adc58`. Sections 1 to 10 above describe v1.0 and are unchanged.
+
+**What changed.** The pack and the left-out list were regenerated against the eight drafts at their current versions: legal copy v0.18, DPIA v0.10, incident plan v0.8, post-media addendum v0.6 and Part C v0.3, contest/view-data addendum v0.3 and Part C v0.3, Cloudflare draft v0.3. Counsel has not seen legal copy v0.16, v0.17 or v0.18.
+
+- **75 questions became 71.** Removed because their sources were re-marked B or D: old Q14, Q26 (Cloudflare option choice, Decision Log #449, #518), Q71 (accepted DM timing limit, #350) and Q74 (public report page, legal copy row 35 now D). Narrowed: old Q5 now asks only part 5a (staff who are not child-safety vetted opening a suspected adult's file); staff protection and welfare is the founder's HR duty (#533, #534). Old Q73 became Q70 and also carries legal copy Part C row 22, which v0.18 marks A again. Old Q4 no longer asks about the 365-day figure, which stays out of public legal copy (#534). The cover page, documents table, question map (v1.0 to v1.1) and sign-off table were rebuilt. Strings sheet unchanged: 150 rows (web 99, admin 51).
+- **Left-out list.** Header and versions updated; legal copy row 22 moved out of the full list (A again, folded into Q70); rows 41, 35 and DPIA items 40, 41, 47 now D; row 18, post-media section 12 Q19 and Cloudflare Q9 became full B rows (their partial rows were removed); "unclear, founder to say" now has 36 entries (items 2, 4, 16 to 18, 29, 30, 34 rewritten; 35 and 36 added).
+
+**Arithmetic (a delta from v1.0, not a fresh recount).** A 141 to 130, B 36 to 42, C 20, D 49 to 57, not assigned 3 to 0 (still unconfirmed; see below): 130 + 42 + 20 + 57 = 249 only if the three unassigned incident questions are counted in B or D, which I did not verify. The left-out list has 110 full rows and 40 partial rows (150 rows in the file). The marker-by-marker recount was not redone, so treat the 130 / 42 / 57 split as approximate.
+
+**Verification.** Pack: 71 `**Q` lines, 150 string rows S1 to S150, 8 groups, no "DISPOSITION" text. DOCX rebuilt with pandoc (pypandoc), 48,351 bytes, zip intact; all 63 markdown headings found in the round-trip text and S1 to S150 present. The text contains "Q" numbers up to 75 only in the v1.0-to-v1.1 map table. `soffice` is absent, so layout (table widths, page breaks) is unchecked. A script confirmed no non-A source is cited by a question and no A item is missing from the pack was run on v1.0 only; for v1.1 only the structural counts above were checked.
+
+**Founder to say.** Whether the Q5 narrowing is intended; whether Q70 should carry legal copy row 22; why PhotoDNA was dropped (#526, no reason recorded); whether incident Q18, Q23 and Q24 should now have a disposition. Post-media Part C v0.3 was a narrow refresh and its markers still read "v0.2"; its three open notes (lines 142, 182, 214) were matched to questions by content.
+
+**Not verified.** Nothing was run beyond the scripts above. CI cannot be read from here. The Security session was not asked. Law and vendor statements were not re-fetched.
