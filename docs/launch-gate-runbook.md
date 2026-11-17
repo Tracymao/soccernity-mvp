@@ -243,7 +243,7 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 
 None of these is decided by this runbook. They are the things that need a person who is not an engineer.
 
-**7.1 Clear the 246 tagged strings.** WHO: COUNSEL, then AGENT. ROW: B-124, B-208, B-089, B-301. Counsel reads the strings listed in `docs/pending-copy-manifest.md` (web 145, admin 101). For each cleared string an agent removes the tag from the source and deletes its manifest row. **Strings are cleared by removing the tag, never by allow-listing:** the allow-list file `scripts/pending-copy/dist-allowlist.json` must stay `[]`. Check with `npm run check:pending-copy` (it builds the apps first). YOU SHOULD SEE: it passes (today it fails by design). The production web and admin builds run this same check, so production cannot deploy until it passes.
+**7.1 Clear the 196 tagged strings.** WHO: COUNSEL, then AGENT. ROW: B-124, B-208, B-089, B-301. Counsel reads the public strings and the admin strings about children, guardians, holds, suspensions and media. The 56 admin two-factor strings were cleared by the founder, not counsel (Decision Log #531). The check prints 196 places today (web 145, admin 51); the manifest lists 150 rows (web 99, admin 51), because the check counts every place the text reaches the built files and the manifest counts one row per string in source. For each cleared string an agent removes the tag from the source and deletes its manifest row. **Strings are cleared by removing the tag, never by allow-listing:** the allow-list file `scripts/pending-copy/dist-allowlist.json` must stay `[]`. Check with `npm run check:pending-copy` (it builds the apps first). YOU SHOULD SEE: it passes (today it fails by design). The production web and admin builds run this same check, so production cannot deploy until it passes.
 
 **7.2 Legal copy.** WHO: COUNSEL. ROW: B-089, B-159. The live Terms and Privacy pages render `docs/legal-copy-draft-tos-privacy-policy.md`. It is a draft, still not approved, with `[PROPOSAL]` markers and an unfilled company name, address and effective date (Decision Log #203 stays open for the prose). Counsel review the current version; the founder fills the company details. Do not publish while the NOT APPROVED banner remains.
 
@@ -287,7 +287,7 @@ None of these is decided by this runbook. They are the things that need a person
 
 ## Part 9 - Going live (FOUNDER, AGENT)
 
-Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cleared (step 7.1), and the founder has said go.
+Do not start until: Parts 5 to 7 are GATE-passed, the 196 tagged strings are cleared (step 7.1), and the founder has said go.
 
 **9.1 Merge to `main`.** The two production static sites build from `main`; production API deploys from `main`. WHO: AGENT merges only when the founder says; **Temi verifies and merges** (project rule).
 
@@ -401,7 +401,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 246 tagged strings are cle
 | 6.14 Suspected-imagery reporting path tried on staging (post picture, profile picture, cover) | Agent, founder | B-206, B-321 | |
 | 6.15 Video on staging with a real upload | QA, founder | B-322, B-238 | |
 | 6.16 Static-site headers, `/sw.js`, CSP | Agent, founder | B-179, B-180 | |
-| 7.1 246 tagged strings cleared | Counsel, agent | B-124, B-208, B-301 | |
+| 7.1 196 tagged strings cleared | Counsel, agent | B-124, B-208, B-301 | |
 | 7.2 Legal copy | Counsel | B-089, B-159 | |
 | 7.3 DPIA + addenda | Counsel | B-159, B-236, B-241 | |
 | 7.4 Withdrawal wording | Counsel | B-200 | |
