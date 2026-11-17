@@ -19,13 +19,29 @@ to confirm, revise or reject. **[OPEN]** = belongs to the founder or counsel; th
 **[UNVERIFIED, FOR COUNSEL]** = a claim about Cloudflare, Render or a law that this draft could not confirm from a
 primary source (the reason is given each time).
 
-- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED).
+- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**.
 - **Decision Log:** #449 (adopted 2026-10-31: free-plan Cloudflare proxy in front of the API and the two static sites,
   with an origin lock; built at the launch gate), #424 (the original recommendation), #437 (DNS records stay
   "DNS only" until then), #429 (re-verify `TRUST_PROXY_HOPS`), #4 (scope: UK, Nigeria, US, EU).
 - **Register:** B-251 (edge protection), with B-249, B-256, B-267 (b), B-090, B-265.
 - **Nothing here is live.** No Cloudflare account, domain, DNS record or deployment exists. The proxy is built at the
   launch gate (B-090). Everything about Cloudflare below is from its public documents as retrieved on 2026-11-01.
+
+---
+
+## Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **each of the 11 questions in Section 11 a disposition marker**; (2) it adds marked notes beside the statements that later Decision Log entries have overtaken (the timing of the proxy, #518, and the dropped image-scanning tool, #526); (3) it adds this changelog. It **chooses no option, completes nothing, applies nothing to the product, the legal draft, the DPIA or any code, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text and every `[OPEN]`, `[PROPOSAL]` and `[UNVERIFIED, FOR COUNSEL]` marker are kept.
+
+**Disposition markers:** `[v0.2 DISPOSITION: A — …]` open for counsel (non-blocking, Decision Log #532); `B` decided by the founder (the Decision Log number is named; "counsel's view not recorded" wherever true, because a founder decision is not legal clearance); `C` resolved, counsel signed off (**none**); `D` founder or engineering housekeeping.
+
+**Result of the check:** the only founder decision that bears on this file is #449 (adopt the free-plan proxy, with an origin lock, built at the launch gate), as amended in timing by #518 (Cloudflare proxy deferred until after launch). It decides **whether and roughly when** the proxy is used; it does **not** answer any legal question about it. **Q9 is therefore marked B for the scope** (proxy in front of the API and the two static sites, which is the scope of Option A in Section 7; counsel's view not recorded) **and A for the one open part** (whether the admin hostname is excluded). **Q1 to Q8, Q10 and Q11 stay A.**
+
+**Not part of this draft:** the Cloudflare **image-scanning tool** was considered for detecting illegal images and **dropped by the founder (#526)**: it works on images only after they are published, it would need a cache in front of `media.soccernity.com` (which would reverse #518) and it does not cover video. Nothing here assesses it.
+
+**Stale in this file, not edited:** the header names legal draft **v0.11** and DPIA **v0.3**; they are now **v0.16** and **v0.8**, and the row numbers proposed in Section 8 (including "row 47") must be re-checked against the current Part C before use. This file was not re-pointed. The NOT APPROVED banner and the empty sign-off in Section 13 are unchanged.
+
+**Not verified:** CI could not be read; nothing was run; the Security session could not be asked (non-interactive); the Cloudflare, Render and law statements in this file were **not re-fetched** in this refresh and carry their 2026-11-01 retrieval dates. Facts about the repo were read on `origin/main` `014afcd` (2026-11-17).
 
 ---
 
@@ -56,6 +72,8 @@ primary source (the reason is given each time).
    (UK Addendum, Data Privacy Framework) is an NDPC-approved instrument that this draft could find.
 6. **The founder has adopted the proxy (#449).** This draft does not reopen that. It records what counsel's answers
    could change (Section 7) and the technical consequences counsel should know (Section 9).
+
+   **[v0.2 CHANGED — #518, #526]** *Timing: Decision Log #518 defers building the Cloudflare proxy until **after launch**; #449 still records the decision to adopt it with an origin lock. Neither entry is legal clearance, and counsel's view is not recorded. Separately, the Cloudflare image-scanning tool is **not** part of this draft (#526, dropped by the founder; see the changelog).* *[v0.2 DISPOSITION: B — the adoption and timing are founder decisions (#449, #518; counsel's view not recorded). A — every legal question about the proxy stays open (Section 11).]*
 
 ---
 
@@ -302,6 +320,8 @@ COUNSEL]**
 | What counsel's answer would change | If transfers from Nigeria or for under-13 US users are not acceptable on the free plan, A is the option most affected | If counsel accepts static-site metadata but not credential exposure, B | If neither is acceptable at the free-plan terms |
 | Variants counsel may name | Exclude the admin hostname; add Enterprise localization (Section 4); proxy only after a transfer instrument is recorded | — | — |
 
+**[v0.2 CHANGED — #449, #518]** *No option in this table has been chosen **by counsel**, and v0.2 does not choose one. The founder's decision (#449, timing #518) is to put the free-plan proxy in front of the API and the two static sites with an origin lock, which is the scope of **Option A**; this records that decision and is not legal clearance. Whether the admin hostname is excluded (the variant in the last row) is **not** decided.* *[v0.2 DISPOSITION: B for the scope (#449; counsel's view not recorded); A for the admin-hostname variant and for whether Option A is acceptable at all.]*
+
 ---
 
 ## 8. Proposed wording **[COPY PENDING LEGAL REVIEW]**
@@ -438,25 +458,40 @@ line 460 of `docs/build-register.md`, "36 / 14 / 9 / 20") should read **9 / 20 /
 
 1. **Q1 — Roles.** Is Cloudflare a processor for all proxied traffic, and for what is it a controller (Section 2.1)? How is
    "Network Data" treated?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 2. **Q2 — Soccernity's role and notice.** What must the policy say to users and, separately, to guardians about an
    edge proxy that decrypts their child's traffic? Does it bump `CONSENT_SCREEN_VERSION`?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — any consent-screen change bumps `CONSENT_SCREEN_VERSION` and the tripwire hash (engineering housekeeping, #348).]*
 3. **Q3 — Children.** Cloudflare says its own services are not for under-18s. Does that, or the absence of any child
    statement in the DPA, affect Soccernity's use for a children's platform?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 4. **Q4 — UK/EU transfer.** Which Chapter V route applies (DPF/UK Extension, SCCs plus UK Addendum), under the UK law as
    amended on 5 February 2026? Is a transfer risk assessment needed, and is the free plan's lack of regional control
    acceptable? What is the current status of the UK–US data bridge?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 5. **Q5 — Nigeria.** On what basis under NDPA s. 41/43 and GAID Schedule 5 may Nigerian users' traffic go through
    Cloudflare's network? Is there an NDPC-approved instrument; must the basis be recorded and notified (s. 41(2)–(3));
    is consent after informing of the risks (s. 43(1)(a)) workable for children, and who consents?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 6. **Q6 — US.** COPPA and any state law for an edge proxy handling under-13 IP addresses and content.
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. Scope (UK, Nigeria, US, EU) is Decision Log #4, which is open.]*
 7. **Q7 — Contract.** Does the DPA bind a Free-plan account, and how is acceptance recorded? Who owns the 10-day
    sub-processor objection window?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — who owns the 10-day objection window internally is founder housekeeping once an account exists.]*
 8. **Q8 — Logs.** What is the retention of customer logs on the free plan, who at Soccernity may view them, and should
    a shorter or Enterprise setting be required?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 9. **Q9 — Options.** A, B or C (Section 7); is excluding the admin hostname required?
+   *[v0.2 DISPOSITION: B for the scope — the founder adopted the free-plan proxy in front of the API and the two static sites, with an origin lock (#449; building deferred until after launch, #518; counsel's view not recorded). A for which of Options A, B and C is acceptable and for excluding the admin hostname; non-blocking.]*
 10. **Q10 — Existing text.** The PP IP statements (Section 8.3), the row 9/20 omission, and the Render-already-uses-Cloudflare
     check.
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — the Render–Cloudflare check is a lookup the founder can do at the launch gate.]*
 11. **Q11 — Incident plan.** Cloudflare's notice has no hour limit; how does that fit the 72-hour clocks?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. The incident plan draft (`docs/incident-response-and-breach-notification-plan-draft.md`) carries the clocks.]*
+
+---
+
+**[v0.2 CHANGED — #532]** *v0.2 note: a narrow refresh (changelog, disposition markers on all 11 questions, two marked notes on timing and the dropped scanning tool). It chooses no option, applies nothing, claims nothing as solved and records no counsel position, because counsel has not reviewed this file.*
 
 ---
 

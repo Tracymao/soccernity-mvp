@@ -23,10 +23,27 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 - **Document:** DPIA addendum for contest view and impression data
 - **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED)
+- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**
 - **Reviewed by counsel:** NOT YET (Section 10)
 - **Companion file:** `docs/legal-copy-part-c-view-data-draft.md` (the proposed Part C row and
   viewer-notice options; it holds the notice wording, this file holds the risk analysis)
+
+---
+
+## Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **every one of the 16 questions in Section 9 a disposition marker**; (2) it adds a marked note beside the few statements the built system has since contradicted (the contest-entry removal of B-300 and the report-retention cascade of B-307); (3) it adds this changelog. It **chooses no option (R-1 to R-5, P-1 to P-4, N-1 to N-4), completes nothing, applies nothing to the product, the policy or the consent screen, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text is kept.
+
+**Disposition markers:** `[v0.2 DISPOSITION: A — …]` open for counsel (non-blocking, Decision Log #532); `B` decided by the founder (the Decision Log number is named; "counsel's view not recorded" wherever true, because a founder decision is not legal clearance); `C` resolved, counsel signed off (**none**); `D` founder or engineering housekeeping.
+
+**Result of the check:** a search of the Decision Log entries named in this file found **no entry that decides any of the 16 questions**. The founder decisions that exist are product decisions: "same rules for minors" (#382 to #385, #404), the 40 / 20 daily caps (#383), the 50 percent / 1 second threshold (#405 item 7, #418), fold-and-delete at the crown (#418) and no Contest notifications for unverified accounts (#405 item 4). **All 16 questions therefore stay A**; the product decisions are cited where they bear on a question.
+
+**What the build has changed that touches this file (verified in code on `origin/main` `014afcd`, 2026-11-17):**
+- **B-300 (Decision Log #488, #495, built, PR #742):** when a moderator removes the post of a Contest entry, the entry stops competing, the baseline points earned on that post (by anyone) and its win or crown points are **revoked** (marked `PointsLedgerEntry.revokedForRemovalAt`, not deleted) and restored if an appeal is overturned; its `ContestVote` rows are freed. See the notes after R17 and in Section 6.
+- **B-307 (PR #758, built):** the report-retention sweep no longer keeps forever a report whose removed post is a Contest entry in a **completed** cycle; deleting the post cascades to that entry's `ContestEngagement`, `ContestImpression`, `ContestVote` and `ContestRoundWinner` rows. The `PointsLedgerEntry` rows stay. This is the **one case** where store D rows are deleted by anything other than an unlike. See the note after R17.
+- **Not changed:** `AccountDeletionSweepService.anonymizeUser` still deletes the viewer's `ContestImpression` rows (line 283) and **still contains no deletion of `PointsLedgerEntry` or `ContestEngagement` rows** (re-checked in this pass), so R18 stands as written.
+
+**Not verified:** CI could not be read; nothing was run; the Security session could not be asked (non-interactive). The "v0.3 DPIA" this addendum refers to is now **v0.8** (and later drafts exist on other branches); this file was not re-pointed at them.
 
 ---
 
@@ -105,6 +122,7 @@ outlive whatever it references").
 **D. `ContestEngagement` view rows.** Entry, `userId` (the viewer; a real foreign key to `User`),
 `kind` = `view`, `followedAtEngagement` (whether the viewer followed the creator at that moment), `occurredAt`.
 Unique per (entry, user, kind). The same table also holds `like` and `comment` rows.
+*[v0.2 CHANGED — B-307]* Store D rows are also removed when their entry is removed by the report-retention cascade (see the note after R17); this is the only deletion other than an unlike. Store C rows for a removed entry's post are **marked revoked** (B-300), not deleted. *[v0.2 DISPOSITION: D — a statement of built behaviour.]*
 
 **Deliberately never stored, anywhere (per the reports):** dwell seconds, video playhead, session id, IP
 address, user agent, device or browser, mute state, scroll position, viewport, the tile's position in the
@@ -195,6 +213,8 @@ with the entry, and nothing in the code deletes them after a contest ends (only 
 row). Each is a lasting record that account X viewed post Y at time T (C and D) and, for the creator
 rows in C, **that account Z viewed X's post** (`counterpartId`).
 
+**[v0.2 CHANGED — #488, #495, B-300, B-307]** Two built facts narrow, but do not remove, this finding. (1) **Revocation:** when a moderator removes a Contest entry's post, the points earned on it (by anyone) are marked `revokedForRemovalAt` (a flag on the row, **not a deletion**) and restored on an overturned appeal (B-300). The ledger is still never deleted by this. (2) **A removed entry's `ContestEngagement` rows can now be deleted:** if the entry's post was removed, its report is closed and the cycle is completed, the report-retention sweep deletes the post and the database cascade drops that entry's `ContestEngagement`, `ContestImpression`, `ContestVote` and `ContestRoundWinner` rows (B-307, PR #758); a legacy admin-judged cycle that still holds a winner row keeps the report. **Everything else in this finding stands:** no retention period exists for the rows of an entry that was never removed. *[v0.2 DISPOSITION: A — whether the remaining rows need a period is for counsel (Q7); D — the B-300 / B-307 behaviour is built engineering and is stated only so counsel reads current facts.]*
+
 *Draft severity: moderate. Draft likelihood: certain (it is how the code works). Placeholder ratings.*
 
 ### R18 — Erasure and anonymisation do not reach stores C and D **[COPY PENDING LEGAL REVIEW]**
@@ -217,6 +237,8 @@ whether a ledger row combined with other data could re-identify. That is a legal
 also a **disclosure** question: the draft Privacy Policy §9 says signals "that are yours alone"
 (follows, likes, saves, notifications, memberships) are removed at anonymisation, and does not mention
 the ledger or contest engagement rows.
+
+**[v0.2 CHANGED — B-300, B-307]** Re-checked in this pass: `anonymizeUser` still deletes only the viewer's `ContestImpression` rows (A) and still does **not** delete `PointsLedgerEntry` or `ContestEngagement` rows, so the finding and its three consequences stand. The only deletion of `ContestEngagement` rows other than an unlike is the B-307 cascade described after R17, which is triggered by the retention of a **report**, not by account anonymisation. *[v0.2 DISPOSITION: A — whether the remaining rows are personal data after anonymisation, and what to do (Q6); non-blocking.]*
 
 *Draft severity: moderate. Draft likelihood: certain as built. Placeholder ratings.*
 
@@ -286,6 +308,8 @@ Stated as built; none has been reviewed or tested by counsel, and none is live.
 | R21 | Daily caps (40 given, 20 received, Europe/London day) held in configuration and enforced under a per-account-day advisory lock (proven by a concurrent test; mutation-checked). Per-viewer per-video cap of 3 per day on carousel impressions. Server-side measurement of qualifying time; a view never qualifies in under 1 s. |
 | R21 | Rotation never orders by engagement, live rank or follower count; the viewer's own entry and blocked pairs are excluded. |
 | R22 | Restricted accounts never served or counted. |
+
+**[v0.2 CHANGED — B-300, B-307]** **Added controls, as built:** a removed Contest entry is excluded from the carousel, ranking and tallies, its points are revoked and restorable (B-300); a removed entry's engagement and impression rows are deleted with the post once the report is retained out (B-307). Not reviewed or tested by counsel. *[v0.2 DISPOSITION: D — stated as built.]*
 | Data minimisation | IP address, user agent, device, dwell time, playhead, scroll and viewport are never stored. The claimed visible share/ms are checked then discarded. |
 
 ---
@@ -313,6 +337,8 @@ Periods below are illustrative placeholders for counsel, not a recommended numbe
 The drafter's lean, labelled as a lean: R-2 plus R-5 together address the identifiability concern
 without losing totals, but the interaction with revocation (R-2's cost column) means it needs an
 engineering check before counsel relies on it. **[OPEN]** (Q8).
+
+*[v0.2 CHANGED — #532]* **No option R-1 to R-5 has been chosen, and v0.2 does not choose one.** *[v0.2 DISPOSITION: A — R-1 to R-5, P-1 to P-4 and N-1 to N-4 stay open for counsel and the founder; non-blocking.]*
 
 ### 7.2 Independent purge job for `ContestImpression` **[COPY PENDING LEGAL REVIEW]**
 
@@ -370,6 +396,7 @@ disclosure on the consent screen) are summarised in the table below so this file
 11. **The 50 percent / 1 second threshold and the 40 / 20 point caps are product defaults**, not
     legal figures, and could change.
 12. **All processing described is test-only.** No live data exists; nothing here has been run on children.
+13. **[v0.2 CHANGED — #532]** **v0.2 reads `CLAUDE.md`'s status bullets, the register and the code on `origin/main` `014afcd` (2026-11-17).** Nothing was run, CI could not be read, the Security session could not be asked, and the DPIA this addendum would attach to is now v0.8 (not v0.3). *[v0.2 DISPOSITION: D — housekeeping.]*
 
 ---
 
@@ -377,35 +404,51 @@ disclosure on the consent screen) are summarised in the table below so this file
 
 1. Is processing view and dwell data of children (store B, and the rows in C and D) permissible for the
    stated purposes, and on what lawful basis, in each regime in scope (UK, EU, Nigeria, US)?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. The founder's "same rules for minors" (#382 to #385, #404) is a product decision, B, not a legal clearance (counsel's view not recorded).]*
 2. Does the combination of A to D amount to **profiling** of children, and if so what follows? Does
    awarding points for passive viewing change the analysis compared with ranking by deliberate acts?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 3. Is **guardian consent** for "using Soccernity" enough for this processing, or does it need its own
    mention, or its own consent? If a consent screen change is required, must already-confirmed guardians
    be re-notified (the Decision Log #363 question again)?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — any consent-screen change bumps `CONSENT_SCREEN_VERSION` and the tripwire hash (engineering housekeeping, #348).]*
 4. Is **transient processing** in Redis (120 s) disclosable as "not stored", or must the Policy
    describe it? Same for requests that pass through hosting logs.
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 5. For an **under-13 US** child whose guardian completed card verification, does that consent extend to
    this data collection under COPPA?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 6. After **anonymisation**, are `PointsLedgerEntry` and `ContestEngagement` rows (and
    other users' `counterpartId` references to the anonymised id) personal data? Is the current behaviour
    (rows kept, account anonymised) acceptable, or must they be deleted or detached (R18)?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. The current behaviour is re-verified (see the note after R18) and is partly changed only by the B-307 report-retention cascade.]*
 7. What **retention period** is defensible for each of C and D, and for the aggregate
    `impressionTotal`? (Options R-1 to R-5.)
+   *[v0.2 DISPOSITION: A — for counsel and the founder; no option chosen; non-blocking.]*
 8. May the **creator's received-points row carry the viewer's id** (`counterpartId`), and if not, how is
    revocation to be preserved (assumption 8)?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. Note: B-300's revocation of a removed entry's points uses a flag on the row (`revokedForRemovalAt`) and does not depend on `counterpartId`.]*
 9. Does the hosting provider's **backup retention** define the real purge horizon, and must the Policy say so?
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — finding the host's actual backup retention is founder housekeeping at the launch gate (not looked up in this pass).]*
 10. Is an **independent purge job** a required control or an engineering preference (options P-1 to P-4)?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — if a purge job is wanted, it is engineering work (not built).]*
 11. Is there a **viewer-facing transparency duty** for this processing, at what age-appropriate level, and
     where must it appear (options N-1 to N-4)? Must the notice be shown to the child at first exposure?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. The notice options are in the companion Part C file.]*
 12. Do the **reward mechanics** (points, public leaderboard with minors' usernames, daily caps) need a
     separate children's-design assessment (R21)? Is the **40 / 20 daily cap** an adequate brake?
+    *[v0.2 DISPOSITION: A — adequacy is for counsel; non-blocking. B — the caps themselves are a founder default (#383, #385; counsel's view not recorded).]*
 13. Should **unverified-email** accounts be treated the same across A, C and D (R22)?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. Related founder decision: unverified-email accounts get no Contest notifications (#405 item 4, B), which is narrower than this question.]*
 14. Does the **admin exposure view** (aggregates only) need an access-control or audit-logging rule beyond
     the existing admin guards?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 15. Is **data protection by design/default** satisfied by "no opt-out"? Should viewing-for-points be
     **off by default for minors**, with an opt-in?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking. The founder decided "same rules for minors" (#382 to #385, #404, B; counsel's view not recorded).]*
 16. Should a **fresh DPIA section or a separate DPIA** be completed for the contest as a whole (not only
     view data), given it is new processing of children's data?
+    *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 
 ---
 
@@ -424,6 +467,8 @@ it.
 | Decision Log entry created | |
 
 ---
+
+**[v0.2 CHANGED — #532]** *v0.2 note: a narrow refresh (changelog, disposition markers on all 16 questions, notes beside the statements B-300 and B-307 changed). It chooses no option, applies nothing, claims nothing as solved and records no counsel position, because counsel has not reviewed this file.*
 
 ## Closing statement **[COPY PENDING LEGAL REVIEW]**
 
