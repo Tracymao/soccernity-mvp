@@ -52,7 +52,7 @@ export interface SuspectedIllegalRecord {
   uploaderId: string;
   postId: string | null;
   reportId: string | null;
-  /** "image" | "video" */
+  /** "image" | "video" | "profile_avatar" | "profile_cover" (backend PR #806) */
   kind: string;
   /** The internal reason the admin gave at set-aside. Never shown to the uploader. */
   reason: string;
@@ -84,8 +84,9 @@ export interface SuspectedIllegalPage {
   nextCursor: string | null;
 }
 
-// POST /admin/media-review/:id/suspected-illegal { reason } -> 201 the record. The id is a post or contest media id
-// (a profile picture's id is refused with a 404 by the server).
+// POST /admin/media-review/:id/suspected-illegal { reason } -> 201 the record. The id is a post or contest media id,
+// or a profile item id ("avatar:<user>:<file>" / "cover:<user>:<file>", backend PR #806). A stale profile id (the
+// picture was replaced or decided) is a 404 and nothing is set aside.
 export function setAsideSuspectedIllegal(mediaId: string, reason: string): Promise<SuspectedIllegalRecord> {
   return adminFetch<SuspectedIllegalRecord>(`/admin/media-review/${encodeURIComponent(mediaId)}/suspected-illegal`, {
     method: "POST",
