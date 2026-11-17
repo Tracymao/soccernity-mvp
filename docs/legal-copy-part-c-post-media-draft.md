@@ -4,7 +4,7 @@
 
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
-This is a **new, standalone file**. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8), and nothing
+This is a **new, standalone file**. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8 when drafted; **[v0.3 CHANGED — #532]** v0.17 on `origin/main` `b67d9c0`), and nothing
 here has been applied to the Terms, the Privacy Policy, the guardian consent screen, the composer or any Figma frame. It
 supplies material for whoever next revises that draft, after counsel has answered the questions in
 `docs/dpia-addendum-post-media-draft.md` (the **DPIA addendum**, which holds the risk analysis, the facts, the options for
@@ -14,7 +14,7 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 approved). Every block of wording below carries `[COPY PENDING LEGAL REVIEW]` on purpose, and **[PROPOSAL]** / **[OPEN]** follow
 the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**
 - **Facts from:** `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md` and the code on
   `origin/main` at `5857ea8`, as recorded in the DPIA addendum. **Nothing here is live** and no statute or regulator guidance
   was retrieved.
@@ -23,6 +23,14 @@ the conventions of the existing legal draft.
   cases and a person reviews the uncertain ones and reported ones). Where wording differs, both variants are given and
   labelled. **[OPEN]**
   **[v0.2 CHANGED — #430 item 1, #524]** **The founder has decided the review model**: automatic check first, then report-and-review (a moderator opens only the uncertain and the reported files). It is **Mode B in this file's terms, plus a route to report a file**. **Mode A applies only until an AWS account exists** (a founder step; none exists today, so no check runs and every file waits for a moderator). Counsel's view is not recorded. *[v0.2 DISPOSITION: B — #430 item 1, #524; counsel's view not recorded. The Mode A wording variants stay in this file for that interim and for counsel's comparison.]*
+
+---
+
+### Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** It brings the legal draft version and the Part C row numbers to what is on `origin/main` `b67d9c0` (2026-11-17): the legal draft is **v0.17**, and its Part C table already uses rows **1 to 54**, so the row proposed here as **row 46** is taken (rows 45 to 54 exist; the **next free row is 55**); **renumber when applied, and do not renumber here.** It **chooses no option, applies nothing to the policy, the consent screen or the product, completes nothing and claims nothing as solved.** No counsel position is recorded. Every disposition in v0.2 is **unchanged** (Decision Log #534 re-marked no question in this file; it concerns the DPIA addendum's §7 question 5 and §12 question 19). Decision Log #533 and #534 are in docs PR R98, **pending merge when this was written**. The three places the pack report called "oddities" (about lines 55, 97 and 148 of v0.2) were checked and are **not faults**: each is the end of a paragraph of the original wording followed by a marked v0.2 note; nothing was changed there.
+
+**Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
 ---
 
@@ -36,7 +44,7 @@ the conventions of the existing legal draft.
 
 **Disposition index:** §7 questions: 1 B for the model and A for whether the Policy may describe an automatic approval, 2 B (premise overtaken, launch step not done), 3 A, 4 A, 5 A, 6 A, 7 A, 8 A; section 4 notice options N-1 to N-5: A (none chosen); section 5 option table: the built options (M-2/M-3, P-2 to P-4, F-2 with exception) are B, the rest A or D as marked in the note after that table. The DPIA addendum (`docs/dpia-addendum-post-media-draft.md`, v0.5) holds the full list.
 
-**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **That file is not touched here.**
+**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.17; the numbers have moved again.)* **That file is not touched here.**
 
 ---
 
@@ -46,7 +54,7 @@ the conventions of the existing legal draft.
 "avatar, cover photo, bio and country visible to other users including minors"; row 44 is "other new processing") and row 37
 already covers Rekognition for avatars and cover photos. The view-data draft
 (`docs/legal-copy-part-c-view-data-draft.md`) proposes **row 45**. So this is proposed as **row 46** and **must be renumbered
-when applied**. Counsel may prefer to fold it into row 37 instead; the facts below would simply be appended to it.
+when applied**. **[v0.3 CHANGED — #532]** *(Stale: legal draft v0.17 Part C already uses rows 45 to 54, including 46 (direct-message retention), 47 (what the safeguarding team sees when a message is reported) and 52 to 54; the next free row is 55. Checked against the table of that file on 2026-11-17.)* Counsel may prefer to fold it into row 37 instead; the facts below would simply be appended to it.
 
 | # | Item | Where it appears above | Owner |
 |---|---|---|---|

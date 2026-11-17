@@ -6,7 +6,7 @@
 
 This is a **new, standalone file** in the style of `docs/dpia-addendum-post-media-draft.md` and
 `docs/legal-copy-part-c-post-media-draft.md`. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
-(v0.11), `docs/sprint-1-dpia-outline-draft.md` (v0.3), the register or the Build Plan. If counsel accepts any of it,
+(v0.11 when drafted; **[v0.3 CHANGED — #532]** v0.17 on `origin/main` `b67d9c0`), `docs/sprint-1-dpia-outline-draft.md` (v0.3 when drafted; **[v0.3 CHANGED — #532]** v0.9), the register or the Build Plan. If counsel accepts any of it,
 applying it is a separate step for whoever maintains those files.
 
 Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negotiable #2: every output is a draft,
@@ -19,13 +19,21 @@ to confirm, revise or reject. **[OPEN]** = belongs to the founder or counsel; th
 **[UNVERIFIED, FOR COUNSEL]** = a claim about Cloudflare, Render or a law that this draft could not confirm from a
 primary source (the reason is given each time).
 
-- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**.
+- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**.
 - **Decision Log:** #449 (adopted 2026-10-31: free-plan Cloudflare proxy in front of the API and the two static sites,
   with an origin lock; built at the launch gate), #424 (the original recommendation), #437 (DNS records stay
   "DNS only" until then), #429 (re-verify `TRUST_PROXY_HOPS`), #4 (scope: UK, Nigeria, US, EU).
 - **Register:** B-251 (edge protection), with B-249, B-256, B-267 (b), B-090, B-265.
 - **Nothing here is live.** No Cloudflare account, domain, DNS record or deployment exists. The proxy is built at the
   launch gate (B-090). Everything about Cloudflare below is from its public documents as retrieved on 2026-11-01.
+
+---
+
+## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.3 CHANGED — #449, #532, #534]** v0.3 is a **narrow refresh of one disposition and stale references only.** (1) **Q9 (which of Options A, B and C) is now marked B (#449) in every place it appears** (the Q9 entry in Section 11, and the notes near the timing paragraph and the options table in Sections 3 and 7, and the "Result of the check" paragraph above); v0.2 had marked the scope B and the choice of option A. The marking records the founder's decision (the free-plan proxy in front of the API and the two static sites, with an origin lock; building deferred until after launch, #518). **Counsel's view is not recorded, this is not legal clearance, and v0.3 does not choose or apply an option.** The founder's brief extends B to Q9 as a whole; v0.2's A part for the **admin-hostname variant** is therefore also moved to B by that instruction and I flag it for the founder to confirm. **Q1 to Q8, Q10 and Q11 stay A.** (2) **Stale references brought current (marked in place):** the legal draft is **v0.17** and the DPIA **v0.9** (this file said v0.11 and v0.3, and the v0.2 note said v0.16 and v0.8); the row numbers proposed in Section 8 (including "row 47") still must be re-checked against the current Part C before use (legal draft v0.17 already uses rows 1 to 54, **the next free row is 55**), which I did **not** do row by row. It **completes nothing and claims nothing as solved.** The NOT APPROVED banner and the empty sign-off in Section 13 are unchanged. Decision Log #533 and #534 are in docs PR R98, **pending merge when this was written**; they are not relied on for Q9.
+
+**Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
 ---
 
@@ -36,6 +44,9 @@ primary source (the reason is given each time).
 **Disposition markers:** `[v0.2 DISPOSITION: A — …]` open for counsel (non-blocking, Decision Log #532); `B` decided by the founder (the Decision Log number is named; "counsel's view not recorded" wherever true, because a founder decision is not legal clearance); `C` resolved, counsel signed off (**none**); `D` founder or engineering housekeeping.
 
 **Result of the check:** the only founder decision that bears on this file is #449 (adopt the free-plan proxy, with an origin lock, built at the launch gate), as amended in timing by #518 (Cloudflare proxy deferred until after launch). It decides **whether and roughly when** the proxy is used; it does **not** answer any legal question about it. **Q9 is therefore marked B for the scope** (proxy in front of the API and the two static sites, which is the scope of Option A in Section 7; counsel's view not recorded) **and A for the one open part** (whether the admin hostname is excluded). **Q1 to Q8, Q10 and Q11 stay A.**
+
+*[v0.3 DISPOSITION: B — Q9: which of Options A, B and C is decided by the founder: the free-plan proxy in front of the API and the two static sites, with an origin lock (Decision Log #449; building deferred until after launch, #518). Counsel's view not recorded; not legal clearance; this draft does not choose or apply an option. Replaces the v0.2 marker for Q9.]* **[v0.3 CHANGED — #449]**
+
 
 **Not part of this draft:** the Cloudflare **image-scanning tool** was considered for detecting illegal images and **dropped by the founder (#526)**: it works on images only after they are published, it would need a cache in front of `media.soccernity.com` (which would reverse #518) and it does not cover video. Nothing here assesses it.
 
@@ -74,6 +85,7 @@ primary source (the reason is given each time).
    could change (Section 7) and the technical consequences counsel should know (Section 9).
 
    **[v0.2 CHANGED — #518, #526]** *Timing: Decision Log #518 defers building the Cloudflare proxy until **after launch**; #449 still records the decision to adopt it with an origin lock. Neither entry is legal clearance, and counsel's view is not recorded. Separately, the Cloudflare image-scanning tool is **not** part of this draft (#526, dropped by the founder; see the changelog).* *[v0.2 DISPOSITION: B — the adoption and timing are founder decisions (#449, #518; counsel's view not recorded). A — every legal question about the proxy stays open (Section 11).]*
+   *[v0.3 DISPOSITION: B — Q9: which of Options A, B and C is decided by the founder: the free-plan proxy in front of the API and the two static sites, with an origin lock (Decision Log #449; building deferred until after launch, #518). Counsel's view not recorded; not legal clearance; this draft does not choose or apply an option. Replaces the v0.2 marker for Q9.]* **[v0.3 CHANGED — #449]**
 
 ---
 
@@ -322,6 +334,9 @@ COUNSEL]**
 
 **[v0.2 CHANGED — #449, #518]** *No option in this table has been chosen **by counsel**, and v0.2 does not choose one. The founder's decision (#449, timing #518) is to put the free-plan proxy in front of the API and the two static sites with an origin lock, which is the scope of **Option A**; this records that decision and is not legal clearance. Whether the admin hostname is excluded (the variant in the last row) is **not** decided.* *[v0.2 DISPOSITION: B for the scope (#449; counsel's view not recorded); A for the admin-hostname variant and for whether Option A is acceptable at all.]*
 
+*[v0.3 DISPOSITION: B — Q9: which of Options A, B and C is decided by the founder: the free-plan proxy in front of the API and the two static sites, with an origin lock (Decision Log #449; building deferred until after launch, #518). Counsel's view not recorded; not legal clearance; this draft does not choose or apply an option. Replaces the v0.2 marker for Q9.]* **[v0.3 CHANGED — #449]**
+
+
 ---
 
 ## 8. Proposed wording **[COPY PENDING LEGAL REVIEW]**
@@ -483,6 +498,7 @@ line 460 of `docs/build-register.md`, "36 / 14 / 9 / 20") should read **9 / 20 /
    *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 9. **Q9 — Options.** A, B or C (Section 7); is excluding the admin hostname required?
    *[v0.2 DISPOSITION: B for the scope — the founder adopted the free-plan proxy in front of the API and the two static sites, with an origin lock (#449; building deferred until after launch, #518; counsel's view not recorded). A for which of Options A, B and C is acceptable and for excluding the admin hostname; non-blocking.]*
+   *[v0.3 DISPOSITION: B — Q9: which of Options A, B and C is decided by the founder: the free-plan proxy in front of the API and the two static sites, with an origin lock (Decision Log #449; building deferred until after launch, #518). Counsel's view not recorded; not legal clearance; this draft does not choose or apply an option. Replaces the v0.2 marker for Q9.]* **[v0.3 CHANGED — #449]**
 10. **Q10 — Existing text.** The PP IP statements (Section 8.3), the row 9/20 omission, and the Render-already-uses-Cloudflare
     check.
     *[v0.2 DISPOSITION: A — for counsel; non-blocking. D — the Render–Cloudflare check is a lookup the founder can do at the launch gate.]*
