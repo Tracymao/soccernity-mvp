@@ -524,7 +524,7 @@ requires or whether it applies.** Counsel will know which apply; this list exist
 5. **Moderator exposure to unlawful material.** What legal protection and what safeguarding for staff who may view such
    material in the course of review; is it lawful for ordinary staff to open a suspected file at all?
    *[v0.5 DISPOSITION: D — staff welfare, vetting and HR are the founder's duty (stated by the founder in this refresh's brief; Decision Log #430 item 3 requires vetting for reviewers of minors' media, built B-258; only a vetted admin can set a file aside, #525).]*
-   *[v0.6 DISPOSITION: B — staff legal protection and welfare is the founder's HR duty, and only vetted, authorised staff may open suspected-illegal-imagery files (Decision Log #533 and #534; docs PR R98, pending merge). Counsel's view not recorded. Replaces the v0.5 marker D above. 5a below stays A.]* **[v0.6 CHANGED — #533]**
+   *[v0.6 DISPOSITION: B — staff legal protection and welfare is the founder's HR duty, and only vetted, authorised staff may open suspected-illegal-imagery files (Decision Log #533 and #534). Counsel's view not recorded. Replaces the v0.5 marker D above. 5a below stays A.]* **[v0.6 CHANGED — #533]**
    *[v0.5 DISPOSITION: A — 5a: whether it is lawful at all for non-vetted staff to open a suspected adult's file stays with counsel; non-blocking.]*
 6. **Timing.** May post and Contest-entry upload go live **before** the statutory path exists? Register B-239 records this
    as undecided.
@@ -903,7 +903,7 @@ Added because R24 turns on it. Built today: the public prefix.
 19. Does the processing of **images of non-user children** (R29) require a consent or notice mechanism, or only a
     take-down route? Is a media-specific report target required?
     *[v0.5 DISPOSITION: A — for counsel (consent or notice for depicted non-user children). A file report route exists for signed-in users (`POST /media/:id/report`); a public route for non-users does not, and the legal draft's Part C row 8 says non-user reporting was removed from the public text on counsel's advice and a route is a product matter (the founder's call, on the founder list).]*
-    *[v0.6 DISPOSITION: D — images of children who are not users, and whether a media-specific report route (including one for non-users) is wanted, is a product matter for the founder; recorded, not decided (Decision Log #534; docs PR R98, pending merge; legal draft Part C row 8). Replaces the v0.5 marker A above. Whether consent or notice is required for depicted non-user children is no longer on the counsel list.]* **[v0.6 CHANGED — #534]**
+    *[v0.6 DISPOSITION: D — images of children who are not users, and whether a media-specific report route (including one for non-users) is wanted, is a product matter for the founder; recorded, not decided (Decision Log #534; legal draft Part C row 8). Replaces the v0.5 marker A above. Whether consent or notice is required for depicted non-user children is no longer on the counsel list.]* **[v0.6 CHANGED — #534]**
 
 **Documents**
 
@@ -920,17 +920,17 @@ Added because R24 turns on it. Built today: the public prefix.
 22. Is a window of minutes in which the public object of a removed post's file can still be fetched, after the post is hidden,
     acceptable? (§1.5 finding 1)
     *[v0.5 DISPOSITION: D — a 5-minute reconciler window is an engineering parameter and risk acceptance, not a lawyer question; for the founder (on the founder list).]*
-    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534; docs PR R98, pending merge).]* **[v0.6 CHANGED — #534]**
+    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534).]* **[v0.6 CHANGED — #534]**
 23. Is it intended that either kind of admin hold keeps a removed post's files while only a legal hold keeps a direct message
     (DPIA v0.4 R33(c))?
     *[v0.5 DISPOSITION: D — whether the difference between the hold rules is intended is a founder question; Decision Log #482 and #484 are decisions of what was built, not of this difference.]*
-    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534; docs PR R98, pending merge).]* **[v0.6 CHANGED — #534]**
+    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534).]* **[v0.6 CHANGED — #534]**
 
 **[CHANGED v0.3 — 2026-11-11]** 23a. The report sweep adds a third rule (a legal or bad-faith hold on the reporter, the account behind the target and, for a
     message report, all participants) and account anonymisation a fourth (any hold skips the account). Should one hold rule apply
     to messages, files and reports alike? (DPIA v0.5 R36(e); v0.6 R36(e) unchanged)
     *[v0.5 DISPOSITION: D — a founder question, as for question 23; counsel may wish to see the four rules side by side (DPIA v0.6 R36(e)).]*
-    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534; docs PR R98, pending merge). The DPIA is now v0.9; R36(e) is the cited place, not re-checked.]* **[v0.6 CHANGED — #534]**
+    *[v0.6 DISPOSITION: D — confirmed: recorded, not decided; founder or engineering (Decision Log #534). The DPIA is now v0.9; R36(e) is the cited place, not re-checked.]* **[v0.6 CHANGED — #534]**
 24. **[CHANGED v0.3 — 2026-11-11]** After the report sweep deletes a removed post's report, the post row and its `PostMedia` rows go with it (**[CHANGED v0.4 — 2026-11-11]** 6 years after
     closure, 7 years if the report concerns a minor). Is that the right end for the record of **what the file was and why it was
     rejected or removed**, or must some record of a removed child's file survive for a statutory duty (B-206)? Does the answer

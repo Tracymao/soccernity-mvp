@@ -29,13 +29,13 @@ Counsel last gave input on the legal copy at v0.7 (Decision Log #4 and #203; the
 | Document (file in `docs/`) | Version | What changed since counsel last saw it | Questions that cite it |
 |---|---|---|---|
 | Legal copy (`legal-copy-draft-tos-privacy-policy.md`) | v0.18 | Counsel last saw v0.7 (resolved decisions applied). Since then (including v0.18: Google and Facebook sign-in removed from the text, built-feature markers removed, the 365-day set-aside figure no longer stated in public text): Contact Us retention and notice, direct-message retention, what staff see when a message is reported, soft removal of content, suspension and appeals, report retention restored to the 6-7 year range, the suspected-illegal-imagery path, and (v0.17) every Part C row sorted into A, B, C or D. | 21 questions: Q1, Q3, Q4, Q6, Q7, Q14, Q28, Q33, Q36, Q37, Q38, Q39, Q40, Q41, Q47, Q61, Q67, Q68, Q69, Q70, Q71 |
-| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.10 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorted every one of the 51 open items; v0.10 brings it to the built state and re-marks items 40, 41 and 47 as decided by the founder (B) into A, B, C or D, and records that uploads no longer wait for counsel (Decision Log #524). | 12 questions: Q1, Q6, Q7, Q14, Q32, Q34, Q37, Q39, Q42, Q47, Q58, Q59 |
-| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.8 | No counsel review. v0.7 re-sorts the questions into A, B, C or D, and records the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. | 17 questions: Q3, Q6, Q15, Q42, Q45, Q46, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q56, Q57, Q60 |
-| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.6 | No counsel review. v0.5 and v0.6 record the decided review model (automatic check first, then report-and-review), the set-aside path, profile pictures and covers, and sorts every question. | 19 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q16, Q17, Q20, Q34, Q35, Q43, Q62 |
-| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note; v0.3 refreshed stale references only (legal draft version, row numbers). It updates the wording options to the decided review model. | 9 questions: Q1, Q3, Q13, Q16, Q43, Q61, Q62, Q65, Q66 |
-| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.3 | No counsel review. v0.2 records removed Contest entries (B-300), the report-retention cascade (B-307) and sorts every question. | 12 questions: Q25, Q26, Q27, Q28, Q29, Q30, Q31, Q32, Q34, Q44, Q63, Q64 |
-| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.3 | No counsel review. v0.2 sorts every question and note against the current built behaviour. | 5 questions: Q25, Q44, Q61, Q63, Q64 |
-| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.3 | No counsel review. v0.2 records that the proxy is adopted in principle but building it is deferred until after launch (Decision Log #449, #518) and sorts every question. | 10 questions: Q18, Q19, Q20, Q21, Q22, Q23, Q24, Q55, Q61, Q68 |
+| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.10 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorted every one of the 51 open items into A, B, C or D and recorded that uploads no longer wait for counsel (Decision Log #524). v0.10 re-marks items 40, 41 and 47 from "decided by the founder" (B) to founder or engineering housekeeping (D), because no decision exists for them; marks hosting as decided (Frankfurt, Decision Log #391); and adds pointers to later built work. | 12 questions: Q1, Q6, Q7, Q14, Q32, Q34, Q37, Q39, Q42, Q47, Q58, Q59 |
+| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.8 | No counsel review. v0.7 re-sorted the questions into A, B, C or D and recorded the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. v0.8 folds Q18 into Q5, re-marks Q19, Q20, Q23 and Q24 (a) and (b) as housekeeping (D) and Q24 (c) as decided (B, Decision Log #503), and fixes the "no account exists" lines. | 17 questions: Q3, Q6, Q15, Q42, Q45, Q46, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q56, Q57, Q60 |
+| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.6 | No counsel review. v0.5 recorded the decided review model (automatic check first, then report-and-review), the set-aside path and profile pictures and covers, and sorted every question. v0.6 re-marks section 7 question 5 from D to B (staff legal protection and welfare is the founder's duty, Decision Log #533; 5a stays A) and section 12 question 19 from A to D (Decision Log #534), and brings stale version references up to date. | 19 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q16, Q17, Q20, Q34, Q35, Q43, Q62 |
+| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note and updated the wording options to the decided review model. v0.3 refreshed stale references only (legal draft version, Part C row numbers); no disposition changed. | 9 questions: Q1, Q3, Q13, Q16, Q43, Q61, Q62, Q65, Q66 |
+| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.3 | No counsel review. v0.2 recorded removed Contest entries (B-300) and the report-retention cascade (B-307) and sorted every question. v0.3 refreshed stale version references only; no disposition changed. | 12 questions: Q25, Q26, Q27, Q28, Q29, Q30, Q31, Q32, Q34, Q44, Q63, Q64 |
+| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note against the current built behaviour. v0.3 refreshed stale version and row-number references only; no disposition changed. | 5 questions: Q25, Q44, Q61, Q63, Q64 |
+| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.3 | No counsel review. v0.2 recorded that the proxy is adopted in principle but building it is deferred until after launch (Decision Log #449, #518) and sorted every question. v0.3 marks Q9 (which option) as decided by the founder (B, Decision Log #449) in every place it appears, and refreshes stale references. | 10 questions: Q18, Q19, Q20, Q21, Q22, Q23, Q24, Q55, Q61, Q68 |
 
 Document codes used below: LC legal copy, DP DPIA, IP incident plan, PA post-media addendum, PC post-media Part C, CA contest and view-data addendum, VC view-data Part C, CF Cloudflare draft.
 
@@ -62,6 +62,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Why it matters:* A vetted admin can set the file aside and record that a report was made, but there is no prepared route to file one, and no deadline has been checked.
 - *Label:* Can follow launch (default, founder may veto): the set-aside path is built and kept private; the founder has chosen to launch without registering (#529).
 - *Sources:* Post-media addendum v0.6, section 7 question 3; Incident plan v0.8, question 11; Incident plan v0.8, question 22; Legal copy v0.18, Part C row 37; Post-media Part C v0.3, note at line 182.
+
 **Q4.** Evidence. May or must Soccernity keep a file it has set aside as possibly illegal? Is the default of 365 days right, what should happen when it ends, and who may open or copy the file? The Terms and Policy no longer state the period (Decision Log #534); should they state any period, and in what words?
 
 - *Why it matters:* The file is kept privately, for 365 days by default, past account deletion, and every deletion path leaves it alone. The 365 days is a default, not a legal figure.
@@ -84,7 +85,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 
 - *Why it matters:* The founder has not decided this; the drafts only note the point.
 - *Label:* Can follow launch (default, founder may veto): the sweep is built, runs after 6 or 7 years, and no public text depends on it.
-- *Sources:* Post-media addendum v0.6, section 12 question 25; Legal copy v0.18, Part C row 50; DPIA v0.10, section 5 item 34.
+- *Sources:* Post-media addendum v0.6, section 12 question 24; Legal copy v0.18, Part C row 50; DPIA v0.10, section 5 item 34.
 
 ### Group 2 — Automated rejection of a child's file, and video from children
 
@@ -308,7 +309,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 
 - *Why it matters:* Rejected and unattached files are deleted on every path unless protected; the labels have no stated period.
 - *Label:* Needed before the documents are signed: the Policy retention table needs a figure or a statement for each.
-- *Sources:* Post-media addendum v0.6, section 12 question 14; Post-media Part C v0.3, question 8.
+- *Sources:* Post-media addendum v0.6, section 12 question 14; Post-media Part C v0.3, question 8; Post-media Part C v0.3, notes at lines 170 and 234 (retention of the check's labels and the disclosure consequence of each retention option).
 
 **Q44.** View-data retention. What period is defensible for the view records and the exposure records, for the aggregate rows, and for the backup copies; is a separate purge job a required control; and is the proposed retention-table row adequate while those periods are not set?
 
@@ -446,7 +447,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 
 - *Why it matters:* These facts are true of the built system; the Policy wording is a draft.
 - *Label:* Needed before the documents are signed: the Policy states how files are reviewed.
-- *Sources:* Post-media Part C v0.3, question 1; Post-media Part C v0.3, question 4.
+- *Sources:* Post-media Part C v0.3, question 1; Post-media Part C v0.3, question 4; Post-media Part C v0.3, note at line 126 (automatic approval and unchecked audio).
 
 **Q66.** Must the Policy name Amazon Web Services and Cloudflare, give the region of each, and disclose the AWS opt-out?
 
@@ -496,7 +497,7 @@ Every open item from the eight drafts that is marked A (open for counsel) maps t
 | Q4 | 1 | PA s7 Q4; LC open 2 |
 | Q5 | 1 | PA s7 Q5 (part 5a) |
 | Q6 | 1 | IP Q22; PA s12 Q21; LC row 50; DP item 34 |
-| Q7 | 1 | PA s12 Q25; LC row 50; DP item 34 |
+| Q7 | 1 | PA s12 Q24; LC row 50; DP item 34 |
 | Q8 | 2 | PA s12 Q2 |
 | Q9 | 2 | PA s12 Q3 |
 | Q10 | 2 | PA s12 Q4 |
@@ -514,16 +515,16 @@ Every open item from the eight drafts that is marked A (open for counsel) maps t
 | Q22 | 3 | CF Q6 |
 | Q23 | 3 | CF Q7 |
 | Q24 | 3 | CF Q8 |
-| Q25 | 4 | CA Q1; VC line 49; CA Q15 |
+| Q25 | 4 | CA Q1; VC line 57; CA Q15 |
 | Q26 | 4 | CA Q2 |
 | Q27 | 4 | CA Q3; CA Q5 |
 | Q28 | 4 | CA Q12; LC row 10 |
 | Q29 | 4 | CA Q13 |
-| Q30 | 4 | CA Q8; CA line 216 |
+| Q30 | 4 | CA Q8; CA line 224 |
 | Q31 | 4 | CA Q14 |
 | Q32 | 4 | CA Q16; DP item 13 |
 | Q33 | 4 | LC row 43 |
-| Q34 | 5 | DP item 12; DP item 21; CA Q6; CA line 241; PA s12 Q16 |
+| Q34 | 5 | DP item 12; DP item 21; CA Q6; CA line 249; PA s12 Q16 |
 | Q35 | 5 | PA s12 Q17 |
 | Q36 | 5 | LC row 12 |
 | Q37 | 5 | LC row 14; DP item 16; LC row 6; LC row 17; DP item 8 |
@@ -532,8 +533,8 @@ Every open item from the eight drafts that is marked A (open for counsel) maps t
 | Q40 | 5 | LC row 23; LC row 40 |
 | Q41 | 5 | LC row 39 |
 | Q42 | 5 | DP item 39; DP item 42; IP Q21 |
-| Q43 | 5 | PA s12 Q14; PC Q8 |
-| Q44 | 5 | CA Q7; CA Q9; CA Q10; CA line 341; VC line 85; VC Q5 |
+| Q43 | 5 | PA s12 Q14; PC Q8; PC note 170; PC note 234 |
+| Q44 | 5 | CA Q7; CA Q9; CA Q10; CA line 349; VC line 93; VC Q5 |
 | Q45 | 6 | IP Q2 |
 | Q46 | 6 | IP Q3 |
 | Q47 | 6 | IP Q4; DP item 32; LC row 11; LC row 21 |
@@ -550,11 +551,11 @@ Every open item from the eight drafts that is marked A (open for counsel) maps t
 | Q58 | 7 | DP item 23 |
 | Q59 | 7 | DP item 28 |
 | Q60 | 7 | IP Q3; IP Q2 |
-| Q61 | 8 | PC Q6; VC Q3; VC line 110; CF Q2; LC row 32 |
+| Q61 | 8 | PC Q6; VC Q3; VC line 118; CF Q2; LC row 32 |
 | Q62 | 8 | PA s12 Q18; PC note 214 |
 | Q63 | 8 | CA Q11; VC Q1; VC Q2 |
 | Q64 | 8 | VC Q4; CA Q4 |
-| Q65 | 8 | PC Q1; PC Q4 |
+| Q65 | 8 | PC Q1; PC Q4; PC note 126 |
 | Q66 | 8 | PC Q3 |
 | Q67 | 8 | LC open 3 |
 | Q68 | 8 | LC row 38; CF Q10 |

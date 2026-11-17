@@ -124,3 +124,46 @@ Branch `legal/counsel-review-pack-v11`, cut from `origin/main` `c7adc58`. Sectio
 **Founder to say.** Whether the Q5 narrowing is intended; whether Q70 should carry legal copy row 22; why PhotoDNA was dropped (#526, no reason recorded); whether incident Q18, Q23 and Q24 should now have a disposition. Post-media Part C v0.3 was a narrow refresh and its markers still read "v0.2"; its three open notes (lines 142, 182, 214) were matched to questions by content.
 
 **Not verified.** Nothing was run beyond the scripts above. CI cannot be read from here. The Security session was not asked. Law and vendor statements were not re-fetched.
+
+## 12. D10 final polish (Word layout, arithmetic, stale leftovers)
+
+Branch `legal/counsel-pack-final-polish`, cut from `origin/main` `bca83de`. Docs only. DRAFT: nothing here is approved or legal advice (non-negotiable #2). **No counsel question was added, removed, split or renumbered**; the pack still has 71 questions and 150 string rows (S1 to S150).
+
+**1. Word layout.** Old file measured at 81 pages when rendered with LibreOffice (the brief said 97; I report the measured figure). New file: **44 pages**, four sections (portrait cover; landscape documents table; portrait questions; landscape question-to-source table, v1.0 to v1.1 map, strings sheet and sign-off), A4, 2 cm portrait / 1.8 cm landscape margins. Strings-sheet widths: # narrow, String widest, Figma medium, Approve and Reject narrow, Reword wide. Header rows repeat, rows do not split, the sign-off starts on its own page and fits it, footer carries "Counsel review pack v1.1: DRAFT, not approved, not legal advice. Page N". Rendered to PDF with LibreOffice headless and each page to PNG with PyMuPDF, looked at, and iterated (two headings orphaned at page bottoms were fixed with keep-with-next and a page break before "5. Sign-off"). Exact commands:
+
+```
+pandoc docs/counsel-review-pack.md -f markdown -t docx --reference-doc=docs/counsel-review-pack-reference.docx -o docs/counsel-review-pack.docx
+python docs/counsel-pack-build.py
+```
+
+`docs/counsel-pack-build.py` (committed) runs the pandoc command itself and then applies the section breaks, fixed widths, repeating headers and footer; `docs/counsel-review-pack-reference.docx` (committed) is pandoc's default reference document restyled (Calibri, A4, light-grey table borders). The old docx was not byte-reproducible from a recorded command; this one is.
+
+**2. Documents table (pack section 2)** re-read against the current changelogs of all eight drafts; versions and one-line statuses updated (legal copy v0.18, DPIA v0.10, incident plan v0.8, post-media addendum v0.6, Part C v0.3, contest/view-data addendum v0.3, Part C v0.3, Cloudflare v0.3). **Source-pointer additions** (not new questions): Q43 gained `PC note 170; PC note 234` and Q65 gained `PC note 126`, because those notes carry the same A items.
+
+**3. Arithmetic: `docs/counsel-pack-check.py`** (stdlib only, counting rule at the top: newest `[vX.Y DISPOSITION: ...]` marker wins; a composite marker is read component by component; an item with any A component is class A and its non-A remainder is a "partial" left-out row, not an extra item; loose prose letter mentions are listed as ambiguous and never counted). Output on this branch:
+
+| Document | Items | A | B | C | D | X | A items with a non-A remainder |
+|---|---|---|---|---|---|---|---|
+| Legal copy v0.18 | 67 | 27 | 9 | 9 | 22 | 0 | 0 |
+| DPIA v0.10 | 51 | 14 | 10 | 10 | 17 | 0 | 0 |
+| Incident plan v0.8 | 32 | 23 | 1 | 1 | 7 | 0 | 0 |
+| Post-media addendum v0.6 | 32 | 19 | 8 | 0 | 5 | 0 | 3 |
+| Post-media Part C v0.3 | 21 | 13 | 3 | 0 | 5 | 0 | 7 |
+| Contest and view-data addendum v0.3 | 22 | 19 | 0 | 0 | 3 | 0 | 5 |
+| View-data Part C v0.3 | 10 | 8 | 0 | 0 | 2 | 0 | 2 |
+| Cloudflare draft v0.3 | 13 | 10 | 3 | 0 | 0 | 0 | 3 |
+| **Total** | **248** | **133** | **34** | **20** | **61** | **0** | **20** |
+
+Checks: (a) every A item is cited by a pack question: PASS (133 of 133); (b) no non-A item is cited by a question: PASS; (c) every non-A item and every partial remainder is in the left-out list: PASS (115 of 115); (d) 248 = 133 A + 115 in the left-out list + 0 not assigned: PASS. The left-out list now has **115 full rows + 20 partial rows = 135 rows** (the 20 partial rows are the non-A remainders of 20 A items, not extra items).
+
+**v1.0 against now, with reasons.** v1.0 (D5) counted 249 = 141 A + 36 B + 20 C + 49 D + 3 not assigned; the script cannot recompute v1.0, so those figures are taken from the D5 report. The direct count today is **248**, not 249. The difference is one item: post-media addendum section 12 Q26 is no longer present in the v0.6 draft, which is why the total fell from 249 to 248. The v1.1 report's earlier delta arithmetic (130 + 42 + 20 + 57 = 249) is kept above as history; it does not match a direct count and should not be quoted. Per-document movements: legal copy A 28 to 27, B 10 to 9, D 20 to 22 (row 22 is A again; rows 35 and 41 and one in-text marker are D; two further A-to-D moves cannot be attributed from the markers); DPIA B 13 to 10, D 14 to 17 (items 40, 41 and 47 B to D); incident plan B 3 to 1, D 2 to 7, not assigned 3 to 0 (Q18, Q23 and Q24 are now D, with Q24 part (c) B; Q19 and Q20 B to D); post-media addendum 33 to 32 items; Part C A 16 to 13, B 2 to 3, D 3 to 5; Cloudflare A 13 to 10, B 0 to 3 (Q9 and two notes). **No total was adjusted to make it match.**
+
+**Ambiguous markers:** the script lists 22 (file and line): mostly prose letter mentions in changelogs, one line in the Cloudflare changelog (line 48), and two same-version markers for post-media addendum section 12 Q23 (lines 927 and 933). They are listed, not counted, and the founder should confirm none changes a class.
+
+**4. Left-out list (`docs/counsel-pack-left-out.md`, INTERNAL)** re-labelled to the current draft versions (a "(marker vX.Y)" suffix where the newest marker is from an older version); entries 19 to 21 of "unclear, founder to say" now say incident Q18, Q23 and Q24 are D (Q24 (a) and (b) D, (c) B) and that the founder should confirm this reading.
+
+**5. Mechanical draft edits.** "docs PR R98, pending merge" replaced with the Decision Log numbers (#533, #534) in the DPIA, incident plan, post-media addendum and the Cloudflare, Part C and contest addendum changelogs; the legal copy header now reads version 0.18; legal copy open item 2 notes that public text no longer states the 365-day figure. Three history sentences (DPIA line 43, incident plan line 33, post-media addendum line 34) deliberately keep the old "docs PR R98" wording because they describe how the earlier version cited it.
+
+**6. Pack text check.** 71 `**Q` lines, S1 to S150, no "DISPOSITION" text, 63 headings round-trip through the rebuilt docx.
+
+**Not verified.** Nothing was run beyond these scripts, pandoc and LibreOffice rendering. CI cannot be read from here. The Security session was not asked. Word itself was not opened: layout was checked through LibreOffice only, so column widths may differ slightly in Word; in the LibreOffice render the footer page number looks a little larger than the footer text (cosmetic, left). Law and vendor statements were not re-fetched. The pack has not been read by counsel or the founder.
