@@ -1,6 +1,6 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.17) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.18) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -38,6 +38,10 @@ Do not fill either from this file. The sign-off block at the end of this documen
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
   counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice; v0.13 (2026-11-09) wrote the direct-message retention wording and the report-a-message disclosure; v0.14 (2026-11-10) wrote the removed-content wording; v0.15 (2026-11-11) wrote the suspension, appeal, message-report visibility and report-retention wording; v0.16 (2026-11-11) restored the counsel-approved report-retention range, narrowed Terms 7.3 and brought the Contact Us description up to the built feature. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.18 changelog (2026-11-17)
+
+A stale-statement fix on v0.17. **Still a draft: NOT APPROVED, NOT LEGAL ADVICE, sign-off empty; counsel has not seen v0.16, v0.17 or v0.18.** Founder decisions of 2026-11-15 to 2026-11-17 (Decision Log #479, #524 to #534; #533 and #534 are in docs PR R98, pending merge when this was written; the founder's decisions, **not counsel's**). **No new rule and no new figure.** (1) Google and Facebook sign-in removed from ToS 4.3, PP 1.9, PP 5 (#479). (2) Markers for built features (#368 to #373) and two-factor removed; PP 6 describes the httpOnly cookie token model (B-246). (3) ToS 7.3 and 7.9 state the built appeal screens and Contact Us category. (4) The 365-day figure for set-aside files is no longer stated in public text (Decision Log #534); it stays configuration. (5) Part C rows 18 (B), 22 (A), 33 (D), 35 (D), 41 (D) re-marked per #534. Every change is marked `[v0.18 CHANGED ...]`; stale items not verified are listed in `docs/legal-copy-v0.18-report.md`.
 
 ### v0.17 changelog (2026-11-17)
 
@@ -277,8 +281,7 @@ profile.
 restricted-pending account cannot: have a publicly visible profile; send direct messages, or be
 found as a recipient by anyone trying to message it; participate in Banter Rooms beyond read-only viewing; or, as
 currently implemented, create posts or comments (Build Plan Section 8.3 step 5; Decision Log
-#21 for the current scope of what "restricted" covers). **[PROPOSAL, not yet built — Decision Log
-#370]** The restriction is intended to be uniform: a restricted-pending account also cannot complete
+#21 for the current scope of what "restricted" covers). ****[v0.18 CHANGED — #370: built; "not yet built" marker removed]**** The restriction is intended to be uniform: a restricted-pending account also cannot complete
 its profile, edit its profile, follow anyone, like or save anything, or join a club or group. It can
 still report content and appeal, change the guardian's email address, change its password, deactivate
 or delete the account, and log out. **Registration cannot be completed until the guardian approves**
@@ -368,7 +371,7 @@ automatically as soon as the check succeeds**; if a refund does not go through f
 it. Soccernity does not receive or store the guardian's card details (they go directly to the
 payment provider); we keep only a reference to the transaction. Guardians of children who are 13 or
 over, or whose country is determined not to be the United States, are not asked for this step.
-**[PROPOSAL, not yet built — Decision Log #368]** The country is the one we derive from the
+****[v0.18 CHANGED — #368: built; "not yet built" marker removed]**** The country is the one we derive from the
 registration request (see the Privacy Policy, Section 1.8); the country the person selects at the Age
 Gate is kept alongside it, but the derived country is the one that decides whether this step applies,
 and if it cannot be determined we apply this stronger step. Someone using a VPN or similar tool can
@@ -383,15 +386,9 @@ under your account. Tell us promptly if you believe your account has been compro
 4.2. You may only maintain one personal account. Club fan pages, Banter Rooms, and community
 groups are shared spaces within the platform, not separate accounts.
 
-4.3. Soccernity currently supports registering with an email address and password. **[PROPOSAL, not
-yet built — Decision Log #378]** Sign-in with Google or Facebook is intended: it receives your name and
-email address from the provider and **never** your date of birth, and you still go through the Age Gate
-(date of birth and country) and, if you are under 18, the guardian-consent flow like any other user.
-Apple sign-in is not planned. **[PROPOSAL, not yet built]** Two-factor authentication will use an
-authenticator app, not text messages. The Privacy Policy, Section 5, describes what each provider
-shares.
+4.3. Soccernity supports registering with an email address and password. **[v0.18 CHANGED — #479]** Sign-in with Google or Facebook was planned and has been removed; it is not offered. You can turn on two-factor authentication with an authenticator app (not text messages); it is optional for users. **[v0.18 CHANGED — built state]** **[COPY PENDING LEGAL REVIEW]**
 
-4.4. **Completing your profile.** **[PROPOSAL, not yet built — Decision Log #369]** After you register
+4.4. **Completing your profile.** ****[v0.18 CHANGED — #369: built; "not yet built" marker removed]**** After you register
 (and, for a minor, after a guardian approves) you must complete your profile, including choosing a
 **username**, before you can use the rest of Soccernity. Until you do, other users see you under a
 neutral placeholder name rather than your real name, you cannot post, and you are returned to the
@@ -436,7 +433,7 @@ Location and device information embedded in an image is removed. **[OPEN: counse
 
 6.3. If you delete one of your posts, it is **permanently deleted**, together with every comment,
 like and save other users have made on it (Decision Log #360). If you delete a comment, it is
-removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a set period (currently 365 days), so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]** If you delete your account,
+removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]** If you delete your account,
 Section 8 explains what happens to your content: it is not removed, but stays visible without
 your identity attached, because other users' replies, likes, and saves on it are not yours to
 take down with you.
@@ -460,8 +457,7 @@ outcome.
 appeal it. **An appeal against a decision recorded on a report is reviewed by a member of the
 moderation team who did not take or record that decision** (Decision Log #138). **An appeal against
 a suspension that a moderator made directly from the user page, without a report, is reviewed by a
-moderator.** This process is being built into the Admin Console and is not yet fully live in the
-product as of this draft; this document will be updated once it is. If your account is suspended
+moderator.** **[v0.18 CHANGED — built state]** The staff screens for deciding an appeal are built in the Admin Console. If your account is suspended
 and you cannot sign in, see Section 7.9. **[COPY PENDING LEGAL REVIEW]**
 
 7.4. You may report content or behaviour that violates these Terms using the reporting tools
@@ -482,7 +478,7 @@ while the removal could still be appealed, so that the files can be put back if 
 succeeds. The stored file is deleted when the removal is confirmed, that is, when the time allowed
 for an appeal has passed or an appeal has been decided and the removal stands. The exception is a
 file that is kept as evidence under a hold (Section 8.4), which is kept for as long as the hold
-lasts. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a set period (currently 365 days), so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+lasts. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 
 7.7. **Guardians.** **[COPY PENDING LEGAL REVIEW]** If the account that posted the removed content belongs to a minor, we
 normally email the guardian who has confirmed consent to say that Soccernity removed content
@@ -499,9 +495,7 @@ lifted, we email you again. If the account belongs to a minor, we normally also 
 has confirmed consent to say that the account was suspended, or that the suspension was lifted, giving
 only the kind of action and when it happened (Section 7.7).
 
-7.9. **Appealing a suspension when you cannot sign in.** **[COPY PENDING LEGAL REVIEW]** **[PROPOSAL, not yet built — the server
-accepts the "Appeal a suspension" category and a staff appeal can be recorded through the server, but the category is not yet on the
-Contact Us form in the app and the Admin Console screen for recording an appeal is not yet built]** If your account is suspended you
+7.9. **Appealing a suspension when you cannot sign in.** **[COPY PENDING LEGAL REVIEW]** **[v0.18 CHANGED — #492, built state: the "Appeal a suspension" category is on the Contact Us form and staff can record an appeal in the Admin Console]** If your account is suspended you
 cannot sign in, so you cannot use an in-app appeal. Instead, contact us through the Contact Us page (the
 suspension email links to it), choose the category "Appeal a suspension" and say that you want to appeal. Our staff will record the appeal on your
 behalf. An appeal has to be made within the time allowed for appeals, which applies to the decision in
@@ -547,7 +541,7 @@ made unusable, and the account is marked permanently deleted. Specifically:
   stays visible read-only, and can later be reassigned to a new user who registers the same team
   name and city.
 - **Guardian-consent records** are handled separately; see the Privacy Policy, Section 9.
-- **Pictures and videos set aside as possibly illegal imagery.** **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a set period (currently 365 days), so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+- **Pictures and videos set aside as possibly illegal imagery.** **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 - **Anonymised accounts with nothing left in them are removed.** **[PROPOSAL, not yet built — Decision
   Log #375]** 30 days after anonymisation, the anonymised record is permanently deleted if it
   belonged to a minor whose guardian never approved the account, or if the account has no content.
@@ -584,7 +578,7 @@ Section 7.8. **[COPY PENDING LEGAL REVIEW]**
 9.1. Some information about you is visible to other users by default once your account is fully
 active (not restricted-pending): your username (shown instead of your real name; until you have
 completed your profile, a neutral placeholder is shown instead), profile content you choose to
-share, **[PROPOSAL, not yet built — Decision Log #371]** your avatar, cover photo, bio and country
+share, ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]**** your avatar, cover photo, bio and country
 (shown in place of a location — we do not collect a precise location), your
 posts and comments, your club-page membership, and — where the Leaderboard feature is live —
 your ranking and points. **This applies to minors as well as adults**: avatars and cover photos are
@@ -673,7 +667,7 @@ will add further steps only if a regulator requires them.
 #### 1.1 Account and identity data (all users)
 
 Email address, phone number (optional), password (stored as a secure hash, never in plain text),
-username (**[PROPOSAL, not yet built — Decision Log #369]** required before your profile is complete,
+username (****[v0.18 CHANGED — #369: built; "not yet built" marker removed]**** required before your profile is complete,
 and shown to other users instead of your real name; until it is set, others see a neutral
 placeholder), display name, date of birth, and — derived from date of birth — whether your account is
 classified as belonging to a minor (under 18) and whether it is under 16. These two
@@ -697,12 +691,11 @@ Sections 7 and 8). *Founder states counsel agrees; counsel review of the wording
 
 Posts, comments, photos, videos, and other media you upload; your membership in club pages,
 Banter Rooms, and community groups; who you follow and who follows you; posts you save; and
-messages you send through the platform's direct-messaging feature. **[PROPOSAL, not yet built —
-Decision Log #371]** Also your avatar, cover photo and bio, which are visible to other users,
+messages you send through the platform's direct-messaging feature. ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]**** Also your avatar, cover photo and bio, which are visible to other users,
 **including minors** (and which minors can also see on each other's profiles), and your country,
 which is shown in place of a location. Images are checked automatically when uploaded (Section 5),
 then reviewed by a person if flagged, and the location and device information embedded in an image
-is removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a set period (currently 365 days), so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+is removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 
 #### 1.4 Grassroots record-keeping data
 
@@ -738,7 +731,7 @@ before it does, not after.
 
 #### 1.8 Country and IP address
 
-**[PROPOSAL, not yet built — Decision Log #368; OPEN: counsel to confirm]** We ask for your **country**
+****[v0.18 CHANGED — #368: built; "not yet built" marker removed]** **[OPEN: counsel to confirm]**** We ask for your **country**
 at sign-up (the Age Gate). We also work out which country a registration is coming from, by looking
 up the IP address of the request in a database that is held on our own servers — no third party
 receives the IP address. **The IP address is read in memory for that lookup and is never stored or
@@ -760,11 +753,7 @@ If a message is a safeguarding concern or a complaint, a moderator may turn it i
 record; it is then kept for as long as that record is kept (Section 9), which can be longer than 12
 months, and if that record is later deleted the enquiry goes back to the 12-month rule. When your account is
 deleted, the enquiries it sent are deleted too, unless one was turned into a report or case record.
-**[COPY PENDING LEGAL REVIEW]** *Google and Facebook sign-in:* **[PROPOSAL, not yet built]** we receive your name and email address from
-the provider you choose. We do **not** receive or use a date of birth from them; you still give your
-date of birth and country at the Age Gate. *Two-factor authentication:* **[PROPOSAL, not yet built]** uses an authenticator app;
-we will hold the secret needed to check the codes it generates, protected at rest **[OPEN: details to
-be confirmed]**. *Email verification:* every user must verify their email address, which is
+**[COPY PENDING LEGAL REVIEW]** *Google and Facebook sign-in:* **[v0.18 CHANGED — #479]** this was planned and has been removed; we do not offer it and do not receive data from those providers. *Two-factor authentication:* **[v0.18 CHANGED — built state]** if you turn it on, uses an authenticator app; we hold the secret needed to check the codes it generates, encrypted at rest, and single-use backup codes stored only as hashes. **[COPY PENDING LEGAL REVIEW]** **[OPEN: counsel to read what is stored (Part C row 44)]** *Email verification:* every user must verify their email address, which is
 processed by our email provider (Section 5).
 
 ### 2. How we use your data
@@ -801,7 +790,7 @@ and is **restricted** until a guardian confirms consent (see the Terms of Servic
 restricted:
 
 - The account's profile is not visible to other users.
-- **[PROPOSAL, not yet built — Decision Log #370]** The account cannot complete or edit its profile
+- ****[v0.18 CHANGED — #370: built; "not yet built" marker removed]**** The account cannot complete or edit its profile
   and cannot make any social write (follow, like, save, join a club or group). It can still report
   and appeal, change the guardian's email, change its password, deactivate or delete the account,
   and log out. Registration cannot be completed until the guardian approves, including card
@@ -833,14 +822,14 @@ account-status page.
 
 4.2. When the guardian follows the link, they see a plain-language explanation of what the
 minor's account can do and what data is collected, and an explicit "I consent" action.
-**[PROPOSAL, not yet built — Decision Log #372]** They also see a summary of the request — the
+****[v0.18 CHANGED — #372: built; "not yet built" marker removed]**** They also see a summary of the request — the
 minor's name, date of birth, how the guardian was named, and the date requested — and notices that
 the guardian's email appears on the minor's profile as the line of contact and that the minor's photo
 and username are visible to others. This is returned to the holder of the single-use link only;
 the link is rate-limited, gives the same response whether it is invalid, expired or used, and the
 date of birth is decrypted only to build that one response. A "report incorrect details" action
 flags the account for support, and declining remains available. When the guardian approves, an email
-is sent to the minor **[PROPOSAL, not yet built — Decision Log #373]**. This
+is sent to the minor ****[v0.18 CHANGED — #373: built; "not yet built" marker removed]****. This
 action is recorded, including the method and the time it happened. **The consent record also
 captures the version of the consent screen the guardian was shown and a coarse device type
 ("mobile", "desktop" or "unknown")** (Decision Log #348). This record does **not** include the
@@ -916,13 +905,13 @@ acting on Soccernity's instructions as a data processor unless stated otherwise:
   #307).
 - **Stripe** — payment provider, used only for the guardian card-verification step in Section 4.6
   for the younger-child US group. Card details go directly to Stripe and never reach Soccernity.
-- **Amazon Web Services (Amazon Rekognition)** — **[PROPOSAL, not yet built — Decision Log #371]**
+- **Amazon Web Services (Amazon Rekognition)** — ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]****
   automated safety check on uploaded pictures and videos (for a video, on still frames taken from it), including avatars and cover photos, in an EU/UK region where
   available. Files the check is unsure about, and files that users report, go to a Soccernity reviewer, and a file is not shown to other users until it has passed. No hash-matching against known abuse imagery is in place. **[COPY PENDING LEGAL REVIEW]** **[v0.17 CHANGED — #524, #525]**
   **[OPEN: counsel — cross-border transfer, and any duties that apply to hosting images of
   minors, including hash-matching for child sexual abuse material, whose availability on our
   storage provider is unconfirmed.]**
-- **MaxMind GeoLite2** — **[PROPOSAL, not yet built — Decision Log #368]** a country database held on
+- **MaxMind GeoLite2** — ****[v0.18 CHANGED — #368: built; "not yet built" marker removed]**** a country database held on
   our own servers and used for the registration country lookup in Section 1.8. No IP address is sent
   to MaxMind or anyone else.
 - **Sentry** — an error-monitoring tool, wired into the platform but not yet actively collecting
@@ -947,19 +936,11 @@ each of the providers above stores data, or whether that involves a transfer of 
 across borders that would require additional safeguards under UK GDPR or Nigeria's NDPA 2023.
 This is flagged as an open item for counsel, not assessed as low-risk by default.
 
-**Not yet live:** **[PROPOSAL, not yet built — Decision Log #378]** Google and Facebook sign-in is
-intended. Each provider would share your name and email address with Soccernity (and, if you use
-Facebook without an email address, we would ask you for one); neither would give us a date of birth,
-and each provider receives the fact that you signed in to Soccernity under its own terms. Apple
-sign-in is not planned. **[OPEN: counsel to review each provider's role.]**
+**[v0.18 CHANGED — #479]** Google and Facebook sign-in was planned and has been removed. No sign-in provider receives any data about you from Soccernity.
 
 ### 6. Cookies and similar technologies
 
-**[PROPOSAL — to be confirmed once the web application's actual cookie/storage use is audited]**
-As of this draft, Soccernity's web application stores your session (login) tokens using the
-browser's local storage, used solely to keep you signed in — not for advertising or cross-site
-tracking. This section should be revisited and expanded once a formal cookie audit is done,
-particularly if any analytics or advertising technology is added in future.
+**[v0.18 CHANGED — built state (B-246); OPEN: no engineering audit of what the web app stores is recorded, Part C row 15]** Soccernity's web application keeps a short-lived access token only in the page's memory, and your refresh token in a cookie that scripts on the page cannot read (httpOnly), sent only to Soccernity's own servers and used solely to keep you signed in, not for advertising or cross-site tracking. If you choose "stay signed in" the cookie is kept across browser sessions; otherwise it ends when the browser is closed. This section should be revisited and expanded once a formal cookie and storage audit is done, particularly if any analytics or advertising technology is added in future. **[COPY PENDING LEGAL REVIEW]**
 
 ### 7. Public and semi-public visibility of your information
 
@@ -989,7 +970,7 @@ feature. This is described here so it is not a surprise:
   this data is standard on the platforms Soccernity is modelled after. **[PROPOSAL, flagged by
   the founder's own prior decision]** If Soccernity ever introduces a private-account setting,
   this default would need to be revisited.
-- **Avatars, cover photos, bio and country** **[PROPOSAL, not yet built — Decision Log #371]** are
+- **Avatars, cover photos, bio and country** ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]**** are
 visible to other users, **including minors**, once the account is active. Country is shown in
 place of a location; we do not collect a precise location. Uploaded images are checked
 automatically and reviewed by a person if flagged (Section 5).
@@ -1074,14 +1055,14 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Investigation hold** **[PROPOSAL, not yet built — Decision Log #376; counsel review pending]** | If you are the reporter, the reported party, or the author of reported content in a moderation report, erasure is paused while the report is open, then until any appeal period has ended or the appeal is decided, then for **6 months** after the matter is closed, whatever the outcome. During the hold we keep the report, the reported content and messages, and identifiers (user ID, name, email, date of birth) and clear data that is not evidence (such as the password hash). A reported person, and the author of reported content, is then deleted in the ordinary way. A reporter whose report was upheld, or where neither party was found at fault, follows the ordinary deletion path and only the report record is kept for the 6 months; a reporter found to have acted in bad faith is held in full for the 6 months. A moderator may also place a **legal hold** on both accounts, which lasts until it is lifted | Closure of the report or appeal, plus 6 months, or lifting of a legal hold. While a report is open no maximum duration is set **[OPEN]** |
 | **A reporter's data held in full** **[PROPOSAL, not yet built — counsel review pending]** | Held in full only so that records exist if the reported person takes legal action against the reporter. It is not used for any other purpose | As above |
 | **Contact Us form submissions** | Name, email address, category, subject and message (and the account it came from, if you were signed in), kept to answer the enquiry. Deleted automatically 12 months after the last message in the enquiry **[COPY PENDING LEGAL REVIEW]**. A message that is a safeguarding concern or a complaint may be turned into a report or case record by a moderator; it is then kept with the retention that applies to those records (see "Moderation reports and actions" below), and the 12-month deletion no longer applies to it; if that record is later deleted, the enquiry goes back to the 12-month rule. When your account is deleted, the enquiries it sent are deleted unless one was turned into such a record **[COPY PENDING LEGAL REVIEW]** | 12 months after the last message in the enquiry, automatic; or the retention of the report or case record it became part of |
-| **Country information** **[PROPOSAL, not yet built — Decision Log #368]** | Declared country code, derived country code, method and time are kept with the account. The IP address used for the lookup is never stored. **[OPEN: retention period.]** | To be set |
+| **Country information** ****[v0.18 CHANGED — #368: built; "not yet built" marker removed]**** | Declared country code, derived country code, method and time are kept with the account. The IP address used for the lookup is never stored. **[OPEN: retention period.]** | To be set |
 | **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and — where captured — the consent-screen version and coarse device type; not the full guardian record — the guardian's name, email and relationship to the minor are **not** retained past anonymisation — and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). While the account is a minor account it follows the same retention as the rest of a minor's account data; once the account is promoted to adult, the ordinary adult retention rules apply | Promotion to adult |
 | **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. When you later delete your account, guardian data is handled on the normal guardian-data deletion timeframe — snapshotted into the consent record above, then deleted | Account deletion |
 | **Messages between users** **[PROPOSAL, not yet built — Decision Log #478]** | Deleted automatically **12 months after the message was sent**, for every user, including under-18s. After an account is anonymised its messages stay visible in the conversation, attributed to "[deleted user]," until they reach that age. A message that is the subject of a report, or that the reporter chose to include as context, is not deleted at 12 months: it is kept with that report, under the retention that applies to reports (see "Moderation reports and actions" below) **[COPY PENDING LEGAL REVIEW]**. A conversation left with no messages is deleted with its last message **[COPY PENDING LEGAL REVIEW]** | 12 months after each message was sent, automatic; or the retention of the report the message is attached to |
 | **Content a moderator has removed** (a post, a comment or a message) **[PROPOSAL, not yet built — Decision Log #483]** | Hidden from other people as soon as the moderator removes it. The item itself is not erased: it is kept, hidden, with the report it belongs to, under the retention for "Moderation reports and actions" below. A removed message is therefore not deleted at 12 months, and a removed item is not made visible again by account anonymisation. When that report is deleted, the removed item is deleted with it. If an appeal succeeds, the item is restored [COPY PENDING LEGAL REVIEW] | Deletion of the report (see "Moderation reports and actions" below); restored if the appeal succeeds |
 | **Pictures and videos of a post a moderator removed** **[PROPOSAL, not yet built — Decision Log #484]** | Made unavailable at once. A private copy is kept only while the removal can still be appealed, then the stored file is deleted when the removal is confirmed (the time allowed for an appeal has passed, or an appeal has been decided and the removal stands). A file kept as evidence under a hold (see "Investigation hold" above) is kept for as long as the hold lasts. The record of the file stays with the post; the file does not [COPY PENDING LEGAL REVIEW] | Confirmation of the removal; or the end of a hold. **[OPEN: statutory reporting and evidence set-aside, Part C row 37]** |
-| **Pictures and videos set aside as possibly illegal imagery** **[COPY PENDING LEGAL REVIEW]** **[v0.17 CHANGED — #525, #530]** | A picture or video (including a profile picture or cover photo) that a child-safety reviewer set aside as possibly illegal imagery is kept privately, away from other users, and is not deleted with the post, the account or a removal. A record of who set it aside and when is kept. | A set period, currently 365 days from the set-aside, and longer if the law requires it. **[OPEN: counsel, evidence retention beyond 365 days and any release of the file, Part C row 37]** |
+| **Pictures and videos set aside as possibly illegal imagery** **[COPY PENDING LEGAL REVIEW]** **[v0.17 CHANGED — #525, #530]** | A picture or video (including a profile picture or cover photo) that a child-safety reviewer set aside as possibly illegal imagery is kept privately, away from other users, and is not deleted with the post, the account or a removal. A record of who set it aside and when is kept. | A limited period set by Soccernity from the set-aside, and longer if the law requires it. **[v0.18 CHANGED — #534: the figure is configuration and is not stated in the public text]** **[OPEN: counsel, the period and any release of the file, Part C row 37]** |
 | Moderation reports and actions | Data tied to a concluded investigation or moderation case is held for **6–7 years**, for accountability, legal claims and pattern detection. A report is concluded when it is dismissed, or when the time allowed for an appeal has passed, or when an appeal has been decided and the decision stands; it is not concluded while it is open or while an appeal is pending **[COPY PENDING LEGAL REVIEW]**. At the end of the period we delete the content the report removed first, with its stored pictures and videos, and then the report. The link between the report and any messages a reporter attached as context is deleted with the report; those messages are then deleted by the ordinary message rule above **[COPY PENDING LEGAL REVIEW]**. A report is kept longer, and not deleted, while a legal hold is in place, while an active hold covers an account involved in it, when the matter has been escalated for statutory reporting, or where deleting it would break another record that depends on it **[COPY PENDING LEGAL REVIEW]**. Our staff action log, which records that an action was taken and by whom (not the content), is not deleted when a report is deleted **[OPEN: retention period for that log]** [COPY PENDING LEGAL REVIEW] | End of the retention period; or the end of a hold |
 | Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted, or when a moderator's removal of the post is confirmed (see "Pictures and videos of a post a moderator removed" and "Pictures and videos set aside as possibly illegal imagery") |
 
@@ -1218,14 +1199,14 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 12 | Who exercises a minor's data-subject rights, and how a minor/guardian disagreement is handled **[v0.17 DISPOSITION: A — who exercises a minor's data-subject rights and how a minor/guardian disagreement is handled]** | PP §10 | Counsel |
 | 13 | **Resolved (signed off)** — England & Wales, exclusive jurisdiction, savings clause; applied in v0.7 **[v0.17 DISPOSITION: C — counsel signed off; applied v0.7]** | ToS §12 | — |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window (UK-GDPR-derived reasoning, not yet confirmed for Nigeria) **[v0.17 DISPOSITION: A — Nigerian counsel to cross-check the 6-month consent-record retention window against the NDPA 2023]** | PP §9 | Nigerian counsel |
-| 15 | Cookie/local-storage audit for the actual web application **[v0.17 DISPOSITION: D — an engineering audit of what the web app stores must exist before counsel can read PP section 6; none is recorded (the web token model changed, B-246). Listed under 'unclear' in the report]** | PP §6 | `backend-api`/frontend + counsel |
+| 15 | Cookie/local-storage audit for the actual web application **[v0.17 DISPOSITION: D — an engineering audit of what the web app stores must exist before counsel can read PP section 6; none is recorded (the web token model changed to an in-memory access token plus an httpOnly refresh cookie, B-246; PP 6 now says so, v0.18). Listed under 'unclear' in the report]** | PP §6 | `backend-api`/frontend + counsel |
 | 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. The under-16 recipient refusal is now the indistinguishable 404 (Decision Log #351, live). Guardian contact now shows for **every minor (under 18)**, not only under-16s (v0.8) — see row 32; the genuine under-16 rules are unchanged **[v0.17 DISPOSITION: D — built (PR #272, Decision Log #346, #351); the guardian-contact part is row 32]** | ToS §3.5(a), (c); PP §8 | Counsel |
 | 17 | **Built (PR #274, Decision Log #348)** — consent-screen version (a manually bumped label, tripwire-checked) + coarse device type. Counsel to confirm sufficiency **[v0.17 DISPOSITION: A — counsel to confirm the consent-screen version and device type are sufficient evidence; built under Decision Log #348]** | PP §4.2 | Counsel |
-| 18 | **Built (PRs #273/#276/#280, Decision Log #347/#350)** — adult cannot start a DM with a minor; enumeration-safe; timing jitter accepted (#350) **[v0.17 DISPOSITION: A+B — founder accepted the timing jitter (Decision Log #350); counsel to confirm the accepted limitation]** | ToS §3.5(b); PP §8 | Counsel to confirm the accepted limitation |
+| 18 | **Built (PRs #273/#276/#280, Decision Log #347/#350)** — adult cannot start a DM with a minor; enumeration-safe; timing jitter accepted (#350) **[v0.18 DISPOSITION: B — the timing limit was accepted by the founder (Decision Log #350); counsel confirmation is not requested (#534)]** | ToS §3.5(b); PP §8 | Counsel to confirm the accepted limitation |
 | 19 | **Resolved (signed off)** — see row 4 **[v0.17 DISPOSITION: C — counsel signed off; see row 4]** | PP §2 | — |
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) **[v0.17 DISPOSITION: A — restates row 9]** | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) **[v0.17 DISPOSITION: A — restates row 11]** | PP §11 | Founder + `backend-api` + counsel |
-| 22 | **Resolved and built (Decision Log #362, merged):** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). The earlier "backend build pending" note is stale and removed. New v0.8 use of the decrypted DOB — the guardian consent page's request summary (Decision Log #372; **now built** — `GET /auth/guardian-consent/request-summary`, shown on the guardian confirm page; it returns the minor's name and full date of birth to the holder of the single-use link) — needs counsel's view on proportionality **[v0.17 DISPOSITION: D — built (Decision Log #362, #372): date of birth encrypted at rest and shown on the guardian page's request summary; counsel's view on the request summary is not recorded]** | PP §1.1, §4.2 | Counsel |
+| 22 | **Resolved and built (Decision Log #362, merged):** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). The earlier "backend build pending" note is stale and removed. New v0.8 use of the decrypted DOB — the guardian consent page's request summary (Decision Log #372; **now built** — `GET /auth/guardian-consent/request-summary`, shown on the guardian confirm page; it returns the minor's name and full date of birth to the holder of the single-use link) — needs counsel's view on proportionality **[v0.18 DISPOSITION: A — built (Decision Log #362, #372); whether showing a minor's full date of birth to the holder of the guardian's single-use link is proportionate is a legal question; counsel's view is not recorded (#534)]** | PP §1.1, §4.2 | Counsel |
 | 23 | Investigation hold has no maximum duration **while a report is open** (Decision Log #345 gives visibility only). v0.8 adds a post-closure period (Decision Log #376, see rows 39 and 40) **[v0.17 DISPOSITION: A — no maximum duration for an open investigation hold (Decision Log #345, #376); founder and counsel]** | PP §9 | Founder + counsel |
 | 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice **[v0.17 DISPOSITION: A — accepted ~24h misclassification window and reliance on an unverified date of birth (Decision Log #349)]** | ToS §3.6; PP §4.5 | Counsel |
 | 25 | **Resolved (Decision Log #351, live in `messaging.service.ts`)** — under-16 recipient refusal is the same 404 as other blocked paths **[v0.17 DISPOSITION: D — built (Decision Log #351); no open question]** | PP §8 | — |
@@ -1236,15 +1217,15 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 30 | **Superseded** — operational items moved to row 36 **[v0.17 DISPOSITION: D — superseded by row 36]** | — | — |
 | 31 | **Resolved (signed off)** — the blanket "we comply with all applicable laws" sentence stays removed; replacement scope wording applied in v0.7 **[v0.17 DISPOSITION: C — counsel signed off; applied v0.7]** | ToS §12; PP scope note | — |
 | 32 | **Guardian contact for every minor (under 18). Backend built (Decision Log #363); the web UI now renders it** on the other-user profile page (`OtherProfilePage`, FC5), so the audit's "no consumer" finding (`GET /users/:id/public-profile` had no consumer — audit section 5 item 14). **Founder states counsel agrees** to showing it for all minors; counsel review of the final wording is pending, as is whether already-confirmed (v1) guardians need notifying. v0.8 corrects the ToS/PP wording, which said under-16, to match the code and the guardian screen ("under 18"). The consent screen version was bumped to v2 for this disclosure **[v0.17 DISPOSITION: A+B — founder decided guardian contact for every minor (Decision Log #363) and states counsel agrees (counsel's view not recorded); counsel review of the final wording and of whether already-confirmed v1 guardians must be notified is pending]** | ToS §3.5(c); PP §1.2, §7, §8 | Founder + counsel |
-| 33 | **Usernames are built but optional (Decision Log #364); v0.8 makes them required before a profile is complete (Decision Log #369, not yet built).** The username-first public-name convention is in code (`publicName`). Not built: the incomplete-profile placeholder and gate, required-at-Create-Profile, and username moderation (reserved words, impersonation, profanity, cooldown, released-handle holding, admin revoke). Create Profile has no code **[v0.17 DISPOSITION: D — built (usernames required, username rules and revoke built, PRs W3/W4 and #626); the row's 'not yet built' text is stale and is listed under 'unclear']** | ToS §4.4, §9.1; PP §1.1, §1.5, §7 | Founder + `backend-api` |
+| 33 | **Usernames are built but optional (Decision Log #364); v0.8 makes them required before a profile is complete (Decision Log #369, not yet built).** The username-first public-name convention is in code (`publicName`). Not built: the incomplete-profile placeholder and gate, required-at-Create-Profile, and username moderation (reserved words, impersonation, profanity, cooldown, released-handle holding, admin revoke). Create Profile has no code **[v0.18 DISPOSITION: D — built (usernames required, rules and revoke, W3/W4, #626); the row's "not yet built" text is superseded, kept as history (#534)]** | ToS §4.4, §9.1; PP §1.1, §1.5, §7 | Founder + `backend-api` |
 | 34 | **Built (Decision Log #365) -- the user-initiated guardian-email change now exists and matches ToS §3.3 / PP §4.3; counsel to confirm the wording against the shipped behaviour (below).** Original note: **User-initiated guardian-email change is not built.** No endpoint lets the minor change the guardian's email while consent is pending (the restart behaviour of Decision Log #60 has no code). As built: `POST /auth/guardian-consent/change-guardian-email`, available only while consent is *pending*; it restarts the request against the new address and the old link stops working. It is refused once consent is confirmed or declined. Also built in the same change: the new request requires the guardian's **name and relationship** (re-captured, since the new address may be a different person); the **previous guardian address is emailed** that the request was withdrawn (plain functional copy, not counsel-reviewed); a minor cannot list their **own** email as the guardian email (at registration or on change); and a **per-minor cap of 5 successful changes per 24h** applies. Counsel to review the withdrawn-notice wording **[v0.17 DISPOSITION: A+D — built (Decision Log #365); counsel to confirm the wording against the shipped behaviour]** | ToS §3.3; PP §4.3 | Founder + counsel |
-| 35 | A public (logged-out) report page now exists in the app (`/report`, `POST /reports/public`). Counsel removed non-user-reporting framing from the ToS, so §7.4 still does not describe it — counsel/product to confirm that is intended **[v0.17 DISPOSITION: A — the public report page exists but ToS 7.4 does not describe it; counsel and product to confirm that is intended (the founder may read this as product only; listed under 'unclear')]** | ToS §7.4; PP §13 | Product + counsel |
+| 35 | A public (logged-out) report page now exists in the app (`/report`, `POST /reports/public`). Counsel removed non-user-reporting framing from the ToS, so §7.4 still does not describe it — counsel/product to confirm that is intended **[v0.18 DISPOSITION: D — whether the Terms mention the public report page is a product choice (#534)]** | ToS §7.4; PP §13 | Product + counsel |
 | 36 | Card step is built but **not live** (no payment-provider keys); the 50-cent figure is configurable but hardcoded in this copy; PCI-DSS self-assessment is an operational follow-up (carried from former row 30) **[v0.17 DISPOSITION: D — operational: payment-provider keys, the 50-cent figure and PCI-DSS self-assessment are the founder's launch-gate steps]** | ToS §3.7; PP §4.6 | Founder |
 | 37 | **Rewritten in v0.17 (Decision Log #524 to #530).** **Decided by the founder, not counsel:** user uploads go live at launch with `MEDIA_UPLOADS_ENABLED` as the off switch and **no counsel gate** (#524); counsel's list below is **non-blocking**. The founder accepts launching before hash-matching exists as **his own risk, not a view of counsel** (#524, #529), and will not register with NCMEC's CyberTipline or the UK body before uploads go on (#529). **Built:** the automatic check (Amazon Rekognition, video sampled into frames) then report-and-review (#430 item 1); and the suspected-illegal-imagery path (PRs #800, #803, #806, #807, Decision Log #525, #530): a child-safety-vetted administrator sets a file aside, it is rejected with the generic rejection, kept privately (365 days by default, past account deletion), and any filing with a receiving body is recorded by hand outside the platform; profile pictures and covers are included; the protection is of the file only and does not stop a person deleting their picture or account. **Not built, and this draft says nothing about it:** hash-matching or any other detection of known abuse imagery. **For counsel, non-blocking, counsel's view on all of it not recorded:** (a) whether the law requires proactive detection; (b) which online-safety and abuse-imagery duties apply in each country; (c) the receiving bodies and any deadlines (all pending counsel in the code, no addresses); (d) evidence retention beyond 365 days and any release of the file; (e) platform duties to children; (f) whether the plain wording shown to the person whose file was removed (the generic rejection) is acceptable. **Original v0.8 text, kept as history:** **New in v0.8 — image-check processor and CSAM obligations.** Amazon Rekognition as a new processor for avatar/cover-photo checks (EU/UK region where available); cross-border assessment; whether hash-matching against known child sexual abuse material is available on the storage provider (Cloudflare R2 coverage unconfirmed) and what statutory duties attach to hosting images of minors. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A+B — B: uploads go live at launch with no counsel gate, off switch MEDIA_UPLOADS_ENABLED, founder accepts launching before hash-matching as his own risk (Decision Log #524, #529, #530); the imagery path is built (#525). A: the duties question below, non-blocking]** | PP §5, §1.3; ToS §6.2 | Counsel |
 | 38 | **New in v0.8 — IP address processed transiently at registration** (country lookup against a local GeoLite2 database; never stored; no third party). Wording, lawful basis and whether "transient, in memory" is enough for the disclosure. VPN/Tor limitation stated. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A — IP address processed transiently at registration; wording, lawful basis and whether 'transient, in memory' is enough]** | PP §1.7, §1.8; ToS §3.7 | Counsel |
 | 39 | **New in v0.8 — a reporter's data held in full** (only where bad faith is found, or under a legal hold) so records exist if the reported person takes legal action. Narrow-purpose wording is exactly as the founder specified; whether it is lawful and proportionate is for counsel. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A — a reporter's data held in full under bad faith or a legal hold; whether it is lawful and proportionate]** | ToS §8.4; PP §9 | Counsel |
 | 40 | **New in v0.8 — purge rule and anonymised-row retention.** Purge of anonymised rows of never-approved minors and no-content accounts after 30 days; content-bearing anonymised accounts stay until counsel reviews them (supersedes the "no purge timer" decision, Decision Log #344). Also: the 6-month post-closure hold and the appeal window length are not counsel-sourced; tension with the 6–7 year moderation-case retention [v0.15 replaced that line; v0.16 restores it, see row 52]. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A+B — founder decided the purge rule and the post-closure hold (Decision Log #375, #376); counsel to review the retention and the appeal-window length (not counsel-sourced)]** | ToS §8.3; PP §9 | Counsel |
-| 41 | **New in v0.8 — social sign-in.** Google and Facebook sign-in (name and email from the provider; no DOB; Facebook accounts without an email need a fallback); each provider's role and transfer position. Apple removed from scope. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: B — social sign-in was removed completely (Decision Log #479); the row and the PP wording that mention it are stale and are listed, not edited]** | ToS §4.3; PP §1.9, §5 | Counsel |
+| 41 | **New in v0.8 — social sign-in.** Google and Facebook sign-in (name and email from the provider; no DOB; Facebook accounts without an email need a fallback); each provider's role and transfer position. Apple removed from scope. Not built. Counsel status: **pending** **[v0.18 DISPOSITION: D — social sign-in was removed completely (Decision Log #479, #534); the PP and ToS wording is fixed in v0.18; row kept as history]** | ToS §4.3; PP §1.9, §5 | Counsel |
 | 42 | **New in v0.8 — Contact Us form retention.** Name, email, category, message are collected; retention is **12 months from the last message in the enquiry, then automatic deletion**, with a moderator able to turn a safeguarding concern or complaint into a report or case record that follows that record's retention instead (Decision Log #440, **the founder's decision, not counsel's**; v0.9 wording, tagged `[COPY PENDING LEGAL REVIEW]`). Counsel has not reviewed the 12-month figure or the escalation wording. [v0.16: the form, the 12-month deletion job and the escalation action are now built (PR #552 and later, Contact Us module on `main`); the text in PP §1.9 and §9 is brought up to the built feature and no longer marked "not yet built". The 12-month figure and escalation wording are still the founder's and still unreviewed by counsel.] Counsel status: **pending** **[v0.17 DISPOSITION: B — founder decided 12 months from the last message (Decision Log #440, #444, #460); not a counsel question]** | PP §1.9, §9 | Temi + counsel |
 | 43 | **New in v0.8 — avatar, cover photo, bio and country visible to other users including minors.** Includes minors seeing other minors' profiles. Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A — avatar, cover photo, bio and country visible to other users including minors; counsel pending]** | ToS §9.1; PP §1.3, §7 | Founder + counsel |
 | 44 | **New in v0.8 — other new processing:** authenticator-app two-factor authentication (what is stored), email to the minor on guardian approval, mandatory email verification for every user, and the guardian consent page's request summary (returns the minor's name and DOB to an unauthenticated token holder). Not built. Counsel status: **pending** **[v0.17 DISPOSITION: A+D — built; counsel to read what is stored for two-factor, the guardian page's request summary and the approval email (the 56 admin two-factor strings were cleared by the founder, Decision Log #531)]** | PP §1.9, §4.2 | Counsel |
@@ -1267,15 +1248,15 @@ Legend: **A** open for counsel; **B** decided by the founder (the Decision Log n
 
 | Marker (where) | Letter | State |
 |---|---|---|
-| `[PROPOSAL — Decision Log #371]` avatar, cover and bio visible to others; automatic image check (ToS 6.2, PP 1.3, PP 5) | D | Built (the check, B-036; post media, PR #474). The marker text is stale. Counsel's open question is row 37 and row 43. |
-| `[PROPOSAL — Decision Log #368/#369/#370/#372/#373]` country lookup, required username, write block, request summary, approval email (PP 1.2 to 1.8, 4.2) | D | Built (W1 to W4). Markers stale, left as written; counsel's questions are rows 22, 38 and 44. |
+| `[PROPOSAL — Decision Log #371]` avatar, cover and bio visible to others; automatic image check (ToS 6.2, PP 1.3, PP 5) | D | Built (the check, B-036; post media, PR #474). **[v0.18: marker removed.]** Counsel's open question is row 37 and row 43. |
+| `[PROPOSAL — Decision Log #368/#369/#370/#372/#373]` country lookup, required username, write block, request summary, approval email (PP 1.2 to 1.8, 4.2) | D | Built (W1 to W4). **[v0.18: markers removed except the open counsel brackets.]** counsel's questions are rows 22, 38 and 44. |
 | `[PROPOSAL — #375]` purge of anonymised rows and `[PROPOSAL — #376]` investigation hold (ToS 8.3, 8.4; PP 9) | B | Built (B-043, B-044); founder's decisions. Counsel's questions are rows 23, 39 and 40. |
 | `[PROPOSAL — #478]` message retention; `[PROPOSAL — #483/#484]` soft removal and stored files (ToS 7, PP 9) | B | Built (B-287, B-289, B-290); founder's decisions, counsel's view not recorded. Counsel question: row 50(a) to (c). |
-| `[PROPOSAL, not yet built ...]` ToS 7.9 appeals and 7.5 notices | D | 7.9: the Contact Us category and the admin screen are built (PRs #739, #740); the marker is stale. 7.5: partly built; left. |
-| ToS 7.3 "being built into the Admin Console and is not yet fully live" | D | Stale: the admin screens are built. Left as written. |
-| PP 1.9 and PP 5 Google and Facebook sign-in; PP 5 "Not yet live" paragraph; Part C row 41 | B | Social sign-in was removed completely (Decision Log #479). These passages and the row are stale; **listed for the founder, not edited**. |
-| PP 1.9 two-factor `[PROPOSAL]` | D | Built (users and admins); the stored data is row 44's question. |
-| PP 6 cookies and local storage | D | Stale: the web token model is an in-memory access token plus an httpOnly cookie (B-246). An engineering audit of what the web app stores is row 15; none is recorded. Left as written. |
+| `[PROPOSAL, not yet built ...]` ToS 7.9 appeals and 7.5 notices | D | **[v0.18: 7.9 marker removed (PRs #739, #740).]** 7.5: partly built; unverified, left. |
+| ToS 7.3 "being built into the Admin Console and is not yet fully live" | D | **[v0.18: fixed, admin screens built.]** |
+| PP 1.9 and PP 5 Google and Facebook sign-in; PP 5 "Not yet live" paragraph; Part C row 41 | D | **[v0.18: fixed — social sign-in removed (#479, #534).]** |
+| PP 1.9 two-factor `[PROPOSAL]` | D | **[v0.18: marker removed.]** Built; the stored data is row 44's question. |
+| PP 6 cookies and local storage | D | **[v0.18: PP 6 rewritten to the httpOnly cookie token model (B-246).]** An engineering audit is row 15; none is recorded. |
 | `[OPEN: counsel ...]` on Amazon Rekognition (PP 5) and on the set-aside row (PP 9) | A | Kept open: row 37. |
 
 ### Questions for counsel (v0.17, the one list)
@@ -1308,7 +1289,7 @@ Only the A items. None of them blocks launch (Decision Log #524, #532). Counsel 
 - **Row 50:** founder decided the stored-file rule (Decision Log #484); counsel questions (a) to (c) in the row remain.
 - **Row 53:** founder decided suspension, emails and appeals (Decision Log #485, #492); counsel to read the email wording and the appeal route.
 
-The plain wording shown to the person whose file was removed (the generic rejection, nothing about illegal imagery) and the retention-reason sentence for set-aside files (including the words "currently 365 days") are wording questions inside row 37 and are repeated in "Open for counsel (added v0.12)" below.
+The plain wording shown to the person whose file was removed (the generic rejection, nothing about illegal imagery) and the retention-reason sentence for set-aside files (the 365-day figure is no longer stated in the public text, v0.18) are wording questions inside row 37 and are repeated in "Open for counsel (added v0.12)" below.
 
 ### Screen copy -- Contact Us form notice
 
@@ -1324,7 +1305,7 @@ Suggestions only. Nothing below is in the Terms or Privacy Policy text, and noth
 
 1. **ToS §3.2, the sentence "Registration cannot be completed until the guardian approves"** **[v0.17 DISPOSITION: D — housekeeping the founder may keep or drop; not a counsel question]** (housekeeping, not a blocker). §3.1 and Privacy Policy §3 say the minor's account is created at the Register step, in a restricted state, and §3.2's first sentence says the account "exists but is restricted". "Registration" in the later sentence could be read as the account creation §3.1 says has already happened. Suggested wording, **[COPY PENDING LEGAL REVIEW]**: "The account cannot be fully set up until the guardian approves (including the card verification in 3.7 where it applies)." Not applied to the clause above.
 
-2. **The sentence about set-aside files, ToS 6.3, 7.6, 8.3, PP 1.3 and PP 9 ("kept privately ... for a set period (currently 365 days) ... and for longer if the law requires")** **[v0.17 DISPOSITION: A — wording and the 365-day figure, a default the founder may change (Decision Log #525)]** **[COPY PENDING LEGAL REVIEW]**. Is the retention-reason wording acceptable, and is the length of the period for counsel to set? Non-blocking.
+2. **The sentence about set-aside files, ToS 6.3, 7.6, 8.3, PP 1.3 and PP 9 ("kept privately ... for a set period (currently 365 days) ... and for longer if the law requires")** **[v0.18 DISPOSITION: A — wording and the retention period; the figure is configuration and is not stated in public text (Decision Log #525, #534)]** **[COPY PENDING LEGAL REVIEW]**. Is the retention-reason wording acceptable, and is the length of the period for counsel to set? Non-blocking.
 3. **The plain wording shown to the person whose file was removed** **[v0.17 DISPOSITION: A — wording]**. When a file is set aside the uploader and a guardian see only the generic rejection; this draft has no sentence saying anything else. Is that acceptable? Non-blocking.
 
 ---
