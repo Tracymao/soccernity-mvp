@@ -6,8 +6,9 @@
 //   - NODE_ENV === "production" (Render sets this on staging too): OFF unless the value is exactly "true".
 //     A typo ("TRUE", "1", "yes", empty, unset) leaves it off.
 //   - any other NODE_ENV (development, test, unset): ON unless the value is exactly "false".
-// The founder sets MEDIA_UPLOADS_ENABLED to "true" in Render by hand, at the launch gate, only after counsel's
-// written answer on B-206 (render.yaml, docs/deployment.md).
+// The founder sets MEDIA_UPLOADS_ENABLED to "true" in Render by hand at the launch gate. This is the off switch for
+// uploads; the launch condition is in the launch-gate runbook (step 8.7) and Decision Log #524, and counsel's
+// question list is not a condition (render.yaml, docs/deployment.md).
 
 export const MEDIA_UPLOADS_ENABLED_ENV = 'MEDIA_UPLOADS_ENABLED';
 export const MEDIA_UPLOADS_DISABLED_CODE = 'media_uploads_disabled';
