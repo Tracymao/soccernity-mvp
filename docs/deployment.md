@@ -123,10 +123,11 @@ No two may be the same.
   needs a video, so Contests cannot take entries while it is off). Staff upload
   (`POST /admin/media/upload`), reading and deleting existing media and reporting
   media are not affected. **Leave it off until the launch condition is met**
-  (Decision Log #524; runbook step 8.7): (a) the suspected-illegal-imagery
-  reporting path has been tried once on staging (runbook step 6.14), (b) the
-  founder's own registrations with the receiving bodies are done, and (c) video
-  works on staging with a real upload (runbook step 6.15). Counsel's answer on
+  (Decision Log #524, amended by #529; runbook step 8.7): (a) the
+  suspected-illegal-imagery reporting path has been tried once on staging
+  (runbook step 6.14), and (b) video works on staging with a real upload
+  (runbook step 6.15). Registering with the receiving bodies is not a condition
+  (#529). Counsel's answer on
   B-206 is no longer a condition: it is a non-blocking list (runbook step 7.5).
   The founder turns it on at the launch gate (check B-267 item (l)), together
   with the post-media setup steps below. Locally and in tests it is on unless set to `false`.
