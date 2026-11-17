@@ -2,13 +2,13 @@
 
 **Soccernity — draft documents and one list of questions for counsel**
 
-*Pack prepared 2026-11-17 on branch `legal/counsel-review-pack`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
+*Pack version 1.1, prepared 2026-11-17 on branch `legal/counsel-review-pack-v11`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
 
 ## 1. Cover page
 
 **Who Soccernity is.** Soccernity is a social platform for grassroots football: players who are not part of a club or academy, and the fans, coaches and communities around them. It has users in the UK, Nigeria, the US and the EU, and many of those users are children. It has accounts, posts, direct messages, community rooms, a weekly video-skill Contest with a points leaderboard, pictures and video uploaded by users, and an admin console used by staff. The platform is not live yet.
 
-**What counsel is asked.** Counsel is asked to read the six drafts listed in section 2 and to answer the 75 questions in section 3. Every question is something that is still unresolved and needs a lawyer. Each question says whether it is needed before the documents are signed or can follow launch. Counsel is also asked, in section 4, to approve, reword or reject each of 150 on-screen strings that carry the tag `[COPY PENDING LEGAL REVIEW]`.
+**What counsel is asked.** Counsel is asked to read the eight drafts listed in section 2 and to answer the 71 questions in section 3. Every question is something that is still unresolved and needs a lawyer. Each question says whether it is needed before the documents are signed or can follow launch. Counsel is also asked, in section 4, to approve, reword or reject each of 150 on-screen strings that carry the tag `[COPY PENDING LEGAL REVIEW]`.
 
 **Status of every draft.** Every draft in this pack is NOT APPROVED. Every sign-off block is empty. A draft being written, or a question being marked, closes nothing. Where a draft says what the founder decided, that records the founder's decision; it does not record counsel's view, and the pack never says counsel agrees.
 
@@ -24,24 +24,24 @@
 
 ## 2. Documents
 
-Counsel last gave input on the legal copy at v0.7 (Decision Log #4 and #203; the sign-off covers the decisions, not the live prose). Counsel has not seen v0.16 or v0.17 of the legal copy. No other draft in this pack has been reviewed by counsel.
+Counsel last gave input on the legal copy at v0.7 (Decision Log #4 and #203; the sign-off covers the decisions, not the live prose). Counsel has not seen v0.16, v0.17 or v0.18 of the legal copy. No other draft in this pack has been reviewed by counsel.
 
 | Document (file in `docs/`) | Version | What changed since counsel last saw it | Questions that cite it |
 |---|---|---|---|
-| Legal copy (`legal-copy-draft-tos-privacy-policy.md`) | v0.17 | Counsel last saw v0.7 (resolved decisions applied). Since then: Contact Us retention and notice, direct-message retention, what staff see when a message is reported, soft removal of content, suspension and appeals, report retention restored to the 6-7 year range, the suspected-illegal-imagery path, and (v0.17) every Part C row sorted into A, B, C or D. | 23 questions: Q1, Q3, Q4, Q6, Q7, Q15, Q30, Q35, Q38, Q39, Q40, Q41, Q42, Q43, Q49, Q63, Q69, Q70, Q71, Q72, Q73, Q74, Q75 |
-| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.9 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorts every one of the 51 open items into A, B, C or D, and records that uploads no longer wait for counsel (Decision Log #524). | 12 questions: Q1, Q6, Q7, Q15, Q34, Q36, Q39, Q41, Q44, Q49, Q60, Q61 |
-| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.7 | No counsel review. v0.7 re-sorts the questions into A, B, C or D, and records the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. | 17 questions: Q3, Q6, Q16, Q44, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q55, Q56, Q58, Q59, Q62 |
-| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.5 | No counsel review. v0.5 records the decided review model (automatic check first, then report-and-review), the set-aside path, profile pictures and covers, and sorts every question. | 20 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q14, Q17, Q18, Q21, Q36, Q37, Q45, Q64 |
-| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.2 | No counsel review. v0.2 sorts every question and note, and updates the wording options to the decided review model. | 8 questions: Q1, Q4, Q13, Q17, Q45, Q63, Q67, Q68 |
-| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.2 | No counsel review. v0.2 records removed Contest entries (B-300), the report-retention cascade (B-307) and sorts every question. | 12 questions: Q27, Q28, Q29, Q30, Q31, Q32, Q33, Q34, Q36, Q46, Q65, Q66 |
-| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.2 | No counsel review. v0.2 sorts every question and note against the current built behaviour. | 5 questions: Q27, Q46, Q63, Q65, Q66 |
-| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.2 | No counsel review. v0.2 records that the proxy is adopted in principle but building it is deferred until after launch (Decision Log #449, #518) and sorts every question. | 11 questions: Q19, Q20, Q21, Q22, Q23, Q24, Q25, Q26, Q57, Q63, Q70 |
+| Legal copy (`legal-copy-draft-tos-privacy-policy.md`) | v0.18 | Counsel last saw v0.7 (resolved decisions applied). Since then (including v0.18: Google and Facebook sign-in removed from the text, built-feature markers removed, the 365-day set-aside figure no longer stated in public text): Contact Us retention and notice, direct-message retention, what staff see when a message is reported, soft removal of content, suspension and appeals, report retention restored to the 6-7 year range, the suspected-illegal-imagery path, and (v0.17) every Part C row sorted into A, B, C or D. | 21 questions: Q1, Q3, Q4, Q6, Q7, Q14, Q28, Q33, Q36, Q37, Q38, Q39, Q40, Q41, Q47, Q61, Q67, Q68, Q69, Q70, Q71 |
+| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.10 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorted every one of the 51 open items; v0.10 brings it to the built state and re-marks items 40, 41 and 47 as decided by the founder (B) into A, B, C or D, and records that uploads no longer wait for counsel (Decision Log #524). | 12 questions: Q1, Q6, Q7, Q14, Q32, Q34, Q37, Q39, Q42, Q47, Q58, Q59 |
+| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.8 | No counsel review. v0.7 re-sorts the questions into A, B, C or D, and records the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. | 17 questions: Q3, Q6, Q15, Q42, Q45, Q46, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q56, Q57, Q60 |
+| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.6 | No counsel review. v0.5 and v0.6 record the decided review model (automatic check first, then report-and-review), the set-aside path, profile pictures and covers, and sorts every question. | 19 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q16, Q17, Q20, Q34, Q35, Q43, Q62 |
+| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note; v0.3 refreshed stale references only (legal draft version, row numbers). It updates the wording options to the decided review model. | 9 questions: Q1, Q3, Q13, Q16, Q43, Q61, Q62, Q65, Q66 |
+| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.3 | No counsel review. v0.2 records removed Contest entries (B-300), the report-retention cascade (B-307) and sorts every question. | 12 questions: Q25, Q26, Q27, Q28, Q29, Q30, Q31, Q32, Q34, Q44, Q63, Q64 |
+| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.3 | No counsel review. v0.2 sorts every question and note against the current built behaviour. | 5 questions: Q25, Q44, Q61, Q63, Q64 |
+| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.3 | No counsel review. v0.2 records that the proxy is adopted in principle but building it is deferred until after launch (Decision Log #449, #518) and sorts every question. | 10 questions: Q18, Q19, Q20, Q21, Q22, Q23, Q24, Q55, Q61, Q68 |
 
 Document codes used below: LC legal copy, DP DPIA, IP incident plan, PA post-media addendum, PC post-media Part C, CA contest and view-data addendum, VC view-data Part C, CF Cloudflare draft.
 
 ## 3. Questions
 
-There are **75 questions**, numbered Q1 to Q75, in eight groups. Each question appears once; where several drafts ask the same thing, the question lists every place it appears. Counsel answers a question once and the answer applies to every document that cites it.
+There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question appears once; where several drafts ask the same thing, the question lists every place it appears. Counsel answers a question once and the answer applies to every document that cites it.
 
 ### Group 1 — Suspected illegal imagery (none of these blocks launch)
 
@@ -49,43 +49,42 @@ There are **75 questions**, numbered Q1 to Q75, in eight groups. Each question a
 
 - *Why it matters:* Soccernity is launching without it and plans to add it after launch (IWF Image Intercept first, Hive as the fallback). The founder accepts that as his own risk; he does not claim counsel agrees.
 - *Label:* Can follow launch (default, founder may veto): the founder has decided to launch first (Decision Log #524) and detection is planned for after launch (#526).
-- *Sources:* Post-media addendum v0.5, section 7 question 1; Post-media Part C v0.2, question 7; Legal copy v0.17, in-text marker 10; Legal copy v0.17, Part C row 37; DPIA v0.9, section 5 item 50.
+- *Sources:* Post-media addendum v0.6, section 7 question 1; Post-media Part C v0.3, question 7; Legal copy v0.18, in-text marker 10; Legal copy v0.18, Part C row 37; DPIA v0.10, section 5 item 50.
 
 **Q2.** Which online-safety, abuse-imagery and platform-duty rules apply in each country (risk assessment, reporting, record-keeping, duties because users include children), and which of them does Soccernity already meet?
 
 - *Why it matters:* The drafts name no such regime and the founder has not been told which ones apply.
 - *Label:* Can follow launch (default, founder may veto): no document text depends on the answer before launch.
-- *Sources:* Post-media addendum v0.5, section 7 question 1; Post-media addendum v0.5, section 7 question 7.
+- *Sources:* Post-media addendum v0.6, section 7 question 1; Post-media addendum v0.6, section 7 question 7.
 
 **Q3.** When a trained moderator, a user report or an automatic label suggests an uploaded file may be illegal child imagery: which bodies must or may it be reported to (UK, US, EU, Nigeria), by whom, and by when? What should a vetted staff member do today, given that the founder will not register with the US or UK reporting bodies before launch?
 
 - *Why it matters:* A vetted admin can set the file aside and record that a report was made, but there is no prepared route to file one, and no deadline has been checked.
 - *Label:* Can follow launch (default, founder may veto): the set-aside path is built and kept private; the founder has chosen to launch without registering (#529).
-- *Sources:* Post-media addendum v0.5, section 7 question 3; Incident plan v0.7, question 11; Incident plan v0.7, question 22; Legal copy v0.17, Part C row 37.
-
-**Q4.** Evidence. May or must Soccernity keep a file it has set aside as possibly illegal? Is the default of 365 days right, what should happen when it ends, and who may open or copy the file? The set-aside sentence in the Terms and Policy states the period; may it?
+- *Sources:* Post-media addendum v0.6, section 7 question 3; Incident plan v0.8, question 11; Incident plan v0.8, question 22; Legal copy v0.18, Part C row 37; Post-media Part C v0.3, note at line 182.
+**Q4.** Evidence. May or must Soccernity keep a file it has set aside as possibly illegal? Is the default of 365 days right, what should happen when it ends, and who may open or copy the file? The Terms and Policy no longer state the period (Decision Log #534); should they state any period, and in what words?
 
 - *Why it matters:* The file is kept privately, for 365 days by default, past account deletion, and every deletion path leaves it alone. The 365 days is a default, not a legal figure.
-- *Label:* Needed before the documents are signed: the Policy text states the keeping period and cannot be final without the figure.
-- *Sources:* Post-media addendum v0.5, section 7 question 4; Legal copy v0.17, open item 2; Post-media Part C v0.2, note at line 162.
+- *Label:* Needed before the documents are signed: counsel's answer decides whether the Policy may state any keeping period at all.
+- *Sources:* Post-media addendum v0.6, section 7 question 4; Legal copy v0.18, open item 2.
 
-**Q5.** What legal protection and what safeguarding (counselling, limits on exposure) are expected for staff who may view suspected illegal material?
+**Q5.** Is it lawful for Soccernity staff who are not child-safety vetted to open a file suspected to be illegal imagery of an adult? (Files that may involve a child are already limited to vetted staff; staff welfare and vetting are the founder's own HR duty and are not asked.)
 
-- *Why it matters:* Only a child-safety-vetted admin can set a file aside, but staff welfare and employment duties are not described anywhere.
+- *Why it matters:* Only a child-safety-vetted admin can set a file aside, but who may open a suspected adult's file at all is not settled in the drafts.
 - *Label:* Can follow launch (default, founder may veto): staff welfare is an operating duty and no public text depends on it.
-- *Sources:* Post-media addendum v0.5, section 7 question 5.
+- *Sources:* Post-media addendum v0.6, section 7 question 5 (part 5a only).
 
 **Q6.** Soft removal. A removed post, comment or message is hidden but kept in clear text for staff, and the private copy of a removed post's file is kept until the removing report closes. Is that acceptable, and is deleting the file when the removal is confirmed (about 30 days after the decision by default) safe given that a statutory duty could need it?
 
 - *Why it matters:* The wording the Policy uses ('hidden and kept') and the moment the file is deleted both rest on the answer.
 - *Label:* Can follow launch (default, founder may veto): the behaviour is built, the Policy wording is hedged, and the set-aside route can already protect a file.
-- *Sources:* Incident plan v0.7, question 22; Post-media addendum v0.5, section 12 question 21; Legal copy v0.17, Part C row 50; DPIA v0.9, section 5 item 34.
+- *Sources:* Incident plan v0.8, question 22; Post-media addendum v0.6, section 12 question 21; Legal copy v0.18, Part C row 50; DPIA v0.10, section 5 item 34.
 
 **Q7.** After a removed post's report is deleted by the retention sweep, the post and its file records go with it, and a Contest-entry post may be released. Is that the right end of the record for a child's removed file, and does the same answer cover the legacy admin-judged Contest cycle?
 
 - *Why it matters:* The founder has not decided this; the drafts only note the point.
 - *Label:* Can follow launch (default, founder may veto): the sweep is built, runs after 6 or 7 years, and no public text depends on it.
-- *Sources:* Post-media addendum v0.5, section 12 question 25; Legal copy v0.17, Part C row 50; DPIA v0.9, section 5 item 34.
+- *Sources:* Post-media addendum v0.6, section 12 question 25; Legal copy v0.18, Part C row 50; DPIA v0.10, section 5 item 34.
 
 ### Group 2 — Automated rejection of a child's file, and video from children
 
@@ -93,433 +92,409 @@ There are **75 questions**, numbered Q1 to Q75, in eight groups. Each question a
 
 - *Why it matters:* Rekognition can reject a file with a generic reason and no person looks at it first; the uploader sees only the generic reason.
 - *Label:* Needed before the documents are signed: the Policy must say whether automated decision-making is used and what the person can do about it.
-- *Sources:* Post-media addendum v0.5, section 12 question 2.
+- *Sources:* Post-media addendum v0.6, section 12 question 2.
 
 **Q9.** Is accepting video from children proportionate, given that video is checked by sampling frames (about one every 5 seconds), audio is not checked, and short content can be missed?
 
 - *Why it matters:* Video is allowed for all uploaders on the same footing as pictures, including children.
 - *Label:* Can follow launch (default, founder may veto): the founder has decided to launch with video; the question is about proportionality, not the wording.
-- *Sources:* Post-media addendum v0.5, section 12 question 3.
+- *Sources:* Post-media addendum v0.6, section 12 question 3.
 
 **Q10.** What lawful basis supports sending a child's image or video frames to Amazon Web Services for a safety check, and does the answer change for under-13s and under-16s?
 
 - *Why it matters:* Rekognition is the only processor that sees a child's file before a person does.
 - *Label:* Needed before the documents are signed: the Policy lists the basis and the processor.
-- *Sources:* Post-media addendum v0.5, section 12 question 4.
+- *Sources:* Post-media addendum v0.6, section 12 question 4.
 
 **Q11.** Is any accuracy testing required before the check is relied on, and on what data (the drafts do not say how a test could be run without handling real illegal material)?
 
 - *Why it matters:* The thresholds are tuned by the founder with no tested accuracy figures.
 - *Label:* Can follow launch (default, founder may veto): no public text depends on it.
-- *Sources:* Post-media addendum v0.5, section 12 question 5.
+- *Sources:* Post-media addendum v0.6, section 12 question 5.
 
 **Q12.** The thresholds are stricter when the uploader is a child. May they differ by uploader age only, or must they reflect who is shown in the file?
 
 - *Why it matters:* A child can upload an adult's picture and an adult can upload a child's.
 - *Label:* Can follow launch (default, founder may veto): no public text depends on it.
-- *Sources:* Post-media addendum v0.5, section 12 question 6.
+- *Sources:* Post-media addendum v0.6, section 12 question 6.
 
 **Q13.** The Terms-side draft forbids uploading images of children (section 3.6). Is such a rule appropriate, lawful and enforceable on a children's football platform?
 
 - *Why it matters:* Football pictures of teams and matches often include children; the rule is in the draft and nothing in the product enforces it.
 - *Label:* Needed before the documents are signed: the rule is in the Terms text.
-- *Sources:* Post-media Part C v0.2, question 5; Post-media Part C v0.2, note at line 174.
-
-**Q14.** Do images of children who are not users (a team photo, another child in the background) need a consent or notice mechanism, and what is it?
-
-- *Why it matters:* The depicted child has no account, no guardian and no screen where a notice could appear.
-- *Label:* Can follow launch (default, founder may veto): no screen exists and no document text depends on it.
-- *Sources:* Post-media addendum v0.5, section 12 question 19.
+- *Sources:* Post-media Part C v0.3, question 5.
 
 ### Group 3 — Cross-border transfers and processors
 
-**Q15.** For each of the processors the Policy names (Postmark, the object store, Sentry, Render, Neon, Upstash and others), is the transfer and data-location position acceptable under UK GDPR, EU GDPR and the Nigerian Data Protection Act 2023, and what must the Policy say?
+**Q14.** For each of the processors the Policy names (Postmark, the object store, Sentry, Render, Neon, Upstash and others), is the transfer and data-location position acceptable under UK GDPR, EU GDPR and the Nigerian Data Protection Act 2023, and what must the Policy say?
 
 - *Why it matters:* Hosting is in the EU (Frankfurt) but several processors are US companies and no transfer assessment has been written.
 - *Label:* Needed before the documents are signed: the Policy section on processors and international transfers cannot be final without it.
-- *Sources:* Legal copy v0.17, Part C row 9; Legal copy v0.17, Part C row 20; DPIA v0.9, section 5 item 3.
+- *Sources:* Legal copy v0.18, Part C row 9; Legal copy v0.18, Part C row 20; DPIA v0.10, section 5 item 3.
 
-**Q16.** Do the processor contracts (UK and EU Article 28 terms, the Nigerian equivalent) with Render, Neon, Upstash, Postmark and the object store meet the requirements, and who at Soccernity must sign or accept them?
+**Q15.** Do the processor contracts (UK and EU Article 28 terms, the Nigerian equivalent) with Render, Neon, Upstash, Postmark and the object store meet the requirements, and who at Soccernity must sign or accept them?
 
 - *Why it matters:* The accounts exist but nobody has checked what each vendor's standard terms say.
 - *Label:* Can follow launch (default, founder may veto): a contract check, not a wording question.
-- *Sources:* Incident plan v0.7, question 17.
+- *Sources:* Incident plan v0.8, question 17.
 
-**Q17.** Is Amazon Web Services an acceptable processor for children's images, and what contract and what opt-out (AWS may use inputs to improve its services unless the account opts out) is needed?
+**Q16.** Is Amazon Web Services an acceptable processor for children's images, and what contract and what opt-out (AWS may use inputs to improve its services unless the account opts out) is needed?
 
 - *Why it matters:* The founder will set the opt-out before any key is configured; the AWS account does not yet exist.
 - *Label:* Needed before the documents are signed: the Policy names AWS and must describe the opt-out.
-- *Sources:* Post-media addendum v0.5, section 12 question 7; Post-media Part C v0.2, note at line 134.
+- *Sources:* Post-media addendum v0.6, section 12 question 7; Post-media Part C v0.3, note at line 142.
 
-**Q18.** Does the chosen Rekognition region (Ireland by default) process only in that region, and does the chain from the object store (R2, location unconfirmed) to Rekognition create a transfer that needs its own assessment?
+**Q17.** Does the chosen Rekognition region (Ireland by default) process only in that region, and does the chain from the object store (R2, location unconfirmed) to Rekognition create a transfer that needs its own assessment?
 
 - *Why it matters:* Where a child's picture is processed is a fact the Policy must state.
 - *Label:* Needed before the documents are signed: the Policy states the region.
-- *Sources:* Post-media addendum v0.5, section 12 question 9.
+- *Sources:* Post-media addendum v0.6, section 12 question 9.
 
-**Q19.** If Soccernity puts Cloudflare in front of its sites, is Cloudflare a processor for all proxied traffic and a controller for anything of its own?
+**Q18.** If Soccernity puts Cloudflare in front of its sites, is Cloudflare a processor for all proxied traffic and a controller for anything of its own?
 
 - *Why it matters:* A proxy sees login details, tokens and a child's content in transit. The proxy is deferred until after launch (#518) but its text is drafted.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch (Decision Log #518).
-- *Sources:* Cloudflare draft v0.2, question 1.
+- *Sources:* Cloudflare draft v0.3, question 1.
 
-**Q20.** Cloudflare says its own services are not for under-18s. Does that, or the age mix of Soccernity's users, change what Soccernity may do?
+**Q19.** Cloudflare says its own services are not for under-18s. Does that, or the age mix of Soccernity's users, change what Soccernity may do?
 
 - *Why it matters:* Most of Soccernity's users are under 18.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 3.
+- *Sources:* Cloudflare draft v0.3, question 3.
 
-**Q21.** Which route applies to the UK and EU transfer to Cloudflare (adequacy, standard contractual clauses plus the UK addendum, the data bridge), and is a written transfer assessment required? The same question for the pictures sent to AWS.
+**Q20.** Which route applies to the UK and EU transfer to Cloudflare (adequacy, standard contractual clauses plus the UK addendum, the data bridge), and is a written transfer assessment required? The same question for the pictures sent to AWS.
 
 - *Why it matters:* The UK transfer articles were rewritten in February 2026 and the drafts rely on a summary of the new text.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch; the AWS part is covered by the AWS questions above.
-- *Sources:* Cloudflare draft v0.2, question 4; Post-media addendum v0.5, section 12 question 10.
+- *Sources:* Cloudflare draft v0.3, question 4; Post-media addendum v0.6, section 12 question 10.
 
-**Q22.** Nigeria: on what basis under NDPA sections 41 and 43 and Schedule 5 of the General Application and Implementation Directive may Nigerian users' data pass through Cloudflare?
+**Q21.** Nigeria: on what basis under NDPA sections 41 and 43 and Schedule 5 of the General Application and Implementation Directive may Nigerian users' data pass through Cloudflare?
 
 - *Why it matters:* No Nigerian regulator decision on Cloudflare was found.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 5.
+- *Sources:* Cloudflare draft v0.3, question 5.
 
-**Q23.** United States: do COPPA or any state law apply to an edge proxy that handles under-13 users' IP addresses and content?
+**Q22.** United States: do COPPA or any state law apply to an edge proxy that handles under-13 users' IP addresses and content?
 
 - *Why it matters:* The proxy would see every request from US under-13s.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 6.
+- *Sources:* Cloudflare draft v0.3, question 6.
 
-**Q24.** Does Cloudflare's data processing agreement bind a Free-plan account without an extra step, and how is acceptance recorded?
+**Q23.** Does Cloudflare's data processing agreement bind a Free-plan account without an extra step, and how is acceptance recorded?
 
 - *Why it matters:* The drafts could not confirm this from Cloudflare's documents.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 7.
+- *Sources:* Cloudflare draft v0.3, question 7.
 
-**Q25.** What is the retention of Cloudflare's customer logs on the free plan, who at Soccernity may see them, and is that acceptable?
+**Q24.** What is the retention of Cloudflare's customer logs on the free plan, who at Soccernity may see them, and is that acceptable?
 
 - *Why it matters:* No retention figure for the free plan was found.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 8.
-
-**Q26.** Which of the three Cloudflare options is acceptable (proxy everything, proxy only the static sites, or do not use Cloudflare), and must the admin hostname be left out?
-
-- *Why it matters:* The founder has deferred the proxy until after launch; the options are drafted for counsel to name the acceptable one.
-- *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch (Decision Log #518).
-- *Sources:* Cloudflare draft v0.2, question 9; Cloudflare draft v0.2, note at line 76; Cloudflare draft v0.2, note at line 323.
+- *Sources:* Cloudflare draft v0.3, question 8.
 
 ### Group 4 — Profiling of children through view data and points
 
-**Q27.** Is processing the view, impression and dwell data of children (the stores that rank Contest entries, balance finalist exposure and award points) permissible, on what lawful basis, and for under-13s?
+**Q25.** Is processing the view, impression and dwell data of children (the stores that rank Contest entries, balance finalist exposure and award points) permissible, on what lawful basis, and for under-13s?
 
 - *Why it matters:* These records are kept for a short time, and the daily caps and ranking rules are built.
 - *Label:* Needed before the documents are signed: the Policy table and the guardian screen describe this data.
-- *Sources:* Contest and view-data addendum v0.2, question 1; View-data Part C v0.2, note at line 49; Contest and view-data addendum v0.2, question 15.
+- *Sources:* Contest and view-data addendum v0.3, question 1; Contest and view-data addendum v0.3, question 15.
 
-**Q28.** Does the combination of view records, impression records, the points ledger and the leaderboard amount to profiling of children, and if so what follows (a separate assessment, a stricter basis, an opt-out)?
+**Q26.** Does the combination of view records, impression records, the points ledger and the leaderboard amount to profiling of children, and if so what follows (a separate assessment, a stricter basis, an opt-out)?
 
 - *Why it matters:* Points and ranks are public on a leaderboard that shows children by username.
 - *Label:* Needed before the documents are signed: the answer decides how the Policy describes the processing.
-- *Sources:* Contest and view-data addendum v0.2, question 2.
+- *Sources:* Contest and view-data addendum v0.3, question 2.
 
-**Q29.** Is the guardian's consent to use Soccernity enough for this processing, or does it need its own consent? For an under-13 US child whose guardian completed card verification, does that consent extend to it?
+**Q27.** Is the guardian's consent to use Soccernity enough for this processing, or does it need its own consent? For an under-13 US child whose guardian completed card verification, does that consent extend to it?
 
 - *Why it matters:* Today the consent screen does not mention view data; a change to it would also change the screen version.
 - *Label:* Needed before the documents are signed: it decides whether the consent screen and the stored evidence change.
-- *Sources:* Contest and view-data addendum v0.2, question 3; Contest and view-data addendum v0.2, question 5.
+- *Sources:* Contest and view-data addendum v0.3, question 3; Contest and view-data addendum v0.3, question 5.
 
-**Q30.** Do the reward mechanics (points, a public leaderboard with minors' usernames, daily caps of 40 given and 20 received) need a specific assessment, and is it acceptable that minors' usernames and points are public to every signed-in user?
+**Q28.** Do the reward mechanics (points, a public leaderboard with minors' usernames, daily caps of 40 given and 20 received) need a specific assessment, and is it acceptable that minors' usernames and points are public to every signed-in user?
 
 - *Why it matters:* The founder decided children appear on the leaderboard under their usernames (Decision Log #45); counsel has not been asked whether that is proportionate.
 - *Label:* Needed before the documents are signed: the Policy describes the leaderboard.
-- *Sources:* Contest and view-data addendum v0.2, question 12; Legal copy v0.17, Part C row 10.
+- *Sources:* Contest and view-data addendum v0.3, question 12; Legal copy v0.18, Part C row 10.
 
-**Q31.** Is 'no opt-out' consistent with data protection by design and default? Should viewing for points be off by default for children, and should unverified-email accounts be treated the same as verified ones?
+**Q29.** Is 'no opt-out' consistent with data protection by design and default? Should viewing for points be off by default for children, and should unverified-email accounts be treated the same as verified ones?
 
 - *Why it matters:* Viewing is how a child earns points; there is no way to turn it off.
 - *Label:* Can follow launch (default, founder may veto): a design question, not a text question.
-- *Sources:* Contest and view-data addendum v0.2, question 13.
+- *Sources:* Contest and view-data addendum v0.3, question 13.
 
-**Q32.** May the creator's received-points record carry the id of the viewer who earned it for them (`counterpartId`)? If not, what must be removed?
+**Q30.** May the creator's received-points record carry the id of the viewer who earned it for them (`counterpartId`)? If not, what must be removed?
 
 - *Why it matters:* It lets staff reconstruct who viewed whose post; the Policy says creators never see this.
 - *Label:* Needed before the documents are signed: the disclosure about who sees who viewed depends on it.
-- *Sources:* Contest and view-data addendum v0.2, question 8; Contest and view-data addendum v0.2, note at line 216.
+- *Sources:* Contest and view-data addendum v0.3, question 8.
 
-**Q33.** Does the admin view of exposure numbers (aggregates only) need an access-control or audit-logging rule?
+**Q31.** Does the admin view of exposure numbers (aggregates only) need an access-control or audit-logging rule?
 
 - *Why it matters:* Staff can see how many times a finalist was shown to viewers; nothing logs who looked.
 - *Label:* Can follow launch (default, founder may veto): no public text depends on it.
-- *Sources:* Contest and view-data addendum v0.2, question 14.
+- *Sources:* Contest and view-data addendum v0.3, question 14.
 
-**Q34.** Should the Contest have its own data protection impact assessment section or a separate one? Is the residual risk rating in the main assessment acceptable, and is prior consultation with the regulator (Article 36) needed?
+**Q32.** Should the Contest have its own data protection impact assessment section or a separate one? Is the residual risk rating in the main assessment acceptable, and is prior consultation with the regulator (Article 36) needed?
 
 - *Why it matters:* The main assessment has not been signed off and its sign-off block is empty.
 - *Label:* Needed before the documents are signed: the assessment cannot be signed without it.
-- *Sources:* Contest and view-data addendum v0.2, question 16; DPIA v0.9, section 5 item 13.
+- *Sources:* Contest and view-data addendum v0.3, question 16; DPIA v0.10, section 5 item 13.
 
-**Q35.** Is it acceptable for a profile picture, cover photo, bio and country to be visible to other users, including children seeing other children's profiles?
+**Q33.** Is it acceptable for a profile picture, cover photo, bio and country to be visible to other users, including children seeing other children's profiles?
 
 - *Why it matters:* These are now collected at profile creation and shown on public profile pages.
 - *Label:* Needed before the documents are signed: the Policy describes what other users can see.
-- *Sources:* Legal copy v0.17, Part C row 43.
+- *Sources:* Legal copy v0.18, Part C row 43.
 
 ### Group 5 — Erasure, anonymisation, age changes and retention
 
-**Q36.** When an account is anonymised, the posts, comments, messages and Contest and points records stay under '[deleted user]' or an anonymised id. Does that meet the right to erasure (Article 17 and the Nigerian equivalent), including the object-store file gap and the points and engagement rows that stay?
+**Q34.** When an account is anonymised, the posts, comments, messages and Contest and points records stay under '[deleted user]' or an anonymised id. Does that meet the right to erasure (Article 17 and the Nigerian equivalent), including the object-store file gap and the points and engagement rows that stay?
 
 - *Why it matters:* The founder chose anonymisation in place over deletion (Decision Log #341); some rows are kept and a deleted post's files can be left.
 - *Label:* Needed before the documents are signed: the Policy describes what stays after deletion.
-- *Sources:* DPIA v0.9, section 5 item 12; DPIA v0.9, section 5 item 21; Contest and view-data addendum v0.2, question 6; Contest and view-data addendum v0.2, note at line 241; Post-media addendum v0.5, section 12 question 16.
+- *Sources:* DPIA v0.10, section 5 item 12; DPIA v0.10, section 5 item 21; Contest and view-data addendum v0.3, question 6; Post-media addendum v0.6, section 12 question 16.
 
-**Q37.** After anonymisation, are the media check labels and decision fields linked to an anonymised id still personal data?
+**Q35.** After anonymisation, are the media check labels and decision fields linked to an anonymised id still personal data?
 
 - *Why it matters:* Labels and the moderator's id may be kept with the file record.
 - *Label:* Can follow launch (default, founder may veto): no public text depends on it.
-- *Sources:* Post-media addendum v0.5, section 12 question 17.
+- *Sources:* Post-media addendum v0.6, section 12 question 17.
 
-**Q38.** Who exercises a minor's data-subject rights, and how should a disagreement between the minor and the guardian be handled?
+**Q36.** Who exercises a minor's data-subject rights, and how should a disagreement between the minor and the guardian be handled?
 
 - *Why it matters:* The drafts say a guardian's request supersedes the child's wishes but do not cover older children.
 - *Label:* Needed before the documents are signed: the Policy section on rights.
-- *Sources:* Legal copy v0.17, Part C row 12.
+- *Sources:* Legal copy v0.18, Part C row 12.
 
-**Q39.** Consent record. Is keeping the consent audit trail for 6 months after anonymisation (and no guardian identity) sufficient under UK GDPR and the Nigerian act? Does the trail (screen version, device type, verification method) prove consent well enough, and what should a guardian be able to do to withdraw it?
+**Q37.** Consent record. Is keeping the consent audit trail for 6 months after anonymisation (and no guardian identity) sufficient under UK GDPR and the Nigerian act? Does the trail (screen version, device type, verification method) prove consent well enough, and what should a guardian be able to do to withdraw it?
 
 - *Why it matters:* The record is the only proof a guardian consented.
 - *Label:* Needed before the documents are signed: the Policy retention table and the consent screen depend on it.
-- *Sources:* Legal copy v0.17, Part C row 14; DPIA v0.9, section 5 item 16; Legal copy v0.17, Part C row 6; Legal copy v0.17, Part C row 17; DPIA v0.9, section 5 item 8.
+- *Sources:* Legal copy v0.18, Part C row 14; DPIA v0.10, section 5 item 16; Legal copy v0.18, Part C row 6; Legal copy v0.18, Part C row 17; DPIA v0.10, section 5 item 8.
 
-**Q40.** Age reclassification. The daily job re-classes accounts when a child passes 13, 16 or 18, so an account can be mis-classed for up to about 24 hours. Is that acceptable, and is reliance on a self-declared date of birth acceptable? Is it acceptable that a correction to a younger age re-applies restrictions with no notice?
+**Q38.** Age reclassification. The daily job re-classes accounts when a child passes 13, 16 or 18, so an account can be mis-classed for up to about 24 hours. Is that acceptable, and is reliance on a self-declared date of birth acceptable? Is it acceptable that a correction to a younger age re-applies restrictions with no notice?
 
 - *Why it matters:* The rules that restrict children depend on the date of birth.
 - *Label:* Needed before the documents are signed: the Terms and Policy describe the window.
-- *Sources:* Legal copy v0.17, Part C row 24.
+- *Sources:* Legal copy v0.18, Part C row 24.
 
-**Q41.** Guardian authority at 18: the approved wording says a guardian's request to delete a minor's account supersedes the minor's wishes, but says nothing about accounts that have since turned 18. How long should the age-reclassification log be kept, and should the guardian's details be reduced after 18? Is the email to the guardian when a young person turns 18 appropriate?
+**Q39.** Guardian authority at 18: the approved wording says a guardian's request to delete a minor's account supersedes the minor's wishes, but says nothing about accounts that have since turned 18. How long should the age-reclassification log be kept, and should the guardian's details be reduced after 18? Is the email to the guardian when a young person turns 18 appropriate?
 
 - *Why it matters:* Counsel approved the first sentence in an earlier draft; the age-18 case is an open edge.
 - *Label:* Needed before the documents are signed: the Terms section on deletion and the Policy on retention depend on it.
-- *Sources:* Legal copy v0.17, Part C row 26; DPIA v0.9, section 5 item 20.
+- *Sources:* Legal copy v0.18, Part C row 26; DPIA v0.10, section 5 item 20.
 
-**Q42.** Investigation hold: an account involved in an open report is held without any maximum, and for a period after the report closes. Is an open-ended hold acceptable, and is the purge rule (anonymised rows of never-approved minors and no-content accounts removed after 30 days) and the length of the appeal window acceptable?
+**Q40.** Investigation hold: an account involved in an open report is held without any maximum, and for a period after the report closes. Is an open-ended hold acceptable, and is the purge rule (anonymised rows of never-approved minors and no-content accounts removed after 30 days) and the length of the appeal window acceptable?
 
 - *Why it matters:* Neither the 6-month post-closure period nor the 30-day appeal window is a counsel figure.
 - *Label:* Needed before the documents are signed: the Terms and Policy state the periods.
-- *Sources:* Legal copy v0.17, Part C row 23; Legal copy v0.17, Part C row 40.
+- *Sources:* Legal copy v0.18, Part C row 23; Legal copy v0.18, Part C row 40.
 
-**Q43.** When bad faith is found against a reporter, or a legal hold is in place, the reporter's data is held in full so records exist if the reported person takes legal action. Is that lawful and proportionate, and is the narrow wording right?
+**Q41.** When bad faith is found against a reporter, or a legal hold is in place, the reporter's data is held in full so records exist if the reported person takes legal action. Is that lawful and proportionate, and is the narrow wording right?
 
 - *Why it matters:* It is the only place where a reporter's data is kept beyond normal rules.
 - *Label:* Needed before the documents are signed: the Terms and Policy contain the sentence.
-- *Sources:* Legal copy v0.17, Part C row 39.
+- *Sources:* Legal copy v0.18, Part C row 39.
 
-**Q44.** Report retention. Counsel approved '6 to 7 years'; the system keeps a closed report 6 years, and 7 if it concerns a child. Does that split fit a later inquiry or statutory report, and is a report that was dismissed or found to be made in bad faith inside the approved range?
+**Q42.** Report retention. Counsel approved '6 to 7 years'; the system keeps a closed report 6 years, and 7 if it concerns a child. Does that split fit a later inquiry or statutory report, and is a report that was dismissed or found to be made in bad faith inside the approved range?
 
 - *Why it matters:* The range is recorded as counsel's; the exact split and the dismissed case were chosen by the founder.
 - *Label:* Needed before the documents are signed: the Policy retention table states the range.
-- *Sources:* DPIA v0.9, section 5 item 39; DPIA v0.9, section 5 item 42; Incident plan v0.7, question 21.
+- *Sources:* DPIA v0.10, section 5 item 39; DPIA v0.10, section 5 item 42; Incident plan v0.8, question 21.
 
-**Q45.** Media retention: what is defensible for a rejected file, an upload never attached to a post, the check labels and reason, and the moderator's id; and may the Policy describe each of the retention options?
+**Q43.** Media retention: what is defensible for a rejected file, an upload never attached to a post, the check labels and reason, and the moderator's id; and may the Policy describe each of the retention options?
 
 - *Why it matters:* Rejected and unattached files are deleted on every path unless protected; the labels have no stated period.
 - *Label:* Needed before the documents are signed: the Policy retention table needs a figure or a statement for each.
-- *Sources:* Post-media addendum v0.5, section 12 question 14; Post-media Part C v0.2, question 8; Post-media Part C v0.2, note at line 148.
+- *Sources:* Post-media addendum v0.6, section 12 question 14; Post-media Part C v0.3, question 8.
 
-**Q46.** View-data retention. What period is defensible for the view records and the exposure records, for the aggregate rows, and for the backup copies; is a separate purge job a required control; and is the proposed retention-table row adequate while those periods are not set?
+**Q44.** View-data retention. What period is defensible for the view records and the exposure records, for the aggregate rows, and for the backup copies; is a separate purge job a required control; and is the proposed retention-table row adequate while those periods are not set?
 
 - *Why it matters:* The periods are not set and the backup horizon of the host is not confirmed.
 - *Label:* Needed before the documents are signed: the Policy table has an open row until the periods are set.
-- *Sources:* Contest and view-data addendum v0.2, question 7; Contest and view-data addendum v0.2, question 9; Contest and view-data addendum v0.2, question 10; Contest and view-data addendum v0.2, note at line 341; View-data Part C v0.2, note at line 85; View-data Part C v0.2, question 5.
+- *Sources:* Contest and view-data addendum v0.3, question 7; Contest and view-data addendum v0.3, question 9; Contest and view-data addendum v0.3, question 10; View-data Part C v0.3, question 5.
 
 ### Group 6 — Breach notification
 
-**Q47.** When two regimes apply to the same breach, is one filing with merged contents acceptable, or must each regulator get its own?
+**Q45.** When two regimes apply to the same breach, is one filing with merged contents acceptable, or must each regulator get its own?
 
 - *Why it matters:* The plan has one template and does not say.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document, not public text.
-- *Sources:* Incident plan v0.7, question 2.
+- *Sources:* Incident plan v0.8, question 2.
 
-**Q48.** What makes Soccernity 'aware' for the 72-hour clock in each regime?
+**Q46.** What makes Soccernity 'aware' for the 72-hour clock in each regime?
 
 - *Why it matters:* The wording of 'aware' differs and the plan uses the founder's reading.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 3.
+- *Sources:* Incident plan v0.8, question 3.
 
-**Q49.** Is a leaked database copy without its encryption key a notifiable breach, and what may the Policy say about encryption at rest, given that private messages are not end-to-end encrypted?
+**Q47.** Is a leaked database copy without its encryption key a notifiable breach, and what may the Policy say about encryption at rest, given that private messages are not end-to-end encrypted?
 
 - *Why it matters:* The Policy and the plan both make commitments about encryption that depend on the answer.
 - *Label:* Needed before the documents are signed: the Policy contains an encryption statement.
-- *Sources:* Incident plan v0.7, question 4; DPIA v0.9, section 5 item 32; Legal copy v0.17, Part C row 11; Legal copy v0.17, Part C row 21.
+- *Sources:* Incident plan v0.8, question 4; DPIA v0.10, section 5 item 32; Legal copy v0.18, Part C row 11; Legal copy v0.18, Part C row 21.
 
-**Q50.** Must a guardian be told when a child's data is breached, as a separate recipient, and is the child also told (under 13, under 16)? Must the Policy say so?
+**Q48.** Must a guardian be told when a child's data is breached, as a separate recipient, and is the child also told (under 13, under 16)? Must the Policy say so?
 
 - *Why it matters:* The plan has a draft guardian notice; the Policy promises guardian notification in general terms.
 - *Label:* Needed before the documents are signed: the Policy contains a promise that depends on the answer.
-- *Sources:* Incident plan v0.7, question 5; Incident plan v0.7, question 6.
+- *Sources:* Incident plan v0.8, question 5; Incident plan v0.8, question 6.
 
-**Q51.** The live Policy contains no breach-notification text beyond one sentence. Does that omission create a risk that counsel should fix?
+**Q49.** The live Policy contains no breach-notification text beyond one sentence. Does that omission create a risk that counsel should fix?
 
 - *Why it matters:* The plan describes obligations the Policy does not mention.
 - *Label:* Needed before the documents are signed: the Policy text depends on it.
-- *Sources:* Incident plan v0.7, question 7.
+- *Sources:* Incident plan v0.8, question 7.
 
-**Q52.** How long should incident records, evidence copies and the breach register be kept, compared with the retention the Policy states?
+**Q50.** How long should incident records, evidence copies and the breach register be kept, compared with the retention the Policy states?
 
 - *Why it matters:* A breach register must be kept; the Policy states shorter periods for related data.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 8.
+- *Sources:* Incident plan v0.8, question 8.
 
-**Q53.** Who else must be told in a serious incident (police, insurers, a processor's regulator), and is a second named responder required at launch rather than one person?
+**Q51.** Who else must be told in a serious incident (police, insurers, a processor's regulator), and is a second named responder required at launch rather than one person?
 
 - *Why it matters:* The plan names roles as placeholders only; one person leads.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 11; Incident plan v0.7, question 12.
+- *Sources:* Incident plan v0.8, question 11; Incident plan v0.8, question 12.
 
-**Q54.** Nigeria: does the NDPA require Soccernity to register as a data controller 'of major importance'?
+**Q52.** Nigeria: does the NDPA require Soccernity to register as a data controller 'of major importance'?
 
 - *Why it matters:* It decides whether a registration filing is a launch duty.
 - *Label:* Needed before the documents are signed: a filing duty, if it exists, applies at launch.
-- *Sources:* Incident plan v0.7, question 13.
+- *Sources:* Incident plan v0.8, question 13.
 
-**Q55.** Is a separate safeguarding-incident plan (a child at risk, not a data breach) needed, and who should write it?
+**Q53.** Is a separate safeguarding-incident plan (a child at risk, not a data breach) needed, and who should write it?
 
 - *Why it matters:* The plan covers breaches and treats safeguarding incidents only briefly.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 14.
+- *Sources:* Incident plan v0.8, question 14.
 
-**Q56.** How should the breach assessment be routed so that it is privileged in each country?
+**Q54.** How should the breach assessment be routed so that it is privileged in each country?
 
 - *Why it matters:* The plan lets the founder assess first; counsel may want a different route.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 16.
+- *Sources:* Incident plan v0.8, question 16.
 
-**Q57.** Cloudflare's own breach notice to a customer has no hour limit ('without undue delay'). How does that fit the 72-hour clocks?
+**Q55.** Cloudflare's own breach notice to a customer has no hour limit ('without undue delay'). How does that fit the 72-hour clocks?
 
 - *Why it matters:* If the proxy is added, Soccernity may learn of an incident late.
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
-- *Sources:* Cloudflare draft v0.2, question 11.
+- *Sources:* Cloudflare draft v0.3, question 11.
 
-**Q58.** United States: which state breach laws apply to a service with US users, and do any apply to a date of birth plus email plus name combination? Is Soccernity 'directed to children' or does it have actual knowledge of under-13 US users, does COPPA itself impose a breach duty, and does the FTC expect a notice? Does the Health Breach Notification Rule or the FTC Act matter, and what is the position on card data (only a Stripe reference is held, PCI-DSS status)?
+**Q56.** United States: which state breach laws apply to a service with US users, and do any apply to a date of birth plus email plus name combination? Is Soccernity 'directed to children' or does it have actual knowledge of under-13 US users, does COPPA itself impose a breach duty, and does the FTC expect a notice? Does the Health Breach Notification Rule or the FTC Act matter, and what is the position on card data (only a Stripe reference is held, PCI-DSS status)?
 
 - *Why it matters:* Decision Log #4 settles that the US is in scope, not these questions.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document and no public text depends on it.
-- *Sources:* Incident plan v0.7, question -US1; Incident plan v0.7, question -US2; Incident plan v0.7, question -US3; Incident plan v0.7, question -US4.
+- *Sources:* Incident plan v0.8, question -US1; Incident plan v0.8, question -US2; Incident plan v0.8, question -US3; Incident plan v0.8, question -US4.
 
-**Q59.** European Union: if EU users are targeted or monitored, which supervisory authority is notified when there is no EU establishment? Does EU-region hosting alone create a duty for UK and Nigerian users' data? Are the 72-hour and high-risk tests the same for a child's data, and do member states add anything (such as a notice to the holder of parental responsibility)?
+**Q57.** European Union: if EU users are targeted or monitored, which supervisory authority is notified when there is no EU establishment? Does EU-region hosting alone create a duty for UK and Nigerian users' data? Are the 72-hour and high-risk tests the same for a child's data, and do member states add anything (such as a notice to the holder of parental responsibility)?
 
 - *Why it matters:* Decision Log #4 settles that there is no EU representative, not these questions.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document and no public text depends on it.
-- *Sources:* Incident plan v0.7, question -EU1; Incident plan v0.7, question -EU2; Incident plan v0.7, question -EU3; Incident plan v0.7, question -EU4.
+- *Sources:* Incident plan v0.8, question -EU1; Incident plan v0.8, question -EU2; Incident plan v0.8, question -EU3; Incident plan v0.8, question -EU4.
 
 ### Group 7 — Legal facts the drafts recall from memory
 
-**Q60.** The drafts quote Article 8 (age of digital consent) and the member-state age table from memory. Please confirm the age that applies in each country Soccernity serves, and whether it depends on the lawful basis.
+**Q58.** The drafts quote Article 8 (age of digital consent) and the member-state age table from memory. Please confirm the age that applies in each country Soccernity serves, and whether it depends on the lawful basis.
 
 - *Why it matters:* The age gate and the guardian rules are built on these ages.
 - *Label:* Needed before the documents are signed: the Terms and Policy state ages.
-- *Sources:* DPIA v0.9, section 5 item 23.
+- *Sources:* DPIA v0.10, section 5 item 23.
 
-**Q61.** Every legal proposition in sections 2.5 and 2.6 of the assessment (COPPA and the 2025 amendments, state laws, UK and Nigerian rules) was written from general knowledge, not retrieved text. Please confirm or correct each.
+**Q59.** Every legal proposition in sections 2.5 and 2.6 of the assessment (COPPA and the 2025 amendments, state laws, UK and Nigerian rules) was written from general knowledge, not retrieved text. Please confirm or correct each.
 
 - *Why it matters:* The assessment is the basis of the guardian-consent and card-verification design.
 - *Label:* Needed before the documents are signed: the assessment cannot be signed with unverified legal statements.
-- *Sources:* DPIA v0.9, section 5 item 28.
+- *Sources:* DPIA v0.10, section 5 item 28.
 
-**Q62.** The breach plan states UK and Nigerian breach-notification facts without a reading of the official text: the ICO's own pages could not be read, the UK text now names 'the Commission' in places, and the NDPA and GAID were not read in full. Please confirm each statement.
+**Q60.** The breach plan states UK and Nigerian breach-notification facts without a reading of the official text: the ICO's own pages could not be read, the UK text now names 'the Commission' in places, and the NDPA and GAID were not read in full. Please confirm each statement.
 
 - *Why it matters:* The clocks and contents in the plan rest on these statements.
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
-- *Sources:* Incident plan v0.7, question 3; Incident plan v0.7, question 2.
+- *Sources:* Incident plan v0.8, question 3; Incident plan v0.8, question 2.
 
 ### Group 8 — Notices and wording that change when processing changes
 
-**Q63.** May the guardian consent screen stay as it is when data about viewing, the automated file check and the proxy (if added) are added, or must it change (and the consent screen version with it)? Must guardians who already consented be told?
+**Q61.** May the guardian consent screen stay as it is when data about viewing, the automated file check and the proxy (if added) are added, or must it change (and the consent screen version with it)? Must guardians who already consented be told?
 
 - *Why it matters:* A change to the consent screen changes the stored evidence and may need guardians to be told again.
 - *Label:* Needed before the documents are signed: it decides the final text of the consent screen.
-- *Sources:* Post-media Part C v0.2, question 6; Post-media Part C v0.2, note at line 206; View-data Part C v0.2, question 3; View-data Part C v0.2, note at line 110; Cloudflare draft v0.2, question 2; Legal copy v0.17, Part C row 32.
+- *Sources:* Post-media Part C v0.3, question 6; View-data Part C v0.3, question 3; Cloudflare draft v0.3, question 2; Legal copy v0.18, Part C row 32.
 
-**Q64.** Is there a notice duty to the person who uploads about the automated check and the human review, and must the guardian be told? At what level for a child?
+**Q62.** Is there a notice duty to the person who uploads about the automated check and the human review, and must the guardian be told? At what level for a child?
 
 - *Why it matters:* Today the uploader sees only a generic rejection; the Policy does not describe the automated check.
 - *Label:* Needed before the documents are signed: the Policy and the upload screen contain the wording.
-- *Sources:* Post-media addendum v0.5, section 12 question 18.
+- *Sources:* Post-media addendum v0.6, section 12 question 18; Post-media Part C v0.3, note at line 214 (notice options N-1 to N-5).
 
-**Q65.** Is there a viewer-facing transparency duty for view and dwell data, at what age-appropriate level, and may the in-product text be short and linked to the Policy? Must the child-register wording be shown to every under-18 or only to younger children?
+**Q63.** Is there a viewer-facing transparency duty for view and dwell data, at what age-appropriate level, and may the in-product text be short and linked to the Policy? Must the child-register wording be shown to every under-18 or only to younger children?
 
 - *Why it matters:* No such notice exists in the app today.
 - *Label:* Needed before the documents are signed: it decides whether a notice and wording are added.
-- *Sources:* Contest and view-data addendum v0.2, question 11; View-data Part C v0.2, question 1; View-data Part C v0.2, question 2.
+- *Sources:* Contest and view-data addendum v0.3, question 11; View-data Part C v0.3, question 1; View-data Part C v0.3, question 2.
 
-**Q66.** May the Policy say 'Contest creators never see who viewed' and 'we do not record how long a viewer looked'? Is describing the 120-second Redis record as 'not stored' accurate?
+**Q64.** May the Policy say 'Contest creators never see who viewed' and 'we do not record how long a viewer looked'? Is describing the 120-second Redis record as 'not stored' accurate?
 
 - *Why it matters:* These sentences are in the draft and each depends on a fact about how the records work.
 - *Label:* Needed before the documents are signed: the sentences are in the Policy.
-- *Sources:* View-data Part C v0.2, question 4; Contest and view-data addendum v0.2, question 4.
+- *Sources:* View-data Part C v0.3, question 4; Contest and view-data addendum v0.3, question 4.
 
-**Q67.** What may the Policy say about automatic approval of a file (no person looks at it), that audio is not checked and that video sampling may miss short content, and which of the review models may it describe?
+**Q65.** What may the Policy say about automatic approval of a file (no person looks at it), that audio is not checked and that video sampling may miss short content, and which of the review models may it describe?
 
 - *Why it matters:* These facts are true of the built system; the Policy wording is a draft.
 - *Label:* Needed before the documents are signed: the Policy states how files are reviewed.
-- *Sources:* Post-media Part C v0.2, question 1; Post-media Part C v0.2, question 4; Post-media Part C v0.2, note at line 55; Post-media Part C v0.2, note at line 97; Post-media Part C v0.2, note at line 118; Post-media Part C v0.2, note at line 226.
+- *Sources:* Post-media Part C v0.3, question 1; Post-media Part C v0.3, question 4.
 
-**Q68.** Must the Policy name Amazon Web Services and Cloudflare, give the region of each, and disclose the AWS opt-out?
+**Q66.** Must the Policy name Amazon Web Services and Cloudflare, give the region of each, and disclose the AWS opt-out?
 
 - *Why it matters:* The check sends a child's file to AWS; the proxy is deferred.
 - *Label:* Needed before the documents are signed: the Policy section on processors.
-- *Sources:* Post-media Part C v0.2, question 3.
+- *Sources:* Post-media Part C v0.3, question 3.
 
-**Q69.** Is the plain wording shown to a person whose file was removed (a generic reason and no detail) adequate, and should it say more for a child or a guardian?
+**Q67.** Is the plain wording shown to a person whose file was removed (a generic reason and no detail) adequate, and should it say more for a child or a guardian?
 
 - *Why it matters:* It is the only message the uploader or a guardian receives about a rejected file.
 - *Label:* Needed before the documents are signed: the wording is shown on the upload screen.
-- *Sources:* Legal copy v0.17, open item 3.
+- *Sources:* Legal copy v0.18, open item 3.
 
-**Q70.** Is 'IP address processed transiently at registration (never stored, no third party)' accurate and sufficient disclosure, and does the proxy (if added) make it untrue?
+**Q68.** Is 'IP address processed transiently at registration (never stored, no third party)' accurate and sufficient disclosure, and does the proxy (if added) make it untrue?
 
 - *Why it matters:* The Policy says the registration IP is never stored and that no third party receives it; a proxy would see it.
 - *Label:* Needed before the documents are signed: the Policy contains the sentence.
-- *Sources:* Legal copy v0.17, Part C row 38; Cloudflare draft v0.2, question 10.
+- *Sources:* Legal copy v0.18, Part C row 38; Cloudflare draft v0.3, question 10.
 
-**Q71.** The direct-message restriction between an adult and a child is hidden by returning the same 'not found' answer, but a rarely measurable timing difference and the under-16 case remain. Is that limitation acceptable and how should the Policy describe it?
-
-- *Why it matters:* The founder decided against a fixed delay (Decision Log #350); the residual is disclosed, not closed.
-- *Label:* Can follow launch (default, founder may veto): the residual is stated; no document text depends on the answer.
-- *Sources:* Legal copy v0.17, Part C row 18.
-
-**Q72.** The approved restricted-pending wording ('messaged by or send messages to unverified accounts') is looser than what the code does (it blocks sending and hides the account as a recipient). Should it be tightened?
+**Q69.** The approved restricted-pending wording ('messaged by or send messages to unverified accounts') is looser than what the code does (it blocks sending and hides the account as a recipient). Should it be tightened?
 
 - *Why it matters:* Counsel approved the looser wording earlier; the code is stricter.
 - *Label:* Needed before the documents are signed: it is in the Terms.
-- *Sources:* Legal copy v0.17, Part C row 27.
+- *Sources:* Legal copy v0.18, Part C row 27.
 
-**Q73.** Guardian-facing disclosures: the guardian-email change (the restart of the consent request, the notice to the old address), authenticator-app two-factor (what is stored), the email to the minor on approval, and the request summary the consent page shows to a token holder (name and date of birth). Are the disclosures adequate?
+**Q70.** Guardian-facing disclosures: the guardian-email change (the restart of the consent request, the notice to the old address), authenticator-app two-factor (what is stored), the email to the minor on approval, and the request summary the consent page shows to a token holder (name and date of birth). Are the disclosures adequate? In particular, is it proportionate to show a minor's full date of birth to whoever holds the single-use guardian link?
 
 - *Why it matters:* Each is built and each shows a guardian or a child something new.
 - *Label:* Needed before the documents are signed: the Policy and consent text describe these.
-- *Sources:* Legal copy v0.17, Part C row 34; Legal copy v0.17, Part C row 44.
+- *Sources:* Legal copy v0.18, Part C row 22; Legal copy v0.18, Part C row 34; Legal copy v0.18, Part C row 44.
 
-**Q74.** A public (logged-out) report page now exists (`/report`) but the Terms (section 7.4) do not describe it. Is that intended or should the Terms mention it?
-
-- *Why it matters:* A report from a person without an account is a new route to the moderators.
-- *Label:* Needed before the documents are signed: it is in the Terms.
-- *Sources:* Legal copy v0.17, Part C row 35.
-
-**Q75.** Suspension and appeals: is the wording right (an email at once with a short reason from a fixed list and how to appeal; no stated duration; an appeal period of 30 days by default; points are revoked and not restored; guardians 'normally' told)?
+**Q71.** Suspension and appeals: is the wording right (an email at once with a short reason from a fixed list and how to appeal; no stated duration; an appeal period of 30 days by default; points are revoked and not restored; guardians 'normally' told)?
 
 - *Why it matters:* Several things are deliberately not stated; counsel may want some of them said.
 - *Label:* Needed before the documents are signed: the Terms and Policy contain the sentences.
-- *Sources:* Legal copy v0.17, Part C row 53.
+- *Sources:* Legal copy v0.18, Part C row 53.
 
 ### Question-to-source table
 
-Every open item from the six drafts that is marked A (open for counsel) maps to at least one question below. Together the questions cite 149 source items; 141 distinct items are cited (an item can feed more than one question).
+Every open item from the eight drafts that is marked A (open for counsel) maps to at least one question below. Items are cited by their document code and number (see section 2).
 
 | Question | Group | Source items |
 |---|---|---|
 | Q1 | 1 | PA s7 Q1; PC Q7; LC marker 10; LC row 37; DP item 50 |
 | Q2 | 1 | PA s7 Q1; PA s7 Q7 |
-| Q3 | 1 | PA s7 Q3; IP Q11; IP Q22; LC row 37 |
-| Q4 | 1 | PA s7 Q4; LC open 2; PC line 162 |
-| Q5 | 1 | PA s7 Q5 |
+| Q3 | 1 | PA s7 Q3; IP Q11; IP Q22; LC row 37; PC note 182 |
+| Q4 | 1 | PA s7 Q4; LC open 2 |
+| Q5 | 1 | PA s7 Q5 (part 5a) |
 | Q6 | 1 | IP Q22; PA s12 Q21; LC row 50; DP item 34 |
 | Q7 | 1 | PA s12 Q25; LC row 50; DP item 34 |
 | Q8 | 2 | PA s12 Q2 |
@@ -527,69 +502,147 @@ Every open item from the six drafts that is marked A (open for counsel) maps to 
 | Q10 | 2 | PA s12 Q4 |
 | Q11 | 2 | PA s12 Q5 |
 | Q12 | 2 | PA s12 Q6 |
-| Q13 | 2 | PC Q5; PC line 174 |
-| Q14 | 2 | PA s12 Q19 |
-| Q15 | 3 | LC row 9; LC row 20; DP item 3 |
-| Q16 | 3 | IP Q17 |
-| Q17 | 3 | PA s12 Q7; PC line 134 |
-| Q18 | 3 | PA s12 Q9 |
-| Q19 | 3 | CF Q1 |
-| Q20 | 3 | CF Q3 |
-| Q21 | 3 | CF Q4; PA s12 Q10 |
-| Q22 | 3 | CF Q5 |
-| Q23 | 3 | CF Q6 |
-| Q24 | 3 | CF Q7 |
-| Q25 | 3 | CF Q8 |
-| Q26 | 3 | CF Q9; CF line 76; CF line 323 |
-| Q27 | 4 | CA Q1; VC line 49; CA Q15 |
-| Q28 | 4 | CA Q2 |
-| Q29 | 4 | CA Q3; CA Q5 |
-| Q30 | 4 | CA Q12; LC row 10 |
-| Q31 | 4 | CA Q13 |
-| Q32 | 4 | CA Q8; CA line 216 |
-| Q33 | 4 | CA Q14 |
-| Q34 | 4 | CA Q16; DP item 13 |
-| Q35 | 4 | LC row 43 |
-| Q36 | 5 | DP item 12; DP item 21; CA Q6; CA line 241; PA s12 Q16 |
-| Q37 | 5 | PA s12 Q17 |
-| Q38 | 5 | LC row 12 |
-| Q39 | 5 | LC row 14; DP item 16; LC row 6; LC row 17; DP item 8 |
-| Q40 | 5 | LC row 24 |
-| Q41 | 5 | LC row 26; DP item 20 |
-| Q42 | 5 | LC row 23; LC row 40 |
-| Q43 | 5 | LC row 39 |
-| Q44 | 5 | DP item 39; DP item 42; IP Q21 |
-| Q45 | 5 | PA s12 Q14; PC Q8; PC line 148 |
-| Q46 | 5 | CA Q7; CA Q9; CA Q10; CA line 341; VC line 85; VC Q5 |
-| Q47 | 6 | IP Q2 |
-| Q48 | 6 | IP Q3 |
-| Q49 | 6 | IP Q4; DP item 32; LC row 11; LC row 21 |
-| Q50 | 6 | IP Q5; IP Q6 |
-| Q51 | 6 | IP Q7 |
-| Q52 | 6 | IP Q8 |
-| Q53 | 6 | IP Q11; IP Q12 |
-| Q54 | 6 | IP Q13 |
-| Q55 | 6 | IP Q14 |
-| Q56 | 6 | IP Q16 |
-| Q57 | 6 | CF Q11 |
-| Q58 | 6 | IP Q-US1; IP Q-US2; IP Q-US3; IP Q-US4 |
-| Q59 | 6 | IP Q-EU1; IP Q-EU2; IP Q-EU3; IP Q-EU4 |
-| Q60 | 7 | DP item 23 |
-| Q61 | 7 | DP item 28 |
-| Q62 | 7 | IP Q3; IP Q2 |
-| Q63 | 8 | PC Q6; PC line 206; VC Q3; VC line 110; CF Q2; LC row 32 |
-| Q64 | 8 | PA s12 Q18 |
-| Q65 | 8 | CA Q11; VC Q1; VC Q2 |
-| Q66 | 8 | VC Q4; CA Q4 |
-| Q67 | 8 | PC Q1; PC Q4; PC line 55; PC line 97; PC line 118; PC line 226 |
-| Q68 | 8 | PC Q3 |
-| Q69 | 8 | LC open 3 |
-| Q70 | 8 | LC row 38; CF Q10 |
-| Q71 | 8 | LC row 18 |
-| Q72 | 8 | LC row 27 |
-| Q73 | 8 | LC row 34; LC row 44 |
-| Q74 | 8 | LC row 35 |
-| Q75 | 8 | LC row 53 |
+| Q13 | 2 | PC Q5 |
+| Q14 | 3 | LC row 9; LC row 20; DP item 3 |
+| Q15 | 3 | IP Q17 |
+| Q16 | 3 | PA s12 Q7; PC note 142 |
+| Q17 | 3 | PA s12 Q9 |
+| Q18 | 3 | CF Q1 |
+| Q19 | 3 | CF Q3 |
+| Q20 | 3 | CF Q4; PA s12 Q10 |
+| Q21 | 3 | CF Q5 |
+| Q22 | 3 | CF Q6 |
+| Q23 | 3 | CF Q7 |
+| Q24 | 3 | CF Q8 |
+| Q25 | 4 | CA Q1; VC line 49; CA Q15 |
+| Q26 | 4 | CA Q2 |
+| Q27 | 4 | CA Q3; CA Q5 |
+| Q28 | 4 | CA Q12; LC row 10 |
+| Q29 | 4 | CA Q13 |
+| Q30 | 4 | CA Q8; CA line 216 |
+| Q31 | 4 | CA Q14 |
+| Q32 | 4 | CA Q16; DP item 13 |
+| Q33 | 4 | LC row 43 |
+| Q34 | 5 | DP item 12; DP item 21; CA Q6; CA line 241; PA s12 Q16 |
+| Q35 | 5 | PA s12 Q17 |
+| Q36 | 5 | LC row 12 |
+| Q37 | 5 | LC row 14; DP item 16; LC row 6; LC row 17; DP item 8 |
+| Q38 | 5 | LC row 24 |
+| Q39 | 5 | LC row 26; DP item 20 |
+| Q40 | 5 | LC row 23; LC row 40 |
+| Q41 | 5 | LC row 39 |
+| Q42 | 5 | DP item 39; DP item 42; IP Q21 |
+| Q43 | 5 | PA s12 Q14; PC Q8 |
+| Q44 | 5 | CA Q7; CA Q9; CA Q10; CA line 341; VC line 85; VC Q5 |
+| Q45 | 6 | IP Q2 |
+| Q46 | 6 | IP Q3 |
+| Q47 | 6 | IP Q4; DP item 32; LC row 11; LC row 21 |
+| Q48 | 6 | IP Q5; IP Q6 |
+| Q49 | 6 | IP Q7 |
+| Q50 | 6 | IP Q8 |
+| Q51 | 6 | IP Q11; IP Q12 |
+| Q52 | 6 | IP Q13 |
+| Q53 | 6 | IP Q14 |
+| Q54 | 6 | IP Q16 |
+| Q55 | 6 | CF Q11 |
+| Q56 | 6 | IP Q-US1; IP Q-US2; IP Q-US3; IP Q-US4 |
+| Q57 | 6 | IP Q-EU1; IP Q-EU2; IP Q-EU3; IP Q-EU4 |
+| Q58 | 7 | DP item 23 |
+| Q59 | 7 | DP item 28 |
+| Q60 | 7 | IP Q3; IP Q2 |
+| Q61 | 8 | PC Q6; VC Q3; VC line 110; CF Q2; LC row 32 |
+| Q62 | 8 | PA s12 Q18; PC note 214 |
+| Q63 | 8 | CA Q11; VC Q1; VC Q2 |
+| Q64 | 8 | VC Q4; CA Q4 |
+| Q65 | 8 | PC Q1; PC Q4 |
+| Q66 | 8 | PC Q3 |
+| Q67 | 8 | LC open 3 |
+| Q68 | 8 | LC row 38; CF Q10 |
+| Q69 | 8 | LC row 27 |
+| Q70 | 8 | LC row 22; LC row 34; LC row 44 |
+| Q71 | 8 | LC row 53 |
+
+### v1.0 to v1.1 question map
+
+For counsel who has seen v1.0 of this pack.
+
+| v1.0 | v1.1 | Note |
+|---|---|---|
+| Q1 | Q1 |  |
+| Q2 | Q2 |  |
+| Q3 | Q3 |  |
+| Q4 | Q4 | no longer asks about the 365-day period in public text (#534) |
+| Q5 | Q5 | narrowed to part 5a only (staff protection and welfare are the founder HR duty, #533, #534) |
+| Q6 | Q6 |  |
+| Q7 | Q7 |  |
+| Q8 | Q8 |  |
+| Q9 | Q9 |  |
+| Q10 | Q10 |  |
+| Q11 | Q11 |  |
+| Q12 | Q12 |  |
+| Q13 | Q13 |  |
+| Q14 | removed | its source (post-media addendum s12 Q19) is now decided by the founder (B) |
+| Q15 | Q14 |  |
+| Q16 | Q15 |  |
+| Q17 | Q16 |  |
+| Q18 | Q17 |  |
+| Q19 | Q18 |  |
+| Q20 | Q19 |  |
+| Q21 | Q20 |  |
+| Q22 | Q21 |  |
+| Q23 | Q22 |  |
+| Q24 | Q23 |  |
+| Q25 | Q24 |  |
+| Q26 | removed | its source (Cloudflare Q9, which option) is now B (#449, #518) for scope; the remaining acceptability question stays in Q19 to Q25 |
+| Q27 | Q25 |  |
+| Q28 | Q26 |  |
+| Q29 | Q27 |  |
+| Q30 | Q28 |  |
+| Q31 | Q29 |  |
+| Q32 | Q30 |  |
+| Q33 | Q31 |  |
+| Q34 | Q32 |  |
+| Q35 | Q33 |  |
+| Q36 | Q34 |  |
+| Q37 | Q35 |  |
+| Q38 | Q36 |  |
+| Q39 | Q37 |  |
+| Q40 | Q38 |  |
+| Q41 | Q39 |  |
+| Q42 | Q40 |  |
+| Q43 | Q41 |  |
+| Q44 | Q42 |  |
+| Q45 | Q43 |  |
+| Q46 | Q44 |  |
+| Q47 | Q45 |  |
+| Q48 | Q46 |  |
+| Q49 | Q47 |  |
+| Q50 | Q48 |  |
+| Q51 | Q49 |  |
+| Q52 | Q50 |  |
+| Q53 | Q51 |  |
+| Q54 | Q52 |  |
+| Q55 | Q53 |  |
+| Q56 | Q54 |  |
+| Q57 | Q55 |  |
+| Q58 | Q56 |  |
+| Q59 | Q57 |  |
+| Q60 | Q58 |  |
+| Q61 | Q59 |  |
+| Q62 | Q60 |  |
+| Q63 | Q61 |  |
+| Q64 | Q62 |  |
+| Q65 | Q63 |  |
+| Q66 | Q64 |  |
+| Q67 | Q65 |  |
+| Q68 | Q66 |  |
+| Q69 | Q67 |  |
+| Q70 | Q68 |  |
+| Q71 | removed | its source (LC row 18) is now decided by the founder (B) |
+| Q72 | Q69 |  |
+| Q73 | Q70 | now also carries LC Part C row 22 (guardian request summary), which is open for counsel again |
+| Q74 | removed | its source (LC row 35) is now housekeeping (D) |
+| Q75 | Q71 |  |
 
 ## 4. Strings sheet
 
@@ -994,13 +1047,13 @@ This table is intentionally blank. Nothing in this pack has been signed.
 
 | Document | Version | Reviewed by | Date | Outcome | Notes |
 |---|---|---|---|---|---|
-| Legal copy | v0.17 | | | | |
-| DPIA | v0.9 | | | | |
-| Incident plan | v0.7 | | | | |
-| Post-media addendum | v0.5 | | | | |
-| Post-media Part C | v0.2 | | | | |
-| Contest and view-data addendum | v0.2 | | | | |
-| View-data Part C | v0.2 | | | | |
-| Cloudflare draft | v0.2 | | | | |
+| Legal copy | v0.18 | | | | |
+| DPIA | v0.10 | | | | |
+| Incident plan | v0.8 | | | | |
+| Post-media addendum | v0.6 | | | | |
+| Post-media Part C | v0.3 | | | | |
+| Contest and view-data addendum | v0.3 | | | | |
+| View-data Part C | v0.3 | | | | |
+| Cloudflare draft | v0.3 | | | | |
 | Strings sheet (section 4) | 150 strings | | | | |
-| Questions Q1 to Q75 (section 3) | answered: yes / no | | | | |
+| Questions Q1 to Q71 (section 3) | answered: yes / no | | | | |
