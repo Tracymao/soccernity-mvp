@@ -51,7 +51,7 @@ Enforcement applies **at sign-in and at the next refresh** (founder decision 202
 
 *Where the check sits: after rotation, not before.* The refresh token is validated and consumed first, so a bad or replayed token is the ordinary 401 and touches no account (reuse detection is unchanged), and the admin's identity comes from the token that was actually consumed (read from the access token just signed for it, so no lookup API on the token store was needed). Revoking the whole family then removes the replacement the rotation issued too: it was never returned to the caller, so no usable refresh token is left behind. If the revoke itself failed (Redis down) the request is a 500 and the replacement, never returned, is unreachable.
 
-*Accepted:* **access tokens already issued stay valid until they expire (15 minutes by default, `ADMIN_JWT_ACCESS_TTL_SECONDS`).** There is deliberately no per-request database check, so an unenrolled admin's last access token runs out within that time, not at once. Proven by an e2e test.
+*Access tokens already issued (corrected after B-305, Decision Log #500; this paragraph used to say they stay valid until they expire, with no per-request check):* **this path cuts the admin off at once.** `revokeAllSessionsForAdmin` also writes a per-admin "sessions revoked at" marker (whole seconds), and `AdminJwtAuthGuard` refuses, on every request, any access token issued in an earlier second than that marker, with the same 401 as an invalid token. The one exception is the documented one-second edge: a token issued in the same whole second as the revocation is still accepted. If Redis cannot be read the guard accepts the token, logs, and reports to Sentry (fail open). Proven by `test/two-factor.e2e-spec.ts`, which pins the clock to show the one-second edge; an earlier-second token is refused (see `docs/backend-stale-revocation-wording-report.md`).
 
 ## Recovery: a USER who lost the device AND the backup codes (B-276; Decision Log #455, #456)
 
@@ -179,7 +179,7 @@ SHA-1 / 6 digits / 30 s / ±1 step · replay of a used step refused · challenge
 ## Not built / open
 
 - No frontend, QR image, SMS, WebAuthn; no admin screens (B-271). A minor's lost-device recovery goes through the guardian (see "Recovery"); the recovery web pages are not built.
-- **Refresh is gated; access tokens already issued run out within 15 minutes** (see "The refresh gate"). No per-request check, by decision.
+- **Refresh is gated, and the gate cuts the admin off at once** (see "The refresh gate"): since B-305 (Decision Log #500) an access token issued before the revocation is refused on its next request, apart from the one-second edge. This replaces the earlier "run out within 15 minutes, no per-request check" decision.
 - No in-memory fallback for the code lock; no per-IP limit on `POST /auth/two-factor/regenerate|disable` (they need an access token *and* the password; the global write limit still applies).
 - Anyone who has a user's password can lock that user's *code entry* for 15 minutes by failing five codes (the same shared-lockout trade-off Decision Log #432 records for the password lock). The password is already needed to obtain a challenge.
 - A key rotation has no procedure (`docs/dob-encryption-rollback.md`).

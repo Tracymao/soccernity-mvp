@@ -373,7 +373,7 @@ checks and ahead of multipart parsing):
   so it needs no gate of its own and cannot take new entries while the switch is off.
 
 One warning is logged at start-up while uploads are off; the boot is never refused. The founder sets the value to `true` in
-Render by hand at the launch gate, only after counsel answers B-206 (`render.yaml`, `docs/deployment.md`).
+Render by hand at the launch gate. It is the off switch for uploads; the launch condition is in the launch-gate runbook (step 8.7) and Decision Log #524, and counsel's question list is not a condition (`render.yaml`, `docs/deployment.md`).
 
 ## Not built here
 
