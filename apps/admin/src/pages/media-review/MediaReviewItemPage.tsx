@@ -14,8 +14,8 @@
 // does not store any for a profile picture). The server decides who may see an item: a minor's picture is
 // answered with the same 404 as a missing one for an admin who is not child-safety vetted, and this page shows
 // that 404 as the ordinary "not found" state, with no client-side filtering and no mention of vetting.
-// A decided profile item is no longer in the queue, so GET answers 404 afterwards: this page therefore does not
-// re-read it after a decision. It shows the outcome from the answer it already has, and a 409 from the server
+// A profile item decided with Approve or Reject is no longer in the queue, so GET answers 404 afterwards: this page
+// therefore does not re-read it after a decision. It shows the outcome from the answer it already has, and a 409 from the server
 // (someone decided first, or the picture left the queue) becomes the "Already decided" state. The frame says
 // who decided and when ("Another moderator approved this ... 3 minutes ago"); the API says neither, so
 // the text claims only what is known.
@@ -25,8 +25,10 @@
 // when the signed-in admin could use it: when the admin session is present and says the admin is NOT child-safety
 // vetted, the button is not drawn at all. With no session provider (a test mounting the page alone) the server decides,
 // and its coded 403 child_safety_vetting_required shows the existing restricted notice. Once a record exists the page
-// shows its status and a link instead of the button. Profile pictures and covers have no such action (the server
-// refuses their ids with a 404).
+// shows its status and a link instead of the button. A profile picture or cover photo has it too (backend PR #806): the item leaves the queue the moment it is set aside,
+// so the page keeps the record the answer returned and shows it with the decided state. The item stays READABLE
+// afterwards (the server answers status "rejected", awaitingDecision false and the record), so a re-opened page shows
+// the record callout with Approve and Reject disabled.
 //
 // Deviations from the frames, because the API does not provide the data: the "Reason given" sample on the
 // user-report callout is not shown (reports carry no reason and never identify the reporter, only a count);
@@ -60,7 +62,7 @@ type Load = "loading" | "loaded" | "not-found" | "error";
  * What a profile-picture decision left behind. Not read from the server (a decided profile item is gone from the
  * queue and answers 404): "approved" / "rejected" are this moderator's own decision; "conflict" is a 409.
  */
-type ProfileOutcome = "approved" | "rejected" | "conflict";
+type ProfileOutcome = "approved" | "rejected" | "set_aside" | "conflict";
 
 function RejectDialog({
   noun,
@@ -148,6 +150,8 @@ function decisionLeftQueue(err: unknown): boolean {
 function profileDecidedText(outcome: ProfileOutcome, noun: string): string {
   if (outcome === "approved") return `You approved this ${noun} just now. There is nothing more to do here.`;
   if (outcome === "rejected") return `You rejected this ${noun} just now. There is nothing more to do here.`;
+  if (outcome === "set_aside")
+    return `You set this ${noun} aside as suspected illegal imagery just now, which also rejected it. There is nothing more to do here.`;
   return `Another moderator already decided this ${noun}, or it is no longer waiting for review. There is nothing more to do here.`;
 }
 
@@ -165,6 +169,9 @@ export default function MediaReviewItemPage() {
   const [profileOutcome, setProfileOutcome] = useState<ProfileOutcome | null>(null);
   const [settingAside, setSettingAside] = useState(false);
   const [restricted, setRestricted] = useState(false);
+  // A profile item leaves the queue the moment it is set aside (it is rejected in the same step), so the page cannot
+  // re-read its record; it keeps the one the set-aside answer returned.
+  const [profileRecord, setProfileRecord] = useState<{ id: string; status: string } | null>(null);
   const alive = useRef(true);
   const auth = useOptionalAdminAuth();
 
@@ -238,13 +245,15 @@ export default function MediaReviewItemPage() {
 
   const profile = isProfileItem(item);
   const noun = profile ? itemTypeLabel(item).toLowerCase() : item.kind === "video" ? "video" : "picture";
-  const decided = profile ? profileOutcome !== null : !item.awaitingDecision;
+  // A profile item set aside earlier is still readable (backend PR #806) but no longer waiting: the server answers
+  // status "rejected" and awaitingDecision false, so a re-opened page is read-only like a decided post file.
+  const decided = profile ? profileOutcome !== null || !item.awaitingDecision : !item.awaitingDecision;
   const reported = item.sources.includes("user_report") && item.reportCount > 0;
   // Offered only to an admin who could use it. A known-not-vetted admin never sees it (a missing or false flag reads
   // as not vetted, as the guardian-notices section does); with no session provider the server decides on press.
   const knownNotVetted = auth !== null && auth.admin?.childSafetyVetted !== true;
-  const record = item.suspectedIllegalRecord ?? null;
-  const canSetAside = !profile && !knownNotVetted && record === null;
+  const record = item.suspectedIllegalRecord ?? profileRecord ?? null;
+  const canSetAside = !knownNotVetted && record === null && (!profile || profileOutcome === null);
 
   async function approve() {
     if (!item || busy) return;
@@ -301,6 +310,25 @@ export default function MediaReviewItemPage() {
 
   async function setAside(reason: string) {
     if (!item) return;
+    if (profile) {
+      let created;
+      try {
+        created = await setAsideSuspectedIllegal(item.id, reason);
+      } catch (err) {
+        // 404: the picture was replaced (or decided) since it was shown. Nothing was set aside; show the stale state.
+        if (err instanceof AdminApiError && err.status === 404) {
+          setSettingAside(false);
+          setItem(null);
+          setLoad("not-found");
+          return;
+        }
+        throw err;
+      }
+      setSettingAside(false);
+      setProfileRecord({ id: created.id, status: created.status });
+      setProfileOutcome("set_aside");
+      return;
+    }
     const created = await setAsideSuspectedIllegal(item.id, reason);
     // The file was rejected in the same step: re-read it so the page shows the decided state and the record.
     setSettingAside(false);
@@ -326,6 +354,20 @@ export default function MediaReviewItemPage() {
               </p>
             </div>
           ) : null}
+
+          {record ? (
+            <div className="mod-callout" role="status" data-testid="suspected-illegal-record">
+              <span className="mod-callout__bar" aria-hidden />
+              <p>
+                <strong>Set aside as suspected illegal imagery.</strong> Status: {statusLabel(record.status)}.{" "}
+                <Link className="mod-link" to={`/moderation/suspected-illegal/${encodeURIComponent(record.id)}`}>
+                  Open the record
+                </Link>
+              </p>
+            </div>
+          ) : null}
+
+          {restricted ? <VettingRestrictedNotice /> : null}
 
           <div className="media-profile-grid">
             <section className="mod-card media-preview" aria-label="Preview">
@@ -392,6 +434,16 @@ export default function MediaReviewItemPage() {
                 >
                   Reject
                 </button>
+                {canSetAside ? (
+                  <button
+                    type="button"
+                    className="mod-btn mod-btn--outline"
+                    onClick={() => setSettingAside(true)}
+                    disabled={decided || busy !== null}
+                  >
+                    Suspected illegal imagery
+                  </button>
+                ) : null}
               </div>
             </section>
           </div>
@@ -403,6 +455,19 @@ export default function MediaReviewItemPage() {
               error={rejectError}
               onCancel={() => setRejecting(false)}
               onSubmit={reject}
+            />
+          ) : null}
+
+          {settingAside ? (
+            <SetAsideDialog
+              noun={noun}
+              onSubmit={setAside}
+              onClose={() => setSettingAside(false)}
+              onRestricted={() => {
+                setSettingAside(false);
+                setRestricted(true);
+                void auth?.refreshProfile();
+              }}
             />
           ) : null}
         </div>
