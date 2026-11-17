@@ -11,6 +11,8 @@ export function RecordStatusPill({ status }: { status: string }) {
 export function kindLabel(kind: string): string {
   if (kind === "image") return "Picture";
   if (kind === "video") return "Video";
+  if (kind === "profile_avatar") return "Profile picture";
+  if (kind === "profile_cover") return "Cover photo";
   return kind;
 }
 

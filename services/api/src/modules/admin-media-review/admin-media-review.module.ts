@@ -20,6 +20,6 @@ import { ProfileImageReviewService } from './profile-image-review.service';
   imports: [PrismaModule, AdminAuthFoundationModule, AdminActionLogModule, StorageModule, PostMediaModule, UsersModule],
   controllers: [AdminMediaReviewController],
   providers: [AdminMediaReviewService, ProfileImageReviewService],
-  exports: [AdminMediaReviewService],
+  exports: [AdminMediaReviewService, ProfileImageReviewService],
 })
 export class AdminMediaReviewModule {}

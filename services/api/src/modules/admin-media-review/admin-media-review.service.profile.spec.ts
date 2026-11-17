@@ -50,10 +50,11 @@ const profileRow = (kind: 'avatar' | 'cover', userId: string, at: Date | null): 
   uploadedAt: at,
 });
 
-function build(opts: { posts?: unknown[]; profiles?: ProfileQueueRow[]; vetted?: boolean } = {}) {
+function build(opts: { posts?: unknown[]; profiles?: ProfileQueueRow[]; vetted?: boolean; record?: { id: string; status: string } | null } = {}) {
   const prisma = {
     postMedia: { findMany: jest.fn().mockResolvedValue(opts.posts ?? []), findFirst: jest.fn() },
     adminUser: { findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: opts.vetted ?? true }) },
+    suspectedIllegalMedia: { findUnique: jest.fn().mockResolvedValue(opts.record ?? null) },
   };
   const profileImages = {
     listCandidates: jest.fn().mockResolvedValue(opts.profiles ?? []),
@@ -166,6 +167,14 @@ describe('AdminMediaReviewService by id with profile pictures', () => {
     prisma.postMedia.findFirst.mockResolvedValue(null);
     await expect(service.get(POST, 'a1')).rejects.toMatchObject({ status: 404 });
     expect(profileImages.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('B-206: a profile item carries its set-aside record (id, status), or null when none exists', async () => {
+    const withRecord = build({ record: { id: 'rec-1', status: 'set_aside' } });
+    await expect(withRecord.service.get(ID, 'a1')).resolves.toMatchObject({ suspectedIllegalRecord: { id: 'rec-1', status: 'set_aside' } });
+    expect(withRecord.prisma.suspectedIllegalMedia.findUnique).toHaveBeenCalledWith({ where: { mediaId: ID }, select: { id: true, status: true } });
+    const without = build();
+    await expect(without.service.get(ID, 'a1')).resolves.toMatchObject({ suspectedIllegalRecord: null });
   });
 
   it('approve writes ONE audit row: media.approved, target type profile_image, target the PERSON, the kind in the note', async () => {

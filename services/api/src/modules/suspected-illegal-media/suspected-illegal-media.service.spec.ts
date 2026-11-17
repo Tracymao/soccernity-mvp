@@ -160,7 +160,7 @@ describe('SuspectedIllegalMediaService.setAside', () => {
     for (const h of [minor, missing, adult]) expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('404 for an unknown media id (vetted admin) and for a profile-picture id', async () => {
+  it('404 for an unknown media id (vetted admin) and for a profile-picture id when the profile services are not wired (covered with them in the .profile spec)', async () => {
     const h = build();
     h.decisions.rejectForSetAside.mockRejectedValue(new HttpException({ code: 'media_not_found' }, 404));
     expect((await outcome(h.service.setAside(MEDIA, 'a1', { reason: 'r' }))).status).toBe(404);

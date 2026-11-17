@@ -1,15 +1,18 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { AdminMediaReviewService } from '../admin-media-review/admin-media-review.service';
-import { isProfileItemId } from '../admin-media-review/profile-image-item-id';
+import { formatProfileItemId, isProfileItemId } from '../admin-media-review/profile-image-item-id';
+import { ProfileImageReviewService } from '../admin-media-review/profile-image-review.service';
 import { assertAdminChildSafetyVetted, isAdminChildSafetyVetted } from '../moderation/child-safety-vetting.util';
 import { PostMediaConfig } from '../post-media/post-media.config';
 import { postMediaError } from '../post-media/post-media.errors';
 import { PostMediaDecisionService } from '../post-media/post-media-decision.service';
 import { currentObjectKey } from '../post-media/post-media.service';
+import { AUTO_REJECTION_REASON } from '../post-media/media-moderation-decision.util';
+import { UserImageReviewService } from '../users/user-image-review.service';
 import { OTHER_BODY_KEY, suggestedBodiesFor, SuggestedBody } from './receiving-bodies.constants';
 import {
   SUSPECTED_MEDIA_CODES,
@@ -77,6 +80,12 @@ export interface SuspectedIllegalPage {
   nextCursor: string | null;
 }
 
+/** The two record kinds a profile picture or cover is stored under (a post-media record carries the file's kind). */
+const PROFILE_KINDS = ['profile_avatar', 'profile_cover'];
+function isProfileKind(kind: string): boolean {
+  return PROFILE_KINDS.includes(kind);
+}
+
 function encodeCursor(row: { setAsideAt: Date; id: string }): string {
   return Buffer.from(JSON.stringify({ t: row.setAsideAt.toISOString(), id: row.id }), 'utf8').toString('base64url');
 }
@@ -100,13 +109,16 @@ export class SuspectedIllegalMediaService {
     private readonly mediaReview: AdminMediaReviewService,
     private readonly config: PostMediaConfig,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+    // B-206 (profile pictures and covers). Optional so a spec that only covers post media keeps its shape.
+    @Optional() private readonly profileImages?: ProfileImageReviewService,
+    @Optional() private readonly profileRejections?: UserImageReviewService,
   ) {}
 
   // ---- POST /admin/media-review/:id/suspected-illegal --------------------------------------------
 
   async setAside(mediaId: string, adminId: string, dto: SetAsideSuspectedIllegalDto): Promise<SuspectedIllegalRecord> {
-    // Post and contest media only: a profile picture's id ("avatar:<user>:<file>") is not a media id (recorded gap).
-    if (isProfileItemId(mediaId)) throw postMediaError(404, 'media_not_found', 'Media not found');
+    // A profile picture or cover has its own id ("avatar:<user>:<file>") and its own storage: own branch, same rules.
+    if (isProfileItemId(mediaId)) return this.setAsideProfileImage(mediaId, adminId, dto);
     await this.assertVettedOrHide(mediaId, adminId);
     if (dto.reportId) {
       const report = await this.prisma.report.findUnique({ where: { id: dto.reportId }, select: { id: true } });
@@ -165,6 +177,123 @@ export class SuspectedIllegalMediaService {
     return this.withSuggestions(outcome.record);
   }
 
+  /**
+   * A profile picture or cover (backend/suspected-illegal-profile-images). Same outcome as for post media: the file is
+   * rejected through the generic rejection (the person sees the same "not approved", the guardian notice is the one a
+   * rejection already sends, no new notification, no account hold), a record is written, and the stored file is
+   * protected from every deletion path.
+   *
+   * ONE transaction: UserImageReviewService.rejectProfileImage runs the record and the audit row INSIDE its own
+   * transaction, so they land with the rejection or not at all. It is given the file the moderator was shown, so a
+   * re-upload since is a 404 and nothing is set aside.
+   *
+   * If the picture is PUBLISHED, rejectProfileImage first withdraws it to the private prefix (copy, verify, delete the
+   * public object). That step can fail with a 503 BEFORE anything is rejected; then nothing is recorded and the
+   * moderator can simply try again. An already-REJECTED picture (the automatic check's own rejections are the ones
+   * most worth keeping) is recorded without a second rejection.
+   */
+  private async setAsideProfileImage(
+    id: string,
+    adminId: string,
+    dto: SetAsideSuspectedIllegalDto,
+  ): Promise<SuspectedIllegalRecord> {
+    if (!this.profileImages || !this.profileRejections) throw postMediaError(404, 'media_not_found', 'Media not found');
+    // 404 for a malformed id, an unknown person or a file that is no longer their current one.
+    const target = await this.profileImages.locate(id);
+    if (!(await isAdminChildSafetyVetted(this.prisma, adminId))) {
+      // A minor's picture does not exist for a non-vetted admin; an adult's gets the coded 403.
+      if (target.isMinor) throw postMediaError(404, 'media_not_found', 'Media not found');
+      await assertAdminChildSafetyVetted(this.prisma, adminId);
+    }
+    if (dto.reportId) {
+      const report = await this.prisma.report.findUnique({ where: { id: dto.reportId }, select: { id: true } });
+      if (!report) throw postMediaError(404, SUSPECTED_MEDIA_CODES.reportNotFound, 'Report not found');
+    }
+    const mediaId = formatProfileItemId(target.kind, target.userId, target.key);
+    // Cheap pre-check, before a published file is withdrawn; the in-transaction check below is the real one.
+    if (await this.prisma.suspectedIllegalMedia.findUnique({ where: { mediaId }, select: { id: true } })) {
+      throw this.alreadyRecorded();
+    }
+
+    const now = this.clock.now();
+    const preserveUntil = new Date(now.getTime() + this.config.suspectedMediaPreserveDays * 24 * 3600 * 1000);
+    const kind = target.kind === 'avatar' ? 'profile_avatar' : 'profile_cover';
+    const writeRecord = async (tx: Prisma.TransactionClient, endKey: string): Promise<RecordRow> => {
+      if (await tx.suspectedIllegalMedia.findUnique({ where: { mediaId }, select: { id: true } })) {
+        throw this.alreadyRecorded();
+      }
+      const uploader = await tx.user.findUnique({
+        where: { id: target.userId },
+        select: { isMinor: true, derivedCountry: true, declaredCountry: true },
+      });
+      const record = await tx.suspectedIllegalMedia.create({
+        data: {
+          mediaId,
+          uploaderId: target.userId,
+          postId: null,
+          reportId: dto.reportId ?? null,
+          objectKey: endKey,
+          kind,
+          reason: dto.reason,
+          uploaderCountry: uploader?.derivedCountry ?? uploader?.declaredCountry ?? null,
+          uploaderIsMinor: uploader?.isMinor ?? false,
+          status: 'set_aside',
+          setAsideByAdminId: adminId,
+          setAsideAt: now,
+          preserveUntil,
+        },
+        select: RECORD_SELECT,
+      });
+      // targetId is the PERSON, so the audit log reader can apply its child-safety rule (as for approve / reject).
+      await tx.adminActionLog.create({
+        data: {
+          adminId,
+          action: ADMIN_ACTION_LOG_ACTIONS.MEDIA_SUSPECTED_ILLEGAL_SET_ASIDE,
+          targetType: ADMIN_ACTION_LOG_TARGET_TYPES.PROFILE_IMAGE,
+          targetId: target.userId,
+          notes: `record=${record.id}; kind=${kind}${dto.reportId ? `; report=${dto.reportId}` : ''}`,
+        },
+      });
+      return record;
+    };
+
+    try {
+      if (target.status === 'rejected') {
+        // Already rejected (for example by the automatic check): keep the evidence, reject nothing a second time.
+        const record = await this.prisma.$transaction(async (tx) => {
+          const live = await tx.user.findUnique({
+            where: { id: target.userId },
+            select: { avatarKey: true, avatarStatus: true, coverKey: true, coverStatus: true },
+          });
+          const key = live ? (target.kind === 'avatar' ? live.avatarKey : live.coverKey) : null;
+          const status = live ? (target.kind === 'avatar' ? live.avatarStatus : live.coverStatus) : null;
+          // The row must still be exactly the rejected file the moderator was shown.
+          if (!key || key !== target.key || status !== 'rejected') {
+            throw postMediaError(404, 'media_not_found', 'Media not found');
+          }
+          return writeRecord(tx, key);
+        });
+        return this.withSuggestions(record);
+      }
+      const holder: { record?: RecordRow } = {};
+      await this.profileRejections.rejectProfileImage(target.userId, target.kind, AUTO_REJECTION_REASON, target.key, {
+        // A withdrawn copy may be the only copy of the evidence: never discard it if the transaction fails.
+        keepWithdrawnCopyOnFailure: true,
+        inTransaction: async (tx, endKey) => {
+          holder.record = await writeRecord(tx, endKey);
+        },
+      });
+      if (!holder.record) throw this.alreadyRecorded();
+      return this.withSuggestions(holder.record);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw this.alreadyRecorded();
+      // rejectProfileImage speaks Nest's plain 404 / 409 (the picture was replaced, removed or rejected meanwhile).
+      if (err instanceof NotFoundException) throw postMediaError(404, 'media_not_found', 'Media not found');
+      if (err instanceof ConflictException) throw postMediaError(404, 'media_not_found', 'Media not found');
+      throw err;
+    }
+  }
+
   // ---- GET /admin/suspected-illegal-media --------------------------------------------------------
 
   async list(query: ListSuspectedIllegalQueryDto, adminId: string): Promise<SuspectedIllegalPage> {
@@ -196,11 +325,20 @@ export class SuspectedIllegalMediaService {
     const row = await this.prisma.suspectedIllegalMedia.findUnique({ where: { id }, select: RECORD_SELECT });
     if (!row) throw this.notFound();
     // The file may be gone (its row is deleted with the post): then there is simply no link.
-    const media = await this.prisma.postMedia.findUnique({
-      where: { id: row.mediaId },
-      select: { publishedAt: true, publicKey: true, privateKey: true },
-    });
-    const link = await this.mediaReview.viewLinkForObject(media ? currentObjectKey(media) : null);
+    let key: string | null;
+    if (isProfileKind(row.kind)) {
+      // A profile picture has no PostMedia row: the record itself names the private file it ended at, and that file
+      // is what the evidence rule protects (it survives the person replacing the picture or deleting the account).
+      const stored = await this.prisma.suspectedIllegalMedia.findUnique({ where: { id }, select: { objectKey: true } });
+      key = stored?.objectKey ?? null;
+    } else {
+      const media = await this.prisma.postMedia.findUnique({
+        where: { id: row.mediaId },
+        select: { publishedAt: true, publicKey: true, privateKey: true },
+      });
+      key = media ? currentObjectKey(media) : null;
+    }
+    const link = await this.mediaReview.viewLinkForObject(key);
     return { ...this.withSuggestions(row), viewUrl: link.url, viewUrlExpiresAt: link.expiresAt };
   }
 
@@ -265,8 +403,11 @@ export class SuspectedIllegalMediaService {
         data: {
           adminId,
           action: change.action,
-          targetType: ADMIN_ACTION_LOG_TARGET_TYPES.POST_MEDIA,
-          targetId: record.mediaId,
+          // A profile picture's audit row is about the PERSON (so the audit log reader applies its child-safety rule).
+          targetType: isProfileKind(record.kind)
+            ? ADMIN_ACTION_LOG_TARGET_TYPES.PROFILE_IMAGE
+            : ADMIN_ACTION_LOG_TARGET_TYPES.POST_MEDIA,
+          targetId: isProfileKind(record.kind) ? record.uploaderId : record.mediaId,
           notes: `record=${id}; ${change.notes}`,
         },
       });

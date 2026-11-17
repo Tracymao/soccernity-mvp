@@ -184,7 +184,26 @@ export class ProfileImageReviewService {
   /** GET /admin/media-review/:id for a profile picture. Only a picture that is in the queue; anything else is a 404. */
   async get(id: string, vetted: boolean, now: Date): Promise<MediaReviewItem> {
     const target = await this.resolve(id, vetted);
-    if (target.status !== 'pending' || !(await this.isWaitingForPerson(target))) throw this.notFound();
+    if (target.status !== 'pending' || !(await this.isWaitingForPerson(target))) {
+      // B-206: a picture a child-safety-vetted admin set aside as suspected illegal imagery is rejected, so it is no
+      // longer in the queue, but its page stays readable (the record is what makes it evidence).
+      const record = await this.prisma.suspectedIllegalMedia.findUnique({
+        where: { mediaId: formatProfileItemId(target.kind, target.userId, target.key) },
+        select: { setAsideAt: true },
+      });
+      if (!record) throw this.notFound();
+      const [asRecord] = await this.toItems(
+        [{ kind: target.kind, userId: target.userId, key: target.key, uploadedAt: target.uploadedAt }],
+        now,
+      );
+      return {
+        ...asRecord,
+        status: 'rejected',
+        awaitingDecision: false,
+        decidedAt: record.setAsideAt,
+        decisionSource: 'moderator',
+      };
+    }
     const [item] = await this.toItems(
       [
         {
@@ -284,6 +303,17 @@ export class ProfileImageReviewService {
       status: (ref.kind === 'avatar' ? user.avatarStatus : user.coverStatus) ?? null,
       uploadedAt: (ref.kind === 'avatar' ? user.avatarUploadedAt : user.coverUploadedAt) ?? null,
     };
+  }
+
+  /**
+   * backend/suspected-illegal-profile-images (B-206). Finds the picture an id names for the set-aside route, whoever
+   * the caller is: the person must exist and the id's file must still be their CURRENT file for that kind (a
+   * re-upload since makes it a 404). The caller applies the vetting rule using `isMinor`.
+   */
+  async locate(id: string) {
+    const target = await this.resolve(id, true);
+    const user = await this.prisma.user.findUnique({ where: { id: target.userId }, select: { isMinor: true } });
+    return { ...target, isMinor: user?.isMinor ?? false };
   }
 
   /** For Approve / Reject: the picture must be pending and in the queue; a decided one is a 409. */

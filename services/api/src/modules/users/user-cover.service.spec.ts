@@ -41,6 +41,8 @@ function build(storage: Partial<DirectUploadStorageService> = {}) {
       findUnique: jest.fn().mockResolvedValue({ coverKey: null, avatarKey: null }),
       update: jest.fn().mockResolvedValue({ id: 'u1' }),
     },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]) },
+    postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService;
   const store = {
     upload: jest.fn().mockImplementation(async (_b: Buffer, key: string) => `https://cdn.example/${key}`),
@@ -111,6 +113,20 @@ describe('UserCoverService (B-196)', () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'private-profile/u1/old.jpg' });
     await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
     expect(store.delete).toHaveBeenCalledWith('private-profile/u1/old.jpg');
+  });
+
+  it('keeps the PREVIOUS cover when it is a set-aside evidence file, and defers its deletion (B-206)', async () => {
+    const { prisma, store, service } = build();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'private-profile/u1/old.jpg' });
+    ((prisma as any).suspectedIllegalMedia.findMany as jest.Mock).mockResolvedValue([
+      { mediaId: 'cover:u1:old.jpg', status: 'set_aside', preserveUntil: new Date(Date.now() + 86_400_000) },
+    ]);
+    await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
+    expect(store.delete).not.toHaveBeenCalledWith('private-profile/u1/old.jpg');
+    expect((prisma as any).postMediaDeferredDeletion.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ objectKey: 'private-profile/u1/old.jpg', mediaId: 'cover:u1:old.jpg', uploaderId: 'u1', postId: null })],
+      skipDuplicates: true,
+    });
   });
 
   it('a failure removing the old object never fails the upload', async () => {

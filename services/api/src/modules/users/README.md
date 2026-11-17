@@ -905,3 +905,17 @@ club feed, view recording and the heartbeat all go through `visibleToViewer`.
 `MEDIA_UPLOADS_ENABLED` off (production default, see `post-media/README.md` "Uploads switch") they answer
 `403 { code: 'media_uploads_disabled' }` before the multipart body is parsed, so nothing is re-encoded, stored or written.
 `DELETE /users/:id/avatar` and `/cover` are not gated: a person can still remove a picture they already hold.
+
+## Suspected illegal imagery on profile pictures (B-206, `backend/suspected-illegal-profile-images`)
+
+A child-safety-vetted moderator can set a profile picture or cover aside through
+`POST /admin/media-review/:id/suspected-illegal` (module `suspected-illegal-media`). It rejects the picture through
+`UserImageReviewService.rejectProfileImage` with the shown file as the expected key (so a re-upload makes the id a 404 and
+nothing is set aside), withdrawing a published file to `private-profile/` first (503 and nothing set aside if that fails),
+and creates the record. The person sees the ordinary "not approved" state, the guardian notice is the existing one, no
+account hold is placed. While a record is `set_aside` or before its `preserveUntil`, the stored object is kept by every
+removal path here: `UserAvatarService` / `UserCoverService` (replace, delete), `AccountDeletionSweepService`
+(anonymise, minimise), `ProfileImagePublishService` (private original) and `UserImageReviewService.discardPrivateCopy`
+(`profile-image-evidence.util.ts`). **This does not stop the person replacing or deleting their picture, or deleting
+their account: the database row follows the normal rules and only the stored file is kept.** A deferral is written to
+`PostMediaDeferredDeletion` in the same transaction where one exists.

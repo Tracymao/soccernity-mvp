@@ -4,6 +4,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { deleteStoredObjects, deleteUserPostMedia } from '../post-media/post-media-cleanup.util';
+import { profileKeysToDeleteNow } from '../users/profile-image-evidence.util';
 import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 import { addDays, resolveHoldRuleConfig } from '../account-hold/account-hold.config';
 import { HoldType, resolveAccountHold } from '../account-hold/account-hold.rules';
@@ -330,8 +331,7 @@ export class AccountDeletionSweepService {
     let dataExportKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
-      stored.avatarKey = before?.avatarKey ?? null;
-      stored.coverKey = before?.coverKey ?? null;
+      await this.keysToRemove(tx, userId, before, stored, new Date());
 
       await this.deleteBehaviouralRows(tx, userId);
       dataExportKeys = await this.deleteDataExportRows(tx, userId);
@@ -385,6 +385,27 @@ export class AccountDeletionSweepService {
     return rows.map((r) => r.fileKey).filter((k): k is string => Boolean(k));
   }
 
+  // backend/suspected-illegal-profile-images (B-206): which of the person's profile objects may be removed from
+  // storage after this transaction commits. A picture or cover SET ASIDE as suspected illegal imagery is kept: its
+  // deletion is written to PostMediaDeferredDeletion INSIDE this transaction (so the account is changed and the
+  // deferral exists together, or neither) and finished later by RejectedMediaSweepService.processDeferred. Every other
+  // picture is removed as before. The account is anonymised or minimised exactly the same either way.
+  private async keysToRemove(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    before: { avatarKey: string | null; coverKey: string | null } | null,
+    stored: { avatarKey: string | null; coverKey: string | null },
+    now: Date,
+  ): Promise<void> {
+    const refs = [
+      ...(before?.avatarKey ? [{ kind: 'avatar' as const, userId, key: before.avatarKey }] : []),
+      ...(before?.coverKey ? [{ kind: 'cover' as const, userId, key: before.coverKey }] : []),
+    ];
+    const free = new Set(await profileKeysToDeleteNow(tx, refs, now));
+    stored.avatarKey = before?.avatarKey && free.has(before.avatarKey) ? before.avatarKey : null;
+    stored.coverKey = before?.coverKey && free.has(before.coverKey) ? before.coverKey : null;
+  }
+
   // Best effort, AFTER a commit: the row no longer points at the object, so a storage outage (or no store)
   // must not undo the change. A failure leaves an orphaned object, logged with its key.
   private async removeProfileImageObjects(
@@ -426,8 +447,7 @@ export class AccountDeletionSweepService {
         where: { id: userId },
         select: { avatarKey: true, coverKey: true, anonymizedAt: true },
       });
-      stored.avatarKey = before?.avatarKey ?? null;
-      stored.coverKey = before?.coverKey ?? null;
+      await this.keysToRemove(tx, userId, before, stored, now);
 
       // Decision Log #349: no longer gated on isMinor -- a user reclassified
       // as an adult (turned 18) may still hold a Guardian row whose consent

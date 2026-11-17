@@ -29,9 +29,21 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
       findUnique: jest.fn().mockResolvedValue({ userId: 'u1', kind: 'avatar', objectKey: KEY, attempts: 0 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([] as unknown[]) },
+    postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     user: {
       findUnique: jest.fn().mockResolvedValue({ isMinor: false, avatarKey: KEY, avatarStatus: 'pending', coverKey: null, coverStatus: null }),
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // A successful guarded write moves the live key, as the real row does; the publish step then re-reads it
+      // (backend/suspected-illegal-profile-images) before deleting the private original.
+      updateMany: jest.fn().mockImplementation(async (args: { data: { avatarKey?: string; coverKey?: string } }) => {
+        const current = await prisma.user.findUnique();
+        prisma.user.findUnique.mockResolvedValue({
+          ...(current as object),
+          ...(args.data.avatarKey ? { avatarKey: args.data.avatarKey } : {}),
+          ...(args.data.coverKey ? { coverKey: args.data.coverKey } : {}),
+        });
+        return { count: 1 };
+      }),
     },
   };
   const storage = {

@@ -221,7 +221,14 @@ export class AdminMediaReviewService {
 
   async get(id: string, adminId: string): Promise<MediaReviewItem> {
     if (isProfileItemId(id) && this.profileImages) {
-      return this.profileImages.get(id, await isAdminChildSafetyVetted(this.prisma, adminId), this.clock.now());
+      const profileItem = await this.profileImages.get(id, await isAdminChildSafetyVetted(this.prisma, adminId), this.clock.now());
+      // B-206: read-only, whether this picture has been set aside as suspected illegal imagery.
+      const profileRecord = await this.prisma.suspectedIllegalMedia.findUnique({
+        // The record's mediaId IS the item id (kind:user:file).
+        where: { mediaId: id },
+        select: { id: true, status: true },
+      });
+      return { ...profileItem, suspectedIllegalRecord: profileRecord ?? null };
     }
     // Only items that have been through the queue: this is not a general browser of everyone's uploads.
     const conditions: Prisma.PostMediaWhereInput[] = [
