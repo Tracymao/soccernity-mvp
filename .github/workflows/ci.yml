@@ -186,17 +186,10 @@ jobs:
           node-version: "22.22.0"
 
       - name: Audit production dependencies (gate, High and above)
-        run: |
-          status=0
-          for ws in services/api apps/web apps/admin packages/shared; do
-            echo "::group::npm audit --omit=dev --workspace=$ws"
-            if ! npm audit --omit=dev --workspace="$ws" --audit-level=high; then
-              echo "::error::High or Critical production advisory in $ws"
-              status=1
-            fi
-            echo "::endgroup::"
-          done
-          exit $status
+        # .github/scripts/audit-gate.mjs runs the same `npm audit --omit=dev` per workspace
+        # and removes only the time-boxed entries in .github/audit-allowlist.json
+        # (currently GHSA-fc5q-39xc-vjpf, picomatch, no patch published; expires 2026-12-17).
+        run: node .github/scripts/audit-gate.mjs services/api apps/web apps/admin packages/shared
 
       - name: Audit including dev dependencies (report only)
         continue-on-error: true
