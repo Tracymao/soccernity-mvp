@@ -1,0 +1,9 @@
+[
+  {
+    "id": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "ReDoS in picomatch <= 4.0.7. No patched version has been published (npm latest is 4.0.7, GitHub lists no first_patched_version), so no lockfile or override change can clear it. Reaches services/api's audit only through the hoisted apps/mobile React Native/Jest tree (micromatch, jest-util, anymatch), not through any code the API runs in production. Remove this entry as soon as a patched picomatch exists and the lockfile is updated.",
+    "added": "2026-11-17",
+    "expires": "2026-12-17"
+  }
+]
