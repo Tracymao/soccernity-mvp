@@ -5,7 +5,7 @@
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
 This is a **new, standalone file**. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
-(v0.8), and nothing here has been applied to the Terms, the Privacy Policy, the guardian consent
+(v0.8 when drafted; **[v0.3 CHANGED — #532]** v0.17 on `origin/main` `b67d9c0`), and nothing here has been applied to the Terms, the Privacy Policy, the guardian consent
 screen or any Figma frame. It supplies material for whoever next revises that draft, after counsel
 has answered the questions in `docs/dpia-addendum-contest-view-data-draft.md` (the **DPIA addendum**,
 which holds the risk analysis, the store-by-store facts and the questions for counsel).
@@ -14,10 +14,18 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 is a draft, never approved). Every block of wording below carries `[COPY PENDING LEGAL REVIEW]` on purpose,
 and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**
 - **Facts from:** `docs/backend-w11-exposure-report.md` §4 and `docs/backend-w12-points-report.md` §4, with
   two direct code checks recorded in the DPIA addendum (R18). **Nothing here is live** and no regulator
   guidance was retrieved.
+
+---
+
+## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** The legal draft is now **v0.17** (this file said v0.8, and the v0.2 note said v0.16) and its Part C table uses rows **1 to 54**, so the row proposed here as **row 45** is taken (45 is the Contact Us form notice, 46 and 47 are message rows, 52 to 54 are moderation rows); **the next free row is 55; renumber when applied, and do not renumber here.** It **chooses no notice option (N-1 to N-4), applies nothing, completes nothing and claims nothing as solved.** **Every disposition in v0.2 is unchanged.** Counsel has not reviewed it; no counsel position is recorded. Decision Log #533 and #534 are in docs PR R98, **pending merge when this was written**. The phrases "Part C of the v0.8 draft" and "the last existing row is 44" are **kept** (they describe the draft when this file was written) with a marked note beside each.
+
+**Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
 ---
 
@@ -38,7 +46,7 @@ and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal dra
 ## 1. Proposed Part C row **[COPY PENDING LEGAL REVIEW]**
 
 Same table format as Part C of the v0.8 draft. The last existing row is **44**, so this is proposed as
-**row 45**. One row, because the findings are one processing activity; the detail lives in the DPIA addendum.
+**row 45**. **[v0.3 CHANGED — #532]** *(Stale: in v0.17 the last existing row is 54, so the next free row is 55; renumber when applied.)* One row, because the findings are one processing activity; the detail lives in the DPIA addendum.
 
 **[v0.2 CHANGED — #532]** *The row number 45 is already taken in the current legal draft (v0.16); renumber when applying. [v0.2 DISPOSITION: D — housekeeping for whoever revises the legal draft.]*
 

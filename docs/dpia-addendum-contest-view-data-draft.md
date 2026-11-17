@@ -5,7 +5,7 @@
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
-`docs/sprint-1-dpia-outline-draft.md` (v0.3), which is the DPIA it would attach to. If counsel
+`docs/sprint-1-dpia-outline-draft.md` (v0.3 when drafted; **[v0.3 CHANGED — #532]** v0.9 on `origin/main` `b67d9c0`), which is the DPIA it would attach to. If counsel
 accepts it, folding it into that document (as proposed risks R17 to R22, a new §1.3 row group and
 new §5 items) is a separate step for whoever maintains that file.
 
@@ -23,10 +23,18 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 - **Document:** DPIA addendum for contest view and impression data
 - **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**
+- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**
 - **Reviewed by counsel:** NOT YET (Section 10)
 - **Companion file:** `docs/legal-copy-part-c-view-data-draft.md` (the proposed Part C row and
   viewer-notice options; it holds the notice wording, this file holds the risk analysis)
+
+---
+
+## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+
+**[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** It re-points this addendum at the files now on `origin/main` `b67d9c0` (2026-11-17): the DPIA is **v0.9** (this file said v0.3, and the v0.2 note said v0.8) and the legal draft is **v0.17** (this file said v0.8). It **chooses no option, completes nothing and claims nothing as solved.** **Every disposition in v0.2 is unchanged:** Decision Log #534 re-marked no question in this file. Sign-off is empty and counsel has not reviewed it. The statement that the draft Privacy Policy "mentions points and rank in §1.5 and nothing about impressions, view qualification or dwell measurement" was **re-checked against v0.17** (no match for "impression" or "dwell" in that file, 2026-11-17) and **still holds**; it is annotated, not changed. The references to "the v0.3 DPIA" inside the body (§2.1 lawful basis, §2.6 COPPA, §5 R17 numbering "continues from the v0.3 DPIA's R16", the "§0 item 5" limitation) describe what that DPIA said **when this addendum was written**; they are **kept**, not rewritten, because I did not re-verify each one against v0.9 (they are listed in `docs/addenda-stale-fixes-report.md`). Decision Log #533 and #534 are in docs PR R98, **pending merge when this was written**.
+
+**Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
 ---
 
@@ -43,7 +51,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 - **B-307 (PR #758, built):** the report-retention sweep no longer keeps forever a report whose removed post is a Contest entry in a **completed** cycle; deleting the post cascades to that entry's `ContestEngagement`, `ContestImpression`, `ContestVote` and `ContestRoundWinner` rows. The `PointsLedgerEntry` rows stay. This is the **one case** where store D rows are deleted by anything other than an unlike. See the note after R17.
 - **Not changed:** `AccountDeletionSweepService.anonymizeUser` still deletes the viewer's `ContestImpression` rows (line 283) and **still contains no deletion of `PointsLedgerEntry` or `ContestEngagement` rows** (re-checked in this pass), so R18 stands as written.
 
-**Not verified:** CI could not be read; nothing was run; the Security session could not be asked (non-interactive). The "v0.3 DPIA" this addendum refers to is now **v0.8** (and later drafts exist on other branches); this file was not re-pointed at them.
+**Not verified:** CI could not be read; nothing was run; the Security session could not be asked (non-interactive). The "v0.3 DPIA" this addendum refers to is now **v0.8** (and later drafts exist on other branches); this file was not re-pointed at them. **[v0.3 CHANGED — #532]** *(Updated: the DPIA on `origin/main` is **v0.9** as of 2026-11-17; the header now says so; the body references are kept, see the v0.3 changelog.)*
 
 ---
 
@@ -246,7 +254,7 @@ the ledger or contest engagement rows.
 
 Per the W11 report: "The viewer has no control, no notice and no opt-out in this PR (the transparency
 copy of spec 10b was displaced by #400 E10 and no replacement is decided)." The draft Privacy Policy
-(`docs/legal-copy-draft-tos-privacy-policy.md` v0.8) mentions points and rank in §1.5 and nothing about
+(`docs/legal-copy-draft-tos-privacy-policy.md` v0.8 **[v0.3 CHANGED — #532]** v0.17, re-checked 2026-11-17) mentions points and rank in §1.5 and nothing about
 impressions, view qualification or dwell measurement (confirmed by search). The guardian consent
 confirmation screen does not mention it, and changing that screen's wording bumps
 `CONSENT_SCREEN_VERSION` and the tripwire hash (Decision Log #348, #415). Children's transparency
