@@ -176,6 +176,8 @@ describe('UserImageReviewService: withdrawing a published picture (B-037)', () =
     };
     const prisma = {
       $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+      suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([] as unknown[]) },
+      postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
       user: {
         findUnique: jest.fn().mockImplementation(async () =>
           // the first read (before the transaction) sees the published key; a later one sees what is live afterwards
@@ -294,6 +296,38 @@ describe('UserImageReviewService: withdrawing a published picture (B-037)', () =
     await expect(service.rejectProfileImage('u1', 'avatar', 'x')).rejects.toBeInstanceOf(NotFoundException);
     expect(objects.has(PRIVATE)).toBe(false);
     expect(storage.delete).toHaveBeenCalledWith(PRIVATE);
+  });
+
+  it('never discards a stray private copy that now has a set-aside record (B-206 evidence rule), and defers it', async () => {
+    const { service, storage, objects, prisma } = buildPublished({ updateCount: 0, liveKeyAfter: 'private-profile/u1/NEW.jpg' });
+    prisma.suspectedIllegalMedia.findMany.mockResolvedValue([
+      { mediaId: 'avatar:u1:f1.jpg', status: 'set_aside', preserveUntil: new Date(Date.now() + 86_400_000) },
+    ]);
+    await expect(service.rejectProfileImage('u1', 'avatar', 'x')).rejects.toBeInstanceOf(NotFoundException);
+    expect(objects.has(PRIVATE)).toBe(true);
+    expect(storage.delete).not.toHaveBeenCalledWith(PRIVATE);
+    expect(prisma.postMediaDeferredDeletion.createMany).toHaveBeenCalled();
+  });
+
+  it('keepWithdrawnCopyOnFailure keeps the withdrawn private copy when the rejection fails (set-aside path)', async () => {
+    const { service, objects } = buildPublished({ updateCount: 0, liveKeyAfter: 'private-profile/u1/NEW.jpg' });
+    await expect(
+      service.rejectProfileImage('u1', 'avatar', 'x', undefined, { keepWithdrawnCopyOnFailure: true }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(objects.has(PRIVATE)).toBe(true);
+  });
+
+  it('runs inTransaction with the file the picture ends at, inside the same transaction as the rejection', async () => {
+    const { service, tx, prisma } = buildPublished();
+    const seen: string[] = [];
+    await service.rejectProfileImage('u1', 'avatar', 'x', undefined, {
+      inTransaction: async (t, endKey) => {
+        expect(t).toBe(tx);
+        seen.push(endKey);
+      },
+    });
+    expect(seen).toEqual([PRIVATE]);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('if another rejection of the same picture won the race its private file is KEPT', async () => {

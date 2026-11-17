@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { ProfileImageKind } from './user-image-review.service';
+import { profileKeysToDeleteNow } from './profile-image-evidence.util';
 import { publicProfileKeyFor } from './profile-image.util';
 
 // backend/b036-avatar-cover-check + backend/b037-profile-image-review (B-036, B-037; Decision Log #411 item 1).
@@ -87,8 +88,34 @@ export class ProfileImagePublishService {
       await this.discardUnrecordedCopy(userId, kind, publicKey);
       return false;
     }
-    await this.deleteQuietly(key, `Private original of ${kind}`);
+    await this.deletePrivateOriginal(userId, kind, key);
     return true;
+  }
+
+  // The private original left behind once the public copy is live. backend/suspected-illegal-profile-images (B-206):
+  // between publishing and this delete a child-safety-vetted admin may set the picture aside. That path withdraws the
+  // public file back to THIS SAME private key (same user and file name) and points the row at it, so the "original"
+  // is now the only copy of the evidence. It is therefore kept when (a) the row points at it again, or (b) a
+  // set-aside record protects the file (the deferral is written so the sweep finishes it later). Fail closed: if the
+  // check cannot run, nothing is deleted. A residual window of a few milliseconds remains between this check and the
+  // delete (a set-aside that completes entirely inside it), recorded in the users README.
+  private async deletePrivateOriginal(userId: string, kind: ProfileImageKind, key: string): Promise<void> {
+    try {
+      const row = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { avatarKey: true, coverKey: true },
+      });
+      const live = row ? (kind === 'avatar' ? row.avatarKey : row.coverKey) : null;
+      if (live === key) return;
+      const free = await profileKeysToDeleteNow(this.prisma, [{ kind, userId, key }], new Date());
+      if (free.length === 0) return;
+    } catch (err) {
+      this.logger.warn(
+        `Private original of ${kind}: ${key} kept because the set-aside check could not run (${err instanceof Error ? err.message : String(err)}).`,
+      );
+      return;
+    }
+    await this.deleteQuietly(key, `Private original of ${kind}`);
   }
 
   /** Removes a public copy that was made but never recorded -- unless something else has since made it the live file. */

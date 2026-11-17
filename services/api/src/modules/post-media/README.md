@@ -394,3 +394,11 @@ anonymised, account purged, B-290 closure deletion, stray sweep (counted as `ski
 written to `PostMediaDeferredDeletion` and finished by `processDeferred` once protection ends. Set-aside itself reuses
 `PostMediaDecisionService.rejectForSetAside` and the existing generic rejection reason; nothing new is sent to the user.
 Config: `SUSPECTED_MEDIA_PRESERVE_DAYS` (`post-media.config.ts`).
+
+**Profile pictures and covers (`backend/suspected-illegal-profile-images`).** The same rule and the same
+`PostMediaDeferredDeletion` table now protect a set-aside profile picture or cover (record `kind` `profile_avatar` /
+`profile_cover`, `mediaId` = the profile item id, `postId` null). The profile paths that remove a stored object (replace,
+delete, anonymise, minimise, the publish step's private-original delete, the rejection's discard of a withdrawn copy) call
+`users/profile-image-evidence.util.ts`, which asks `suspectedMediaUnderProtection`; `processDeferred` finishes the
+deferrals. See `suspected-illegal-media/README.md` for the path table. There is no stray-object sweep under
+`private-profile/`. Protection is file-level only: it does not stop the person deleting their picture or account.

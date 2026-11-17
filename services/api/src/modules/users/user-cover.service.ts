@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { MediaProcessor } from '../post-media/media-processor';
+import { profileKeysToDeleteNow } from './profile-image-evidence.util';
 import { ProfileImageViewService } from './profile-image-view.service';
 import {
   UploadedProfileImage,
@@ -71,7 +72,7 @@ export class UserCoverService {
       await this.removeObject(key);
       throw err;
     }
-    if (previous?.coverKey) await this.removeObject(previous.coverKey);
+    if (previous?.coverKey) await this.removeReplaced(userId, previous.coverKey);
 
     return { cover: { url: await this.view.signedLink(key), status: 'pending', rejectionReason: null } };
   }
@@ -84,8 +85,24 @@ export class UserCoverService {
       data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null, coverUploadedAt: null },
       select: { id: true },
     });
-    if (current?.coverKey) await this.removeObject(current.coverKey);
+    if (current?.coverKey) await this.removeReplaced(userId, current.coverKey);
     return { cover: null };
+  }
+
+  // The OLD file after a replace or a delete. backend/suspected-illegal-profile-images (B-206): a file set aside as
+  // suspected illegal imagery is NOT deleted (it is recorded in PostMediaDeferredDeletion and kept until the record
+  // allows it); every other file is deleted as before. Runs AFTER the row has been updated, so a set-aside of the old
+  // file can no longer succeed (its key no longer matches) and a record that exists is already visible here. Fail
+  // closed: if the check cannot run, nothing is deleted (a leftover object is better than a lost one).
+  private async removeReplaced(userId: string, key: string): Promise<void> {
+    try {
+      const free = await profileKeysToDeleteNow(this.prisma, [{ kind: 'cover', userId, key }], new Date());
+      if (free.length > 0) await this.removeObject(key);
+    } catch (err) {
+      this.logger.warn(
+        `Cover object ${key} was kept because the set-aside check could not run (${err instanceof Error ? err.message : String(err)}).`,
+      );
+    }
   }
 
   // Best effort: the row is the source of truth for what the user sees. A

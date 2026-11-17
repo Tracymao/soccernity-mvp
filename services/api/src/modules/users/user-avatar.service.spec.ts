@@ -32,6 +32,8 @@ function file(buffer: Buffer, mimetype: string) {
 function build(storage: Partial<DirectUploadStorageService> = {}) {
   const prisma = {
     user: { findUnique: jest.fn().mockResolvedValue({ avatarKey: null }), update: jest.fn().mockResolvedValue({ id: 'u1' }) },
+    suspectedIllegalMedia: { findMany: jest.fn().mockResolvedValue([]) },
+    postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService;
   const store = {
     // upload() would return the URL of the PRIVATE key (not a URL anyone may use); the service must ignore it.
@@ -109,6 +111,20 @@ describe('UserAvatarService (B-035)', () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'private-profile/u1/old.jpg' });
     await service.uploadAvatar('u1', file(JPEG, 'image/jpeg'));
     expect(store.delete).toHaveBeenCalledWith('private-profile/u1/old.jpg');
+  });
+
+  it('keeps the PREVIOUS file when it is a set-aside evidence file, and defers its deletion (B-206)', async () => {
+    const { prisma, store, service } = build();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'private-profile/u1/old.jpg' });
+    ((prisma as any).suspectedIllegalMedia.findMany as jest.Mock).mockResolvedValue([
+      { mediaId: 'avatar:u1:old.jpg', status: 'set_aside', preserveUntil: new Date(Date.now() + 86_400_000) },
+    ]);
+    await service.uploadAvatar('u1', file(JPEG, 'image/jpeg'));
+    expect(store.delete).not.toHaveBeenCalledWith('private-profile/u1/old.jpg');
+    expect((prisma as any).postMediaDeferredDeletion.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ objectKey: 'private-profile/u1/old.jpg', mediaId: 'avatar:u1:old.jpg', uploaderId: 'u1', postId: null })],
+      skipDuplicates: true,
+    });
   });
 
   it('a failure removing the old object never fails the upload', async () => {

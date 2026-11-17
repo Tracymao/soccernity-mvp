@@ -83,5 +83,8 @@ hide a minor's rows from an unvetted admin by joining `User`), the kind in the n
 
 `GET /admin/media-review/:id` now also returns `suspectedIllegalRecord: { id, status } | null` (read only). The set-aside
 action itself is `POST /admin/media-review/:id/suspected-illegal`, built in module `suspected-illegal-media` (vetted admin
-only; a non-vetted admin gets the same 404 as an unknown id on a minor's file). Profile pictures and covers are not
-covered by it (404).
+only; a non-vetted admin gets the same 404 as an unknown id on a minor's file). It accepts a profile item id too
+(`avatar:<user>:<file>` / `cover:<user>:<file>`): for a profile picture `GET /admin/media-review/:id` carries the same
+`suspectedIllegalRecord`, and a picture that was set aside (so now rejected) stays readable through `GET` while its
+record exists. A picture the person has since replaced is a 404 and nothing is set aside. A published picture is withdrawn
+to the private prefix first; if that fails the answer is 503 and nothing is rejected or set aside.

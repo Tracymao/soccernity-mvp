@@ -28,13 +28,16 @@ const userRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function build(opts: { configured?: boolean; user?: Record<string, unknown> | null; check?: Record<string, unknown> | null } = {}) {
+function build(
+  opts: { configured?: boolean; user?: Record<string, unknown> | null; check?: Record<string, unknown> | null; record?: Record<string, unknown> | null } = {},
+) {
   const prisma = {
     $queryRaw: jest.fn().mockResolvedValue([]),
     user: {
       findUnique: jest.fn().mockResolvedValue(opts.user === undefined ? userRow() : opts.user),
       findMany: jest.fn().mockResolvedValue([{ id: USER, username: 'ada_l', displayName: 'Ada Lovelace', email: 'must-not-leak@example.com' }]),
     },
+    suspectedIllegalMedia: { findUnique: jest.fn().mockResolvedValue(opts.record ?? null) },
     profileImageCheck: {
       findUnique: jest.fn().mockResolvedValue(opts.check === undefined ? { objectKey: KEY, state: 'review' } : opts.check),
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -92,6 +95,22 @@ describe('ProfileImageReviewService.get', () => {
     for (const state of ['review', 'gave_up']) {
       await expect(build({ check: { objectKey: KEY, state } }).service.get(ID, true, NOW)).resolves.toMatchObject({ id: ID });
     }
+  });
+
+  it('B-206: a picture that was SET ASIDE (now rejected) stays readable as a rejected record, with the set-aside time', async () => {
+    const setAsideAt = new Date('2026-11-05T09:59:00Z');
+    const { service, prisma } = build({
+      user: userRow({ avatarStatus: 'rejected' }),
+      record: { setAsideAt },
+    });
+    const item = await service.get(ID, true, NOW);
+    expect(prisma.suspectedIllegalMedia.findUnique).toHaveBeenCalledWith({ where: { mediaId: ID }, select: { setAsideAt: true } });
+    expect(item).toMatchObject({ id: ID, status: 'rejected', awaitingDecision: false, decidedAt: setAsideAt, decisionSource: 'moderator' });
+  });
+
+  it('B-206: a rejected picture WITHOUT a record is still a 404 (the queue is not a browser of decided pictures)', async () => {
+    const { service } = build({ user: userRow({ avatarStatus: 'rejected' }), record: null });
+    await expect(service.get(ID, true, NOW)).rejects.toMatchObject({ status: 404 });
   });
 
   it('with the check not configured every pending picture is in the queue, with or without bookkeeping', async () => {

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { MediaProcessor } from '../post-media/media-processor';
+import { profileKeysToDeleteNow } from './profile-image-evidence.util';
 import { ProfileImageViewService } from './profile-image-view.service';
 import {
   PROFILE_IMAGE_MAX_FILE_SIZE_BYTES,
@@ -85,7 +86,7 @@ export class UserAvatarService {
       await this.removeObject(key);
       throw err;
     }
-    if (previous?.avatarKey) await this.removeObject(previous.avatarKey);
+    if (previous?.avatarKey) await this.removeReplaced(userId, previous.avatarKey);
 
     return { avatar: { url: await this.view.signedLink(key), status: 'pending', rejectionReason: null } };
   }
@@ -98,8 +99,24 @@ export class UserAvatarService {
       data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null, avatarUploadedAt: null },
       select: { id: true },
     });
-    if (current?.avatarKey) await this.removeObject(current.avatarKey);
+    if (current?.avatarKey) await this.removeReplaced(userId, current.avatarKey);
     return { avatar: null };
+  }
+
+  // The OLD file after a replace or a delete. backend/suspected-illegal-profile-images (B-206): a file set aside as
+  // suspected illegal imagery is NOT deleted (it is recorded in PostMediaDeferredDeletion and kept until the record
+  // allows it); every other file is deleted as before. Runs AFTER the row has been updated, so a set-aside of the old
+  // file can no longer succeed (its key no longer matches) and a record that exists is already visible here. Fail
+  // closed: if the check cannot run, nothing is deleted (a leftover object is better than a lost one).
+  private async removeReplaced(userId: string, key: string): Promise<void> {
+    try {
+      const free = await profileKeysToDeleteNow(this.prisma, [{ kind: 'avatar', userId, key }], new Date());
+      if (free.length > 0) await this.removeObject(key);
+    } catch (err) {
+      this.logger.warn(
+        `Avatar object ${key} was kept because the set-aside check could not run (${err instanceof Error ? err.message : String(err)}).`,
+      );
+    }
   }
 
   // Best effort: the row is the source of truth for what the user sees, so a

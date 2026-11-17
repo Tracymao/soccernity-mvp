@@ -7,8 +7,10 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
+import { profileKeysToDeleteNow } from './profile-image-evidence.util';
 import { isPublicProfileKey, privateProfileKeyFor } from './profile-image.util';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 
@@ -55,6 +57,24 @@ export interface ProfileImageRejection {
   status: 'rejected';
 }
 
+/**
+ * backend/suspected-illegal-profile-images (B-206). Options only the set-aside route uses; every other caller omits
+ * them and behaves exactly as before.
+ */
+export interface ProfileImageRejectionOptions {
+  /**
+   * Runs INSIDE the rejection transaction, after the row is rejected and before the notification, with the key the
+   * file ENDS at (the private key). What it writes (the SuspectedIllegalMedia record, the audit row) therefore lands
+   * with the rejection or not at all; if it throws, the whole rejection rolls back.
+   */
+  inTransaction?: (tx: Prisma.TransactionClient, endKey: string) => Promise<void>;
+  /**
+   * When true, a private copy made by a withdrawal is NOT deleted if the transaction fails. The set-aside file may be
+   * the only copy of the evidence (the public object is already gone), and a retry finds the file already moved.
+   */
+  keepWithdrawnCopyOnFailure?: boolean;
+}
+
 @Injectable()
 export class UserImageReviewService {
   private readonly logger = new Logger(UserImageReviewService.name);
@@ -78,6 +98,7 @@ export class UserImageReviewService {
     kind: ProfileImageKind,
     reason: unknown,
     expectedKey?: string,
+    options: ProfileImageRejectionOptions = {},
   ): Promise<ProfileImageRejection> {
     const cleaned = this.cleanReason(reason);
 
@@ -132,6 +153,12 @@ export class UserImageReviewService {
           throw new NotFoundException(row ? `This user has no ${kind} to reject` : 'User not found');
         }
 
+        if (options.inTransaction) {
+          const endKey = movedTo ?? guardKey ?? (await this.keyIn(tx, userId, kind));
+          if (!endKey) throw new NotFoundException(`This user has no ${kind} to reject`);
+          await options.inTransaction(tx, endKey);
+        }
+
         await tx.notification.create({
           data: {
             userId,
@@ -144,13 +171,20 @@ export class UserImageReviewService {
     } catch (err) {
       // The rejection was not written. A private copy made for it must not outlive it -- unless another rejection
       // of the same picture won the race and the row now points at exactly that file.
-      if (movedTo) await this.discardPrivateCopy(userId, kind, movedTo);
+      if (movedTo && !options.keepWithdrawnCopyOnFailure) await this.discardPrivateCopy(userId, kind, movedTo);
       throw err;
     }
 
     this.guardianNotices.notifyInBackground(userId, 'profile_image_not_approved');
 
     return { userId, kind, status: 'rejected' };
+  }
+
+  // The key the row points at, read inside a transaction (the rejection has just written the status, not the key).
+  private async keyIn(tx: Prisma.TransactionClient, userId: string, kind: ProfileImageKind): Promise<string | null> {
+    const row = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
+    if (!row) return null;
+    return (kind === 'avatar' ? row.avatarKey : row.coverKey) ?? null;
   }
 
   private async currentKey(userId: string, kind: ProfileImageKind): Promise<string | null> {
@@ -202,6 +236,9 @@ export class UserImageReviewService {
     try {
       const live = await this.currentKey(userId, kind);
       if (live === privateKey) return;
+      // B-206: a file that now has a set-aside record (a concurrent set-aside won) is evidence and is never discarded.
+      const free = await profileKeysToDeleteNow(this.prisma, [{ kind, userId, key: privateKey }], new Date());
+      if (free.length === 0) return;
       await this.discardQuietly(privateKey);
     } catch (err) {
       this.logger.warn(
