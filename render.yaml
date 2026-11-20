@@ -3,13 +3,13 @@
 # (Postgres) + Upstash (Redis), unbundled. Imported in Render's dashboard
 # ("New > Blueprint") to create the services below.
 #
-# HOSTING REGION: everything is hosted in the EU. Both services use
+# HOSTING REGION: Render is in Frankfurt (EU). Both API services use
 # `region: frankfurt`. Render does not allow a service's region to be changed
 # after creation (docs.render.com/blueprint-spec: "You can't modify this value
 # after creation"), so this must be right BEFORE the first import. Neon
-# (Postgres) and Upstash (Redis) must ALSO be created in an EU region, in or
-# near the same area as the Render service, to keep latency low and data in the
-# EU. This file cannot enforce that; it is a manual step (docs/deployment.md).
+# (Postgres) and Upstash (Redis) are created in London (eu-west-2), NOT in the EU (the founder's own
+# choice of 2026-11-19, Decision Log #536: Render has only Frankfurt for Europe). This file cannot
+# enforce that; it is a manual step (docs/deployment.md).
 # The two static sites (apps/web, apps/admin) have NO `region`: Render documents it as unsupported for static sites, which are served
 # from a global CDN. The EU rule therefore covers the API, the database and the cache; the static files are public by design and hold
 # no personal data.
@@ -237,7 +237,9 @@ services:
       - key: SPORTS_DATA_MAX_REFRESH_PAGES
         value: "1"
       # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
-      # S3_BUCKET is the PUBLIC bucket (served by S3_PUBLIC_BASE_URL, https://media.soccernity.com); S3_PRIVATE_BUCKET is
+      # STAGING: S3_BUCKET is the PUBLIC bucket (soccernity-staging-public, served by S3_PUBLIC_BASE_URL, https://media.staging.soccernity.com); S3_PRIVATE_BUCKET is
+      # the PRIVATE one (soccernity-staging-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
+      # https://<account-id>.eu.r2.cloudflarestorage.com. Staging and production never share a bucket, a token or a media host (Decision Log #535).
       # the PRIVATE one (no public address of any kind). Production refuses to start without a distinct private bucket (B-265).
       - key: S3_BUCKET
         sync: false
@@ -249,7 +251,7 @@ services:
         sync: false
       - key: S3_ENDPOINT
         sync: false
-      # S3_PUBLIC_BASE_URL: the custom domain on the PUBLIC bucket only (https://media.soccernity.com);
+      # S3_PUBLIC_BASE_URL: the custom domain on the PUBLIC bucket only (https://media.staging.soccernity.com);
       # unset keeps <endpoint>/<bucket>/<key>, which is NOT publicly readable on R2
       - key: S3_PUBLIC_BASE_URL
         sync: false
@@ -598,7 +600,9 @@ services:
       - key: SPORTS_DATA_MAX_REFRESH_PAGES
         value: "1"
       # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
-      # S3_BUCKET is the PUBLIC bucket (served by S3_PUBLIC_BASE_URL, https://media.soccernity.com); S3_PRIVATE_BUCKET is
+      # PRODUCTION: S3_BUCKET is the PUBLIC bucket (soccernity-media-public, served by S3_PUBLIC_BASE_URL, https://media.soccernity.com); S3_PRIVATE_BUCKET is
+      # the PRIVATE one (soccernity-media-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
+      # https://<account-id>.eu.r2.cloudflarestorage.com. Staging and production never share a bucket, a token or a media host (Decision Log #535).
       # the PRIVATE one (no public address of any kind). Production refuses to start without a distinct private bucket (B-265).
       - key: S3_BUCKET
         sync: false
@@ -797,15 +801,16 @@ services:
         source: /*
         destination: /index.html
     # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
-    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT: its real host contains the
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
     # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
-    # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # the exact host then. The public bucket is served at https://media.staging.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
     # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
     # proxy if B-251 is built; if both set a header, check the response for a duplicate.
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.soccernity.com; media-src 'self' https://media.soccernity.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com https://*.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.staging.soccernity.com; media-src 'self' https://media.staging.soccernity.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
@@ -840,15 +845,16 @@ services:
         source: /*
         destination: /index.html
     # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
-    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT: its real host contains the
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
     # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
-    # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # the exact host then. The public bucket is served at https://media.staging.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
     # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
     # proxy if B-251 is built; if both set a header, check the response for a duplicate.
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.soccernity.com https://*.r2.cloudflarestorage.com; media-src 'self' https://media.soccernity.com https://*.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com; frame-src 'none'"
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; media-src 'self' https://media.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com; frame-src 'none'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
@@ -880,7 +886,8 @@ services:
         source: /*
         destination: /index.html
     # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
-    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT: its real host contains the
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
     # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
     # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
     # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
@@ -888,7 +895,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.soccernity.com; media-src 'self' https://media.soccernity.com; font-src 'self'; connect-src 'self' https://api.soccernity.com https://*.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.soccernity.com; media-src 'self' https://media.soccernity.com; font-src 'self'; connect-src 'self' https://api.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
@@ -927,7 +934,8 @@ services:
         source: /*
         destination: /index.html
     # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
-    # variables into this file, so the origins are written out. https://*.r2.cloudflarestorage.com stands for S3_ENDPOINT: its real host contains the
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
     # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
     # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
     # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
@@ -935,7 +943,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.soccernity.com https://*.r2.cloudflarestorage.com; media-src 'self' https://media.soccernity.com https://*.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.soccernity.com; frame-src 'none'"
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; media-src 'self' https://media.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.soccernity.com; frame-src 'none'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff

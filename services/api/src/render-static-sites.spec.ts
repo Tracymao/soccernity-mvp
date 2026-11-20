@@ -180,8 +180,11 @@ describe('render.yaml static sites (B-179)', () => {
         expect(d.get('connect-src')).toEqual(
           expect.arrayContaining(['https://api.stripe.com', 'https://*.r2.cloudflarestorage.com']),
         );
-        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', 'blob:', 'https://media.soccernity.com']));
-        expect(d.get('media-src')).toEqual(expect.arrayContaining(["'self'", 'https://media.soccernity.com']));
+        // Each environment has its own media host (Decision Log #535).
+        const media = env === 'staging' ? 'https://media.staging.soccernity.com' : 'https://media.soccernity.com';
+        expect(d.get('connect-src')).toEqual(expect.arrayContaining(['https://*.eu.r2.cloudflarestorage.com']));
+        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', 'blob:', media]));
+        expect(d.get('media-src')).toEqual(expect.arrayContaining(["'self'", media]));
         expect(d.get('worker-src')).toEqual(["'self'"]);
       });
 
@@ -196,8 +199,9 @@ describe('render.yaml static sites (B-179)', () => {
         expect(d.get('script-src')).toEqual(["'self'"]);
         expect(d.get('connect-src')).toEqual(["'self'", origins.api]);
         // The review queue plays a 5-minute signed link on the S3 endpoint, so admin needs that origin too.
-        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', 'https://media.soccernity.com', 'https://*.r2.cloudflarestorage.com']));
-        expect(d.get('media-src')).toEqual(expect.arrayContaining(['https://media.soccernity.com', 'https://*.r2.cloudflarestorage.com']));
+        const media = env === 'staging' ? 'https://media.staging.soccernity.com' : 'https://media.soccernity.com';
+        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', media, 'https://*.r2.cloudflarestorage.com', 'https://*.eu.r2.cloudflarestorage.com']));
+        expect(d.get('media-src')).toEqual(expect.arrayContaining([media, 'https://*.r2.cloudflarestorage.com', 'https://*.eu.r2.cloudflarestorage.com']));
         expect(hs.some((h) => h.path === '/sw.js')).toBe(false);
       });
     }
