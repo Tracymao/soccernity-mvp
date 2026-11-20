@@ -1,0 +1,643 @@
+/* Users admin screen (Figma node 917:218 — Decision Log #142, backed by
+ * sprint-5/admin-users-dashboard-backend). Light mode only; every colour
+ * is a --sn-* token. Destructive/blocking actions are navy, not red — no
+ * destructive token exists (non-negotiable #3), same convention
+ * pages/content/content.css / pages/moderation/moderation.css use. */
+
+.us-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.us-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.us-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.us-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.us-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.us-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.us-loading,
+.us-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.us-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  /* Error accent bar: semantic/alert, as the frames draw it (Decision Log
+   * #408 item 4, B-166). Accent only; the text stays navy. */
+  border-left: 6px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.us-row-error {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.us-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.us-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.us-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.us-table__row {
+  display: grid;
+  grid-template-columns: 1.4fr 130px 110px 220px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.us-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.us-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.us-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.us-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.us-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.us-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.us-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* the frames write these labels in sentence case ("Support action"), unlike the lowercase status values */
+.us-pill--plain {
+  text-transform: none;
+}
+
+/* actions */
+
+.us-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.us-actions__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.us-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.us-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.us-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.us-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.us-btn--sm {
+  padding: 10px 20px;
+  font-size: 14px;
+  align-self: flex-start;
+}
+
+.us-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-confirm span {
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+/* User Detail + Correct date of birth (B-109 / B-104; Figma W0 pass C
+ * 6647:25540, 6649:24980-25952). Light mode, tokens only; blocking and
+ * destructive actions are navy, never red (non-negotiable #3). */
+
+.ud-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ud-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.ud-fields__row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.ud-fields__row dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-fields__row dd {
+  margin: 0;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.ud-fields__mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.ud-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ud-action--divided {
+  border-top: 1px solid var(--sn-icon-inactive);
+  padding-top: 16px;
+}
+
+.ud-action__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-action__body {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.ud-field label {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-input {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.ud-input--readonly {
+  background-color: var(--sn-background-surface);
+}
+
+.ud-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+#dob-reason,
+.ud-field:has(#dob-reason) {
+  max-width: none;
+}
+
+.ud-field__help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-field__error {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-callout {
+  padding: 12px 14px;
+  border-left: 3px solid var(--sn-brand-navy);
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+/* The "never put a date of birth in the reason" warning is the one callout
+ * that must not be skimmed past: heavier border, same two-colour palette. */
+.ud-callout--warning {
+  border: 1px solid var(--sn-brand-navy);
+  border-left-width: 6px;
+}
+
+.ud-guardian {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.ud-guardian legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-buttons,
+.ud-dialog__buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.us-btn--lg {
+  padding: 10px 20px;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+a.us-btn {
+  text-decoration: none;
+}
+
+.ud-scrim {
+  position: fixed;
+  inset: 0;
+  background-color: var(--sn-overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.ud-dialog {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 12px;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated);
+}
+
+.ud-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.ud-dialog__head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--sn-text-primary);
+}
+
+.ud-dialog__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.ud-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px 22px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.ud-dialog__summary {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.ud-dialog__summary p {
+  margin: 0 0 4px;
+}
+
+.ud-dialog__reason {
+  color: var(--sn-text-secondary);
+}
+
+.ud-dialog__subtitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ud-dialog__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ud-dialog__buttons {
+  justify-content: flex-end;
+}
+
+/* B-033 revoke dialog, B-120 incorrect-details reports, B-104 guardian block
+ * (Figma W0 pass C / pass K). Tokens only. The frames draw the error bar and
+ * the invalid-field stroke in semantic/alert (#FA0606), a founder-authorised
+ * exception to non-negotiable #3 (Decision Log #99, #408 item 4, B-166). It is
+ * used for the accent only (bar, border); error text and buttons stay navy,
+ * because white-on-alert is 4.12:1, below AA. */
+
+.ud-callout--error {
+  margin: 0;
+  border: 1px solid var(--sn-brand-navy);
+  border-left: 6px solid var(--sn-semantic-alert);
+  font-weight: 600;
+}
+
+p.ud-callout {
+  margin: 0;
+}
+
+.ud-fields__muted {
+  color: var(--sn-text-secondary);
+}
+
+.ud-field--wide {
+  max-width: none;
+}
+
+.ud-dialog__text {
+  margin: 0;
+}
+
+.ud-input[aria-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
+  border-width: 2px;
+}
+
+.us-pill--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.ir-row {
+  grid-template-columns: 1fr 150px 100px 1fr 1.5fr 80px 100px 90px;
+  gap: 12px;
+}
+
+.ir-row + .ir-row:not(.us-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.ir-empty {
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* B-282 Guardian notices section (Figma 6920:34766 and its family, Decision Log #458). Tokens only, two-colour
+ * palette. The alert colour is the callout bar only (Decision Log #408 item 4); the buttons are navy, because no
+ * destructive token exists (non-negotiable #3). */
+
+.gn-card {
+  gap: 14px;
+}
+
+.gn-copy-tag {
+  margin: 0;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+.gn-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gn-heading .us-card__title {
+  margin: 0;
+}
+
+.gn-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-info {
+  margin: 0;
+}
+
+.gn-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: var(--sn-background-surface);
+  font-weight: normal;
+}
+
+.gn-alert__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.gn-alert__body {
+  margin: 0;
+  font-size: 13px;
+}
+
+.gn-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gn-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+  margin: 0;
+}
+
+.gn-facts dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.gn-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gn-reason__label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-reason__text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.gn-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

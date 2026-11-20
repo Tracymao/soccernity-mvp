@@ -1,0 +1,21 @@
+/* Layout for the core auth routes -- Top Bar + routed content, no site
+ * Header. Deliberately mirrors AppShell.css (same 32px content padding),
+ * so the auth screens that were built to cancel AppShell's padding with a
+ * negative margin (LoginPage, SignupSplitScreen, ClubPickerStep) keep
+ * working unchanged -- only the chrome above them differs. */
+
+/* B-187: the Top Bar is 90px at EVERY width (AuthTopBar.css has no breakpoint), so
+ * unlike AppShell the chrome height does not change on mobile. Pages that fill
+ * the viewport (signup split screen, club picker) read this variable. */
+.sn-auth-chrome {
+  --sn-chrome-height: 90px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--sn-background-page);
+}
+
+.sn-auth-chrome__content {
+  flex: 1;
+  padding: 32px;
+}

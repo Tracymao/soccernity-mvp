@@ -2,7 +2,7 @@
   "name": "@soccernity/web",
   "private": true,
   "version": "0.1.0",
-  "description": "Soccernity fan-facing web app (React). Screens built here should already be marked complete by figma-design-system or figma-screen-builder \u2014 see CLAUDE.md.",
+  "description": "Soccernity fan-facing web app (React). Screens built here should already be marked complete by figma-design-system or figma-screen-builder — see CLAUDE.md.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,20 +10,31 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\" --no-error-on-unmatched-pattern"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
-    "@soccernity/shared": "*"
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
+    "@soccernity/shared": "*",
+    "@stripe/react-stripe-js": "^6.11.0",
+    "@stripe/stripe-js": "^9.17.0",
+    "qrcode.react": "4.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.5.0"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@eslint/js": "^9.39.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.72.0",
+    "@typescript-eslint/parser": "^8.72.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.34.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0"
+    "globals": "^17.14.0",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

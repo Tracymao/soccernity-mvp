@@ -1,0 +1,189 @@
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import AdminProfilePage from "./AdminProfilePage";
+import { AdminApiError } from "../api/adminClient";
+import { clearAdminSession, getAdminAccessToken, replaceAdminAccessToken } from "../lib/adminSession";
+
+vi.mock("../api/adminAuth", () => ({
+  updateAdminProfile: vi.fn(),
+  changeAdminPassword: vi.fn(),
+}));
+import { updateAdminProfile, changeAdminPassword } from "../api/adminAuth";
+
+vi.mock("../auth/AdminAuthContext", () => ({ useAdminAuth: vi.fn() }));
+import { useAdminAuth } from "../auth/AdminAuthContext";
+
+const applyProfile = vi.fn();
+const ADMIN = {
+  id: "admin-1",
+  email: "kuponiyi.abraham@soccernity.com",
+  fullName: "Kuponiyi Abraham",
+  phone: "+234 800 000 0000",
+  role: "superadmin",
+  accountStatus: "active",
+  createdAt: "",
+  updatedAt: "",
+};
+
+beforeEach(() => {
+  vi.mocked(updateAdminProfile).mockReset();
+  vi.mocked(changeAdminPassword).mockReset();
+  applyProfile.mockReset();
+  (useAdminAuth as unknown as Mock).mockReturnValue({
+    status: "authenticated",
+    admin: ADMIN,
+    login: vi.fn(),
+    logout: vi.fn(),
+    applyProfile,
+  });
+});
+afterEach(() => {
+  cleanup();
+  clearAdminSession();
+});
+
+// The page header now carries the working admin search bar (B-114); the form fields exclude it.
+const fieldTextboxes = () =>
+  screen.queryAllByRole("textbox").filter((el) => el.getAttribute("aria-label") !== "Search Soccernity");
+
+describe("AdminProfilePage — view", () => {
+  it("shows the four fields read-only with a title-cased role", () => {
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByText("Kuponiyi Abraham").length).toBeGreaterThan(0);
+    expect(screen.getByText("kuponiyi.abraham@soccernity.com")).not.toBeNull();
+    expect(screen.getAllByText("Super Admin").length).toBeGreaterThan(0);
+    expect(screen.getByText("+234 800 000 0000")).not.toBeNull();
+    expect(fieldTextboxes()).toHaveLength(0);
+  });
+});
+
+describe("AdminProfilePage — edit", () => {
+  it("edits fullName + phone only; email and role are locked, not inputs", () => {
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    // exactly two text inputs: Full name + Phone
+    const inputs = fieldTextboxes();
+    expect(inputs.length).toBe(2);
+    expect(screen.getByText(/changed by a superadmin, not here/i)).not.toBeNull();
+  });
+
+  it("PATCHes the profile and adopts the result", async () => {
+    const updated = { ...ADMIN, fullName: "Kuponiyi A. Abraham" };
+    vi.mocked(updateAdminProfile).mockResolvedValue(updated);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    const [nameInput] = fieldTextboxes();
+    fireEvent.change(nameInput, { target: { value: "Kuponiyi A. Abraham" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateAdminProfile).toHaveBeenCalledWith({
+        fullName: "Kuponiyi A. Abraham",
+        phone: "+234 800 000 0000",
+      }),
+    );
+    expect(applyProfile).toHaveBeenCalledWith(updated);
+  });
+});
+
+describe("AdminProfilePage — change password", () => {
+  function openPanel() {
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change Password" }));
+  }
+  const fill = (label: RegExp, value: string) =>
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
+  it("rejects a mismatch client-side without calling the API", () => {
+    openPanel();
+    fill(/current password/i, "oldpass12");
+    fill(/^new password/i, "newpass123");
+    fill(/confirm new password/i, "different99");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+    expect(screen.getByRole("alert").textContent).toContain("don’t match");
+    expect(changeAdminPassword).not.toHaveBeenCalled();
+  });
+
+  it("rejects a short new password client-side", () => {
+    openPanel();
+    fill(/current password/i, "oldpass12");
+    fill(/^new password/i, "short");
+    fill(/confirm new password/i, "short");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+    expect(screen.getByRole("alert").textContent).toContain("at least 8");
+    expect(changeAdminPassword).not.toHaveBeenCalled();
+  });
+
+  it("shows the other-sessions-signed-out message on success and stores the FRESH session (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockResolvedValue({ accessToken: "fresh-access" });
+    openPanel();
+    fill(/current password/i, "oldpass12");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/signed out of every other Admin Console session/i)).not.toBeNull(),
+    );
+    expect(changeAdminPassword).toHaveBeenCalledWith("oldpass12", "brandnewpass1");
+    // The change revoked this device's old session; the fresh one keeps the operator signed in.
+    expect(getAdminAccessToken()).toBe("fresh-access");
+  });
+
+  it("204 (enforced two-factor, none enrolled): ends the session locally instead of showing success (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockResolvedValue(null);
+    openPanel();
+    fill(/current password/i, "oldpass12");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => expect(getAdminAccessToken()).toBeNull());
+    expect(screen.queryByText(/signed out of every other Admin Console session/i)).toBeNull();
+  });
+
+  it("surfaces a wrong current password (401)", async () => {
+    vi.mocked(changeAdminPassword).mockRejectedValue(new AdminApiError(401, "unauthorized"));
+    openPanel();
+    fill(/current password/i, "wrongpass1");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("current password is incorrect"),
+    );
+  });
+
+  it("a wrong current password leaves the existing session untouched (B-310)", async () => {
+    replaceAdminAccessToken("old-access");
+    vi.mocked(changeAdminPassword).mockRejectedValue(new AdminApiError(401, "unauthorized"));
+    openPanel();
+    fill(/current password/i, "wrongpass1");
+    fill(/^new password/i, "brandnewpass1");
+    fill(/confirm new password/i, "brandnewpass1");
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).not.toBeNull());
+    expect(getAdminAccessToken()).toBe("old-access");
+  });
+});

@@ -1,0 +1,44 @@
+// Shared two-panel shell for all three signup-entry screens (Age Gate,
+// Guardian Details Capture, Register). Figma renders each as a fixed
+// 1440x900(+) canvas with just a logo bar and no site nav.
+//
+// DECISION LOG #172, resolved: the /signup route (and /login, /forgot-
+// password, /reset-password) render under AuthChrome, which supplies the
+// logo-only "Top Bar -- Soccernity" -- not AppShell's full site Header.
+// So this component no longer draws its own wordmark lockup (it would
+// double up under the Top Bar). AuthChrome keeps AppShell's 32px content
+// padding, so SignupSplitScreen.css's `margin: -32px` full-bleed
+// technique is unchanged.
+import type { ReactNode, CSSProperties } from "react";
+import "./SignupSplitScreen.css";
+
+interface SignupSplitScreenProps {
+  variant: "dark" | "light";
+  themeVars: CSSProperties;
+  /** Right panel tone. "navy" = the safeguarding panel of the Age Gate family
+   * (white copy on brand navy, Figma 5108:6626); default = the variant's own. */
+  rightTone?: "navy";
+  /** Left panel content, rendered below the logo (eyebrow/heading/form/etc). */
+  children: ReactNode;
+  /** Right panel content -- safeguarding copy + rings, or the Register illustration. */
+  rightPanel: ReactNode;
+}
+
+export default function SignupSplitScreen({
+  variant,
+  themeVars,
+  rightTone,
+  children,
+  rightPanel,
+}: SignupSplitScreenProps) {
+  const navyRight = rightTone === "navy";
+  return (
+    <div
+      className={`signup-split signup-split--${variant}${navyRight ? " signup-split--navy-right" : ""}`}
+      style={themeVars}
+    >
+      <div className="signup-split__left">{children}</div>
+      <div className={`signup-split__right${navyRight ? " signup-split__right--navy" : ""}`}>{rightPanel}</div>
+    </div>
+  );
+}

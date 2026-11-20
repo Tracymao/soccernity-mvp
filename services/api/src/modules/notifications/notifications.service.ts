@@ -1,0 +1,582 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  NOTIFICATIONS_DEFAULT_PAGE_SIZE,
+  NOTIFICATIONS_MAX_PAGE_SIZE,
+} from './notifications.constants';
+import { decodeNotificationCursor, encodeNotificationCursor } from './cursor.util';
+import { NotificationsQueryDto } from './dto/notifications-query.dto';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
+import { notificationBlockHiddenFilter } from './block-visibility.util';
+import { PROFILE_IMAGE_KINDS, ProfileImageKind } from '../users/user-image-review.service';
+import { POST_MEDIA_NOTIFICATION_TYPES } from '../post-media/post-media-review.constants';
+import { USERNAME_REVIEW_NOTIFICATION_TYPE, UsernameReviewOutcome } from '../username-review/username-review.constants';
+
+// The seven real MVP notification types — see schema.prisma's own comment
+// on Notification.type for the authoritative list and where each is
+// written (sprint-3/notification-triggers-message-fixture-contest,
+// Decision Log #87/#278). `payloadRefId` is a bare, untyped string with no
+// FK — a referenced row can be gone by the time this reads it (hard
+// account deletion, Decision Log #44's cascade), which is why every
+// resolved `data` field below is nullable.
+const NOTIFICATION_ROW_SELECT = {
+  id: true,
+  userId: true,
+  type: true,
+  payloadRefId: true,
+  read: true,
+  createdAt: true,
+} as const;
+
+type NotificationRow = Prisma.NotificationGetPayload<{ select: typeof NOTIFICATION_ROW_SELECT }>;
+
+// ---------------------------------------------------------------------
+// Resolved `data` shapes. Deliberately structured data, not pre-rendered
+// English — copy/templating is a frontend concern; DL #279 already
+// finalized the exact per-type wording in Figma, and baking strings into
+// this API would fight that. The frontend switches on the notification's
+// own `type` field to know which of these shapes to expect.
+// ---------------------------------------------------------------------
+
+// follow — payloadRefId IS the actor's own userId (see users.service.ts),
+// so this is the one type where the actor is directly resolvable.
+export interface NotificationActor {
+  id: string;
+  // username if set, else displayName (users/public-name.util.ts)
+  publicName: string;
+}
+
+// like / comment — payloadRefId is the POST, not an actor. A real,
+// disclosed limitation, not an oversight: neither Like nor Comment stores
+// who performed the action anywhere Notification can reach without
+// touching the trigger call sites (out of this PR's scope) — so a
+// like/comment notification can resolve WHAT was liked/commented on, but
+// never WHO did it. See notifications/README.md for the open Decision Log
+// candidate (a future `actorId` column).
+export interface NotificationPost {
+  id: string;
+  contentText: string;
+  authorId: string;
+}
+
+// message — payloadRefId is the conversationId (one collapsed unread row
+// per thread, not per message). The caller of GET /notifications is
+// always the notification's own recipient, and a Conversation is always
+// exactly 2 participants, so "the other participant" is unambiguous and
+// doubles as the sender. `null` only for the ghost case (Decision Log
+// #44's cascade hard-deleted them) — same as messaging's own
+// OtherParticipant.
+export interface NotificationOtherParticipant {
+  id: string;
+  publicName: string | null;
+}
+
+// fixture_scheduled / result_logged — payloadRefId is the fixtureId.
+// `teamBName` is null when the away side is a free-text opponent
+// (Decision Log #256) rather than a registered team — the API returns
+// the raw value, same "Opponent TBC" fallback stays a frontend concern
+// precedent FIXTURE_SELECT itself already established.
+export interface NotificationFixture {
+  id: string;
+  teamAName: string;
+  teamBName: string | null;
+  scheduledAt: Date;
+  status: string;
+  result: { scoreA: number; scoreB: number } | null;
+}
+
+// contest_win — payloadRefId is the cycleId, deliberately not
+// roundId/entryId (contest.service.ts's own comment: "the one
+// single-resource read endpoint that exists today"). This resolves the
+// cycle's title only — which week or position was won is not
+// recoverable from this reference without a correlated query the
+// upstream design deliberately avoided storing a pointer for; not
+// reproduced here either, for the same reason.
+export interface NotificationContestCycle {
+  id: string;
+  title: string;
+}
+
+// The seven scheduled Contest events (backend/w3c-contest-notifications, B-122, Decision Log #404
+// item 16). payloadRefId is "<cycleId>:<week>" for the week-level types and "<cycleId>" for the
+// cycle-level ones; both resolve to the cycle plus `week` (null for cycle-level). For
+// contest_final_result only, `outcome` says whether the month produced winners or "No winner this
+// month" (derived from the cycle's standings when the notification is read, so the row itself
+// stays a plain pointer).
+export const CONTEST_EVENT_NOTIFICATION_TYPES = [
+  'contest_week_opens',
+  'contest_votes_closing',
+  'contest_week_result',
+  'contest_finalist',
+  'contest_reveal',
+  'contest_final_result',
+  'contest_upload_reminder',
+] as const;
+export type ContestOutcome = 'winners' | 'no_winner';
+
+// match_kickoff — payloadRefId is MatchData.externalRef (sprint-4/match-kickoff-alerts, Decision Log
+// #336 item 2). Structured fields only, copy stays a frontend concern. Nullable: the match row can be
+// absent if it was never refreshed again after the subscription (a subscription itself is a plain
+// string reference with no FK, by design).
+export interface NotificationMatch {
+  externalRef: string;
+  competition: string;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+  kickoffTime: Date;
+  status: string;
+}
+
+export type NotificationData =
+  | { actor: NotificationActor }
+  | { match: NotificationMatch }
+  | { post: NotificationPost }
+  | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
+  | { fixture: NotificationFixture }
+  | { cycle: NotificationContestCycle; week?: number | null; outcome?: ContestOutcome }
+  // age_milestone: payloadRefId is the milestone key (e.g. 'under_16_lifted').
+  | { milestone: string }
+  // profile_image_rejected (B-214): payloadRefId is 'avatar' | 'cover'. Names which image only;
+  // the moderator's reason is NOT here, it is on the owner's own GET /users/:id.
+  | { image: ProfileImageKind }
+  // post_media_approved / post_media_rejected (B-037): payloadRefId is the PostMedia id. Names which file
+  // only; the moderator's reason is NOT here, it is on the uploader's own GET /media/uploads/:id.
+  | { media: { id: string; kind: string } }
+  // username_review_decided (B-139 part (c), Decision Log #467): payloadRefId is the outcome. The admin's reason is
+  // NOT here or anywhere the user can read it.
+  | { usernameReview: { outcome: UsernameReviewOutcome } };
+
+export interface NotificationView {
+  id: string;
+  type: string;
+  read: boolean;
+  createdAt: Date;
+  payloadRefId: string | null;
+  // null when payloadRefId is missing, or the referenced row is gone.
+  data: NotificationData | null;
+}
+
+export interface NotificationPage {
+  items: NotificationView[];
+  nextCursor: string | null;
+  unreadCount: number;
+}
+
+@Injectable()
+export class NotificationsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // GET /notifications — the caller's own inbox, keyset-paginated
+  // newest-first (Notification.createdAt desc, id desc — the same
+  // direction feed/clubs/banter/messaging's own list endpoints page in).
+  // Implicitly self-scoped: no :id param, always `userId` from the
+  // caller's own access token, same as GET /contest/current.
+  //
+  // unreadCount is computed alongside the page (one extra COUNT query,
+  // in parallel) so the Notification Centre page itself doesn't need a
+  // second round-trip to GET /notifications/unread-count just to render
+  // its own header — that endpoint exists for callers (the Navbar badge,
+  // rendered on every page) that need the count WITHOUT paying for a
+  // full resolved page.
+  async listNotifications(
+    userId: string,
+    query: NotificationsQueryDto,
+  ): Promise<NotificationPage> {
+    const limit = Math.min(query.limit ?? NOTIFICATIONS_DEFAULT_PAGE_SIZE, NOTIFICATIONS_MAX_PAGE_SIZE);
+
+    const hidden = await notificationBlockHiddenFilter(this.prisma, userId);
+    const base: Prisma.NotificationWhereInput = { userId, ...hidden };
+    const where: Prisma.NotificationWhereInput = query.cursor
+      ? { AND: [base, this.buildCursorFilter(query.cursor)] }
+      : base;
+
+    const [rows, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        select: NOTIFICATION_ROW_SELECT,
+      }),
+      this.getUnreadCount(userId, hidden),
+    ]);
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeNotificationCursor({ createdAt: last.createdAt, id: last.id }) : null;
+
+    const items = await this.resolveNotifications(trimmed);
+    return { items, nextCursor, unreadCount };
+  }
+
+  // GET /notifications/unread-count — a dedicated, lightweight endpoint
+  // (a single COUNT query, no resolution work) rather than folding this
+  // into GET /notifications alone. The Navbar avatar/badge renders on
+  // EVERY page (Header.tsx), so it needs the count without paying for a
+  // resolved 20-item page it will never render.
+  async getUnreadCount(
+    userId: string,
+    hiddenByBlock?: Prisma.NotificationWhereInput,
+  ): Promise<number> {
+    const hidden = hiddenByBlock ?? (await notificationBlockHiddenFilter(this.prisma, userId));
+    return this.prisma.notification.count({ where: { userId, read: false, ...hidden } });
+  }
+
+  // PATCH /notifications/:id/read — marks one notification read.
+  // Not-found-or-not-owned -> 404, never 403 (the same "don't leak
+  // resource existence to a non-owner" convention as
+  // UsersService.assertFollowGraphVisible / MessagingService.assertParticipant
+  // — a notification id is only ever legitimately referenced by its own
+  // owner). Idempotent: marking an already-read row read again is a
+  // no-op 200, matching this codebase's "repeat action is not an error"
+  // philosophy for like/save/follow, applied here to a boolean flip
+  // rather than a toggle relationship.
+  async markRead(userId: string, notificationId: string): Promise<NotificationView> {
+    // B-197: a row hidden by a Block is not visible to its owner, so it is the
+    // same 404 as a missing row (and is left untouched).
+    const row = await this.prisma.notification.findFirst({
+      where: { id: notificationId, userId, ...(await notificationBlockHiddenFilter(this.prisma, userId)) },
+      select: NOTIFICATION_ROW_SELECT,
+    });
+    if (!row) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    if (!row.read) {
+      await this.prisma.notification.update({
+        where: { id: notificationId },
+        data: { read: true },
+      });
+    }
+
+    const [resolved] = await this.resolveNotifications([{ ...row, read: true }]);
+    return resolved;
+  }
+
+  // PATCH /notifications/read-all — marks every unread row read for the
+  // caller. Mirrors MessagingService.markConversationRead's own
+  // `{ markedRead }` shape.
+  async markAllRead(userId: string): Promise<{ markedRead: number }> {
+    // B-197: rows hidden by a Block are left untouched (and not counted).
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, read: false, ...(await notificationBlockHiddenFilter(this.prisma, userId)) },
+      data: { read: true },
+    });
+    return { markedRead: result.count };
+  }
+
+  private buildCursorFilter(raw: string): Prisma.NotificationWhereInput {
+    const cursor = decodeNotificationCursor(raw);
+    return {
+      OR: [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+      ],
+    };
+  }
+
+  // Batched row -> NotificationView resolution. At most SIX extra
+  // queries for a whole page, never one per row (no N+1): one for the
+  // referenced Posts (like/comment), one for the referenced
+  // Conversations (message) plus the "other participant" lookups those
+  // conversations imply, one combined User lookup covering BOTH the
+  // follow actors and the message other-participants (both need only
+  // { id, displayName }), one for the referenced Fixtures
+  // (fixture_scheduled/result_logged), and one for the referenced
+  // ContestCycles (contest_win), and one for the MatchData rows (match_kickoff). Each query only runs if the page
+  // actually contains that type — an empty page, or a page of a single
+  // type, costs fewer than five.
+  private async resolveNotifications(rows: NotificationRow[]): Promise<NotificationView[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const refIdsFor = (types: string[]) =>
+      [...new Set(rows.filter((r) => types.includes(r.type) && r.payloadRefId).map((r) => r.payloadRefId as string))];
+
+    const followRefIds = refIdsFor(['follow']);
+    const postRefIds = refIdsFor(['like', 'comment']);
+    const conversationRefIds = refIdsFor(['message']);
+    const fixtureRefIds = refIdsFor(['fixture_scheduled', 'result_logged']);
+    // contest_win's payloadRefId is the bare cycleId; the scheduled Contest events add an optional
+    // ":<week>" suffix, so the cycle id is everything before the colon.
+    const contestEventRefIds = refIdsFor([...CONTEST_EVENT_NOTIFICATION_TYPES]);
+    const cycleRefIds = [
+      ...new Set([...refIdsFor(['contest_win']), ...contestEventRefIds.map((r) => splitContestRef(r).cycleId)]),
+    ];
+    const finalResultCycleIds = [
+      ...new Set(refIdsFor(['contest_final_result']).map((r) => splitContestRef(r).cycleId)),
+    ];
+    const matchRefIds = refIdsFor(['match_kickoff']);
+    const mediaRefIds = refIdsFor([...POST_MEDIA_NOTIFICATION_TYPES]);
+
+    const [posts, conversations, fixtures, cycles, matches, standingCycleRows, mediaRows] = await Promise.all([
+      postRefIds.length > 0
+        ? this.prisma.post.findMany({
+            // B-289: a post a moderator removed is gone for a notification too (data: null, "no longer available").
+            where: { id: { in: postRefIds }, removedByModerationAt: null },
+            select: { id: true, contentText: true, authorId: true },
+          })
+        : Promise.resolve([] as { id: string; contentText: string; authorId: string }[]),
+      conversationRefIds.length > 0
+        ? this.prisma.conversation.findMany({
+            where: { id: { in: conversationRefIds } },
+            select: { id: true, participantIds: true },
+          })
+        : Promise.resolve([] as { id: string; participantIds: string[] }[]),
+      fixtureRefIds.length > 0
+        ? this.prisma.fixture.findMany({
+            where: { id: { in: fixtureRefIds } },
+            select: {
+              id: true,
+              scheduledAt: true,
+              status: true,
+              teamA: { select: { name: true } },
+              teamB: { select: { name: true } },
+              opponentName: true,
+              result: { select: { scoreA: true, scoreB: true } },
+            },
+          })
+        : Promise.resolve(
+            [] as {
+              id: string;
+              scheduledAt: Date;
+              status: string;
+              teamA: { name: string };
+              teamB: { name: string } | null;
+              opponentName: string | null;
+              result: { scoreA: number; scoreB: number } | null;
+            }[],
+          ),
+      cycleRefIds.length > 0
+        ? this.prisma.contestCycle.findMany({
+            where: { id: { in: cycleRefIds } },
+            select: { id: true, title: true },
+          })
+        : Promise.resolve([] as { id: string; title: string }[]),
+      matchRefIds.length > 0
+        ? this.prisma.matchData.findMany({
+            where: { externalRef: { in: matchRefIds } },
+            select: {
+              externalRef: true,
+              competition: true,
+              homeTeamName: true,
+              awayTeamName: true,
+              kickoffTime: true,
+              status: true,
+            },
+          })
+        : Promise.resolve(
+            [] as {
+              externalRef: string;
+              competition: string;
+              homeTeamName: string | null;
+              awayTeamName: string | null;
+              kickoffTime: Date;
+              status: string;
+            }[],
+          ),
+      // Which of the final-result cycles actually have crowned standings (one row per cycle is
+      // enough): the rest read as "No winner this month".
+      finalResultCycleIds.length > 0
+        ? this.prisma.contestStanding.findMany({
+            where: { cycleId: { in: finalResultCycleIds } },
+            select: { cycleId: true },
+            distinct: ['cycleId'],
+          })
+        : Promise.resolve([] as { cycleId: string }[]),
+      // Which file a post_media_* notification names (kind only). A deleted file degrades to data: null.
+      mediaRefIds.length > 0
+        ? this.prisma.postMedia.findMany({ where: { id: { in: mediaRefIds } }, select: { id: true, kind: true } })
+        : Promise.resolve([] as { id: string; kind: string }[]),
+    ]);
+    const mediaById = new Map(mediaRows.map((m) => [m.id, m]));
+    const cyclesWithStandings = new Set(standingCycleRows.map((r) => r.cycleId));
+
+    // "Other participant" ids, derived from the conversations above —
+    // needs the conversations fetched first (this mirrors
+    // MessagingService.toConversationViews's own two-step batching).
+    // Every row in one GET /notifications page belongs to the SAME
+    // caller (it's implicitly self-scoped), so the caller's own userId
+    // — the notification's own `userId` — is always the "self" side of
+    // the 2-party conversation.
+    const conversationById = new Map(conversations.map((c) => [c.id, c]));
+    const otherParticipantIdByConversationId = new Map<string, string | null>();
+    for (const row of rows) {
+      if (row.type !== 'message' || !row.payloadRefId) continue;
+      const conversation = conversationById.get(row.payloadRefId);
+      const otherId = conversation
+        ? (conversation.participantIds.find((id) => id !== row.userId) ?? null)
+        : null;
+      otherParticipantIdByConversationId.set(row.payloadRefId, otherId);
+    }
+
+    // One combined User lookup for both follow actors AND message
+    // other-participants — both need only { id, displayName }, so this
+    // is a single extra query rather than two.
+    const userIds = [
+      ...new Set(
+        [
+          ...followRefIds,
+          ...[...otherParticipantIdByConversationId.values()].filter((id): id is string => id !== null),
+        ],
+      ),
+    ];
+    const users =
+      userIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, ...PUBLIC_NAME_SELECT },
+          })
+        : [];
+    const userById = new Map(users.map((u) => [u.id, toPublicUser(u)]));
+
+    const postById = new Map(posts.map((p) => [p.id, p]));
+    const fixtureById = new Map(fixtures.map((f) => [f.id, f]));
+    const cycleById = new Map(cycles.map((c) => [c.id, c]));
+    const matchByRef = new Map(matches.map((m) => [m.externalRef, m]));
+
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      read: row.read,
+      createdAt: row.createdAt,
+      payloadRefId: row.payloadRefId,
+      data: this.resolveOne(row, {
+        postById,
+        userById,
+        otherParticipantIdByConversationId,
+        fixtureById,
+        cycleById,
+        matchByRef,
+        cyclesWithStandings,
+        mediaById,
+      }),
+    }));
+  }
+
+  private resolveOne(
+    row: NotificationRow,
+    lookups: {
+      postById: Map<string, { id: string; contentText: string; authorId: string }>;
+      userById: Map<string, { id: string; publicName: string }>;
+      otherParticipantIdByConversationId: Map<string, string | null>;
+      fixtureById: Map<
+        string,
+        {
+          id: string;
+          scheduledAt: Date;
+          status: string;
+          teamA: { name: string };
+          teamB: { name: string } | null;
+          opponentName: string | null;
+          result: { scoreA: number; scoreB: number } | null;
+        }
+      >;
+      cycleById: Map<string, { id: string; title: string }>;
+      cyclesWithStandings: Set<string>;
+      mediaById: Map<string, { id: string; kind: string }>;
+      matchByRef: Map<
+        string,
+        {
+          externalRef: string;
+          competition: string;
+          homeTeamName: string | null;
+          awayTeamName: string | null;
+          kickoffTime: Date;
+          status: string;
+        }
+      >;
+    },
+  ): NotificationData | null {
+    if (!row.payloadRefId) {
+      return null;
+    }
+
+    switch (row.type) {
+      case 'follow': {
+        const actor = lookups.userById.get(row.payloadRefId);
+        return actor ? { actor } : null;
+      }
+      case 'like':
+      case 'comment': {
+        const post = lookups.postById.get(row.payloadRefId);
+        return post ? { post } : null;
+      }
+      case 'message': {
+        const otherId = lookups.otherParticipantIdByConversationId.get(row.payloadRefId) ?? null;
+        const other = otherId ? (lookups.userById.get(otherId) ?? { id: otherId, publicName: null }) : null;
+        return { conversationId: row.payloadRefId, otherParticipant: other };
+      }
+      case 'fixture_scheduled':
+      case 'result_logged': {
+        const fixture = lookups.fixtureById.get(row.payloadRefId);
+        if (!fixture) return null;
+        return {
+          fixture: {
+            id: fixture.id,
+            teamAName: fixture.teamA.name,
+            teamBName: fixture.teamB?.name ?? fixture.opponentName,
+            scheduledAt: fixture.scheduledAt,
+            status: fixture.status,
+            result: fixture.result,
+          },
+        };
+      }
+      case 'contest_win': {
+        const cycle = lookups.cycleById.get(row.payloadRefId);
+        return cycle ? { cycle } : null;
+      }
+      case 'contest_week_opens':
+      case 'contest_votes_closing':
+      case 'contest_week_result':
+      case 'contest_finalist':
+      case 'contest_reveal':
+      case 'contest_final_result':
+      case 'contest_upload_reminder': {
+        const { cycleId, week } = splitContestRef(row.payloadRefId);
+        const cycle = lookups.cycleById.get(cycleId);
+        if (!cycle) return null;
+        return {
+          cycle,
+          week,
+          ...(row.type === 'contest_final_result'
+            ? { outcome: (lookups.cyclesWithStandings.has(cycleId) ? 'winners' : 'no_winner') as ContestOutcome }
+            : {}),
+        };
+      }
+      case 'match_kickoff': {
+        const match = lookups.matchByRef.get(row.payloadRefId);
+        return match ? { match } : null;
+      }
+      case 'age_milestone':
+        return { milestone: row.payloadRefId };
+      case 'post_media_approved':
+      case 'post_media_rejected': {
+        const media = lookups.mediaById.get(row.payloadRefId);
+        return media ? { media: { id: media.id, kind: media.kind } } : null;
+      }
+      case USERNAME_REVIEW_NOTIFICATION_TYPE:
+        return row.payloadRefId === 'reinstated' || row.payloadRefId === 'declined'
+          ? { usernameReview: { outcome: row.payloadRefId } }
+          : null;
+      case 'profile_image_rejected':
+        return (PROFILE_IMAGE_KINDS as readonly string[]).includes(row.payloadRefId)
+          ? { image: row.payloadRefId as ProfileImageKind }
+          : null;
+      default:
+        return null;
+    }
+  }
+}
+
+// "<cycleId>" or "<cycleId>:<week>". Cycle ids are UUIDs (no colon), so the first colon is
+// unambiguous.
+function splitContestRef(ref: string): { cycleId: string; week: number | null } {
+  const i = ref.indexOf(':');
+  if (i === -1) return { cycleId: ref, week: null };
+  const week = Number(ref.slice(i + 1));
+  return { cycleId: ref.slice(0, i), week: Number.isInteger(week) ? week : null };
+}

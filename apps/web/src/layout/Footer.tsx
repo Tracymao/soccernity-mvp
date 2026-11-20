@@ -1,0 +1,95 @@
+// Shared site footer. Figma source: the canonical "Footer" frame
+// standardized file-wide in Decision Log #209/#210 -- desktop 5213:6816,
+// mobile 5543:7662, "Soccernity-MVP" file (weZWWqggy9j13eX8bhFgs6).
+//
+// Rendered once by FooterLayout (src/layout/FooterLayout.tsx), which wraps
+// exactly the routes whose canonical Figma frame carries a footer -- Home,
+// Sports Hub, Blog, Article Detail, Contact Us (see FooterLayout.tsx). Community / Clubs /
+// ClubFanPage / Banter have NO footer in their Figma frames (confirmed
+// live) and are deliberately left as direct AppShell children. See
+// src/app/router.tsx and Decision Log #213.
+//
+// DRIFT NOTE: this is built to the *canonical* Figma footer, not a copy of
+// HomePage.tsx's previous inline footer -- that inline version had drifted
+// (no logo mark, no social bar, no bullet separators, no rule). See
+// Decision Log #213 and docs/sprint-2-shared-footer-layout-report.md.
+//
+// The three legal links are real links: /terms and /privacy render the draft legal copy
+// (pages/legal/LegalPage.tsx) and /contact is the Contact Us form (pages/ContactPage.tsx, B-047).
+// The social icons stay non-interactive: Soccernity has no published social accounts to link to, and
+// rendering them as links would fabricate a destination. The social icon SVGs carry their brand-green fill
+// baked in, the same convention nav-blog.svg etc. already use.
+//
+// "Report a concern" (added alongside ReportPage.tsx) IS a real,
+// navigating link -- unlike the legal-links row above, /report exists
+// today (POST /reports/public). This is the "help area" that task asked
+// for: there's no separate help/support hub anywhere in this app to link
+// from instead.
+import { Link } from "react-router";
+import logoMark from "../assets/icons/soccernity-logo-mark.svg";
+import socialFacebook from "../assets/icons/social-facebook.svg";
+import socialInstagram from "../assets/icons/social-instagram.svg";
+import socialTwitter from "../assets/icons/social-twitter.svg";
+import socialTiktok from "../assets/icons/social-tiktok.svg";
+import socialYoutube from "../assets/icons/social-youtube.svg";
+import socialLinkedin from "../assets/icons/social-linkedin.svg";
+import "./Footer.css";
+
+// Labels are verbatim from the Figma frame's own text nodes.
+const SOCIALS: { label: string; icon: string }[] = [
+  { label: "facebook", icon: socialFacebook },
+  { label: "instagram", icon: socialInstagram },
+  { label: "twitter", icon: socialTwitter },
+  { label: "Tik Tok", icon: socialTiktok },
+  { label: "YouTube", icon: socialYoutube },
+  { label: "LinkedIn", icon: socialLinkedin },
+];
+
+// "Privacy Settings" was removed from the canonical Figma footer file-wide
+// in Decision Log #222 (founder: "remove, don't relink") -- dropped here
+// too, in sprint-2/privacy-settings-to-code, to keep the code footer in
+// step. Result everywhere: Terms of Service · Privacy Policy · Contact Us.
+const LEGAL_LINKS: { label: string; to: string }[] = [
+  { label: "Terms of Service", to: "/terms" },
+  { label: "Privacy Policy", to: "/privacy" },
+  { label: "Contact Us", to: "/contact" },
+];
+
+export default function Footer() {
+  return (
+    <footer className="sn-footer">
+      <div className="sn-footer__wordmark">
+        <img src={logoMark} alt="" width={32} height={32} className="sn-footer__logo-mark" />
+        <span>Soccernity</span>
+      </div>
+
+      <ul className="sn-footer__socials">
+        {SOCIALS.map((s) => (
+          <li key={s.label} className="sn-footer__social">
+            <img src={s.icon} alt="" width={24} height={24} />
+            <span>{s.label}</span>
+          </li>
+        ))}
+      </ul>
+
+      <nav className="sn-footer__links" aria-label="Footer">
+        {LEGAL_LINKS.map((l) => (
+          <Link key={l.to} to={l.to} className="sn-footer__link">
+            {l.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="sn-footer__rule" aria-hidden="true" />
+
+      <p className="sn-footer__report">
+        <Link to="/report">Report a concern</Link>
+      </p>
+
+      <p className="sn-footer__legal">
+        Copyright &copy; 2026 Soccernity. All rights reserved. The information contained in Soccernity may not be
+        published, broadcast, rewritten, or redistributed without the prior written authority of Soccernity.
+      </p>
+    </footer>
+  );
+}

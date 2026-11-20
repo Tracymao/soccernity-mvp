@@ -1,0 +1,308 @@
+/* Colour values reference the --signup-* custom properties set inline from
+ * authThemeVars.ts (itself sourced from packages/shared's design tokens) --
+ * do not hardcode hex here.
+ *
+ * Renders under AuthChrome (logo-only Top Bar, 90px), not AppShell --
+ * Decision Log #172. AuthChrome keeps AppShell's 32px content padding, so
+ * the `margin: -32px` full-bleed technique is unchanged; only the chrome
+ * height differs. */
+
+.signup-split {
+  display: flex;
+  min-height: calc(100vh - var(--sn-chrome-height, 90px)); /* B-187: AppShell 90/64px, AuthChrome 90px */
+  margin: -32px;
+  background-color: var(--signup-bg);
+  color: var(--signup-text-primary);
+  font-family: "Inter", sans-serif;
+}
+
+.signup-split__left {
+  flex: 1 1 480px;
+  /* min-width: 0 lets the 480px flex-basis shrink below its content size;
+   * without it the left panel kept a 488px width at 390px (QA D-11). */
+  min-width: 0;
+  max-width: 720px;
+  padding: 64px 80px;
+  box-sizing: border-box;
+}
+
+.signup-split__right {
+  flex: 1 1 480px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signup-split--dark .signup-split__right,
+.signup-split__right--navy {
+  background-color: var(--signup-brand-navy);
+}
+
+.signup-split--light .signup-split__right {
+  background-color: var(--signup-green-tint, rgba(123, 185, 41, 0.08));
+}
+
+/* Specificity: the navy tone wins over the light variant's tint. */
+.signup-split--light .signup-split__right.signup-split__right--navy {
+  background-color: var(--signup-brand-navy);
+}
+
+@media (max-width: 960px) {
+  .signup-split__right {
+    display: none;
+  }
+
+  .signup-split__left {
+    max-width: none;
+    padding: 40px 24px;
+  }
+}
+
+.signup-split__eyebrow {
+  font: 600 13px "Inter", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--signup-text-secondary);
+  margin: 0 0 12px;
+}
+
+.signup-split__heading {
+  font: 600 32px/1.3 "Inter", sans-serif;
+  margin: 0 0 12px;
+  color: var(--signup-text-primary);
+}
+
+.signup-split__subheading {
+  font: 400 16px/1.7 "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+  margin: 0 0 32px;
+  max-width: 440px;
+}
+
+.signup-split__footer {
+  margin-top: 32px;
+  font: 600 16px "Inter", sans-serif;
+}
+
+.signup-split__footer a,
+.signup-split__back {
+  color: var(--signup-brand-navy);
+  text-decoration: underline;
+}
+
+.signup-split__back {
+  display: inline-block;
+  margin-top: 32px;
+  font: 600 16px "Inter", sans-serif;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Right-panel safeguarding copy (Age Gate / Guardian Details) */
+.signup-split__rings {
+  position: absolute;
+  width: 155%;
+  aspect-ratio: 1;
+  right: -25%;
+  bottom: -30%;
+}
+
+.signup-split__right-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  padding: 0 64px;
+  color: #ffffff;
+}
+
+.signup-split__right-copy h2 {
+  font: 600 30px/1.4 "Inter", sans-serif;
+  margin: 0 0 16px;
+}
+
+.signup-split__right-copy p {
+  font: 400 17px/1.7 "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+/* Right-panel illustration (Register) */
+.signup-split__illustration {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Form */
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 440px;
+}
+
+.signup-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signup-form__label {
+  font: 600 16px "Inter", sans-serif;
+}
+
+.signup-form__row {
+  display: flex;
+  gap: 10px;
+}
+
+.signup-form__input,
+.signup-form__select {
+  flex: 1;
+  min-width: 0;
+  height: 65px;
+  padding: 0 24px;
+  background-color: var(--signup-surface);
+  border: 1px solid var(--signup-icon-inactive, transparent);
+  border-radius: 8px;
+  font: 400 16px "Inter", sans-serif;
+  color: var(--signup-text-primary);
+  box-sizing: border-box;
+}
+
+/* D-14: `flex: 1` is a width rule inside a .signup-form__row, but inside a
+ * column group (.signup-form__group) it resolves the basis to 0 and the
+ * field collapsed to ~20px with no visible border. Fields sitting directly in
+ * a group keep their set height and fill the width. */
+.signup-form__group > .signup-form__input,
+.signup-form__group > .signup-form__select {
+  flex: none;
+  width: 100%;
+}
+
+.signup-form__input:focus,
+.signup-form__select:focus {
+  outline: 2px solid var(--signup-brand-navy);
+  outline-offset: 1px;
+}
+
+
+/* Read-only value (Register's date of birth, set at the Age Gate). */
+.signup-form__input[readonly] {
+  cursor: default;
+}
+
+.signup-form__input::placeholder {
+  color: var(--signup-text-secondary);
+}
+
+.signup-form__select {
+  appearance: auto;
+}
+
+.signup-form__hint {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+  margin: 0;
+}
+
+.signup-form-error {
+  font: 600 14px "Inter", sans-serif;
+  color: #d92d20;
+  margin: 0;
+}
+
+.signup-info-panel {
+  background-color: var(--signup-green-tint, rgba(123, 185, 41, 0.2));
+  border-radius: 8px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signup-info-panel__title {
+  font: 600 14px "Inter", sans-serif;
+  margin: 0;
+  color: var(--signup-text-primary);
+}
+
+.signup-info-panel__body {
+  font: 400 14px/1.6 "Inter", sans-serif;
+  margin: 0;
+  color: var(--signup-text-secondary);
+}
+
+.signup-button {
+  height: 69px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--signup-brand-green);
+  color: var(--signup-text-on-green);
+  font: 600 16px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.signup-split--light .signup-button {
+  background-color: var(--signup-brand-navy);
+  color: #fff;
+  box-shadow: 0px 30px 30px rgba(40, 46, 101, 0.15);
+}
+
+/* Age Gate / Guardian Details (Figma 5108:6626, 5108:6627): light panel on the
+ * left, navy safeguarding panel on the right, GREEN primary button. */
+.signup-split--navy-right .signup-button {
+  background-color: var(--signup-brand-green);
+  color: var(--signup-text-on-green);
+  box-shadow: none;
+}
+
+.signup-split--navy-right .signup-button.signup-button--navy {
+  background-color: var(--signup-brand-navy);
+  color: #fff;
+}
+
+/* Navy primary button on the dark (Age Gate family) shell -- the "Back to
+   sign up" button of the below-minimum-age screen (Figma 5464:7113). */
+.signup-button--navy {
+  background-color: var(--signup-brand-navy);
+  color: #fff;
+  border: 1px solid var(--signup-icon-inactive, transparent);
+}
+
+.signup-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signup-form__fineprint {
+  font: 400 14px/1.7 "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+  margin: 0;
+}
+
+.signup-form__accent-text {
+  color: var(--signup-brand-navy);
+  font-weight: 600;
+}
+
+.signup-split--dark .signup-form__accent-text {
+  color: var(--signup-brand-green);
+}
+
+.signup-success {
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.signup-success__body {
+  font: 400 16px/1.7 "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+  margin: 0;
+}

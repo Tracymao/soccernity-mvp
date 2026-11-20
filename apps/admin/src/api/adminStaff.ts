@@ -1,0 +1,136 @@
+// Admin Staff Roles client — services/api `/admin/staff*` (Build Plan
+// Section 4.8, built by feat/admin-role-management). Wires
+// SettingsRolesPage.tsx / RoleFormPages.tsx's EditRolePage to it — see
+// that PR's README (services/api/src/modules/admin-staff-roles/README.md)
+// for the full guard/schema reasoning; response shapes mirror
+// admin-staff-roles.service.ts's `AdminStaffListItem` exactly, including
+// the childSafetyVetted/vettedAt/vettedByAdminId fields that module's own
+// GET /admin/staff select was widened to carry (see that README's own
+// "Response shape" section) — there is no separate GET for vetting
+// status, only api/adminStaffVetting.ts's write-and-read-back PATCH.
+//
+// Every call goes through adminFetch (isolated admin auth path,
+// ADMIN_JWT_SECRET, transparent 401→refresh — adminClient.ts /
+// Decision Log #54). Every route here requires `superadmin` — an
+// `editor` OR `moderator` token gets a real 403 (AdminRolesGuard), a
+// stricter split than api/adminUsers.ts's own ('moderator', 'superadmin')
+// precedent — see admin-staff-roles.controller.ts's own header comment
+// for why.
+import { adminFetch } from "./adminClient";
+
+// Mirrors services/api admin-staff-roles.constants.ts exactly. apps/admin
+// can't import from services/api — this codebase's usual per-side copy,
+// the same convention api/moderation.ts/api/adminContent.ts already
+// follow for their own constants.
+export const ADMIN_STAFF_ROLES = ["editor", "moderator", "superadmin"] as const;
+export type AdminStaffRole = (typeof ADMIN_STAFF_ROLES)[number];
+
+// The real AdminUser row, list/write-shaped — services/api's own
+// ADMIN_STAFF_SELECT (admin-staff-roles.service.ts).
+export interface AdminStaffListItem {
+  id: string;
+  email: string;
+  fullName: string;
+  role: AdminStaffRole;
+  accountStatus: string; // "active" | "deactivated"
+  createdAt: string;
+  childSafetyVetted: boolean;
+  vettedAt: string | null;
+  vettedByAdminId: string | null;
+  // backend/two-factor-api-codes: whether this admin has an authenticator app set up. Derived server-side from
+  // totpEnabledAt; no secret, no backup-code count. Present on every item the staff routes return.
+  twoFactorEnabled: boolean;
+}
+
+export interface AdminStaffListPage {
+  items: AdminStaffListItem[];
+  nextCursor: string | null;
+}
+
+// GET /admin/staff — keyset-paginated, one optional exact-match `role`
+// filter.
+export function listStaff(
+  query: { role?: AdminStaffRole; cursor?: string; limit?: number } = {},
+): Promise<AdminStaffListPage> {
+  const params = new URLSearchParams();
+  if (query.role) params.set("role", query.role);
+  if (query.cursor) params.set("cursor", query.cursor);
+  if (query.limit) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return adminFetch<AdminStaffListPage>(`/admin/staff${qs ? `?${qs}` : ""}`);
+}
+
+// POST /admin/staff (feat/admin-staff-create, PR #340, Decision Log #191) — superadmin-only. Mirrors
+// services/api CreateAdminStaffDto: email (valid, <= 254), fullName (1-120), role, and an OPTIONAL
+// temporaryPassword (8-128). Omitted -> the server generates one and returns it ONCE as `temporaryPassword`;
+// supplied -> it is never returned. No email is sent to the new admin. 409 = an account with that email exists.
+export const ADMIN_STAFF_EMAIL_MAX = 254;
+export const ADMIN_STAFF_NAME_MAX = 120;
+export const ADMIN_STAFF_PASSWORD_MIN = 8;
+export const ADMIN_STAFF_PASSWORD_MAX = 128;
+
+export interface CreateAdminStaffInput {
+  email: string;
+  fullName: string;
+  role: AdminStaffRole;
+  temporaryPassword?: string;
+}
+
+export type CreatedAdminStaff = AdminStaffListItem & { temporaryPassword?: string };
+
+export function createStaff(input: CreateAdminStaffInput): Promise<CreatedAdminStaff> {
+  return adminFetch<CreatedAdminStaff>("/admin/staff", { method: "POST", body: input });
+}
+
+// PATCH /admin/staff/:id/role — reassigns ONLY AdminUser.role. A 409
+// means the target is the last active superadmin (see that module's
+// README); surfaced verbatim by the caller via AdminApiError.message.
+export function updateAdminRole(id: string, role: AdminStaffRole): Promise<AdminStaffListItem> {
+  return adminFetch<AdminStaffListItem>(`/admin/staff/${id}/role`, { method: "PATCH", body: { role } });
+}
+
+// AdminUser.accountStatus's real value set — a narrower two-value set
+// than platform User's own ("active" | "suspended" | "deleted",
+// api/adminUsers.ts) since there is no admin-side pending_deletion/hard-
+// delete concept, only "can this admin currently log in."
+export const ADMIN_STAFF_ACCOUNT_STATUSES = ["active", "deactivated"] as const;
+export type AdminStaffAccountStatus = (typeof ADMIN_STAFF_ACCOUNT_STATUSES)[number];
+
+// PATCH /admin/staff/:id/status (feat/admin-staff-status, Decision Log
+// #193) — sets ONLY AdminUser.accountStatus. Deactivating revokes every
+// existing session for the TARGET admin server-side; a 409 means the
+// target is the last active superadmin, same shape as updateAdminRole's
+// own 409 — surfaced verbatim via AdminApiError.message.
+export function updateAdminStatus(id: string, status: AdminStaffAccountStatus): Promise<AdminStaffListItem> {
+  return adminFetch<AdminStaffListItem>(`/admin/staff/${id}/status`, { method: "PATCH", body: { status } });
+}
+
+// There is no GET /admin/staff/:id anywhere in services/api —
+// EditRolePage is reached from SettingsRolesPage's own row "Edit" link,
+// which passes the row's already-fetched AdminStaffListItem via router
+// `state` (see ReportDetailPage.tsx / api/moderation.ts's own identical
+// precedent, Decision Log candidate #4 in that module). `findStaffById`
+// below is the fallback for a DIRECT visit or a page refresh (no router
+// state): it re-lists (unfiltered, so any role is found regardless of
+// which role bucket a caller last filtered by) and searches client-side
+// for the matching id, bounded to a few pages so a very large staff
+// roster can't turn a refresh into an unbounded crawl. If the admin isn't
+// found within that bound, the page shows an honest "open it from the
+// Roles list instead" state rather than fabricating one.
+//
+// A real GET /admin/staff/:id would remove this workaround entirely and
+// is the more correct long-term fix; recorded as a Decision Log
+// candidate in admin-staff-roles/README.md's own "Not built" section.
+const FIND_BY_ID_MAX_PAGES = 5;
+
+export async function findStaffById(id: string): Promise<AdminStaffListItem | null> {
+  let cursor: string | undefined;
+  for (let page = 0; page < FIND_BY_ID_MAX_PAGES; page += 1) {
+    const result = await listStaff({ cursor, limit: 50 });
+    const found = result.items.find((a) => a.id === id);
+    if (found) return found;
+    if (!result.nextCursor) return null;
+    cursor = result.nextCursor;
+  }
+  return null;
+}

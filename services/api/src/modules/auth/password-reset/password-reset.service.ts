@@ -1,0 +1,114 @@
+import { Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { AccountEmailService } from '../../account-emails/account-email.service';
+import { GuardianSecurityNoticeService } from '../../guardian-security-notice/guardian-security-notice.service';
+import { PasswordService } from '../password/password.service';
+import { AuthLimitsService } from '../rate-limit/auth-limits/auth-limits.service';
+import { TokenService } from '../token/token.service';
+import { PasswordResetEmailService } from './email/password-reset-email.service';
+import { DEFAULT_RESET_TOKEN_TTL_MINUTES } from './reset-token.constants';
+import { InvalidResetTokenError } from './reset-token.errors';
+import { ConsumedResetToken, ResetTokenStore } from './reset-token.store';
+
+// Deliberately generic and identical for both branches (existing account
+// vs. no such account) — never let a caller distinguish "we found your
+// email" from "we didn't" via this response. See forgotPassword() below
+// for how the two branches are kept response-identical.
+export const FORGOT_PASSWORD_GENERIC_MESSAGE =
+  'If an account exists for that email address, a password reset link has been sent to it.';
+
+@Injectable()
+export class PasswordResetService {
+  private readonly logger = new Logger(PasswordResetService.name);
+  private readonly resetTokenTtlMinutes: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly resetTokenStore: ResetTokenStore,
+    private readonly passwordService: PasswordService,
+    private readonly tokenService: TokenService,
+    private readonly emailService: PasswordResetEmailService,
+    configService: ConfigService,
+    private readonly authLimits: AuthLimitsService,
+    private readonly guardianNotices: GuardianSecurityNoticeService,
+    // backend/b069-transactional-emails (B-069): the account's own "your password was reset" email.
+    @Optional() private readonly accountEmails?: AccountEmailService,
+  ) {
+    this.resetTokenTtlMinutes =
+      Number(configService.get('RESET_TOKEN_TTL_MINUTES')) || DEFAULT_RESET_TOKEN_TTL_MINUTES;
+  }
+
+  // Always resolves — never throws for "email not found", and always
+  // returns void so the controller can return one fixed generic message
+  // regardless of what happened here. Anti-enumeration is enforced at
+  // this boundary, not left to the controller to remember.
+  async forgotPassword(email: string): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (!user) {
+      // No account: do real, comparable-cost work anyway (a no-op hash
+      // verify against a fixed dummy hash) so this branch's timing is
+      // closer to the found-account branch below. This is a best-effort
+      // mitigation, not a guarantee of constant-time behavior over a real
+      // network — Node/HTTP stacks make true constant-time responses
+      // impractical — but it avoids the cheapest, most obvious timing
+      // tell (skipping the expensive hash/Redis work entirely).
+      await this.passwordService.verify(
+        '$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$dGltaW5nLWRlY295aGFzaA',
+        'timing-decoy',
+      );
+      this.logger.debug(
+        `forgot-password requested for an email with no matching account (details withheld from response)`,
+      );
+      return;
+    }
+
+    const issued = await this.resetTokenStore.issue(user.id, this.resetTokenTtlMinutes);
+    await this.emailService.sendPasswordResetEmail(user.email, issued.token);
+  }
+
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    let consumed: ConsumedResetToken;
+    try {
+      consumed = await this.resetTokenStore.verifyAndConsume(rawToken);
+    } catch (err) {
+      if (err instanceof InvalidResetTokenError) {
+        throw new UnauthorizedException(err.message);
+      }
+      throw err;
+    }
+
+    const passwordHash = await this.passwordService.hash(newPassword);
+    const updated = await this.prisma.user.update({
+      where: { id: consumed.userId },
+      data: { passwordHash },
+      select: { email: true },
+    });
+
+    // Sensible-security-practice per the task spec: a password reset means
+    // any previously-issued refresh token (e.g. from a device an attacker
+    // who knew the old password was using) should stop working. B1's
+    // TokenService already exposes exactly this (revokeAllSessionsForUser
+    // -> RefreshTokenStore.revokeAllForUser), so this reuses it rather
+    // than building a parallel mechanism.
+    await this.tokenService.revokeAllSessionsForUser(consumed.userId);
+
+    // Clear the account-wide failed-login ceiling for this address so an owner who has just proved control
+    // of their mailbox is not left behind failed guesses made by someone else (the per-IP-and-account
+    // counters expire on their own). Best-effort: the reset has already succeeded.
+    try {
+      if (updated?.email) await this.authLimits.clearAccountCeiling(updated.email);
+    } catch (err) {
+      this.logger.warn(`Could not clear the login ceiling after a password reset: ${(err as Error).message}`);
+    }
+
+    // B-275: the reset has committed; a minor's confirmed guardian is told, in the background (never fails the reset).
+    this.guardianNotices.notifyInBackground(consumed.userId, 'password_reset');
+
+    // B-069 (Decision Log #472 default (a)): the person is told, at the account's own address, that the password
+    // was changed through a reset link (Figma 1380:2297). Fire-and-log, after the reset has committed.
+    this.accountEmails?.passwordResetCompletedInBackground(consumed.userId);
+  }
+}

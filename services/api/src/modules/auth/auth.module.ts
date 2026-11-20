@@ -1,0 +1,35 @@
+import { AccountEmailsModule } from '../account-emails/account-emails.module';
+import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { TwoFactorModule } from '../two-factor/two-factor.module';
+import { AuthFoundationModule } from './auth-foundation.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
+// Sprint 1 / PR B3 — login, refresh, logout (Build Plan Section 4.1 /
+// 5.7). Self-contained on purpose: app.module.ts's `// AuthModule`
+// placeholder is being contended for by B2/B4/B6 in this same parallel
+// wave, so this module doesn't try to pre-resolve that merge — it just
+// needs `AuthModule` (this class) imported into app.module.ts once PRs
+// land, same as every other Sprint 1 backend PR in the wave.
+//
+// PrismaService is provided directly here (not from a shared
+// PrismaModule) because no such shared module exists yet — HealthModule
+// (src/health/health.module.ts) does the same thing today. If a future PR
+// introduces a global PrismaModule, this provider should be dropped in
+// favour of importing that instead.
+@Module({
+  imports: [PrismaModule, AuthFoundationModule, TwoFactorModule, GuardianSecurityNoticeModule, AccountEmailsModule],
+  controllers: [AuthController],
+  providers: [AuthService],
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- AuthService is
+  // exported so GuardianConsentModule can inject it for
+  // startPendingDeletion() (a guardian declining/withdrawing consent puts
+  // the minor's account on the same deletion path POST
+  // /auth/delete-account uses). No circularity: this module imports only
+  // AuthFoundationModule, and neither it nor AuthFoundationModule imports
+  // GuardianConsentModule.
+  exports: [AuthService],
+})
+export class AuthModule {}

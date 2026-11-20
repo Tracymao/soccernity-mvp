@@ -1,5 +1,407 @@
 # leaderboard module
 
-Build target: Sprint 6 — Section 4.9 of the MVP Build Plan.
-Endpoints for this module: see the matching subsection of Build Plan Section 4.
-Not yet implemented — this is a placeholder so the sprint owner is visible in the file tree.
+Build target: Sprint 6 — Section 4.9 of the MVP Build Plan
+(`GET /leaderboard?period=`). **Now built**, ahead of the rest of
+Sprint 6, by `sprint-6/leaderboard-read-rollup` (Build Plan Decision Log
+#292) — the same "run one Sprint N module early" pattern
+`admin`/`contest`/`grassroots`/`banter`/`messaging`/`notifications`/
+`community-groups` all already used in this codebase.
+
+## What this module does NOT do
+
+Read this before anything else — it's easy to over-read "Leaderboard
+module" as more than it is:
+
+- It does **not** aggregate `PointsLedgerEntry` on read. `GET
+  /leaderboard` reads exclusively from the materialized
+  `LeaderboardEntry` table. A period the rollup hasn't touched yet
+  returns an empty page (`{ items: [], nextCursor: null }`), not an
+  error and not an on-demand backfill.
+- It does **not** touch `FeedService`, `UsersService`, or
+  `ContestService` (the point-award writers, via `points/points.util.ts`'s
+  `awardPoints`) — this module is read/rollup only.
+- **Club boards (Decision Log #128) — built.** `GET /leaderboard?clubId=`
+  returns the board for the caller's OWN represented club and nothing
+  else. Any other `clubId`, or any `clubId` when the caller represents no
+  club, is a 403 (checked server-side against a fresh read of
+  `User.representedClubId`). The club is a **snapshot at earning time**
+  (see below), not a live join, and points earned before this change are
+  unattributed.
+- It does **not** build the Competition board (Prediction/Commentary
+  types, Decision Log #72/#73) — Build Plan Section 2.2 defers it.
+- It does **not** touch `apps/web` or Figma. `LeaderboardPage.tsx`'s
+  Overall board is still illustrative dummy data
+  (`sprint-2/contest-posting-flow-to-code` already wired its Contest tab
+  to the real Contest endpoints, but not this one) — wiring it to this
+  real endpoint is a separate `figma-to-code` follow-up.
+
+## Period handling — ISO-8601 week, no library
+
+`GET /leaderboard?period=` and the rollup both key on an ISO-8601 week
+string, `"YYYY-Www"` (e.g. `"2026-W33"`). All the date math lives in
+`iso-week.util.ts`, hand-rolled with plain `Date`/UTC methods:
+
+- **No date library was added.** Confirmed via
+  `grep -n "date-fns\|dayjs\|luxon\|moment" package.json` that this repo
+  has zero date-library dependency anywhere, and
+  `contest.service.ts`'s own `resolveRoundWindows` already hand-rolls its
+  own date arithmetic with plain `Date`/UTC methods — adding a dependency
+  for ~80 lines of well-tested, self-contained week arithmetic would be a
+  bigger footprint than the arithmetic itself.
+- **Every computation is exclusively UTC** — `Date.UTC`/`getUTC*`/
+  `setUTC*`, never a local-time accessor. This mirrors
+  `account-deletion-sweep.service.ts`'s own documented lesson: that
+  service's `purgeExpiredConsentAuditRecords` originally used `setMonth`
+  (local time) and silently drifted its cutoff by an hour across a DST
+  boundary; `setUTCMonth` fixed it. Mixing local-time and UTC date math
+  in the same file is exactly the class of bug that produced that one.
+- `getIsoWeekPeriod(date)` — the period containing `date`, via the
+  standard ISO-8601 rule: find the Thursday of the same Mon–Sun week,
+  that Thursday's *own* calendar year is the ISO year (which can differ
+  from `date`'s own calendar year — the classic example, `2008-12-29`, a
+  Monday, is `2009-W01`), and the week number counts Thursdays from 1
+  January of that ISO year.
+- `parseIsoWeekPeriod(period)` — parses **and validates**: rejects a
+  malformed string, and rejects an out-of-range week (`week > 52` for a
+  year with only 52 ISO weeks, `week > 53` otherwise) via
+  `isoYearHasWeek53(isoYear)` (a year has a 53rd week iff 1 January is a
+  Thursday, or the year is a leap year and 1 January is a Wednesday) —
+  so `"2025-W53"` (2025 genuinely has only 52 ISO weeks) is a real 400,
+  not silently accepted and misinterpreted. Throws
+  `BadRequestException`, not a generic `Error` — this is reached directly
+  from `GET /leaderboard`'s own `?period=` query param, so a malformed
+  value is a client input error (400), not a server fault.
+- `getIsoWeekBoundaries(period)` — the `[start, end)` UTC boundary
+  (that week's own Monday 00:00:00 UTC, through the following Monday
+  00:00:00 UTC, exclusive) — the exact window the rollup filters
+  `PointsLedgerEntry.occurredAt` against.
+- `getPreviousIsoWeekPeriod(period)` — the period immediately before
+  `period`, re-derived by walking back 7 days from `period`'s own Monday
+  and re-running `getIsoWeekPeriod` on the result, rather than naively
+  decrementing the week number — week 1 of a year does not precede from
+  a "week 0"; it precedes from the *prior* ISO year's week 52 or 53, and
+  the re-derivation handles that for free.
+
+**Every test fixture for this file was hand-derived independently of the
+implementation**, via plain weekday arithmetic anchored on the widely
+documented ISO-8601 facts that `2009-01-01` is a Thursday and
+`2024-01-01` is a Monday — not generated by running the code and
+asserting on its own output (which would only prove internal
+consistency, not correctness). See `iso-week.util.spec.ts` for the full
+derivation chain, including the classic `2008-12-29 → 2009-W01` /
+`2010-01-01 → 2009-W53` year-boundary examples.
+
+## Rollup mechanism
+
+`LeaderboardRollupService` runs on `@Cron('0 */15 * * * *')` — every 15
+minutes. The installed `@nestjs/schedule`'s `CronExpression` enum has no
+`EVERY_15_MINUTES` member (confirmed directly against
+`cron-expression.enum.d.ts` — the nearest built-ins are
+`EVERY_10_MINUTES`/`EVERY_30_MINUTES`); the literal cron string above
+matches those two members' own `"0 */N * * * *"` shape exactly, so it
+neither over- nor under-shoots the requested cadence.
+`ScheduleModule.forRoot()` is already registered once, globally, in
+`app.module.ts` (`AccountDeletionModule`'s own precedent) — this module
+needs no scheduling infra of its own.
+
+Each tick calls `rollupPeriod` for **both** the current ISO week and the
+immediately-preceding one:
+
+```ts
+async runRollup(now: Date = new Date()): Promise<void> {
+  const currentPeriod = getCurrentIsoWeekPeriod(now);
+  const previousPeriod = getPreviousIsoWeekPeriod(currentPeriod);
+  await this.rollupPeriod(currentPeriod);
+  await this.rollupPeriod(previousPeriod);
+}
+```
+
+Recomputing the previous period too is deliberately cheap insurance
+against the period-boundary edge case (a `PointsLedgerEntry` row awarded
+in the last few minutes of a week, read by a tick that lands just after
+the Monday-00:00-UTC rollover) rather than building separate
+finalization/backfill logic — re-running the same idempotent upsert on
+an already-settled period is a harmless no-op (identical values in,
+identical values out).
+
+`now` is an explicit parameter with a real-clock default, exactly like
+`AccountDeletionSweepService.sweepPendingDeletions(now)` — so tests can
+prove period-boundary behavior deterministically without mocking global
+time. `@Cron()` itself always calls `runRollup()` with no arguments,
+which the default parameter covers.
+
+### `rollupPeriod(period)` — the raw SQL
+
+Prisma's query builder cannot express a `GROUP BY` combined with a
+window function (`RANK() OVER (...)`) — the exact class of gap
+`clubs.service.ts`'s own raw, parameterized `$executeRaw`/`$queryRaw`
+precedent in this codebase exists for (there, the implicit
+`_ClubMembership` join table's `INSERT ... ON CONFLICT`; here, a
+`GROUP BY` + window-function aggregation). One raw, parameterized
+`$queryRaw`, structured as a CTE:
+
+```sql
+-- backend/w12-points (B-093): quarter-point units, revoked rows excluded, NO weekly cap.
+WITH aggregated AS (
+  SELECT
+    ple."userId" AS "userId",
+    CAST(COALESCE(SUM(ple."quarterPoints"), 0) AS INTEGER) AS "totalQuarterPoints"
+  FROM "PointsLedgerEntry" ple
+  INNER JOIN "User" u ON u.id = ple."userId"
+  WHERE ple."occurredAt" >= <period start> AND ple."occurredAt" < <period end>
+    AND ple."revokedAt" IS NULL
+    AND u."accountStatus" = 'active'
+  GROUP BY ple."userId"
+)
+SELECT "userId", "totalQuarterPoints", CAST(RANK() OVER (ORDER BY "totalQuarterPoints" DESC) AS INTEGER) AS "rank"
+FROM aggregated
+WHERE "totalQuarterPoints" > 0
+```
+
+Why a CTE, not one flat query: Postgres does not allow a `SELECT` list
+expression to reference another expression's own alias at the same
+query level — the window function's `ORDER BY` needs the aggregated total,
+which is itself an aggregate expression. Aggregating first in `aggregated`, then
+ranking over its `totalQuarterPoints` *output column* in the outer `SELECT`, sidesteps that
+restriction entirely rather than repeating the expression twice.
+
+`::INTEGER` casts on both computed columns: Postgres's `SUM(int)` and
+`RANK()` both return `bigint` (`int8`) by default, which node-postgres
+(and therefore Prisma's `$queryRaw`) would otherwise hand back as a JS
+`bigint`, not a `number`. Every real point total is far inside the
+safe-integer range, so casting down to a genuine SQL `INTEGER` keeps the
+JS side a plain `number` with no `bigint` handling needed anywhere in
+this module.
+
+`WHERE "totalQuarterPoints" > 0` in the outer query: a user with zero
+`PointsLedgerEntry` rows in the window never appears in `aggregated` at
+all (the `INNER JOIN` only groups rows that exist) — this filter is the
+belt-and-braces case where every source happened to sum to zero, so no
+zero-point `LeaderboardEntry` row is ever materialized.
+
+Each aggregated row is then upserted via plain Prisma (not more raw
+SQL — Prisma's query builder can express "insert or update on a unique
+key" natively):
+
+```ts
+for (const row of aggregated) {
+  await this.prisma.leaderboardEntry.upsert({
+    where: { userId_period: { userId: row.userId, period } },
+    update: { quarterPoints: row.totalQuarterPoints, rank: row.rank },
+    create: { userId: row.userId, period, quarterPoints: row.totalQuarterPoints, rank: row.rank },
+  });
+}
+```
+
+**Deliberately not wrapped in one `$transaction` across every row** —
+each upsert is independently idempotent (re-running with identical input
+reproduces identical output), so a partial failure mid-loop just means
+fewer rows are current until the next 15-minute tick catches up, not a
+correctness problem for any individual row.
+
+## Units, display rounding and the caps (backend/w12-points, B-093)
+
+`LeaderboardEntry.quarterPoints` and `PointsLedgerEntry.quarterPoints` are in **quarter-point units**
+(1 point = 4 units; a creator's 0.25 is exactly 1 unit). **Ranking uses the exact stored value**, so
+rounding never creates a false tie. `GET /leaderboard` shows `points` **rounded to the nearest whole
+point, a half rounding up** (`points/quarter-points.util.ts`): 2 units show as 1, 1 unit as 0, 1002
+units as 251. Two rows can therefore show the same `points` and still rank differently; a row of 0.25
+shows `0` but is still on the board.
+
+The weekly anti-gaming cap this section used to describe (`ENGAGEMENT_POINTS_CAP_PER_PERIOD = 100`,
+applied here with `LEAST(SUM(...), 100)`) is **removed**. It was a read-time stand-in for a cap that did
+not exist at the write side, and it contradicted the spec's "about 1,800 per month" ceiling. The real
+caps (40 points a day earned for giving, 20 for receiving, per Europe/London calendar day, held in
+configuration) are applied **when a point is awarded**
+(`points/engagement-points.util.ts`, see `points/README.md`), so the rollup simply sums the ledger rows
+that have not been revoked (`revokedAt IS NULL`). A revoked row (an unlike, a removed comment, a removed
+post, an account later restricted) counts for nothing. Contest placement prizes are never capped.
+
+## Active-account exclusion (Decision Log #221)
+
+Applied at **both** stages, matching the same "primary write-side
+exclusion, defensive read-side exclusion" shape
+`sprint-2/account-deactivation-backend` already established for feed/
+club/follow-graph reads:
+
+1. **Primary — the rollup.** The raw SQL's own `INNER JOIN "User" u ...
+   AND u."accountStatus" = 'active'` means a deactivated or
+   `pending_deletion` user's `PointsLedgerEntry` rows are simply never
+   included in a fresh rollup — their `LeaderboardEntry` row for the
+   periods a rollup tick just ran is not written or updated at all.
+2. **Defensive — the read.** `GET /leaderboard`'s own query also filters
+   `user: { accountStatus: 'active' }` (mirroring `feed.service.ts`'s
+   `ACTIVE_AUTHOR_POST_FILTER` / `users.service.ts`'s
+   `ACTIVE_FOLLOW_ENTRY_FILTER` exactly), so a user who deactivates in the
+   gap between two 15-minute rollup ticks disappears from reads
+   **immediately**, with no dependency on rollup cadence.
+
+### Stale rows
+
+Because the rollup only upserts rows for currently-active users, a user
+who deactivates simply stops being touched by future rollup ticks —
+their last-computed `LeaderboardEntry` row lingers in Postgres with a
+stale points/rank value until the read-time filter above hides it. This
+is expected and fine; **no explicit deletion or separate cleanup job was
+built**, matching this task's own explicit instruction. `PointsLedgerEntry`
+rows keep accruing for a deactivated user regardless (deactivation
+removes nothing — Decision Log #221's own established behavior), so a
+reactivated user's next rollup tick picks their real total back up with
+no backfill needed.
+
+## `GET /leaderboard`
+
+`JwtAuthGuard`-only — no `GuardianConsentGuard` (reading the board is not
+a "posting"-class action under Section 5.7), and no logged-out view at
+all (Decision Log #129, already established for the Contest tab). No
+`@CurrentUser()` — the response carries no per-caller field, matching
+`GET /clubs`/`GET /banter-rooms`'s "reading a directory isn't
+caller-scoped" shape, not `GET /posts/feed`'s viewer-state shape
+(Decision Log #153/#154/#275).
+
+Keyset pagination: `(rank ASC, userId ASC)` — `rank` alone is not a
+unique tiebreak, since `RANK() OVER (ORDER BY points DESC)` deliberately
+gives two tied users the same rank (Decision Log #61(c): ties are
+allowed), so `userId` is the tiebreaker, mirroring every other two-column
+cursor in this codebase. Default page size 20 / max 50 per Section 5.5,
+same opaque-base64-cursor convention as every other list endpoint here.
+Postgres's own default null ordering already puts `NULL` values last on
+an ascending sort (the opposite of MySQL's default) — no explicit `NULLS
+LAST` was needed for a hypothetical null-`rank` row, though in practice
+no materialized row ever has one (the rollup never upserts a row without
+a real `rank` from the window function).
+
+Response shape:
+
+```ts
+interface LeaderboardEntryView {
+  userId: string;
+  publicName: string;
+  points: number;
+  rank: number;
+  club: { id: string; name: string } | null; // B-053, null for a minor
+  rankChange7d: number | null; // B-053, rank now - rank 7 days ago, negative = moved up
+}
+interface LeaderboardPage {
+  items: LeaderboardEntryView[];
+  nextCursor: string | null;
+}
+```
+
+## Verification
+
+Mocked suite (this PR): 4 new suites, 58 new tests — `iso-week.util.spec.ts`
+(31, the ISO-week date math, both directions, hand-derived fixtures
+including year-boundary cases), `leaderboard.service.spec.ts` (14, the
+read side — period default/validation, active-account filter, ordering,
+pagination shape, cursor decode/encode), `leaderboard-rollup.service.spec.ts`
+(9, the write side — upsert-per-row shape, empty-period handling, the raw
+query's own boundary params and SQL-text assertions, the current+previous
+period cron behavior including the ISO-year-boundary case), and
+`leaderboard.controller.http.spec.ts` (7, `JwtAuthGuard` wiring and DTO
+validation). See `CLAUDE.md`'s matching status bullet for exact
+before/after suite counts.
+
+e2e (real Postgres, `test/leaderboard.e2e-spec.ts`, 14 tests) — the
+raw SQL's own genuine correctness against a live engine, which no mock
+can prove: the absence of any weekly cap, revoked rows being excluded, exact-value ranking with rounded
+display (including a 0.25 row showing 0), both
+active-account exclusion stages (a fresh rollup never writing a
+deactivated user's row at all, and a *stale* already-written row being
+hidden at read time after the user later deactivates), period isolation,
+ties sharing a rank, rollup idempotency across repeated runs, and full
+keyset pagination across 5 users with no gaps or duplicates.
+
+## All-time board, club per row, 7-day change (B-053, Decision Log #472)
+
+`backend/b053-leaderboard-periods`. Three things the board did not answer before. Each is defined from the
+stored quarter-point ledger (`PointsLedgerEntry`) and `LeaderboardEntry` rows, nothing else.
+
+**1. All-time.** `GET /leaderboard?period=all-time` (the one non-weekly `period` value; anything else that is
+not `YYYY-Www` is still a 400). It is the total of the SAME quarter-point ledger since the start: every row
+that has not been revoked (`revokedAt IS NULL`), active accounts only, ranked with the same `RANK()` and the
+same rounding as a weekly board, club boards included (`?clubId=` works with it). It is materialized like the
+weekly boards: `LeaderboardEntry` rows with `period = 'all-time'`, built by the existing
+`LeaderboardRollupService.rollupPeriod('all-time')` (the window is the whole ledger instead of an ISO week).
+The read path is unchanged (it still never aggregates on read). Cost note: the all-time rollup scans the
+whole ledger every 15 minutes; fine at MVP volume, the first thing to revisit if the ledger gets large.
+
+**2. Club per row.** Every item has `club: { id, name } | null`.
+- Overall and all-time boards: the person's CURRENT represented club (`User.representedClubId`).
+- A club board: that club, for every row (the board only exists because the points were attributed to it
+  at earning time, Decision Log #128). The caller can only open their own represented club's board, so this
+  is a lookup of the club they already represent; a person who has since switched club still shows the
+  club of the board they are on.
+- `null` when the person represents no club.
+- **`null` for a minor (`User.isMinor`), always, on every board** (adopted default, veto-able, the same rule
+  as B-234). The minor stays on the board and keeps their rank; only the club is withheld. The login gate
+  and the active-account / restricted-pending visibility rules are unchanged.
+Only the club id and name are selected.
+
+**3. 7-day change.** Every item has `rankChange7d: number | null` = **the person's rank now minus their rank
+on the same board seven days earlier**. A NEGATIVE number means they moved UP. It is `null` (never 0) when
+they were not on that board then. A real zero (same rank both times) is `0`. "The same board" means the same
+period kind and the same club (or none).
+
+How "seven days earlier" is derived, because no snapshot table exists (`GET /leaderboard` stays a plain read
+of `LeaderboardEntry`): `LeaderboardHistoryRollupService` re-ranks the board as it stood at the earlier
+instant and stores the result in `LeaderboardEntry.rankSevenDaysAgo` (one additive nullable column). A
+ledger row counts at that instant only if it had been awarded by then (`occurredAt <= asOf`) and was not yet
+revoked by then (`revokedAt IS NULL OR revokedAt > asOf`). The instants are pure UTC arithmetic in
+`leaderboard-period.util.ts`:
+- **All-time:** `asOf = now - 7 days`, counting from the start.
+- **A weekly board:** the reference instant is the earlier of `now` and the last millisecond of the week;
+  `asOf` is that minus 7 days, and the earlier board is the ISO week containing `asOf`, counted up to `asOf`.
+  For the current week that is last week's board at the same moment (week to date against week to date). For
+  a week that has ended it is the previous week's final board, so a settled week does not drift with the
+  clock.
+- **Club boards** use the club snapshot on the ledger row, exactly like the live club rollup.
+
+It runs as its own service on its own cron (`0 7,22,37,52 * * * *`, seven minutes after the main rollup, so
+the rows it annotates exist) rather than inside `runRollup`, which stays untouched. Each pass builds the
+all-time board, then sets the baseline for the current week, the previous week and all-time, in one
+`UPDATE` per period (a row whose person was not on the earlier board gets NULL through a scalar subquery).
+
+Honest limits:
+- **Account status is today's.** "Active account" in the earlier board is the account's status NOW (no status
+  history exists), so a person deactivated since is absent from both boards and others' earlier ranks are
+  computed without them.
+- **A new row has a NULL baseline until the next pass** (up to ~15 minutes), and rows from before this change
+  stay NULL (older periods are not backfilled). NULL reads as "no change figure", not as 0.
+- **A platform less than seven days old** has no earlier board at all, so every `rankChange7d` is null.
+- Ranks are `RANK()` values, so ties share a rank and a tie can show a 0 or a move that is only the tie
+  breaking.
+
+## Club boards (Decision Log #128)
+
+**Snapshot, not live.** `awardPoints()` (`points/points.util.ts`) reads
+`User.representedClubId` inside the award transaction and writes it to
+`PointsLedgerEntry.clubId`. A later change of represented club never moves
+points already earned: they stay on the club that was represented when they
+were earned. This follows `PointsLedgerEntry.clubId`'s own schema comment
+(snapshot at award time) and the append-only ledger. **Default taken
+absent a specified rule, open to founder override.** The opposite (a live
+join at query time, so points follow the user) is a one-line change in
+`GET /leaderboard`'s `where` clause and the rollup if the founder prefers
+it.
+
+**No backfill.** Pre-change rows keep `clubId = NULL` (unattributed).
+Backfilling from each user's *current* `representedClubId` would tag old
+points with whatever club they represent today, which is wrong under the
+snapshot rule. `User.representedClubId` itself only exists from the
+`20261004013141` migration, so no pre-change club is recoverable anyway. Club
+boards therefore start counting from the deploy of this change.
+
+**Materialization.** `LeaderboardEntry` gained `clubId String @default("")`:
+`''` is the Overall board (existing rows, unchanged), a `ClubPage` id is that
+club's board. The unique key is `(userId, period, clubId)`. The rollup runs
+a second aggregation per period over attributed points only
+(`clubId IS NOT NULL`), ranked with `RANK() OVER (PARTITION BY clubId …)`.
+There is no weekly cap on a club board either (B-093). A mid-week club switch splits the user's
+engagement for that week across two boards, as before.
+
+**Judgment call to confirm:** the weekly win and monthly crown are attributed
+at award time. For contests, that is judging time, not entry time, so a user
+who switches club between entering a round and it being judged credits the
+win to the new club.
+

@@ -1,0 +1,32 @@
+.vote-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vote-toggle__button {
+  min-width: 84px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-brand-navy);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.vote-toggle__button--on {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-background-surface);
+}
+
+.vote-toggle__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vote-toggle__count {
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}

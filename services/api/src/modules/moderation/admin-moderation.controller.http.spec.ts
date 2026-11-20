@@ -1,0 +1,393 @@
+import {
+  ExecutionContext,
+  ForbiddenException,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import * as request from 'supertest';
+import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
+import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
+import { AdminModerationController } from './admin-moderation.controller';
+import { BanterRoomReactivationService } from './banter-room-reactivation.service';
+import { ModerationHoldsService } from './moderation-holds.service';
+import { ModerationService } from './moderation.service';
+
+// Exercises the real HTTP layer: routing, DTO validation, AND — unlike a
+// suite that overrides every guard away — the REAL AdminRolesGuard, left
+// as a genuine DI-resolved instance (it only depends on the globally
+// available Reflector, no mocking needed). Only AdminJwtAuthGuard is
+// overridden (bypassing real token verification, matching
+// contest-admin.controller.http.spec.ts's own precedent) — this suite is
+// the actual proof that editor is rejected and moderator/superadmin are
+// let through, not just documented as such in a comment.
+describe('AdminModerationController (HTTP layer)', () => {
+  let app: INestApplication;
+  const moderationService = {
+    listReports: jest.fn(),
+    getReportById: jest.fn(),
+    actionReport: jest.fn(),
+    decideAppeal: jest.fn(),
+    escalateReport: jest.fn(),
+  };
+
+  // B-045: the Report detail response now carries the report's active holds.
+  const holdsService = {
+    listActiveHoldsForReport: jest.fn(),
+    placeBadFaith: jest.fn(),
+    placeLegal: jest.fn(),
+    lift: jest.fn(),
+  };
+
+  // backend/room-staff-reactivation (Decision Log #515): the room state a Banter Room report's detail carries.
+  const roomReactivation = { describeRoom: jest.fn() };
+
+  let currentAdmin: { sub: string; role: string; aud: string };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AdminModerationController],
+      providers: [
+        { provide: ModerationService, useValue: moderationService },
+        { provide: ModerationHoldsService, useValue: holdsService },
+        { provide: BanterRoomReactivationService, useValue: roomReactivation },
+        AdminRolesGuard,
+      ],
+    })
+      .overrideGuard(AdminJwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          context.switchToHttp().getRequest().admin = currentAdmin;
+          return true;
+        },
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => jest.clearAllMocks());
+
+  describe('role gating (moderator/superadmin only, not editor)', () => {
+    it('rejects an editor with 403 on GET /admin/moderation/reports', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports').expect(403);
+      expect(moderationService.listReports).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor with 403 on GET /admin/moderation/reports/:id', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(403);
+      expect(moderationService.getReportById).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor with 403 on PATCH /admin/moderation/reports/:id', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1')
+        .send({ action: 'dismissed' })
+        .expect(403);
+      expect(moderationService.actionReport).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor with 403 on PATCH /admin/moderation/reports/:id/appeal', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/appeal')
+        .send({ decision: 'upheld' })
+        .expect(403);
+      expect(moderationService.decideAppeal).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor with 403 on PATCH /admin/moderation/reports/:id/escalate', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent', escalatedToAuthority: false })
+        .expect(403);
+      expect(moderationService.escalateReport).not.toHaveBeenCalled();
+    });
+
+    it('allows a moderator through', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      moderationService.listReports.mockResolvedValue({ items: [], nextCursor: null });
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports').expect(200);
+      expect(moderationService.listReports).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows a superadmin through', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'superadmin', aud: 'admin-console' };
+      moderationService.listReports.mockResolvedValue({ items: [], nextCursor: null });
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports').expect(200);
+      expect(moderationService.listReports).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('GET /admin/moderation/reports', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+    });
+
+    it('passes the query through to the service', async () => {
+      moderationService.listReports.mockResolvedValue({ items: [{ id: 'report-1' }], nextCursor: null });
+
+      const res = await request(app.getHttpServer())
+        .get('/admin/moderation/reports')
+        .query({ status: 'open', limit: 10 })
+        .expect(200);
+
+      expect(moderationService.listReports).toHaveBeenCalledWith({ status: 'open', limit: 10 }, 'admin-1');
+      expect(res.body.items).toHaveLength(1);
+    });
+
+    it('rejects an invalid status filter', async () => {
+      await request(app.getHttpServer()).get('/admin/moderation/reports').query({ status: 'bogus' }).expect(400);
+    });
+  });
+
+  describe('GET /admin/moderation/reports/:id', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      holdsService.listActiveHoldsForReport.mockResolvedValue([]);
+    });
+
+    it('keeps every existing report field and adds the active holds', async () => {
+      const hold = {
+        id: 'hold-1',
+        userId: 'u1',
+        type: 'legal_hold',
+        reportId: 'report-1',
+        placedBy: 'admin-9',
+        placedAt: '2030-01-01T00:00:00.000Z',
+        expiresAt: null,
+        liftedAt: null,
+      };
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', status: 'open', concernsMinor: false, reason: 'r' });
+      holdsService.listActiveHoldsForReport.mockResolvedValue([hold]);
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body).toEqual({ id: 'report-1', status: 'open', concernsMinor: false, reason: 'r', holds: [hold] });
+      expect(holdsService.listActiveHoldsForReport).toHaveBeenCalledWith('report-1');
+    });
+
+    it('a Banter Room report also carries the room state and whether this admin may reactivate it', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'banter_room', targetId: 'room-1' });
+      roomReactivation.describeRoom.mockResolvedValue({ id: 'room-1', status: 'inactive', staffMayReactivate: true });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.reportedRoom).toEqual({ id: 'room-1', status: 'inactive', staffMayReactivate: true });
+      expect(roomReactivation.describeRoom).toHaveBeenCalledWith('room-1', 'admin-1');
+    });
+
+    it('a Banter Room report whose room is gone reports reportedRoom as null', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'banter_room', targetId: 'room-1' });
+      roomReactivation.describeRoom.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.reportedRoom).toBeNull();
+    });
+
+    it('every other report keeps its shape: no reportedRoom key, no room lookup', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', targetType: 'post', targetId: 'post-1' });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body).not.toHaveProperty('reportedRoom');
+      expect(roomReactivation.describeRoom).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty holds array when nothing is held', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1' });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.holds).toEqual([]);
+    });
+
+    it('does not look up holds when the report is refused (404)', async () => {
+      moderationService.getReportById.mockRejectedValue(new NotFoundException('Report not found'));
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/missing').expect(404);
+
+      expect(holdsService.listActiveHoldsForReport).not.toHaveBeenCalled();
+    });
+
+    it('forwards the report id and the calling admin id, and returns the report', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', concernsMinor: false });
+
+      const res = await request(app.getHttpServer())
+        .get('/admin/moderation/reports/report-1')
+        .expect(200);
+
+      expect(moderationService.getReportById).toHaveBeenCalledWith('report-1', 'admin-1');
+      expect(res.body.id).toBe('report-1');
+    });
+
+    it('a superadmin may also fetch a single report', async () => {
+      currentAdmin = { sub: 'admin-2', role: 'superadmin', aud: 'admin-console' };
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1' });
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(moderationService.getReportById).toHaveBeenCalledWith('report-1', 'admin-2');
+    });
+
+    it('surfaces a 404 thrown by the service (report does not exist)', async () => {
+      moderationService.getReportById.mockRejectedValue(new NotFoundException('Report not found'));
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/missing').expect(404);
+    });
+
+    it('surfaces the child-safety-vetting 403 thrown by the service for a concernsMinor report', async () => {
+      moderationService.getReportById.mockRejectedValue(
+        new ForbiddenException({
+          statusCode: 403,
+          error: 'Forbidden',
+          code: 'child_safety_vetting_required',
+          message: 'This action requires a child-safety-vetted admin.',
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get('/admin/moderation/reports/report-1')
+        .expect(403);
+
+      expect(res.body.code).toBe('child_safety_vetting_required');
+    });
+  });
+
+  describe('PATCH /admin/moderation/reports/:id', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+    });
+
+    it('actions a report, forwarding the report id and the acting admin id', async () => {
+      moderationService.actionReport.mockResolvedValue({ id: 'report-1', status: 'actioned' });
+
+      const res = await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1')
+        .send({ action: 'content_removed' })
+        .expect(200);
+
+      expect(moderationService.actionReport).toHaveBeenCalledWith('report-1', 'admin-1', {
+        action: 'content_removed',
+      });
+      expect(res.body.status).toBe('actioned');
+    });
+
+    it('rejects an invalid action value', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1')
+        .send({ action: 'delete_everything' })
+        .expect(400);
+    });
+  });
+
+  describe('PATCH /admin/moderation/reports/:id/appeal', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-2', role: 'superadmin', aud: 'admin-console' };
+    });
+
+    it('decides an appeal, forwarding the report id and the reviewing admin id', async () => {
+      moderationService.decideAppeal.mockResolvedValue({ id: 'report-1', appealStatus: 'overturned' });
+
+      const res = await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/appeal')
+        .send({ decision: 'overturned' })
+        .expect(200);
+
+      expect(moderationService.decideAppeal).toHaveBeenCalledWith('report-1', 'admin-2', {
+        decision: 'overturned',
+      });
+      expect(res.body.appealStatus).toBe('overturned');
+    });
+
+    it('rejects an invalid decision value', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/appeal')
+        .send({ decision: 'maybe' })
+        .expect(400);
+    });
+  });
+
+  describe('PATCH /admin/moderation/reports/:id/escalate', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-3', role: 'moderator', aud: 'admin-console' };
+    });
+
+    it('escalates a report, forwarding the report id and the escalating admin id', async () => {
+      moderationService.escalateReport.mockResolvedValue({
+        id: 'report-1',
+        escalatedAt: '2026-09-27T00:00:00.000Z',
+        escalatedByAdminId: 'admin-3',
+        escalationNotes: 'flagging for review',
+        escalatedToAuthority: false,
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'flagging for review', escalatedToAuthority: false })
+        .expect(200);
+
+      expect(moderationService.escalateReport).toHaveBeenCalledWith('report-1', 'admin-3', {
+        escalationNotes: 'flagging for review',
+        escalatedToAuthority: false,
+      });
+      expect(res.body.escalatedByAdminId).toBe('admin-3');
+    });
+
+    it('rejects a missing escalationNotes', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalatedToAuthority: false })
+        .expect(400);
+      expect(moderationService.escalateReport).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing escalatedToAuthority', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent' })
+        .expect(400);
+    });
+
+    it('rejects a non-boolean escalatedToAuthority', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent', escalatedToAuthority: 'yes' })
+        .expect(400);
+    });
+
+    it('a superadmin may also escalate', async () => {
+      currentAdmin = { sub: 'admin-4', role: 'superadmin', aud: 'admin-console' };
+      moderationService.escalateReport.mockResolvedValue({ id: 'report-1', escalatedToAuthority: true });
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'already reported to the authority', escalatedToAuthority: true })
+        .expect(200);
+
+      expect(moderationService.escalateReport).toHaveBeenCalledWith('report-1', 'admin-4', {
+        escalationNotes: 'already reported to the authority',
+        escalatedToAuthority: true,
+      });
+    });
+  });
+});

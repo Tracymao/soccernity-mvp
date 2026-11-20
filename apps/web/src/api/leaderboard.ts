@@ -1,0 +1,70 @@
+// Leaderboard client -- Build Plan Section 4.9, GET /leaderboard
+// (services/api/src/modules/leaderboard, Decision Log #292).
+//
+// JwtAuthGuard-only (login required, Decision Log #129). Reads the
+// materialized LeaderboardEntry table; `period` is an ISO-8601 week
+// ("YYYY-Www") and defaults server-side to the current week. `clubId` (Decision
+// Log #128) selects the club board for the caller's OWN represented club; any
+// other club is a 403 server-side. `period: "all-time"` (B-053, Decision Log #472) is the one non-weekly
+// value. Each row also carries `club` and `rankChange7d`.
+//
+// Shapes mirror services/api/src/modules/leaderboard/leaderboard.types.ts.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export interface LeaderboardClubView {
+  id: string;
+  name: string;
+}
+
+export interface LeaderboardEntryView {
+  userId: string;
+  publicName: string;
+  points: number;
+  rank: number;
+  // null for a minor on every board, and for a person with no represented club.
+  club?: LeaderboardClubView | null;
+  // Rank now minus rank seven days earlier: NEGATIVE means the person moved UP. null = not on the board
+  // seven days ago (never 0 for "new"). Optional here only so a response from an older server still types.
+  rankChange7d?: number | null;
+}
+
+export interface LeaderboardPage {
+  items: LeaderboardEntryView[];
+  nextCursor: string | null;
+}
+
+export class LeaderboardApiError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, options?: { status?: number }) {
+    super(message);
+    this.name = "LeaderboardApiError";
+    this.status = options?.status;
+  }
+}
+
+export async function getLeaderboard(
+  accessToken: string,
+  options: { period?: string; clubId?: string; cursor?: string; limit?: number } = {},
+): Promise<LeaderboardPage> {
+  const url = new URL(`${API_BASE_URL}/leaderboard`);
+  if (options.period) url.searchParams.set("period", options.period);
+  if (options.clubId) url.searchParams.set("clubId", options.clubId);
+  if (options.cursor) url.searchParams.set("cursor", options.cursor);
+  if (options.limit) url.searchParams.set("limit", String(options.limit));
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new LeaderboardApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new LeaderboardApiError(`Couldn't load the leaderboard (${response.status}).`, {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as LeaderboardPage;
+}

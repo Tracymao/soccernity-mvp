@@ -1,0 +1,39 @@
+# Soccernity — local development infrastructure
+# Provisions PostgreSQL and Redis for the modular monolith described in
+# CLAUDE.md / MVP Build Plan Section 5. Connection details here match
+# .env.example exactly. Do not use this compose file for production —
+# hosting platform is Decision Log item #9, still open.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: soccernity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: soccernity
+    ports:
+      - "5432:5432"
+    volumes:
+      - soccernity_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d soccernity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: soccernity-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  soccernity_postgres_data:

@@ -1,0 +1,170 @@
+# Onboarding end-to-end QA suite
+
+Browser tests that drive the **real** `apps/web` and `apps/admin` (Vite dev servers) against the **real**
+`services/api` (built with `nest build`, run with `node dist/main.js`), a **real** Postgres and a **real** Redis.
+No network call is mocked. Report: [`docs/qa-e2e-onboarding-report.md`](../docs/qa-e2e-onboarding-report.md).
+
+This directory is **not** an npm workspace (the root globs are `apps/*`, `services/*`, `packages/*`), so
+installing it never touches the root lockfile and it is not part of `npm test` / CI.
+
+## Run it
+
+Prerequisites: Docker Postgres + Redis up (`docker compose up -d`), a root `.env` (for DB/Redis credentials,
+`JWT_SECRET`, `ADMIN_JWT_SECRET`, `DOB_ENCRYPTION_KEY`), Google Chrome installed.
+
+```
+cd e2e
+npm install
+# If you installed with `npm ci --ignore-scripts` (as the repo's other workspaces are), the ffmpeg-static binary is
+# NOT downloaded, because its download runs as an install script. Fetch it once by hand, or the video upload tests
+# (specs 18 and 17's final-entry upload) skip / fail closed:
+node node_modules/ffmpeg-static/install.js
+npm test                       # everything (~10 min)
+npx playwright test 04         # one spec
+E2E_KEEP_DB=1 npx playwright test 04   # keep the scratch database between runs
+```
+
+`support/global-setup.ts` first runs `npx prisma generate` in `services/api` (idempotent; `npm ci --ignore-scripts` never
+generates the client, so a clean clone needs it), then drops and recreates a scratch database `soccernity_qa` (never your
+`soccernity` dev database), runs the repo's migrations on it, seeds the one admin account that cannot self-register, flushes Redis
+logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
+on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
+
+**A run rewrites tracked files.** The suite saves screenshots under `docs/` (about 290 tracked files get overwritten, and
+new untracked ones appear), so a full run leaves `git status` dirty. Run it in a throwaway worktree, or put the tree back
+afterwards with `git checkout -- docs/` (and delete the untracked screenshots). Nothing here changes where they go.
+
+Spec 19 restarts the API without an object store to test the "uploads aren't available" message; its `afterAll` restarts
+the normal API (fake object store) when the file ends, even if the test fails, so it can sit anywhere in the order.
+
+## Post media upload with a fake check (spec 18, FC10)
+
+`tests/18-fc10-media-upload.spec.ts` drives the media upload pipeline in real Chrome against the real API process.
+Only the two vendors are stand-ins, started by `support/global-setup.ts` from `support/fake-media-services.ts`:
+an S3-compatible object store on :3191 (the browser PUTs to its one-time links) and an Amazon Rekognition answer on
+:3192 (`AWS_ENDPOINT_URL_REKOGNITION`). The API's own code, thresholds and decision rule run unchanged. The fake check
+decides from the picture's **width**: 64 px is cleared, 66 px is rejected, 68 px is left for a moderator
+(`support/media-fixtures.ts` builds the PNGs). The media sweep runs once a minute, so the spec waits up to ~70 s for
+a decision. ffmpeg / ffprobe come from the `ffmpeg-static` and `ffprobe-static` devDependencies (set as `FFMPEG_PATH`
+/ `FFPROBE_PATH` in `support/api-process.ts`); without them a video upload fails closed, as it does in production.
+
+## The whole Contest month in one run (spec 17, FC9)
+
+`tests/17-contest-phases-test-clock.spec.ts` plays a full month in real Chrome with **no environment variable**. The API
+clock is environment-only, so each scene restarts the real API on the instant it needs (`support/api-process.ts`:
+`restartApi({ iso })`; the pid of the running API is in `.run/api.pid`, and global teardown stops whichever one is
+running). Only inputs are seeded (`support/contest-journey.ts`: members, entries, votes, the other finalists' final
+entries); every decision is made by the real lifecycle service on its one-minute tick, and each scene waits for the
+database to show it before looking at the page. Scenes, in order: a forfeited week (pop-up on every load of the Contest
+and Voting pages), week 1 Phase 1 (join and enter), week 1 Phase 2 (vote -> voted -> vote -> voted), Between Weeks,
+weeks 2 and 3 Phase 1 and 2, Between Weeks before the final, the week-4 upload, the reveal (nine finalists on three
+carousel pages, desktop and 390 px), and the crowned state. It takes about ten minutes (the tick waits dominate) and puts
+the API back on the real clock at the end. It skips when `QA_CONTEST_PHASE` / `QA_TEST_CLOCK_ISO` pin the clock.
+
+## Driving ONE live Contest phase (the API test clock)
+
+The Contest follows the Europe/London calendar, so the real clock only ever shows one phase. To see the
+others in a real browser, start the suite with `QA_CONTEST_PHASE`; `support/global-setup.ts` then starts the API with
+`TEST_CLOCK_ISO` (and `E2E_TEST_CLOCK=1`) set to that phase's instant, and `support/contest-clock.ts`
+(`seedContestAtPhase`) seeds a consistent month: a cycle with its four rounds, members, weekly entries, votes and,
+for `final_live`, the final entries. The decisions themselves (ranking, vote lock, winners, finalists, reveal) are
+made by the real lifecycle service on its one-minute tick, on the test clock; the helper waits for that tick
+(under two minutes), then asks the real API which phase it believes it is in.
+
+```
+QA_CONTEST_PHASE=week1_phase2 npx playwright test 17     # one phase per run: the API clock is set when the stack starts
+QA_CONTEST_PHASE=final_live QA_CONTEST_MONTH=2026-12 npx playwright test 17
+QA_TEST_CLOCK_ISO=2026-11-05T10:00:00Z npx playwright test 17   # an explicit instant (add QA_TEST_CLOCK_ADVANCE=1 to let it run on)
+```
+
+Phases: `week{1,2,3}_phase1`, `week{1,2,3}_phase2`, `between_weeks_after_week{1,2,3}`, `week4_upload`, `final_live`.
+Seeded members log in with `Sup3r-secret-pass` (returned by `seedContestAtPhase`). Without `QA_CONTEST_PHASE` or
+`QA_TEST_CLOCK_ISO` the API runs on the real clock and spec 17 skips.
+
+Safety: the clock is read from the environment only; there is no HTTP endpoint that sets it. It is honoured only when
+`NODE_ENV=test` or `E2E_TEST_CLOCK=1`, and the API refuses to start when `NODE_ENV=production` and any of
+`TEST_CLOCK_ISO`, `TEST_CLOCK_ADVANCE`, `E2E_TEST_CLOCK` is set (`services/api/src/validate-runtime-env.ts`). Never
+add them to `render.yaml`. Database defaults (`createdAt DEFAULT now()`) are not on the test clock; the helper
+sets explicit timestamps on everything the contest reads.
+
+## How emails are read
+
+The API runs with no Postmark key, so every email it would send is written to its log with the full template
+data (including the link). `support/helpers.ts` parses `e2e/.run/api.log` (`waitForEmail`). This is the real
+send path up to the provider call.
+
+## Things the harness changes (and why)
+
+| Change | Why |
+|---|---|
+| `AUTH_RATE_LIMIT_MAX=1000` | The default 5 requests/60 s auth throttle is far below what the suite needs. |
+| `ADMIN_LOGIN_RATE_LIMIT_MAX=1000000` | The Admin Console sign-in allows 5 attempts per 15 minutes per IP (Decision Log #190) and one run signs in as many admins. QA only: the API refuses to start in production when this is set. `adminToken()` still caches one real login per run. |
+| `STRIPE_*=replace-me`, `EMAIL_PROVIDER_API_KEY=replace-me` | Never reach Stripe or Postmark. Under-13 card verification therefore fails closed (503). |
+| One test lifts `Guardian.cardVerificationRequired` in SQL | Local runs have no GeoLite2 database, so every under-13 needs the card step (by design). Marked `WORKAROUND` in the spec. |
+
+## Known-defect tests
+
+Tests titled `D-nn: ...` use `test.fail()`: they **pass while the defect exists** and turn red the day it is
+fixed - that is the cue to delete the `test.fail()` line.
+
+Fixed so far (Decision Log #407, backend/w3e): **D-01** (CORS; the CORS proxy is deleted, the browsers talk to the API
+directly), **D-02** (age-5 floor) and **D-06** (username CONTAINS match). Their tests stay as ordinary regression tests
+without `test.fail()`.
+
+## Spec 16 (the Final week) on any day
+
+`tests/16-fc8-final-week.spec.ts` needs a day from 25 to the month end (Europe/London). On the real clock its eight live
+tests skip on every other day. To run them on any day, pin the API clock to a day-25+ instant; the spec then derives
+"now", the month key and the dates it seeds from that same instant (`pinnedClockInstant` in `support/contest-clock.ts`,
+the one resolver `global-setup.ts` also uses):
+
+```
+QA_TEST_CLOCK_ISO=2026-11-26T10:00:00Z QA_TEST_CLOCK_ADVANCE=1 npx playwright test 16-fc8-final-week
+```
+
+- Use the file name, not just `16`: the filter is a substring match and also catches `57-...under16`.
+- Run it ALONE this way. A pin applies to the whole API process, so every spec in that run sees the same clock, and spec 17
+  skips under a pin because it moves the clock itself.
+- `QA_TEST_CLOCK_ADVANCE=1` lets the clock run on from the instant; leaving it out freezes it. Both pass.
+  `QA_CONTEST_PHASE=final_live` also pins to a day-25+ instant.
+- A pin before day 25 skips the live tests with a message that names the pinned instant.
+- The leaderboard test in the same file keeps the REAL week on purpose: the rollup follows the test clock, but
+  `GET /leaderboard` picks its default week from the wall clock.
+
+## Running the suite in GitHub Actions (on demand only)
+
+`.github/workflows/e2e-playwright.yml` runs this same harness on a Linux runner. It starts ONLY when someone presses the
+button: it has no pull request, push or schedule trigger, it is not a required check, and `ci.yml` does not mention it
+(`services/api/src/e2e-playwright-workflow.spec.ts` fails the build if that changes).
+
+1. Open the repository on GitHub, Actions tab, "E2E Playwright (on demand)", "Run workflow".
+2. Pick the branch in "Use workflow from". It tests that branch.
+3. Optional inputs:
+   - `spec_filter`: file names or patterns separated by spaces, for example `06-login-routing` or `52 53`. Empty runs
+     everything.
+   - `test_clock_iso`: pins the API clock, for example `2026-11-26T10:00:00Z`, so the date-gated spec 16 runs on any day. Use
+     it together with `spec_filter` = `16-fc8-final-week` (see the section above: a pin applies to the whole run).
+4. Expected duration: about 40 minutes for the whole suite, a few minutes for one spec. The job stops itself at 100 minutes.
+5. Afterwards open the run: the summary shows passed, failed and skipped counts, and the artifact `e2e-playwright-<run id>`
+   (kept 14 days) holds `results.json`, the API and Vite logs and the failure screenshots, traces and videos.
+
+What it does NOT do: it never runs by itself, it gates no merge, it uses no secrets and talks to no real vendor (the suite
+uses local fakes), and it does not retry a failed test. Two runs never overlap: a second dispatch waits in a queue.
+
+### The run guard (one run at a time)
+
+A run drops and recreates the scratch database `soccernity_qa`, flushes Redis DB 5 and listens on fixed ports (3100, 5273,
+5274, 3191, 3192). Two runs on one machine, for example from two worktrees, would wreck each other. So global setup first takes
+a lock file, `soccernity-e2e-qa.lock` in the OS temp directory (machine-wide, not per worktree), and checks that the ports are
+free. A second run stops before changing anything and prints one line such as:
+
+```
+E2E run guard: another QA run is active (pid 1234, started 2026-11-14T10:00:00.000Z, from D:\Projects\other-worktree\e2e). It owns the scratch database "soccernity_qa" and ports 3100/5273/5274/3191/3192; a second run would drop that database under it. Wait for it to finish. If that process is not running, delete C:\Users\you\AppData\Local\Temp\soccernity-e2e-qa.lock and start again. Nothing was changed or stopped.
+```
+
+- The lock is released at teardown, when setup fails, and when the process exits. A hard kill leaves the file behind; the next
+  run sees that its owner pid is gone (or that the lock is over 6 hours old) and takes it over by itself.
+- If the message names a pid that is NOT running and the run still refuses, delete the lock file it names.
+- If a port is in use the message says which one and how to find the program (`netstat -ano | findstr :3100` on Windows,
+  `lsof -i :3100` on Linux or macOS). The guard never stops anything for you.
+- A normal single run is unaffected.

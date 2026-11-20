@@ -1,0 +1,479 @@
+import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
+import * as request from 'supertest';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthThrottlerGuard } from './rate-limit/auth-throttler.guard';
+import { AuthLimitsInterceptor } from './rate-limit/auth-limits/auth-limits.interceptor';
+
+// Exercises real HTTP request/response handling (routing, DTO
+// validation, status codes) with AuthService mocked out, mirroring
+// registration/registration.controller.spec.ts's pattern -- this is the
+// HTTP-layer coverage that replaces the direct-call validation tests
+// that lived in auth.controller.spec.ts before LoginDto/RefreshDto/
+// LogoutDto became class-validator classes validated by main.ts's
+// global ValidationPipe.
+//
+// sprint-1/f5-f6-missing-endpoints added four JwtAuthGuard/unguarded
+// routes (change-password, deactivate-account, delete-account,
+// reactivate-account) to this same controller. JwtAuthGuard is
+// overridden (not left real) the same way
+// users/users.controller.http.spec.ts already does -- this file mocks
+// AuthService entirely, so there is no real TokenService/PrismaService
+// in this TestingModule for the real JwtAuthGuard to depend on.
+const AUTHENTICATED_USER = { sub: 'user-1', role: 'fan' };
+
+describe('AuthController (HTTP layer)', () => {
+  let app: INestApplication;
+  const guardianNotices = { notifyInBackground: jest.fn(), notify: jest.fn() };
+  const authService = {
+    login: jest.fn(),
+    refresh: jest.fn(),
+    logout: jest.fn(),
+    changePassword: jest.fn(),
+    deactivateAccount: jest.fn(),
+    deleteAccount: jest.fn(),
+    reactivateAccount: jest.fn(),
+    deleteInactiveAccount: jest.fn(),
+  };
+
+  const tokenPairResponse = {
+    accessToken: 'access-token',
+    accessTokenExpiresIn: 900,
+    refreshToken: 'refresh-id.secret',
+    refreshTokenExpiresAt: new Date('2026-08-18T00:00:00.000Z').toISOString(),
+  };
+
+  // /auth/login's response (unlike /auth/refresh's) also carries a `user`
+  // summary as of sprint-2/auth-response-shape-reconciliation -- see
+  // auth-response.mapper.ts's AuthResponse/toAuthUserSummary.
+  const authResponse = {
+    ...tokenPairResponse,
+    user: {
+      id: 'user-1',
+      email: 'player@example.com',
+      phone: null,
+      displayName: 'Player One',
+      dateOfBirth: new Date('1995-01-01').toISOString(),
+      isMinor: false,
+      role: 'fan',
+      verificationStatus: 'unverified',
+      createdAt: new Date('2026-08-16T00:00:00.000Z').toISOString(),
+    },
+  };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        { provide: AuthService, useValue: authService },
+        { provide: GuardianSecurityNoticeService, useValue: guardianNotices },
+      ],
+    })
+      // Same reasoning as registration.controller.spec.ts: @UseGuards()
+      // resolves by class reference, so overrideGuard() bypasses
+      // AuthThrottlerGuard's real DI graph without faking rate-limit
+      // behavior itself (covered separately by
+      // rate-limit/auth-throttler.guard.spec.ts).
+      .overrideInterceptor(AuthLimitsInterceptor)
+      .useValue({ intercept: (_ctx: unknown, next: { handle(): unknown }) => next.handle() })
+      .overrideGuard(AuthThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      // Same pattern users.controller.http.spec.ts already established:
+      // bypass real token verification, attach a fixed authenticated
+      // user to the request so change-password/deactivate/delete-account
+      // handlers have a @CurrentUser() to read.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_USER;
+          return true;
+        },
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('POST /auth/login', () => {
+    it('returns 200 with the token pair and user on success', async () => {
+      authService.login.mockResolvedValueOnce(authResponse);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'player@example.com', password: 'password123' })
+        .expect(200);
+
+      expect(response.body).toEqual(authResponse);
+      expect(authService.login).toHaveBeenCalledWith('player@example.com', 'password123', false);
+    });
+
+    it('rejects a body missing the password field with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'player@example.com' })
+        .expect(400);
+
+      expect(authService.login).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong-type email field with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 12345, password: 'password123' })
+        .expect(400);
+
+      expect(authService.login).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unexpected extra field with 400 (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'player@example.com', password: 'password123', role: 'admin' })
+        .expect(400);
+
+      expect(authService.login).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('returns 200 with the rotated token pair on success', async () => {
+      authService.refresh.mockResolvedValueOnce(tokenPairResponse);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: 'refresh-id.secret' })
+        .expect(200);
+
+      expect(response.body).toEqual(tokenPairResponse);
+      expect(authService.refresh).toHaveBeenCalledWith('refresh-id.secret');
+    });
+
+    it('rejects a body missing refreshToken with 400', async () => {
+      await request(app.getHttpServer()).post('/auth/refresh').send({}).expect(400);
+
+      expect(authService.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong-type refreshToken field with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: 12345 })
+        .expect(400);
+
+      expect(authService.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unexpected extra field with 400 (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: 'refresh-id.secret', role: 'admin' })
+        .expect(400);
+
+      expect(authService.refresh).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('returns 204 on success', async () => {
+      authService.logout.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .send({ refreshToken: 'refresh-id.secret' })
+        .expect(204);
+
+      expect(authService.logout).toHaveBeenCalledWith('refresh-id.secret', false, undefined);
+    });
+
+    it('rejects a body missing refreshToken with 400', async () => {
+      await request(app.getHttpServer()).post('/auth/logout').send({}).expect(400);
+
+      expect(authService.logout).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong-type allSessions field with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .send({ refreshToken: 'refresh-id.secret', allSessions: 'yes' })
+        .expect(400);
+
+      expect(authService.logout).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unexpected extra field with 400 (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .send({ refreshToken: 'refresh-id.secret', role: 'admin' })
+        .expect(400);
+
+      expect(authService.logout).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/change-password', () => {
+    // B-310: the change revokes every session including the caller's own, so it answers 200 with a FRESH session.
+    const FRESH_SESSION = { response: tokenPairResponse, persistent: false };
+
+    it('returns 200 with a fresh token pair and delegates with the caller-from-JWT id, not a body field', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      // Not cookie mode: the full pair is in the body, no Set-Cookie, no current refresh token to read.
+      expect(res.body).toEqual(tokenPairResponse);
+      expect(res.headers['set-cookie']).toBeUndefined();
+      expect(authService.changePassword).toHaveBeenCalledWith(
+        AUTHENTICATED_USER.sub,
+        'old-password',
+        'new-password-123',
+        undefined,
+      );
+    });
+
+    it('cookie mode: sets the new sn_rt cookie, leaves the refresh token out of the body, reads the CURRENT cookie', async () => {
+      authService.changePassword.mockResolvedValueOnce({ response: tokenPairResponse, persistent: true });
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5173')
+        .set('Cookie', 'sn_rt=current-id.current-secret')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(res.body.accessToken).toBe('access-token');
+      expect(res.body.refreshToken).toBeUndefined();
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_rt=refresh-id.secret');
+      expect(cookie).toMatch(/HttpOnly/i);
+      expect(cookie).toMatch(/SameSite=Strict/i);
+      expect(cookie).toContain('Path=/auth');
+      expect(cookie).toMatch(/Max-Age=\d+/i); // persistent was carried over
+      expect(authService.changePassword).toHaveBeenCalledWith(
+        AUTHENTICATED_USER.sub,
+        'old-password',
+        'new-password-123',
+        'current-id.current-secret',
+      );
+    });
+
+    it('cookie mode without the current cookie still succeeds (no cookie to read -> undefined) with a session cookie', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'http://localhost:5173')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(String(res.headers['set-cookie'])).not.toMatch(/Max-Age/i);
+      expect(authService.changePassword).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'old-password', 'new-password-123', undefined);
+    });
+
+    it('cookie mode from a foreign Origin is a 403 and the password is NOT changed', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Origin', 'https://evil.example')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(403);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('rejects a newPassword shorter than 8 characters with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'short' })
+        .expect(400);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('rejects a body missing currentPassword with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ newPassword: 'new-password-123' })
+        .expect(400);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('propagates a 401 thrown by the service (wrong current password)', async () => {
+      authService.changePassword.mockRejectedValueOnce(
+        new UnauthorizedException('Current password is incorrect'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'wrong', newPassword: 'new-password-123' })
+        .expect(401);
+    });
+
+    // B-275 (Decision Log #456): a minor's confirmed guardian is told after a successful change. The route only
+    // hands the user id and the event key over; who is actually emailed is decided in the notice service.
+    it('asks for a guardian security notice exactly once after a successful change, for the caller and no one else', async () => {
+      guardianNotices.notifyInBackground.mockClear();
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'password_changed');
+    });
+
+    it('sends no guardian notice when the change fails (wrong current password) or the body is invalid', async () => {
+      guardianNotices.notifyInBackground.mockClear();
+      authService.changePassword.mockRejectedValueOnce(new UnauthorizedException('Current password is incorrect'));
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'wrong', newPassword: 'new-password-123' })
+        .expect(401);
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'short' })
+        .expect(400);
+
+      expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+    });
+
+    it('does not change the response: the notice call never touches the body, even if it is a no-op', async () => {
+      authService.changePassword.mockResolvedValueOnce(FRESH_SESSION);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(200);
+
+      expect(res.body).toEqual(tokenPairResponse);
+    });
+  });
+
+  describe('POST /auth/deactivate-account', () => {
+    it('returns 204 and delegates to authService with the caller-from-JWT id and the re-entered password', async () => {
+      authService.deactivateAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/deactivate-account')
+        .send({ password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deactivateAccount).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400 -- a bare POST must never deactivate an account', async () => {
+      await request(app.getHttpServer()).post('/auth/deactivate-account').send({}).expect(400);
+
+      expect(authService.deactivateAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/delete-account', () => {
+    it('returns 204 and delegates to authService with the caller-from-JWT id and the re-entered password', async () => {
+      authService.deleteAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/delete-account')
+        .send({ password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deleteAccount).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400 -- a bare POST must never delete an account', async () => {
+      await request(app.getHttpServer()).post('/auth/delete-account').send({}).expect(400);
+
+      expect(authService.deleteAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/reactivate-account', () => {
+    it('returns 200 with a token pair + user on success', async () => {
+      authService.reactivateAccount.mockResolvedValueOnce(authResponse);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'player@example.com', password: 'the-real-password' })
+        .expect(200);
+
+      expect(response.body).toEqual(authResponse);
+      expect(authService.reactivateAccount).toHaveBeenCalledWith('player@example.com', 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'player@example.com' })
+        .expect(400);
+
+      expect(authService.reactivateAccount).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'not-an-email', password: 'the-real-password' })
+        .expect(400);
+
+      expect(authService.reactivateAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  // sprint-2/account-deactivation-backend (Decision Log #221) — the
+  // unauthenticated Delete path from the "Inactive Account" screen.
+  describe('POST /auth/delete-inactive-account', () => {
+    it('returns 204 and delegates to authService with { email, password }', async () => {
+      authService.deleteInactiveAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'player@example.com', password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deleteInactiveAccount).toHaveBeenCalledWith(
+        'player@example.com',
+        'the-real-password',
+      );
+    });
+
+    it('rejects a body missing password with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'player@example.com' })
+        .expect(400);
+
+      expect(authService.deleteInactiveAccount).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'not-an-email', password: 'the-real-password' })
+        .expect(400);
+
+      expect(authService.deleteInactiveAccount).not.toHaveBeenCalled();
+    });
+  });
+});

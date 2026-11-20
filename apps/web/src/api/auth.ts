@@ -1,0 +1,881 @@
+// Auth Service client -- MVP Build Plan Section 4.1.
+//
+// Both `POST /auth/login` (PR B3) and `POST /auth/register` (PR B2) are
+// real, merged endpoints as of `sprint-2/auth-response-shape-
+// reconciliation`, which is also the PR that reconciled this file's
+// `LoginResponse`/`RegisterResponse` interfaces against the real backend
+// DTOs -- they were speculative pre-B2/B3 scaffolding before that. The
+// authoritative source of truth for both shapes is
+// `services/api/src/modules/auth/auth-response.mapper.ts`
+// (`AuthResponse`/`toAuthUserSummary`) and
+// `services/api/src/modules/auth/README.md`'s "response shape
+// reconciliation" note -- read those, not this comment, if either shape
+// changes again.
+import type { GuardianRelationship } from "../pages/signup/types";
+import { COOKIE_MODE_HEADERS } from "../lib/cookieMode";
+import {
+  TWO_FACTOR_CODE_LOCKED,
+  TWO_FACTOR_INVALID_CHALLENGE,
+  TWO_FACTOR_INVALID_CODE,
+  errorBodyCode,
+} from "./twoFactorCodes";
+
+// No VITE_ env convention existed anywhere in apps/web before these PRs.
+// Falls back to services/api's default local port (services/api/src/main.ts).
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+  // "Stay signed in": true -> the API issues a persistent refresh cookie, otherwise a
+  // session cookie (gone when the browser closes). The access token is in memory either way.
+  staySignedIn?: boolean;
+}
+
+// Section 5.7: access token is short-lived (15 min) and carries only
+// `userId` + `role` inside the JWT itself -- no `isMinor`/`consentStatus`
+// trusted claims there (services/api's token.types.ts's non-negotiable).
+// That's a separate concern from this response body, though: `user` here
+// intentionally DOES include `isMinor`/`verificationStatus` -- a fresh,
+// one-time HTTP response reading the caller's own current state back to
+// them, per auth-response.mapper.ts's `AuthUserSummary`. Refresh token is
+// rotating/revocable (Redis-backed per PR B1). This mirrors the real
+// `AuthResponse` shape both `POST /auth/login` and `POST /auth/register`
+// return as of sprint-2/auth-response-shape-reconciliation.
+export interface LoginResponse {
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  // B-246: no refreshToken here. Requests carry `X-Auth-Mode: cookie`, so the API
+  // puts the refresh token in an httpOnly cookie and leaves it out of the body.
+  refreshTokenExpiresAt: string;
+  user: AuthUserSummary;
+}
+
+// B-087 / B-111 (backend B-086, services/api modules/two-factor): for an account with
+// two-factor on, POST /auth/login and POST /auth/reactivate-account answer 200 with this
+// challenge instead of tokens -- no session and no cookie exist yet. The second step is
+// POST /auth/login/two-factor (completeTwoFactorLogin below). The challenge token is opaque,
+// short-lived (the server says how long) and lives only in component state.
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  challengeToken: string;
+  challengeExpiresInSeconds: number;
+  // B-278 (backend B-276): present on a USER challenge, added only after the password step
+  // succeeded. true when a lost-device recovery request is WAITING for this account (an
+  // adult confirmed one); a successful code cancels it. `recoveryExecuteAt` (ISO) only
+  // when true.
+  recoveryPending?: boolean;
+  recoveryExecuteAt?: string;
+}
+
+export function isTwoFactorChallenge(result: unknown): result is TwoFactorChallenge {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { twoFactorRequired?: unknown }).twoFactorRequired === true &&
+    typeof (result as { challengeToken?: unknown }).challengeToken === "string"
+  );
+}
+
+// Shared by LoginResponse and RegisterResponse -- mirrors
+// services/api's auth-response.mapper.ts's AuthUserSummary exactly.
+// Never includes `passwordHash`; deliberately does include
+// `isMinor`/`verificationStatus` (see the comment above LoginResponse).
+// B-030 (Decision Log #367, #394 A6): where an account stands in the sign-up
+// flow, computed on the server and mirrored from
+// services/api/src/modules/auth/onboarding-state.util.ts. A routing HINT only:
+// every protected write is still enforced server-side.
+export type GuardianConsentState = "not_applicable" | "pending" | "confirmed" | "declined";
+export type OnboardingNextStep = "restricted_pending" | "verify_email" | "create_profile" | "none";
+
+export interface AuthUserSummary {
+  id: string;
+  email: string;
+  phone: string | null;
+  displayName: string;
+  username: string | null;
+  publicName: string;
+  dateOfBirth: string;
+  isMinor: boolean;
+  role: "fan" | "player" | "admin";
+  verificationStatus: string;
+  createdAt: string;
+  profileComplete: boolean;
+  /** `declined` is never folded into `pending` (B-030). */
+  guardianConsentStatus: GuardianConsentState;
+  nextStep: OnboardingNextStep;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  displayName: string;
+  /** ISO 8601 date, e.g. "2011-09-04" -- from the Age Gate step. */
+  dateOfBirth: string;
+  /**
+   * Present only when the Age Gate step determined the account is a minor
+   * (under 18 -- Decision Log #8, Build Plan Section 9). Guardian's
+   * minorUserId, consentStatus, consentToken and consentTimestamp
+   * (Section 3 / schema.prisma) are all server-assigned, never sent by the
+   * client.
+   */
+  /** sprint-1/coppa-card-verification: self-declared ISO country, minors only. */
+  countryCode?: string;
+  guardian?: {
+    name: string;
+    email: string;
+    relationship: GuardianRelationship;
+  };
+}
+
+// As of sprint-2/auth-response-shape-reconciliation, `POST /auth/register`
+// returns the identical token/user shape `POST /auth/login` does (see
+// LoginResponse above) -- previously this interface had no token fields
+// at all and a narrower, ad hoc `user` subset; both were speculative
+// scaffolding, not the real DTO. `guardian` is unaffected by that PR --
+// still only present when the registrant declared as a minor.
+export interface RegisterResponse {
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  // B-246: no refreshToken in the body (it is in the httpOnly cookie).
+  refreshTokenExpiresAt: string;
+  user: AuthUserSummary;
+  guardian: {
+    id: string;
+    name: string;
+    email: string;
+    relationship: GuardianRelationship;
+    consentStatus: string;
+  } | null;
+}
+
+// Shared by login() and registerUser() -- both are "a request to the auth
+// API failed" and neither caller (LoginPage.tsx, RegisterStep.tsx)
+// branches on anything beyond `instanceof AuthApiError` + `.message`, so
+// two near-identical classes (one carrying `status`, one carrying
+// `cause`) would just be duplication. `status` and `cause` are both
+// optional debugging metadata, not control flow -- a request can supply
+// either, both, or neither.
+//
+// `code` is a machine-readable discriminator for the rare case where a
+// caller DOES need to branch on the *kind* of failure rather than just
+// show `.message`. The only value in use today is "account_deactivated"
+// (login() -> LoginPage.tsx routes to the Inactive Account interstitial),
+// added by sprint-2/account-deactivation-to-code.
+export class AuthApiError extends Error {
+  readonly status?: number;
+  readonly code?: string;
+  readonly cause?: unknown;
+
+  constructor(message: string, options?: { status?: number; code?: string; cause?: unknown }) {
+    super(message);
+    this.name = "AuthApiError";
+    this.status = options?.status;
+    this.code = options?.code;
+    this.cause = options?.cause;
+  }
+}
+
+export async function login(payload: LoginRequest): Promise<LoginResponse | TwoFactorChallenge> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    // Network-level failure -- expected right now, since no backend route
+    // exists yet for this endpoint. Surface as a typed error so the UI
+    // can distinguish "backend unreachable" from "bad credentials".
+    throw new AuthApiError("Could not reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    // A deactivated account: the backend (AuthService.login) returns a
+    // 401 with a structured `code: "account_deactivated"` field on the
+    // response body, and does so ONLY AFTER the password has verified --
+    // so reaching this branch means the credentials were correct and the
+    // account is simply switched off. Surface that as a distinct `code`
+    // here too so LoginPage can route to the Inactive Account
+    // interstitial (Activate / Delete) instead of showing a "wrong
+    // password" error.
+    //
+    // Previously this checked /deactivat/i against the response's
+    // `message` string -- fragile against any future copy change on the
+    // backend side (Decision Log #225's own flagged follow-up). Now
+    // checks the stable, machine-readable `code` field
+    // (services/api/src/modules/auth/auth.service.ts's
+    // ACCOUNT_DEACTIVATED_CODE) instead, mirroring how
+    // guardianConsentRejection() below and every other structured-error
+    // guard in this codebase (GuardianConsentGuard, Under16RestrictionGuard)
+    // already surface a `code`.
+    const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+    if (response.status === 401 && body?.code === "account_deactivated") {
+      throw new AuthApiError("This account has been deactivated.", {
+        status: 401,
+        code: "account_deactivated",
+      });
+    }
+
+    let message = "Something went wrong signing you in.";
+    if (response.status === 401) {
+      message = "That email and password don't match.";
+    }
+    throw new AuthApiError(message, { status: response.status });
+  }
+
+  return (await response.json()) as LoginResponse | TwoFactorChallenge;
+}
+
+// --- Guardian consent (Build Plan Section 8.3, F5) ------------------------
+//
+// GuardianConsentDto/{message} shape mirrors
+// services/api/src/modules/auth/guardian-consent/guardian-consent.controller.ts
+// exactly. confirmGuardianConsent/resendGuardianConsentRequest are both
+// deliberately unauthenticated (no Bearer header) -- the guardian is not a
+// Soccernity account holder, and the token/email themselves are the
+// credential, mirroring resetPassword's own trust model in lib/authApi.ts.
+// getGuardianConsentStatus is the one authenticated call of the three (it's
+// the MINOR checking their own status), so it takes an access token.
+
+export interface GuardianConsentStatus {
+  consentStatus: string;
+  guardianEmail: string;
+  canResend: boolean;
+  consentTimestamp: string | null;
+  // B-131 (Decision Log #406 item 11): the guardian's first name (an
+  // approximation of the single full-name field) and when the guardian last
+  // decided. Both are null until there is something to show. The decline COUNT
+  // is never returned. Optional here so an older server response still parses.
+  guardianFirstName?: string | null;
+  lastDecisionAt?: string | null;
+}
+
+// The backend's generic rejection body (unknown / rotated / expired token).
+// Anything else on a 400 from the guardian-consent routes is a deliberate,
+// non-generic message ("already confirmed", "declined or withdrawn") the
+// caller is entitled to read -- they already hold the real token, so there
+// is nothing left to enumerate -- and is passed through verbatim.
+const GENERIC_CONSENT_REJECTION = "Invalid or expired consent token";
+const INVALID_LINK_MESSAGE = "This link is invalid or has expired. Ask the account holder to resend the request.";
+
+async function guardianConsentRejection(response: Response): Promise<AuthApiError> {
+  if (response.status === 429) {
+    return new AuthApiError("Too many attempts. Please wait a minute and try again.", { status: 429 });
+  }
+  if (response.status === 400) {
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      if (typeof body.message === "string" && body.message !== GENERIC_CONSENT_REJECTION) {
+        return new AuthApiError(body.message, { status: 400 });
+      }
+    } catch {
+      // Unparseable body -- fall through to the generic message.
+    }
+  }
+  return new AuthApiError(INVALID_LINK_MESSAGE, { status: response.status });
+}
+
+async function postGuardianConsentToken(path: string, consentToken: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consentToken }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw await guardianConsentRejection(response);
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+export function confirmGuardianConsent(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent", consentToken);
+}
+
+// POST /auth/guardian-consent/decline -- the guardian's real "I do not
+// consent". Unauthenticated, same trust model as confirm. Idempotent
+// server-side (re-declining is a 200), so a double-click is harmless.
+export function declineGuardianConsent(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent/decline", consentToken);
+}
+
+// sprint-1/coppa-card-verification -- token-credentialed, unauthenticated,
+// like confirm/decline. None of these ever send or receive card data: the
+// guardian's card goes browser -> Stripe directly, and only client secrets /
+// reference state come back here.
+async function postGuardianJson<T>(path: string, consentToken: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consentToken }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (response.status === 503) {
+    throw new AuthApiError("Card verification isn't available right now. Please try again later.", {
+      status: 503,
+    });
+  }
+  if (!response.ok) {
+    throw await guardianConsentRejection(response);
+  }
+  return (await response.json()) as T;
+}
+
+export interface GuardianVerificationRequirements {
+  cardRequired: boolean;
+  cardVerified: boolean;
+}
+
+export function getGuardianVerificationRequirements(consentToken: string) {
+  return postGuardianJson<GuardianVerificationRequirements>("/auth/guardian-consent/verification", consentToken);
+}
+
+export function createGuardianCardIntent(consentToken: string) {
+  return postGuardianJson<{ clientSecret: string; publishableKey: string }>(
+    "/auth/guardian-consent/card/intent",
+    consentToken,
+  );
+}
+
+export function completeGuardianCardVerification(consentToken: string) {
+  return postGuardianJson<GuardianVerificationRequirements>("/auth/guardian-consent/card/complete", consentToken);
+}
+
+// B-021 / B-029 (Decision Log #372): the guardian's request summary and the
+// "Report incorrect details" action. Both are token-credentialed and
+// unauthenticated, like confirm/decline; the token goes in a header for the
+// GET (so it stays out of URLs and access logs) and in the body for the POST.
+export interface GuardianRequestSummary {
+  minorName: string;
+  /** YYYY-MM-DD. */
+  dateOfBirth: string;
+  guardianName: string;
+  guardianRelationship: string;
+  requestedAt: string;
+  /** When this request's link stops working (ISO). Moves forward if the minor resends. */
+  expiresAt: string;
+  /** True once the guardian reported incorrect details and support has not resolved it: approval is on hold. */
+  incorrectDetailsReported: boolean;
+  notices: {
+    guardianEmailShownOnMinorProfile: true;
+    photoAndUsernameVisibleToOthers: true;
+  };
+}
+
+export async function getGuardianRequestSummary(consentToken: string): Promise<GuardianRequestSummary> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/request-summary`, {
+      headers: { "X-Consent-Token": consentToken },
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (!response.ok) {
+    throw await guardianConsentRejection(response);
+  }
+  return (await response.json()) as GuardianRequestSummary;
+}
+
+// POST /auth/guardian-consent/report-incorrect-details. Sends the token only:
+// no note and no "correct" date is collected from an unauthenticated caller
+// (data minimisation, legal-copy Part C row 22).
+export function reportIncorrectGuardianDetails(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent/report-incorrect-details", consentToken);
+}
+
+export async function getGuardianConsentStatus(accessToken: string): Promise<GuardianConsentStatus> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/status`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't load your guardian consent status (${response.status}).`, {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as GuardianConsentStatus;
+}
+
+// POST /auth/guardian-consent/change-guardian-email (Decision Log #365) --
+// the MINOR (authenticated) replaces the guardian on file while consent is
+// still pending; the backend restarts the consent flow against the new
+// address. name + relationship are required alongside the email because the
+// new address may be a different person. The server's 400/409/429 messages
+// ("can't be your own email", "already confirmed", "too many changes") are
+// deliberate and user-readable, so they are passed through verbatim.
+export interface ChangeGuardianEmailRequest {
+  name: string;
+  email: string;
+  relationship: GuardianRelationship;
+}
+
+export async function changeGuardianEmail(
+  accessToken: string,
+  payload: ChangeGuardianEmailRequest,
+): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/change-guardian-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    let serverMessage: string | null = null;
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      if (typeof body.message === "string") serverMessage = body.message;
+      else if (Array.isArray(body.message) && typeof body.message[0] === "string") serverMessage = body.message[0];
+    } catch {
+      // Unparseable body -- fall through to the generic message.
+    }
+    const readable = [400, 409, 429].includes(response.status) && serverMessage;
+    throw new AuthApiError(readable ? (serverMessage as string) : "Couldn't update the guardian email. Please try again.", {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+export async function resendGuardianConsentRequest(email: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/resend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't send that request (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+// --- Guardian consent withdrawal (B-080 / B-112, Decision Log #340 / #414 item 1) -------
+//
+// Two unauthenticated, token-credentialed steps. The guardian holds no Soccernity account.
+//   1. POST /auth/guardian-consent/withdraw/request { email }  -- the MINOR's account email. ONE fixed
+//      200 for every outcome (unknown address, no guardian, pending, declined or confirmed), so the
+//      page can never tell the guardian whether anything matched. The single-use withdrawal token only
+//      ever goes to the guardian's own inbox.
+//   2. POST /auth/guardian-consent/withdraw { withdrawalToken } -- 200 closes the account at once; a 400
+//      is the generic "invalid or expired" (unknown, expired, used, or consent not confirmed).
+// Both routes share a dedicated throttle (5 attempts per 15 minutes per IP, held in configuration); a
+// throttled caller gets a bare 429. The page maps the status to a state, so only `status` matters here.
+export async function requestGuardianWithdrawal(email: string): Promise<{ message: string }> {
+  return postWithdrawalJson("/auth/guardian-consent/withdraw/request", { email });
+}
+
+export async function withdrawGuardianConsent(withdrawalToken: string): Promise<{ message: string }> {
+  return postWithdrawalJson("/auth/guardian-consent/withdraw", { withdrawalToken });
+}
+
+async function postWithdrawalJson(path: string, body: Record<string, string>): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't complete that request (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { message: string };
+}
+
+// --- Email verification (F7, Build Plan Section 4.1) ----------------------
+//
+// POST /auth/verify-email is unauthenticated -- the user clicking the
+// emailed link is not necessarily signed in yet -- and, like
+// confirmGuardianConsent above, deliberately non-enumerating on failure:
+// an invalid, expired, or already-used token all land on the same
+// generic 400 message, mirroring the backend's own trust model exactly.
+
+// `guardianConsentStatus` is additive, from `sprint-2/verify-email-consent-
+// status-field` (Decision Log #38) -- mirrors
+// services/api/src/modules/auth/registration/registration.service.ts's own
+// `VerifyEmailResult` type exactly, including its own reasoning for staying
+// a plain `string` rather than a narrower union (the real values today are
+// 'not_applicable' | 'pending' | 'confirmed', but a future guardian-decline
+// flow, Decision Log #34, would add a fourth without this type needing to
+// change). VerifyEmailPage.tsx is the one caller that branches on it.
+export interface VerifyEmailResponse {
+  verified: true;
+  userId: string;
+  guardianConsentStatus: string;
+}
+
+export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    // Deliberately generic -- matches the backend's own non-enumeration
+    // posture: an invalid, expired, or already-used token are all
+    // indistinguishable from here.
+    throw new AuthApiError("This verification link is invalid or has expired.", {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as VerifyEmailResponse;
+}
+
+// POST /auth/resend-verification-email (B-128, Decision Log #406 item 3).
+// Unauthenticated and keyed by email. The server answers 200 with ONE generic
+// message for every outcome (unknown address, already verified, closed
+// account, per-account cap reached), so a 200 never tells the caller whether a
+// mail was sent. The per-IP throttle is the only visible refusal: 429.
+export async function resendVerificationEmail(email: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/resend-verification-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't send that request (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+// --- Account lifecycle (F6, sprint-1/f5-f6-missing-endpoints) -------------
+//
+// All three are JwtAuthGuard-only, 204-No-Content-on-success, and require
+// the current password as a re-entry confirmation step -- mirrored here
+// exactly (see auth.controller.ts). The UI calling these MUST collect the
+// password before calling, never send a blank/omitted one.
+
+// B-310 (Decision Log #500 follow-up): a successful change revokes every session, the caller's own included, so the
+// API answers 200 with a FRESH session for this device (cookie mode: the new refresh token is the sn_rt cookie, the
+// body carries only the access token). The caller MUST hand `accessToken` to `replaceAccessToken` (lib/session.ts):
+// that is what keeps the person signed in on this device, as the Change password page promises. This function does
+// not store anything itself -- like login(), it only talks to the API, and each caller stores the session.
+// Returns null when the server answered 204 (it issued no session), in which case the caller must treat the
+// session as ended (clearStoredSession).
+export interface ChangePasswordResult {
+  accessToken: string;
+}
+
+export async function changePassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResult | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: "POST",
+      // The cookie-mode header and credentials let the API read the CURRENT sn_rt cookie (for "Stay signed in") and
+      // set the NEW one. The 401-replay in silentRefresh.ts is unchanged.
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...COOKIE_MODE_HEADERS },
+      credentials: "include",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "Your current password is incorrect." : "Couldn't change your password.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+
+  if (response.status === 204) return null;
+  try {
+    const body = (await response.json()) as { accessToken?: unknown };
+    return typeof body.accessToken === "string" && body.accessToken !== "" ? { accessToken: body.accessToken } : null;
+  } catch {
+    // The password WAS changed; an unreadable body only means no fresh session was handed over.
+    return null;
+  }
+}
+
+export async function deactivateAccount(accessToken: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/deactivate-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "That password is incorrect." : "Couldn't deactivate your account.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+// This does NOT hard-delete anything server-side -- deleteAccount() sets
+// the account to a pending_deletion status (see auth.controller.ts's own
+// comment). Callers must present copy that reflects that ("your request
+// has been received"), never "your account has been deleted".
+export async function deleteAccount(accessToken: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/delete-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "That password is incorrect." : "Couldn't process that request.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+// POST /auth/reactivate-account -- UNAUTHENTICATED, { email, password }
+// (a deactivated account has no session to authenticate with). On
+// success the backend flips accountStatus "deactivated" -> "active" and
+// returns the SAME AuthResponse shape POST /auth/login does (tokens +
+// user) -- so a caller stores the tokens exactly like LoginPage does and
+// the person is signed straight in. An already-"active" account with the
+// right credentials is treated as a plain login (also 200); a
+// "pending_deletion" account or a wrong password both get the generic
+// 401 "Invalid credentials" (non-enumeration -- see auth.service.ts).
+export async function reactivateAccount(
+  email: string,
+  password: string,
+): Promise<LoginResponse | TwoFactorChallenge> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/reactivate-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message =
+      response.status === 401
+        ? "We couldn't reactivate this account. The password may be wrong, or the account is scheduled for deletion."
+        : "Couldn't reactivate your account. Please try again shortly.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+
+  // With two-factor on this is a challenge, not tokens; the reactivation itself
+  // happens when POST /auth/login/two-factor accepts the code (backend B-086).
+  return (await response.json()) as LoginResponse | TwoFactorChallenge;
+}
+
+// POST /auth/login/two-factor -- the second step of sign-in (and of reactivating a
+// deactivated account) for an account with two-factor on. `code` is a 6-digit
+// authenticator code OR a backup code; the server tells them apart. The "stay signed in"
+// choice made at the password step is kept on the challenge, so nothing is re-sent here.
+// On success it issues the session exactly like login (httpOnly refresh cookie, access
+// token in the body).
+//
+// Errors carry the API's own `code` (api/twoFactorCodes.ts), which is what the caller
+// branches on -- never the message text:
+//   two_factor_invalid_challenge -- 401: the sign-in step expired or is no longer valid (also
+//     what a deactivated / suspended account gets mid-flow): go back to sign-in.
+//   two_factor_invalid_code      -- any other 401. By design the server gives ONE answer
+//     for a wrong code, a replayed code and a spent backup code; this client does not
+//     try to tell them apart.
+//   two_factor_code_locked       -- 429: five wrong codes lock code entry for that account.
+export async function completeTwoFactorLogin(challengeToken: string, code: string): Promise<LoginResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/login/two-factor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
+      body: JSON.stringify({ challengeToken, code }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      if ((await errorBodyCode(response)) === TWO_FACTOR_INVALID_CHALLENGE) {
+        throw new AuthApiError("This sign-in step has expired.", {
+          status: 401,
+          code: TWO_FACTOR_INVALID_CHALLENGE,
+        });
+      }
+      throw new AuthApiError("That code didn’t work.", { status: 401, code: TWO_FACTOR_INVALID_CODE });
+    }
+    if (response.status === 429) {
+      throw new AuthApiError("Too many incorrect codes.", { status: 429, code: TWO_FACTOR_CODE_LOCKED });
+    }
+    throw new AuthApiError("Something went wrong signing you in.", { status: response.status });
+  }
+
+  return (await response.json()) as LoginResponse;
+}
+
+// POST /auth/delete-inactive-account -- UNAUTHENTICATED, { email,
+// password }. The Delete path from the Inactive Account screen: a
+// deactivated account has no session to reach the JwtAuthGuard-protected
+// POST /auth/delete-account, so this route re-verifies credentials
+// itself. It does NOT hard-delete -- it sets accountStatus =
+// "pending_deletion" + pendingDeletionAt (the exact same server path as
+// deleteAccount()), starting the 30-day grace clock
+// (AccountDeletionSweepService, Decision Log #42/#44). 204 on success;
+// any failure (wrong password, account not actually "deactivated",
+// account already "pending_deletion") gets a generic 401. Callers MUST
+// present 30-day-grace copy, never "your account has been deleted".
+export async function deleteInactiveAccount(email: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/delete-inactive-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message =
+      response.status === 401 ? "That password is incorrect." : "Couldn't process that request.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+export async function registerUser(payload: RegisterRequest): Promise<RegisterResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      // B-246: in cookie mode the API sets the refresh cookie, and a browser stores a
+      // cross-origin Set-Cookie only if the request used `credentials: "include"`.
+      // (QA D-01 / Decision Log #407 item 1 removed this option while the API set no
+      // cookie, because the CORS answer was not credentialed. B-245 made the CORS
+      // answer credentialed -- exact-origin allow-list, never a wildcard -- so
+      // sending it is correct again.)
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    // Expected during Sprint 1 until B2 merges and a server is actually
+    // running at API_BASE_URL -- this is not a bug in this request.
+    throw new AuthApiError(
+      "Couldn't reach the Soccernity server. The account service may not be available yet -- try again shortly.",
+      { cause: networkError },
+    );
+  }
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new AuthApiError(
+      (body && typeof body.message === "string" && body.message) || `Registration failed (${response.status}).`,
+      { status: response.status, cause: body },
+    );
+  }
+
+  return body as RegisterResponse;
+}
+
+// B-017 / B-246 -- server-side logout (POST /auth/logout, 204). In cookie mode the
+// refresh token is read from the httpOnly cookie, revoked server-side, and the
+// cookie is cleared by this response, so the caller passes nothing. No body, no
+// Authorization header (that would only matter for `allSessions`). The API
+// requires an allow-listed Origin on this route. Best-effort -- the caller clears
+// local state regardless of the outcome, so this never throws.
+export async function logoutSession(): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      headers: COOKIE_MODE_HEADERS,
+      credentials: "include",
+    });
+  } catch {
+    // Network failure: the local session is cleared by the caller anyway.
+  }
+}

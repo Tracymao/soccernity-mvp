@@ -1,0 +1,85 @@
+/* Two-Factor Auth (SMS) leaf (TwoFactorAuthPage.tsx). Figma source:
+ * "Settings — Two-Factor Auth (SMS)" 2926:8294 (desktop) / "…— Mobile"
+ * 5696:8213, "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6).
+ *
+ * Same visual language as PrivacySettingsPage.css's own disabled-toggle
+ * rows (this file's own established "visible, disabled, with a note"
+ * convention for a backend-pending control) — kept as its own scoped
+ * file rather than importing PrivacySettingsPage.css, matching every
+ * other Settings leaf's own-CSS-file precedent (AccountOverviewPage
+ * reuses the shared SettingsLayout.css page bits; Privacy owns its own
+ * file; this leaf does too).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts. Light theme only. */
+
+.security-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.security-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.security-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.security-row__title {
+  font: 600 16px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.security-row__desc {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.security-row__note {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  font-style: italic;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- visual (non-functional) toggle — no backend to drive it yet --- */
+
+.security-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+  position: relative;
+  align-self: center;
+  opacity: 0.6;
+}
+
+.security-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+@media (max-width: 560px) {
+  .security-rows {
+    gap: 22px;
+  }
+}

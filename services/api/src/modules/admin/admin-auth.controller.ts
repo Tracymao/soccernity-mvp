@@ -1,0 +1,223 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import {
+  ADMIN_SESSION_COOKIE,
+  applyCookieSession,
+  assertAllowedCookieOrigin,
+  clearRefreshCookie,
+  isCookieMode,
+  readRefreshCookie,
+} from '../../session-cookie/session-cookie';
+import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
+import { AdminAuthService } from './admin-auth.service';
+import { ADMIN_LOGIN_RATE_LIMIT } from './admin-login-rate-limit';
+import { AdminAuthResponse, AdminTokenPairResponse } from './admin-response.mapper';
+import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
+import { AdminLoginDto } from './dto/admin-login.dto';
+import { AdminLogoutDto } from './dto/admin-logout.dto';
+import { AdminRefreshDto } from './dto/admin-refresh.dto';
+import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
+import { CurrentAdmin } from './guards/current-admin.decorator';
+import { AdminAccessTokenPayload } from './token/admin-token.types';
+import { SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { AdminEnrolmentConfirmDto, AdminEnrolmentTokenDto } from '../two-factor/dto/admin-enrolment-token.dto';
+import { TwoFactorLoginDto } from '../two-factor/dto/two-factor-login.dto';
+import { TwoFactorLockInterceptor } from '../two-factor/two-factor-lock.interceptor';
+import { ADMIN_CODE_IP_LIMIT } from '../two-factor/two-factor.constants';
+import {
+  AdminEnrolmentRequired,
+  EnrolmentStart,
+  TwoFactorChallenge,
+  TwoFactorService,
+} from '../two-factor/two-factor.service';
+
+// Same messages class-validator produced for the old required `refreshToken`.
+const MISSING_REFRESH_TOKEN_MESSAGES = ['refreshToken should not be empty', 'refreshToken must be a string'];
+
+function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
+  if (!authorizationHeader) return undefined;
+  const [scheme, token] = authorizationHeader.split(' ');
+  if (scheme?.toLowerCase() !== 'bearer' || !token) return undefined;
+  return token;
+}
+
+// Sprint 2 / sprint-2/admin-console-account-entity (Decision Log #54).
+// No self-service admin registration endpoint exists here, by design —
+// admin/moderator accounts are provisioned out of band (direct database
+// insert / a future one-off seed script), not self-service signup. A
+// "create admin" endpoint raises its own access-control question (who is
+// allowed to call it — a bootstrapping problem for the very first admin
+// account) that is out of this PR's scope; flagged as a real Decision Log
+// candidate in admin/README.md, not silently left unbuilt.
+@Controller('admin/auth')
+export class AdminAuthController {
+  constructor(
+    private readonly adminAuthService: AdminAuthService,
+    private readonly twoFactor: TwoFactorService,
+  ) {}
+
+  // Decision Log #190: a stricter, fixed limit than the shared User-facing
+  // 'auth' config (admin accounts are a smaller, higher-value target set).
+  // The override is applied per-handler, so this route's counter is
+  // independent of AuthController.login's — admin traffic never exhausts
+  // the User login bucket and vice versa.
+  // The 5 is read per request through ADMIN_LOGIN_RATE_LIMIT (admin-login-rate-limit.ts): production keeps 5; a QA run
+  // may raise it with ADMIN_LOGIN_RATE_LIMIT_MAX, which the API refuses to start with in production.
+  // (Keep the decorators below as one unbroken run: global-rate-limit.coverage.spec.ts scans them textually.)
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_LOGIN_RATE_LIMIT)
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(
+    @Body() dto: AdminLoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<
+    AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'> | TwoFactorChallenge | AdminEnrolmentRequired
+  > {
+    const staySignedIn = dto.staySignedIn === true;
+    const result = await this.adminAuthService.login(dto.email, dto.password, staySignedIn);
+    // B-086 / B-270: a challenge or an enrolment token is NOT a session -- no tokens, no cookie.
+    if ('twoFactorRequired' in result || 'twoFactorEnrolmentRequired' in result) return result;
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, result, staySignedIn);
+  }
+
+  // B-086 / B-270 (Decision Log #446): the second step of admin sign-in, for an admin with two-factor on. Code
+  // checks are bounded per account (5 wrong in 15 minutes lock it for 15) and, here, per IP: 10 per 15 minutes,
+  // tighter than the user-facing 30 because admin accounts are a smaller, higher-value target (as #190 did for login).
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @UseInterceptors(TwoFactorLockInterceptor)
+  @Post('login/two-factor')
+  @HttpCode(HttpStatus.OK)
+  async loginTwoFactor(
+    @Body() dto: TwoFactorLoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>> {
+    const { response, persistent } = await this.adminAuthService.completeTwoFactorLogin(dto.challengeToken, dto.code);
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent);
+  }
+
+  // The enrolment gate (ADMIN_2FA_ENFORCED = "true", admin has no two-factor yet). The token comes from the password
+  // step; a login CHALLENGE token does not work here, and an enrolment token does not work on /login/two-factor
+  // (disjoint Redis namespaces). start returns the secret to show; confirm checks the first code, turns two-factor
+  // on, and returns the session plus the 10 backup codes, once.
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @Post('login/two-factor/enrol/start')
+  @HttpCode(HttpStatus.OK)
+  startEnrolment(@Body() dto: AdminEnrolmentTokenDto): Promise<EnrolmentStart> {
+    return this.twoFactor.startAdminEnrolmentWithToken(dto.enrolmentToken);
+  }
+
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @UseInterceptors(TwoFactorLockInterceptor)
+  @Post('login/two-factor/enrol/confirm')
+  @HttpCode(HttpStatus.OK)
+  async confirmEnrolment(
+    @Body() dto: AdminEnrolmentConfirmDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<(AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>) & { backupCodes: string[] }> {
+    const { response, persistent, backupCodes } = await this.adminAuthService.completeEnrolmentLogin(
+      dto.enrolmentToken,
+      dto.code,
+    );
+    return { ...applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent), backupCodes };
+  }
+
+  // B-245 cookie mode: see AuthController.refresh. The admin cookie (sn_admin_rt, Path
+  // /admin/auth) is a different name and path from the user cookie, and only this controller
+  // reads it, so neither audience's cookie is ever accepted by the other's endpoints.
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Body() dto: AdminRefreshDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminTokenPairResponse | Omit<AdminTokenPairResponse, 'refreshToken'>> {
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      return this.adminAuthService.refresh(dto.refreshToken);
+    }
+    assertAllowedCookieOrigin(req);
+    const cookieToken = readRefreshCookie(req, ADMIN_SESSION_COOKIE);
+    if (!cookieToken) throw new UnauthorizedException('No refresh cookie');
+    try {
+      const { response, persistent } = await this.adminAuthService.refreshSession(cookieToken);
+      return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+      throw error;
+    }
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(
+    @Body() dto: AdminLogoutDto,
+    @Headers('authorization') authorizationHeader?: string,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<void> {
+    const accessToken = extractBearerToken(authorizationHeader);
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      await this.adminAuthService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
+      return;
+    }
+    assertAllowedCookieOrigin(req);
+    clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+    await this.adminAuthService.logout(
+      readRefreshCookie(req, ADMIN_SESSION_COOKIE),
+      dto.allSessions ?? false,
+      accessToken,
+    );
+  }
+
+  // B-310: answers 200 with a FRESH session (the shape POST /admin/auth/refresh returns; cookie mode sets sn_admin_rt
+  // and leaves the token out of the body), because the change revokes every session including the caller's own.
+  // The one exception is an admin with no two-factor while ADMIN_2FA_ENFORCED is on: the password is saved, every
+  // session is revoked and nothing is issued, so the answer is 204 with no body (and in cookie mode the dead cookie
+  // is cleared).
+  @UseGuards(AdminJwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: AdminChangePasswordDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminTokenPairResponse | Omit<AdminTokenPairResponse, 'refreshToken'> | void> {
+    const cookieMode = !!req && !!res && isCookieMode(req);
+    if (cookieMode) assertAllowedCookieOrigin(req);
+    const currentRefreshToken = cookieMode ? readRefreshCookie(req, ADMIN_SESSION_COOKIE) : undefined;
+    const result = await this.adminAuthService.changePassword(
+      admin.sub,
+      dto.currentPassword,
+      dto.newPassword,
+      currentRefreshToken,
+    );
+    if (!result) {
+      if (cookieMode) clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+      res?.status(HttpStatus.NO_CONTENT);
+      return;
+    }
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, result.response, result.persistent);
+  }
+}

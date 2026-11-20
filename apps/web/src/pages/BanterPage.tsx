@@ -1,0 +1,479 @@
+// Banter ("Bants"). Figma source: "Bants homepage - All feed" (2256:6802)
+// + "Bants - search result" (2448:2179), "Soccernity-MVP" file
+// (weZWWqggy9j13eX8bhFgs6). Route: /banter (nav label "Bants" -- Decision
+// Log #163).
+//
+// LOGIN REQUIRED. Decision Log #152 establishes site-wide login-gating
+// for the Community/Bants family of screens; this mirrors
+// CommunityPage.tsx's no-session handling exactly -- a visit with no
+// stored access token renders a "log in" prompt and never calls
+// anything.
+//
+// UPDATED (sprint-3/banter-messaging-to-code): the room list is now REAL.
+// BanterModule is merged in services/api (sprint-3/banter-rooms-backend;
+// Decision Log #275/#276) -- api/banter.ts hits GET /banter-rooms,
+// GET /banter-rooms/search, GET /banter-rooms/mine, POST /banter-rooms,
+// POST/DELETE /banter-rooms/:id/join. Clicking a room goes to
+// /banter/:roomId (BanterRoomPage.tsx) -- the room feed + posting, which
+// has no dedicated Figma frame (flagged there, built plain, same
+// precedent as ClubFanPage/EditProfileModal's "no screen exists, built
+// plain" convention).
+//
+// STILL DUMMY DATA (unchanged, no endpoint exists for any of this): the
+// caller's own profile card is the one real piece in the left rail (name
+// via GET /users/:id, unchanged); Trending News, Fixtures (Decision Log
+// #6) and Suggested are all illustrative sample content -- see
+// ./banter/banterData.ts's own header comment.
+//
+// SEARCH: "All" rooms uses the REAL server-side ?q= filter
+// (GET /banter-rooms, debounced 300ms -- GrassrootsPage's own city-filter
+// precedent), since a real search endpoint now exists. "My Bants" has no
+// server-side q param (GET /banter-rooms/mine takes none) -- that tab
+// filters the already-loaded "mine" page client-side instead, the same
+// judgment call ClubsPage.tsx makes for its own client-side name filter.
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { listRooms, getMyRooms, BanterApiError, type BanterRoom, type BanterRoomScopeType } from "../api/banter";
+import { getUser, type UserProfile } from "../api/users";
+import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
+import { useIsMobile } from "../layout/useIsMobile";
+import BanterJoinButton from "./banter/BanterJoinButton";
+import BanterStatusDot from "./banter/BanterStatusDot";
+import BanterFilterForm from "./banter/BanterFilterForm";
+import CreateTopicDialog from "./banter/CreateTopicDialog";
+import {
+  NO_BANTER_FILTERS,
+  SCOPE_OPTIONS,
+  activeFilterChips,
+  toRoomFilters,
+  type BanterFilters,
+} from "./banter/banterFilters";
+import ReportAction from "./community/ReportAction";
+import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
+import "./banter/BanterPage.css";
+
+type LoadState = "loading" | "loaded" | "error" | "no-session";
+type Category = "all" | "mine";
+// Mobile only: the results list, or the full-screen filter panel
+// (Figma 5803:8876) it opens. Applying the panel returns to results.
+type MobileView = "results" | "filter";
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
+
+function scopeLabel(scopeType: BanterRoomScopeType): string {
+  return SCOPE_OPTIONS.find((o) => o.value === scopeType)?.label ?? scopeType;
+}
+
+export default function BanterPage() {
+  const token = getStoredAccessToken();
+  const decoded = token ? decodeAccessToken(token) : null;
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [category, setCategory] = useState<Category>("all");
+  // queryInput is the live search box; filters.q is what was last applied.
+  const [queryInput, setQueryInput] = useState("");
+  const [filters, setFilters] = useState<BanterFilters>(NO_BANTER_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<MobileView>("results");
+
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [restricted, setRestricted] = useState(false);
+  const [rooms, setRooms] = useState<BanterRoom[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    if (!token || !decoded) return;
+    let cancelled = false;
+    getUser(token, decoded.sub)
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch(() => {
+        /* non-fatal -- the identity card falls back to a generic label */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, decoded?.sub]);
+
+  const load = useCallback(
+    async (cat: Category, f: BanterFilters) => {
+      if (!token) {
+        setLoadState("no-session");
+        return;
+      }
+      setLoadState("loading");
+      try {
+        // "My Bants" has no server-side filters (GET /banter-rooms/mine takes
+        // none), so the Categories/Date/Tag filters apply to "All" only.
+        const page = cat === "mine" ? await getMyRooms(token) : await listRooms(token, toRoomFilters(f));
+        setRooms(page.items);
+        setCursor(page.nextCursor);
+        setLoadState("loaded");
+      } catch (err) {
+        setRestricted(isUnder16Restricted(err));
+        setLoadState("error");
+      }
+    },
+    [token],
+  );
+
+  // Any change to the category or the applied filters re-runs the list.
+  useEffect(() => {
+    load(category, filters);
+  }, [category, filters, token, load]);
+
+  // Debounced quick search, "All" only -- a real server round trip
+  // (GrassrootsPage's own city-filter precedent).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!token || category !== "all") return;
+    const trimmed = queryInput.trim();
+    if (trimmed === filters.q) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setFilters((prev) => (prev.q === trimmed ? prev : { ...prev, q: trimmed }));
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [queryInput, filters.q, category, token]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFiltersOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [filtersOpen]);
+
+  function selectCategory(next: Category) {
+    if (next === category) return;
+    setCategory(next);
+    setQueryInput("");
+    setFilters((prev) => (prev.q ? { ...prev, q: "" } : prev));
+  }
+
+  function openFilters() {
+    if (isMobile) setMobileView("filter");
+    else setFiltersOpen(true);
+  }
+
+  function applyFilters(next: BanterFilters) {
+    setFilters(next);
+    setQueryInput(next.q);
+    setFiltersOpen(false);
+    setMobileView("results");
+  }
+
+  function removeChip(key: "scope" | "tag" | "date" | "q") {
+    if (key === "q") setQueryInput("");
+    setFilters((prev) => {
+      if (key === "scope") return { ...prev, scopeType: null };
+      if (key === "tag") return { ...prev, tagQuery: "" };
+      if (key === "date") return { ...prev, dateFrom: "", dateTo: "" };
+      return { ...prev, q: "" };
+    });
+  }
+
+  async function loadMore() {
+    if (!token || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const page =
+        category === "mine" ? await getMyRooms(token, cursor) : await listRooms(token, { ...toRoomFilters(filters), cursor });
+      setRooms((prev) => [...prev, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch (err) {
+      setLoadMoreError(err instanceof BanterApiError ? err.message : "Couldn't load more rooms.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function applyToggle(roomId: string, next: { joined: boolean; memberCount: number }) {
+    setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, joined: next.joined, memberCount: next.memberCount } : r)));
+  }
+
+  if (!token || !decoded) {
+    return (
+      <div className="banter-status" role="status">
+        Log in to join the conversation on Bants. <Link to="/login">Log in</Link>
+      </div>
+    );
+  }
+
+  const term = queryInput.trim().toLowerCase();
+  // "All" rooms are already server-filtered by activeQuery; "My Bants"
+  // has no server-side q param, so it's filtered client-side here.
+  const visibleRooms = category === "mine" && term ? rooms.filter((r) => r.name.toLowerCase().includes(term)) : rooms;
+  const displayName = profile?.publicName ?? "You";
+  const chips = activeFilterChips(filters);
+
+  if (isMobile && mobileView === "filter") {
+    return (
+      <div className="banter-filter-panel">
+        <button type="button" className="banter-filter-panel__back" onClick={() => setMobileView("results")}>
+          ← Back to rooms
+        </button>
+        <h1 className="banter-filter-dialog__title">Filter</h1>
+        <BanterFilterForm
+          initial={filters}
+          onApply={applyFilters}
+          onCancel={() => setMobileView("results")}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="banter">
+      <div className="banter__left">
+        <div className="banter-card banter-profile">
+          <span className="banter-profile__avatar" aria-hidden="true">
+            {initialsFor(displayName)}
+          </span>
+          <p className="banter-profile__name">{displayName}</p>
+          <p className="banter-profile__handle">Bants profile</p>
+          <div className="banter-profile__stats">
+            <span>
+              <strong>—</strong> Followers
+            </span>
+            <span>
+              <strong>—</strong> Posts
+            </span>
+            <span>
+              <strong>—</strong> Following
+            </span>
+          </div>
+          <Link to="/profile" className="banter-profile__link">
+            View profile
+          </Link>
+          <p className="banter-profile__note">Follower/post counts aren&rsquo;t part of Bants yet.</p>
+        </div>
+
+        <div className="banter-card">
+          <p className="banter-card__title">Trending News</p>
+          <p className="banter-card__note">Sample content</p>
+          {TRENDS.slice(0, 3).map((t) => (
+            <div key={t.topic} className="banter-trend">
+              <span>{t.topic}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="banter__center">
+        <div className="banter-hero">
+          <h1 className="banter-hero__title">Banter Rooms</h1>
+          <p className="banter-hero__lede">
+            Have fun, create and engage in conversations around your favourite teams, events and players.
+          </p>
+          <button type="button" className="banter-hero__cta" onClick={() => setCreateOpen(true)}>
+            Create a room
+          </button>
+        </div>
+
+        <div className="banter-search">
+          <span className="banter-search__icon" aria-hidden="true">
+            ⌕
+          </span>
+          <input
+            type="search"
+            className="banter-search__input"
+            placeholder={category === "mine" ? "Filter your rooms by name" : "Search rooms by name"}
+            aria-label={category === "mine" ? "Filter your rooms by name" : "Search rooms by name"}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+          />
+          <button type="button" className="banter-search__filters" onClick={openFilters}>
+            Filters{chips.length > 0 ? ` (${chips.length})` : ""}
+          </button>
+        </div>
+
+        {term && (
+          <p className="banter-search-result">
+            Result showing for &ldquo;{queryInput}&rdquo; ({visibleRooms.length})
+          </p>
+        )}
+
+        {chips.length > 0 && (
+          <div className="banter-chips" aria-label="Active filters">
+            {chips.map((c) => (
+              <span key={c.key} className="banter-chip">
+                {c.label}
+                <button type="button" aria-label={`Remove filter ${c.label}`} onClick={() => removeChip(c.key)}>
+                  ×
+                </button>
+              </span>
+            ))}
+            <button type="button" className="banter-chips__clear" onClick={() => applyFilters(NO_BANTER_FILTERS)}>
+              Clear all
+            </button>
+          </div>
+        )}
+        {chips.length > 0 && category === "mine" && (
+          <p className="banter-status banter-status--inline">Filters apply to All rooms.</p>
+        )}
+
+        <div className="banter-categories" role="tablist" aria-label="Bants categories">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={category === "all"}
+            className={category === "all" ? "banter-category banter-category--active" : "banter-category"}
+            onClick={() => selectCategory("all")}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={category === "mine"}
+            className={category === "mine" ? "banter-category banter-category--active" : "banter-category"}
+            onClick={() => selectCategory("mine")}
+          >
+            My Bants
+          </button>
+        </div>
+
+        {loadState === "loading" && (
+          <p className="banter-status banter-status--inline" role="status">
+            Loading rooms…
+          </p>
+        )}
+
+        {loadState === "error" && (
+          <p className="banter-status banter-status--inline" role="alert">
+            {restricted ? UNDER_16_MESSAGE : "Couldn’t load rooms. Please try again shortly."}
+          </p>
+        )}
+
+        {loadState === "loaded" && (
+          <ul className="banter-room-list">
+            {visibleRooms.length === 0 && (
+              <li className="banter-empty">
+                {category === "mine" ? "You haven't joined any rooms yet." : "No rooms match that search."}
+              </li>
+            )}
+            {visibleRooms.map((room) => (
+              <li key={room.id} className="banter-room">
+                <Link to={`/banter/${room.id}`} className="banter-room__link">
+                  <span className="banter-room__avatar" aria-hidden="true">
+                    {initialsFor(room.name)}
+                  </span>
+                  <span className="banter-room__text">
+                    <span className="banter-room__name">
+                      <BanterStatusDot status={room.status} />
+                      {room.name}
+                    </span>
+                    <span className="banter-room__meta">
+                      {scopeLabel(room.scopeType)} &middot; {room.memberCount.toLocaleString("en-GB")} members
+                    </span>
+                  </span>
+                </Link>
+                <BanterJoinButton
+                  accessToken={token}
+                  roomId={room.id}
+                  joined={room.joined}
+                  onToggled={(next) => applyToggle(room.id, next)}
+                />
+                {/* Decision Log #357 — the only path that creates a
+                    banter_room report (POST /reports, JwtAuthGuard only). */}
+                <ReportAction
+                  accessToken={token}
+                  targets={[{ label: "Report room", targetType: "banter_room", targetId: room.id }]}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {cursor && loadState === "loaded" && (
+          <button type="button" className="banter-load-more" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        )}
+
+        {loadMoreError && (
+          <p className="banter-status banter-status--inline" role="alert">
+            {loadMoreError}
+          </p>
+        )}
+      </div>
+
+      <div className="banter__right">
+        <div className="banter-card">
+          <p className="banter-card__title">Fixtures</p>
+          <p className="banter-card__note">Sample content</p>
+          {FIXTURES.map((f, i) => (
+            <div key={`${f.home}-${f.away}-${i}`} className="banter-fixture">
+              <span>{f.home}</span>
+              <span className="banter-fixture__time">{f.kickoff}</span>
+              <span>{f.away}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="banter-card">
+          <p className="banter-card__title">Suggested</p>
+          <p className="banter-card__note">Sample content</p>
+          {SUGGESTED.map((s) => (
+            <div key={s.handle} className="banter-suggest">
+              <span className="banter-suggest__avatar" aria-hidden="true">
+                {initialsFor(s.name)}
+              </span>
+              <span className="banter-suggest__text">
+                <span className="banter-suggest__name">{s.name}</span>
+                <span className="banter-suggest__handle">{s.handle}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {createOpen && (
+        <CreateTopicDialog
+          accessToken={token}
+          displayName={displayName}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(room) => navigate(`/banter/${room.id}`)}
+        />
+      )}
+
+      {filtersOpen && !isMobile && (
+        <div
+          className="banter-filter-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setFiltersOpen(false);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="banter-filter-title" className="banter-filter-dialog">
+            <h2 id="banter-filter-title" className="banter-filter-dialog__title">
+              Filter
+            </h2>
+            <BanterFilterForm
+              initial={filters}
+              onApply={applyFilters}
+              onCancel={() => setFiltersOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

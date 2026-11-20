@@ -1,0 +1,25 @@
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
+import { PageViewModule } from '../page-views/page-view.module';
+import { AdminDashboardController } from './admin-dashboard.controller';
+import { AdminDashboardService } from './admin-dashboard.service';
+
+// sprint-5/admin-users-dashboard-backend — Build Plan Section 4.8
+// (Admin Service), the Dashboard half. A dedicated top-level module,
+// deliberately NOT folded into AdminUsersModule even though both shipped
+// in the same PR — see admin-dashboard.controller.ts's own comment for
+// why the Dashboard is open to every admin role rather than
+// moderator/superadmin-only like Users. Read-only, no user-facing
+// routes, so — like AdminContentModule — only AdminAuthFoundationModule
+// is imported.
+//
+// PageViewModule added by feat/admin-dashboard-page-views (Decision Log
+// #306) — AdminDashboardService now injects PageViewService for the real
+// `totalVisits`/`visitsByMonth` fields.
+@Module({
+  imports: [PrismaModule, AdminAuthFoundationModule, PageViewModule],
+  controllers: [AdminDashboardController],
+  providers: [AdminDashboardService],
+})
+export class AdminDashboardModule {}

@@ -1,0 +1,135 @@
+// feat/admin-action-log — plain, dot-namespaced action strings written by
+// AdminActionLogService.record(). AdminActionLog.action is a plain
+// Postgres String, not a Prisma/Postgres enum (same extensibility choice
+// as Report.status/.actionTaken/.appealStatus — see
+// moderation.constants.ts's own header comment), so there is no
+// schema-level allow-list to enforce here. Grouped in one place, not
+// inlined at each call site, so the full set of admin/moderator actions
+// this codebase logs is visible without hunting through every module that
+// writes one.
+export const ADMIN_ACTION_LOG_ACTIONS = {
+  REPORT_ACTIONED: 'report.actioned',
+  REPORT_APPEAL_DECIDED: 'report.appeal_decided',
+  // POST /admin/moderation/reports/:id/appeal (backend/b292-staff-recorded-appeal, B-292). An admin recorded an
+  // appeal on the reported person's behalf. targetType 'report'; the recording admin is adminId; notes carry the
+  // appeal status only ('pending'), never the reason text.
+  REPORT_APPEAL_RECORDED: 'report.appeal_recorded',
+  REPORT_ESCALATED: 'report.escalated',
+  ADMIN_CHILD_SAFETY_VETTING_UPDATED: 'admin_user.child_safety_vetting_updated',
+  USER_STATUS_UPDATED: 'user.status_updated',
+  // POST /admin/users/:id/incorrect-details-report/resolve (B-029, Decision
+  // Log #372) -- support cleared a guardian's "report incorrect details"
+  // flag, releasing the hold on approval. targetType 'user' (the minor).
+  GUARDIAN_INCORRECT_DETAILS_RESOLVED: 'guardian.incorrect_details_resolved',
+  // GET /admin/users/:id (B-109, Decision Log #398 D4) -- an admin's response
+  // contained the user's DECRYPTED date of birth. One row per such response,
+  // repeat reads included. targetType 'user'. No notes: the row records THAT
+  // it was read, never what was read.
+  USER_DOB_VIEWED: 'user.dob_viewed',
+  // POST /admin/users/:id/dob-correction (B-103, Decision Log #390) -- support
+  // corrected a user's date of birth. Notes carry the reason, old and new age
+  // tier and what happened to the guardian request; never a DOB value.
+  USER_DOB_CORRECTED: 'user.dob_corrected',
+  // POST /admin/users/:id/username-revoke (B-033, Decision Log #398 D3) -- an
+  // admin removed a user's username. Written in the SAME transaction as the
+  // change. targetType 'user'. Notes carry the revoked handle, the 30-day hold
+  // end and the REASON.
+  USER_USERNAME_REVOKED: 'user.username_revoked',
+  // POST /admin/username-reviews/:id/decide (backend/b139-username-review, B-139 part (c), Decision Log #467) -- a
+  // different admin decided a revoked user's request for a review: reinstate or decline. Written in the SAME
+  // transaction as the decision. targetType 'user' (the revoked user), so a row about a MINOR is absent for an
+  // admin who is not child-safety vetted (the reader's existing rule). Notes carry the decision, the handle and
+  // the REASON (internal: never sent to the user or the guardian).
+  USER_USERNAME_REVIEW_DECIDED: 'user.username_review_decided',
+  // /admin/users/:id/guardian-notices/{withhold,clear,review} (backend/b280-withhold-guardian-notices, B-280, Decision
+  // Log #458). targetType 'user' (the minor). Written in the SAME transaction as the change. Notes carry the REASON
+  // (withhold, clear) or the NOTE (review), never anything about the guardian. Only child-safety-vetted admins read
+  // them (no endpoint lists this log at all today; see modules/admin-users/README.md).
+  USER_GUARDIAN_NOTICES_WITHHELD: 'user.guardian_notices_withheld',
+  USER_GUARDIAN_NOTICES_CLEARED: 'user.guardian_notices_cleared',
+  USER_GUARDIAN_NOTICES_REVIEWED: 'user.guardian_notices_reviewed',
+  // HoldService (backend/w6-hold-rule-extension, B-044, Decision Log #376 / #398 D1 / #403 item 8). targetType
+  // 'user' (the HELD account); one row per hold, written in the SAME transaction as the AccountHold change. Notes
+  // carry the hold id, the report id and the REASON. The held user is never told.
+  ACCOUNT_HOLD_BAD_FAITH_PLACED: 'account_hold.bad_faith_placed',
+  ACCOUNT_HOLD_LEGAL_PLACED: 'account_hold.legal_hold_placed',
+  ACCOUNT_HOLD_LIFTED: 'account_hold.lifted',
+  // /admin/contact-enquiries (backend/w7-contact-enquiry-admin-escalate, B-046 part B, Decision Log #444 / #445).
+  // targetType 'contact_enquiry'. Handled / reopened are written when the status actually changes; escalated is
+  // written in the SAME transaction as the Report it creates, and its notes carry the report id, the severity,
+  // the minor flag and the admin's REASON (never the enquirer's text).
+  CONTACT_ENQUIRY_HANDLED: 'contact_enquiry.handled',
+  CONTACT_ENQUIRY_REOPENED: 'contact_enquiry.reopened',
+  CONTACT_ENQUIRY_ESCALATED: 'contact_enquiry.escalated',
+  // Reserved, NOT yet wired to a real call site — no AdminUser
+  // role-change endpoint exists anywhere in this codebase yet
+  // (grep-confirmed; no branch/PR for one either, at the time this
+  // constant was added). Kept here so whoever builds that endpoint has a
+  // name to slot straight into AdminActionLogService.record() rather than
+  // inventing an ad-hoc string at that point.
+  ADMIN_ROLE_CHANGED: 'admin_user.role_changed',
+  // POST /admin/staff (Decision Log #191) � a superadmin provisioned a
+  // new AdminUser. Detail records role only, never the password.
+  ADMIN_USER_CREATED: 'admin_user.created',
+  // PATCH /admin/staff/:id/status (feat/admin-staff-status, Decision Log
+  // #193) � a superadmin set the TARGET AdminUser's accountStatus
+  // (active/deactivated). Mirrors USER_STATUS_UPDATED's naming for the
+  // User-side equivalent.
+  ADMIN_ACCOUNT_STATUS_UPDATED: 'admin_user.status_updated',
+  // POST /admin/staff/:id/two-factor/reset (backend/b086-two-factor, B-270, Decision Log #446) -- a superadmin cleared
+  // ANOTHER admin's authenticator-app two-factor (secret and backup codes) and ended their sessions. Written in the SAME
+  // transaction as the reset. targetType 'admin_user'. Notes carry no secret, code or hash.
+  ADMIN_TWO_FACTOR_RESET: 'admin_user.two_factor_reset',
+  // POST /admin/contest/cycles (backend/w7-contest, B-091) -- an admin created a month's Contest.
+  // targetType 'contest_cycle'. Notes carry the month and the title, never the minimum tally.
+  CONTEST_CYCLE_CREATED: 'contest_cycle.created',
+  // PATCH /admin/contest/cycles/:id -- an admin edited a Contest within the locking rules. Notes list
+  // the field NAMES that changed (the minimum tally and points are recorded as changed, not by value).
+  CONTEST_CYCLE_UPDATED: 'contest_cycle.updated',
+  // POST /admin/media-review/:id/approve and /reject (backend/w15-media-review-queue, B-037). targetType
+  // 'post_media', or 'profile_image' for an avatar / cover (B-037). Approving an approved-but-reported item (keeping
+  // it) is logged as MEDIA_APPROVED with a note. The reject note carries the reason the uploader reads.
+  MEDIA_APPROVED: 'media.approved',
+  MEDIA_REJECTED: 'media.rejected',
+  // backend/suspected-illegal-imagery-path (B-206, founder decision 2026-11-15). targetType 'post_media', targetId the
+  // media id. A child-safety-vetted admin set a file aside as suspected illegal imagery (written in the SAME
+  // transaction as the rejection and the record), then recorded that it WAS or WAS NOT filed with a receiving body.
+  // Notes never carry the free-text reason, the reference number or any content: only ids, the body key and (for not
+  // filed) that a reason was recorded. Child-safety rows: only a vetted admin reads them (the audit-log reader).
+  MEDIA_SUSPECTED_ILLEGAL_SET_ASIDE: 'media.suspected_illegal_set_aside',
+  MEDIA_SUSPECTED_ILLEGAL_FILED: 'media.suspected_illegal_filed',
+  MEDIA_SUSPECTED_ILLEGAL_NOT_FILED: 'media.suspected_illegal_not_filed',
+  // GET /admin/search (backend/b114-admin-search, B-114, Decision Log #463) -- written ONLY for a search whose text
+  // contains an '@' (a possible email address). targetType 'search', targetId the KIND of search ('email'); notes
+  // are 'kind=email results=<n>'. The text typed is personal data and is NEVER recorded.
+  ADMIN_SEARCH_PERFORMED: 'admin.search_performed',
+  // POST /admin/banter-rooms/:id/reactivate (backend/room-staff-reactivation, Decision Log #515) -- staff set a Bants
+  // room back to active that STAFF had deactivated (room_deactivated on a report). targetType 'banter_room', targetId
+  // the room; notes carry the report that deactivated it and the optional note. The room's creator is never told.
+  BANTER_ROOM_REACTIVATED: 'banter_room.reactivated',
+} as const;
+
+export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
+
+// targetType values used above. AdminActionLog.targetId is a bare string,
+// not an FK — the same reasoning as Report.targetId: a single log entry
+// needs to point at whichever of several different tables (Report,
+// AdminUser, User, ...) the action concerned, and one Prisma relation
+// field can't express that. No schema-level allow-list to mirror here
+// either, for the same reason.
+export const ADMIN_ACTION_LOG_TARGET_TYPES = {
+  REPORT: 'report',
+  ADMIN_USER: 'admin_user',
+  USER: 'user',
+  CONTEST_CYCLE: 'contest_cycle',
+  POST_MEDIA: 'post_media',
+  // backend/b037-profile-image-review (B-037): an approved / rejected avatar or cover. targetId is the PERSON'S user id
+  // (so the audit log can hide a minor's rows from an unvetted admin); the notes name the kind (avatar | cover).
+  PROFILE_IMAGE: 'profile_image',
+  CONTACT_ENQUIRY: 'contact_enquiry',
+  SEARCH: 'search',
+  BANTER_ROOM: 'banter_room',
+} as const;
+
+export type AdminActionLogTargetType =
+  (typeof ADMIN_ACTION_LOG_TARGET_TYPES)[keyof typeof ADMIN_ACTION_LOG_TARGET_TYPES];

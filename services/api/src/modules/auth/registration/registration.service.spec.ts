@@ -1,0 +1,628 @@
+import { buildTestDobEncryption } from '../../../crypto/test-dob-encryption';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { RegistrationService } from './registration.service';
+
+describe('RegistrationService', () => {
+  const asOfAdult = { dateOfBirth: '1990-01-01' };
+  const asOfMinor = { dateOfBirth: '2015-01-01' };
+
+  function buildService() {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            id: 'user-1',
+            role: 'fan',
+            verificationStatus: 'unverified',
+            createdAt: new Date('2026-08-16T00:00:00.000Z'),
+            ...data,
+          }),
+        ),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      guardian: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            id: 'guardian-1',
+            consentStatus: 'pending',
+            consentTimestamp: null,
+            ...data,
+          }),
+        ),
+      },
+    };
+    const passwordService = { hash: jest.fn().mockResolvedValue('hashed-password') };
+    const tokenService = {
+      issueTokenPair: jest.fn().mockResolvedValue({
+        accessToken: { token: 'access-token', expiresIn: 900 },
+        refreshToken: { token: 'refresh-id.refresh-secret', expiresAt: new Date() },
+      }),
+    };
+    const emailVerificationTokenStore = {
+      issue: jest.fn().mockResolvedValue('verify-token'),
+      verifyAndConsume: jest.fn(),
+    };
+    const emailService = {
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+      sendGuardianConsentEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    // No GUARDIAN_CONSENT_TOKEN_TTL_HOURS override -- exercises
+    // consent-token.constants.ts's DEFAULT_CONSENT_TOKEN_TTL_HOURS
+    // fallback (DPIA finding R5), same as the real app when the env var
+    // is unset.
+    const config = { get: () => undefined };
+    // sprint-2/auto-join-on-signup: mocked ClubsService, matching the
+    // real ClubsService's two methods RegistrationService actually calls.
+    const clubsService = {
+      assertClubExists: jest.fn().mockResolvedValue(undefined),
+      joinClub: jest.fn().mockResolvedValue({ clubId: 'club-1', joined: true, memberCount: 1 }),
+    };
+    // Decision Log #38 (sprint-2/verify-email-consent-status-field):
+    // mocked at the same GuardianConsentService.getConsentStatusForUser
+    // boundary RegistrationService.verifyEmail actually calls — defaults
+    // to `null` (no Guardian row / not a minor), matching how most
+    // verifyEmail tests below don't care about guardian consent at all.
+    const guardianConsentService = {
+      getConsentStatusForUser: jest.fn().mockResolvedValue(null),
+    };
+
+    // B-024: the lookup is mocked at the GeoIpService boundary. Default is an
+    // unresolved lookup (the real behaviour with no database / no IP).
+    const geoIp = {
+      lookupCountry: jest
+        .fn()
+        .mockResolvedValue({ resolved: false, method: 'unresolved', reason: 'database_unavailable' }),
+    };
+
+    const service = new RegistrationService(
+      prisma as any,
+      passwordService as any,
+      tokenService as any,
+      emailVerificationTokenStore as any,
+      emailService as any,
+      config as any,
+      clubsService as any,
+      guardianConsentService as any,
+      buildTestDobEncryption(),
+      geoIp as any,
+    );
+
+    return {
+      service,
+      prisma,
+      passwordService,
+      tokenService,
+      emailVerificationTokenStore,
+      emailService,
+      config,
+      clubsService,
+      guardianConsentService,
+      geoIp,
+    };
+  }
+
+  describe('register', () => {
+    it('creates an adult user with isMinor=false and no Guardian row', async () => {
+      const { service, prisma, emailService } = buildService();
+
+      const result = await service.register({
+        email: 'adult@example.com',
+        password: 'password123',
+        displayName: 'Adult User',
+        ...asOfAdult,
+      } as any);
+
+      expect(result.user.isMinor).toBe(false);
+      expect(result.guardian).toBeNull();
+      expect(prisma.guardian.create).not.toHaveBeenCalled();
+      expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith('adult@example.com', 'verify-token');
+    });
+
+    it('rejects a declared-minor registration with no guardian details', async () => {
+      const { service } = buildService();
+
+      await expect(
+        service.register({
+          email: 'minor@example.com',
+          password: 'password123',
+          displayName: 'Minor User',
+          ...asOfMinor,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("rejects a minor listing their OWN email as the guardian email (case/whitespace-insensitive), writing nothing", async () => {
+      const { service, prisma, emailService } = buildService();
+
+      await expect(
+        service.register({
+          email: 'Minor@Example.com',
+          password: 'password123',
+          displayName: 'Minor User',
+          ...asOfMinor,
+          guardian: { name: 'Me', email: '  minor@example.COM ', relationship: 'Parent' },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.guardian.create).not.toHaveBeenCalled();
+      expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+    });
+
+    // QA D-02 / Decision Log #19 + #407 item 2: the age-5 floor is server-side.
+    // Dates are built from LOCAL calendar parts and the clock is frozen at local
+    // noon, so the boundary day is the same in every time zone (calculateAge
+    // reads local getters).
+    describe('age-5 floor (QA D-02)', () => {
+      const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
+      const NOW = new Date(2026, 5, 15, 12, 0, 0);
+      const dob = (y: number, m: number, d: number) => new Date(y, m, d).toISOString();
+
+      beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(NOW);
+      });
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      const attempt = (dateOfBirth: string, withGuardian = true) => {
+        const h = buildService();
+        const promise = h.service.register({
+          email: 'k@example.com',
+          password: 'password123',
+          displayName: 'K',
+          dateOfBirth,
+          ...(withGuardian ? { guardian: guardianDetails } : {}),
+        } as any);
+        return { ...h, promise };
+      };
+
+      it('refuses a 4-year-old with a valid guardian block: 400, below_minimum_age, nothing written, no email', async () => {
+        const { promise, prisma, emailService } = attempt(dob(2022, 5, 15));
+        await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promise).rejects.toMatchObject({
+          response: { code: 'below_minimum_age', message: 'Soccernity accounts start at age 5.' },
+        });
+        expect(prisma.user.create).not.toHaveBeenCalled();
+        expect(prisma.guardian.create).not.toHaveBeenCalled();
+        expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+        expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+      });
+
+      it('refuses the day before the 5th birthday (age 4 years 364 days)', async () => {
+        const { promise, prisma } = attempt(dob(2021, 5, 16));
+        await expect(promise).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+        expect(prisma.user.create).not.toHaveBeenCalled();
+      });
+
+      it('accepts exactly age 5 (the 5th birthday is today)', async () => {
+        const { promise, prisma } = attempt(dob(2021, 5, 15));
+        await expect(promise).resolves.toBeDefined();
+        expect(prisma.user.create).toHaveBeenCalledTimes(1);
+        expect(prisma.guardian.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('accepts a 6-year-old', async () => {
+        const { promise } = attempt(dob(2020, 5, 15));
+        await expect(promise).resolves.toBeDefined();
+      });
+
+      it('refuses a newborn without a guardian block with the same floor error (floor is not a guardian question)', async () => {
+        const { promise } = attempt(dob(2026, 0, 1), false);
+        await expect(promise).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+      });
+
+      it('does not touch an adult registration', async () => {
+        const { promise } = attempt(dob(1990, 0, 1), false);
+        await expect(promise).resolves.toBeDefined();
+      });
+    });
+
+    describe('consent path selection (sprint-1/coppa-card-verification, re-keyed by B-025)', () => {
+      const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
+      const dobYearsAgo = (years: number) => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - years);
+        d.setDate(d.getDate() - 30);
+        return d.toISOString();
+      };
+      const resolved = (countryCode: string) => ({ resolved: true, countryCode, method: 'geolite2_local' });
+      const unresolved = { resolved: false, method: 'unresolved', reason: 'not_found' };
+
+      // `derived` is what the (mocked) GeoLite2 lookup returns; `declared` is
+      // the countryCode the registrant typed. Only `derived` may matter.
+      const register = async (age: number, derived: unknown, declared?: string, clientIp = '203.0.113.9') => {
+        const { service, prisma, geoIp } = buildService();
+        geoIp.lookupCountry.mockResolvedValue(derived);
+        await service.register(
+          {
+            email: 'm@example.com',
+            password: 'password123',
+            displayName: 'M',
+            dateOfBirth: dobYearsAgo(age),
+            guardian: guardianDetails,
+            ...(declared ? { countryCode: declared } : {}),
+          } as any,
+          clientIp,
+        );
+        return {
+          guardianData: prisma.guardian.create.mock.calls[0][0].data,
+          userData: prisma.user.create.mock.calls[0][0].data,
+          geoIp,
+          prisma,
+        };
+      };
+
+      it.each([
+        ['under 13, derived US', 10, resolved('US'), undefined, true],
+        ['under 13, derived US, declared NG (declaring elsewhere does not avoid it)', 10, resolved('US'), 'NG', true],
+        ['under 13, derived NG, declared US (derived is authoritative)', 10, resolved('NG'), 'US', false],
+        ['under 13, derived non-US, nothing declared', 10, resolved('GB'), undefined, false],
+        ['under 13, lookup unresolved, nothing declared (stronger control)', 10, unresolved, undefined, true],
+        ['under 13, lookup unresolved, declared NG (stronger control still)', 10, unresolved, 'NG', true],
+        ['13-17, derived US', 15, resolved('US'), undefined, false],
+        ['13-17, lookup unresolved', 15, unresolved, undefined, false],
+        ['13 (30 days past birthday), derived US', 13, resolved('US'), undefined, false],
+        ['12, derived US', 12, resolved('US'), undefined, true],
+      ])('%s -> cardVerificationRequired=%s', async (_label, age, derived, declared, expected) => {
+        const { guardianData } = await register(age as number, derived, declared as string | undefined);
+        expect(guardianData.cardVerificationRequired).toBe(expected);
+      });
+
+      it('stores declared and derived country, method and timestamp on the User', async () => {
+        const { userData } = await register(10, resolved('US'), 'us');
+        expect(userData.declaredCountry).toBe('US');
+        expect(userData.derivedCountry).toBe('US');
+        expect(userData.countryDerivationMethod).toBe('geolite2_local');
+        expect(userData.countryDerivedAt).toBeInstanceOf(Date);
+      });
+
+      it('records an unresolved lookup as method "unresolved" with no derived code, and null declared when omitted', async () => {
+        const { userData } = await register(10, unresolved);
+        expect(userData.declaredCountry).toBeNull();
+        expect(userData.derivedCountry).toBeNull();
+        expect(userData.countryDerivationMethod).toBe('unresolved');
+        expect(userData.countryDerivedAt).toBeInstanceOf(Date);
+      });
+
+      it('no longer writes Guardian.declaredCountry', async () => {
+        const { guardianData } = await register(10, resolved('US'), 'US');
+        expect(guardianData).not.toHaveProperty('declaredCountry');
+      });
+
+      it('derives for adults too (the lookup is not limited to minors)', async () => {
+        const { service, prisma, geoIp } = buildService();
+        geoIp.lookupCountry.mockResolvedValue(resolved('GB'));
+        await service.register(
+          { email: 'a@example.com', password: 'password123', displayName: 'A', dateOfBirth: '1990-01-01' } as any,
+          '198.51.100.7',
+        );
+        expect(prisma.user.create.mock.calls[0][0].data.derivedCountry).toBe('GB');
+      });
+
+      it('passes the IP to the lookup and never writes it anywhere', async () => {
+        const ip = '203.0.113.77';
+        const { geoIp, prisma } = await register(10, resolved('US'), undefined, ip);
+        expect(geoIp.lookupCountry).toHaveBeenCalledWith(ip);
+        const everythingWritten = JSON.stringify([
+          prisma.user.create.mock.calls,
+          prisma.guardian.create.mock.calls,
+          prisma.user.update.mock.calls,
+        ]);
+        expect(everythingWritten).not.toContain(ip);
+      });
+
+      it('still registers when no IP is available (lookup is given undefined)', async () => {
+        const { service, prisma, geoIp } = buildService();
+        await service.register(
+          { email: 'n@example.com', password: 'password123', displayName: 'N', dateOfBirth: dobYearsAgo(10), guardian: guardianDetails } as any,
+        );
+        expect(geoIp.lookupCountry).toHaveBeenCalledWith(undefined);
+        expect(prisma.guardian.create.mock.calls[0][0].data.cardVerificationRequired).toBe(true);
+      });
+    });
+
+    it('creates a minor user AND a linked Guardian row with a real consent token when guardian details are provided', async () => {
+      const { service, prisma, emailService } = buildService();
+
+      const result = await service.register({
+        email: 'minor@example.com',
+        password: 'password123',
+        displayName: 'Minor User',
+        ...asOfMinor,
+        guardian: { name: 'Parent Name', email: 'parent@example.com', relationship: 'Parent' },
+      } as any);
+
+      expect(result.user.isMinor).toBe(true);
+      expect(result.guardian).not.toBeNull();
+      expect(result.guardian?.relationship).toBe('Parent');
+      expect(prisma.guardian.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            minorUserId: 'user-1',
+            name: 'Parent Name',
+            email: 'parent@example.com',
+            relationship: 'Parent',
+            consentToken: expect.any(String),
+            consentTokenExpiresAt: expect.any(Date),
+          }),
+        }),
+      );
+      // Real, unique-looking consent token — not a placeholder/empty string.
+      const createCall = prisma.guardian.create.mock.calls[0][0];
+      expect(createCall.data.consentToken).toMatch(/^[0-9a-f-]{36}$/);
+      // DPIA finding R5: ~72 hours out by default (DEFAULT_CONSENT_TOKEN_TTL_HOURS),
+      // not left unset/permanent. Asserted as a range rather than an exact
+      // value to tolerate real test-execution time passing.
+      const expiresInMs = createCall.data.consentTokenExpiresAt.getTime() - Date.now();
+      const seventyTwoHoursMs = 72 * 60 * 60 * 1000;
+      expect(expiresInMs).toBeGreaterThan(seventyTwoHoursMs - 60_000);
+      expect(expiresInMs).toBeLessThanOrEqual(seventyTwoHoursMs);
+      expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledWith(
+        'parent@example.com',
+        createCall.data.consentToken,
+        'Minor User',
+      );
+    });
+
+    it('rejects registration when the email is already taken', async () => {
+      const { service, prisma } = buildService();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'existing-user' });
+
+      await expect(
+        service.register({
+          email: 'taken@example.com',
+          password: 'password123',
+          displayName: 'Someone',
+          ...asOfAdult,
+        } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    // Decision Log #16 (Build Plan Section 9): email normalized to
+    // lowercase on write.
+    it('normalizes email to lowercase on write', async () => {
+      const { service, prisma } = buildService();
+
+      const result = await service.register({
+        email: 'Test@Example.com',
+        password: 'password123',
+        displayName: 'Someone',
+        ...asOfAdult,
+      } as any);
+
+      expect(result.user.email).toBe('test@example.com');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ email: 'test@example.com' }) }),
+      );
+    });
+
+    it('rejects a case-insensitive duplicate email, not just an exact-match collision', async () => {
+      const { service, prisma } = buildService();
+      // Simulates "Test@Example.com" already registered (and, per this
+      // fix, stored lowercase as "test@example.com"). A second attempt
+      // with yet another casing must still collide with it.
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'existing-user', email: 'test@example.com' });
+
+      await expect(
+        service.register({
+          email: 'TEST@EXAMPLE.COM',
+          password: 'password123',
+          displayName: 'Someone',
+          ...asOfAdult,
+        } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+      // The lookup itself was normalized, not just the eventual write —
+      // this is what makes the collision case-insensitive rather than a
+      // lucky exact-string match.
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+    });
+
+    it('rejects an implausible date of birth', async () => {
+      const { service } = buildService();
+
+      await expect(
+        service.register({
+          email: 'future@example.com',
+          password: 'password123',
+          displayName: 'Someone',
+          dateOfBirth: '2999-01-01',
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('never blocks registration on email delivery failing', async () => {
+      const { service, emailService } = buildService();
+      emailService.sendVerificationEmail.mockRejectedValueOnce(new Error('provider down'));
+
+      await expect(
+        service.register({
+          email: 'adult2@example.com',
+          password: 'password123',
+          displayName: 'Adult User',
+          ...asOfAdult,
+        } as any),
+      ).resolves.toBeDefined();
+    });
+
+    // sprint-2/auto-join-on-signup
+    it('joins the given club when clubId is provided (auto-join on signup)', async () => {
+      const { service, clubsService } = buildService();
+
+      const result = await service.register({
+        email: 'joiner@example.com',
+        password: 'password123',
+        displayName: 'Joiner',
+        ...asOfAdult,
+        clubId: 'club-1',
+      } as any);
+
+      expect(clubsService.assertClubExists).toHaveBeenCalledWith('club-1');
+      expect(clubsService.joinClub).toHaveBeenCalledWith('user-1', 'club-1');
+      expect(result.user.id).toBe('user-1');
+    });
+
+    it('does not call ClubsService at all when clubId is omitted (the "no club for now" path)', async () => {
+      const { service, clubsService } = buildService();
+
+      await service.register({
+        email: 'no-club@example.com',
+        password: 'password123',
+        displayName: 'No Club',
+        ...asOfAdult,
+      } as any);
+
+      expect(clubsService.assertClubExists).not.toHaveBeenCalled();
+      expect(clubsService.joinClub).not.toHaveBeenCalled();
+    });
+
+    // The critical ordering regression this PR's brief called out: a bad
+    // clubId must fail the whole registration BEFORE any User row is
+    // committed, not after.
+    it('propagates a NotFoundException for a bad clubId and never creates the User row', async () => {
+      const { service, prisma, clubsService } = buildService();
+      clubsService.assertClubExists.mockRejectedValueOnce(new NotFoundException('Club not found'));
+
+      await expect(
+        service.register({
+          email: 'bad-club@example.com',
+          password: 'password123',
+          displayName: 'Bad Club',
+          ...asOfAdult,
+          clubId: 'does-not-exist',
+        } as any),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(clubsService.joinClub).not.toHaveBeenCalled();
+    });
+
+    it('calls assertClubExists before user.create (ordering, not just outcome)', async () => {
+      const { service, prisma, clubsService } = buildService();
+      const callOrder: string[] = [];
+      clubsService.assertClubExists.mockImplementationOnce(async () => {
+        callOrder.push('assertClubExists');
+      });
+      prisma.user.create.mockImplementationOnce(({ data }: any) => {
+        callOrder.push('user.create');
+        return Promise.resolve({
+          id: 'user-1',
+          role: 'fan',
+          verificationStatus: 'unverified',
+          createdAt: new Date('2026-08-16T00:00:00.000Z'),
+          ...data,
+        });
+      });
+
+      await service.register({
+        email: 'order-check@example.com',
+        password: 'password123',
+        displayName: 'Order Check',
+        ...asOfAdult,
+        clubId: 'club-1',
+      } as any);
+
+      expect(callOrder).toEqual(['assertClubExists', 'user.create']);
+    });
+
+    it('issues an access/refresh token pair carrying only { sub, role } worth of identity', async () => {
+      const { service, tokenService } = buildService();
+
+      const result = await service.register({
+        email: 'adult3@example.com',
+        password: 'password123',
+        displayName: 'Adult User',
+        ...asOfAdult,
+      } as any);
+
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith('user-1', 'fan');
+      expect(result.tokens.accessToken.token).toBe('access-token');
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('marks the user verified when the token is valid', async () => {
+      const { service, prisma, emailVerificationTokenStore } = buildService();
+      emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('user-1');
+
+      const result = await service.verifyEmail('a-real-token');
+
+      expect(result.userId).toBe('user-1');
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { verificationStatus: 'verified' },
+      });
+    });
+
+    it('rejects an invalid or already-consumed token', async () => {
+      const { service, emailVerificationTokenStore } = buildService();
+      emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce(null);
+
+      await expect(service.verifyEmail('bad-token')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // Decision Log #38 (sprint-2/verify-email-consent-status-field): the
+    // three real response-shape cases apps/web's VerifyEmailPage.tsx needs
+    // to branch on.
+    describe('guardianConsentStatus (Decision Log #38)', () => {
+      it('is "not_applicable" for a non-minor (no Guardian row at all)', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('adult-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce(null);
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(guardianConsentService.getConsentStatusForUser).toHaveBeenCalledWith('adult-1');
+        expect(result).toEqual({ userId: 'adult-1', guardianConsentStatus: 'not_applicable' });
+      });
+
+      it('is "confirmed" for a minor whose guardian has already confirmed consent', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('minor-confirmed-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce({
+          consentStatus: 'confirmed',
+          guardianEmail: 'guardian@example.com',
+          canResend: false,
+          consentTimestamp: new Date('2026-01-05T12:00:00.000Z'),
+        });
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(result).toEqual({ userId: 'minor-confirmed-1', guardianConsentStatus: 'confirmed' });
+      });
+
+      it('is "pending" for a minor whose guardian consent is still pending', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('minor-pending-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce({
+          consentStatus: 'pending',
+          guardianEmail: 'guardian@example.com',
+          canResend: true,
+          consentTimestamp: null,
+        });
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(result).toEqual({ userId: 'minor-pending-1', guardianConsentStatus: 'pending' });
+      });
+
+      it('reuses GuardianConsentService.getConsentStatusForUser rather than querying Guardian itself', async () => {
+        const { service, prisma, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('user-1');
+
+        await service.verifyEmail('a-real-token');
+
+        expect(guardianConsentService.getConsentStatusForUser).toHaveBeenCalledWith('user-1');
+        // RegistrationService's own mocked Prisma fake only wires up
+        // guardian.create (needed by register()'s own tests) — no
+        // guardian.findUnique at all. If verifyEmail ever queried Guardian
+        // directly instead of going through GuardianConsentService, this
+        // would throw a TypeError rather than silently pass.
+        expect((prisma.guardian as { findUnique?: unknown }).findUnique).toBeUndefined();
+      });
+    });
+  });
+});

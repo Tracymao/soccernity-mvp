@@ -1,0 +1,226 @@
+/* Shared styling for the account deactivation / deletion flows:
+ *   - src/pages/settings/DeactivateAccountPage.tsx  (/settings/deactivate)
+ *   - src/pages/settings/DeleteAccountPage.tsx      (/settings/delete-account)
+ *   - src/pages/InactiveAccountPage.tsx             (/account/inactive)
+ *
+ * Figma sources: "Settings — Deactivate Account (Intro)" 2924:7358 ->
+ * "(Confirm)" 6213:15640; "Settings — Delete Account (Confirm)"
+ * 6225:14789; "Inactive Account" 1662:2782 -> "— Delete (Confirm)"
+ * 6217:14677. "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6).
+ * Decision Log #220 (design) / #221 (backend) / #222 (direct delete).
+ *
+ * Colours reference the app-wide --sn-* custom properties
+ * (src/theme/applyTheme.ts) -- never hardcode hex. Light theme, the
+ * app's single active mode, matching PrivacySettingsPage.css /
+ * ClubsPage.css. The Figma "Settings" nav rail + profile sidebar are NOT
+ * reproduced (same call as PrivacySettingsPage.tsx); on the Inactive
+ * screen the Figma logged-in navbar is likewise not reproduced -- that
+ * route renders under AuthChrome's logo-only Top Bar (Decision Log
+ * #172), the person is not authenticated there. */
+
+/* --- settings-chrome flows (deactivate / delete from Settings) ------- */
+
+.acct-flow {
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.acct-flow__back {
+  font: 600 13px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-green);
+  text-decoration: none;
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* --- full-bleed interstitial (Inactive Account) --------------------- */
+
+.acct-interstitial {
+  /* AppShell/AuthChrome add 32px content padding; break out of it so the
+     card sits centred in the viewport, matching the Figma frame. */
+  margin: -32px;
+  min-height: calc(100vh - 90px - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: var(--sn-background-page);
+}
+
+.acct-interstitial__inner {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+
+/* --- shared text ------------------------------------------------- */
+
+.acct-heading {
+  font: 700 26px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.acct-interstitial .acct-heading {
+  font-size: 30px;
+}
+
+.acct-lead {
+  font: 400 15px/1.6 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.acct-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.acct-note__title {
+  font: 600 15px/1.4 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.acct-note__body {
+  font: 400 14px/1.6 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- password field -------------------------------------------- */
+
+.acct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.acct-interstitial .acct-field {
+  align-items: center;
+}
+
+.acct-label {
+  font: 500 13px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.acct-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.acct-input:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+/* --- actions --------------------------------------------------- */
+
+.acct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.acct-interstitial .acct-actions {
+  justify-content: center;
+}
+
+.acct-btn {
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  padding: 10px 30px;
+  border-radius: 51px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.acct-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* navy -- the confirming/destructive action. Destructive buttons stay
+   navy, not red: white on --sn-alert measures 4.12:1 and fails AA (the
+   established Settings-mobile decision, Decision Log #220). */
+.acct-btn--primary {
+  background: var(--sn-brand-navy);
+  color: #fff; /* no --sn-text-on-navy token -- disclosed exception, same as PrivacySettingsPage.css */
+}
+
+/* green -- the "go" / reactivate action (non-destructive). */
+.acct-btn--go {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+/* outline -- cancel / secondary. */
+.acct-btn--ghost {
+  background: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+/* --- feedback ------------------------------------------------- */
+
+.acct-error {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}
+
+.acct-success {
+  font: 400 15px/1.6 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.acct-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .acct-heading {
+    font-size: 22px;
+  }
+
+  .acct-interstitial .acct-heading {
+    font-size: 24px;
+  }
+
+  .acct-actions {
+    width: 100%;
+  }
+
+  .acct-btn {
+    flex: 1 1 auto;
+  }
+}

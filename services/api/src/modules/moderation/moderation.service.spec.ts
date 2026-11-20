@@ -1,0 +1,1900 @@
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { encodeModerationCursor } from './cursor.util';
+import { REPORT_ACTIONS } from './moderation.constants';
+import { ModerationService } from './moderation.service';
+
+// Mocked-Prisma unit tests, following grassroots.service.spec.ts /
+// community-groups.service.spec.ts. The real Report.reviewedByAdminId /
+// .appealReviewedByAdminId FKs, the new columns, and the real
+// transactional notification-writing behavior are proven in
+// test/moderation.e2e-spec.ts against Postgres — this file covers the
+// branching/guard logic a mock can prove.
+function buildPrismaMock() {
+  const prisma = {
+    report: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn(),
+    },
+    // B-300: a removed post asks whether it is a contest entry (null = it is not).
+    contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
+    // B-289: content_removed now removes the reported target in the action's own transaction.
+    post: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    comment: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    message: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    user: {
+      findUnique: jest.fn(),
+    },
+    banterRoom: {
+      findUnique: jest.fn(),
+    },
+    // Pre-publication sensitive-content screen: grassroots_team / fixture
+    // are now valid report targets.
+    grassrootsTeam: {
+      findUnique: jest.fn(),
+    },
+    fixture: {
+      findUnique: jest.fn(),
+    },
+    // schema/report-severity-escalation-admin-vetting-application —
+    // ModerationService now fresh-reads AdminUser.childSafetyVetted for
+    // the concernsMinor gate / escalate's own vetting requirement.
+    // Defaults to "vetted" so every PRE-EXISTING test in this file that
+    // doesn't care about vetting keeps behaving exactly as before
+    // (listReports adds no extra filter, actionReport/decideAppeal never
+    // trip the gate since report()'s own default concernsMinor is falsy)
+    // — only the dedicated new tests below override this mock.
+    adminUser: {
+      findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: true }),
+    },
+    notification: {
+      create: jest.fn(),
+    },
+  } as unknown as PrismaService;
+
+  (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn(
+    (fn: (tx: unknown) => unknown) => fn(prisma),
+  );
+
+  return prisma;
+}
+
+// feat/public-report-submission — ModerationService now takes a
+// RegistrationEmailService too (for POST /reports/public's acknowledgment
+// send). Same mocking convention as
+// guardian-consent.service.spec.ts's own emailService fixture.
+function buildEmailServiceMock() {
+  return {
+    sendPublicReportAcknowledgementEmail: jest.fn().mockResolvedValue(undefined),
+    // feat/moderation-outcome-appeal-emails
+    sendReportActionedEmail: jest.fn().mockResolvedValue(undefined),
+    sendAppealDecisionEmail: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+// Outcome/appeal emails are fire-and-forget (void, caught inside the
+// helper), so tests flush the microtask queue before asserting on the
+// email mock. setImmediate runs after all pending promise callbacks.
+const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
+
+// feat/admin-action-log — ModerationService now also takes an
+// AdminActionLogService, called after actionReport/decideAppeal/
+// escalateReport each successfully commit their own state change. Same
+// mocking convention as the two fixtures above.
+function buildAdminActionLogServiceMock() {
+  return {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+// Decision Log #357 — ModerationService now also takes BanterService, used
+// only for the room_deactivated action's status write.
+function buildBanterServiceMock() {
+  return {
+    setRoomStatus: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function buildService(
+  prisma: PrismaService,
+  emailService = buildEmailServiceMock(),
+  adminActionLogService = buildAdminActionLogServiceMock(),
+  banterService = buildBanterServiceMock(),
+  guardianNotices: { notifyInBackground: jest.Mock } = { notifyInBackground: jest.fn() },
+): ModerationService {
+  return new ModerationService(
+    prisma,
+    emailService as never,
+    adminActionLogService as never,
+    banterService as never,
+    guardianNotices as never,
+    { applySuspensionInTx: jest.fn(), completeSuspension: jest.fn(), applyReinstatementInTx: jest.fn(), completeReinstatement: jest.fn() } as never,
+  );
+}
+
+function report(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'report-1',
+    reporterId: 'reporter-1',
+    targetType: 'post',
+    targetId: 'post-1',
+    reason: 'spam',
+    status: 'open',
+    createdAt: new Date('2026-09-01T10:00:00.000Z'),
+    reviewedByAdminId: null,
+    reviewedAt: null,
+    actionTaken: null,
+    appealStatus: null,
+    appealReason: null,
+    appealedAt: null,
+    appealReviewedByAdminId: null,
+    appealReviewedAt: null,
+    ...overrides,
+  };
+}
+
+describe('ModerationService', () => {
+  // ---------- POST /reports ----------
+
+  describe('createReport — grassroots_team / fixture targets (sensitive-content screen)', () => {
+    it('accepts an existing grassroots_team target', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue({ id: 'team-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'grassroots_team' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'team-1', reasonCategory: 'harassment_or_bullying', reason: 'x' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ targetType: 'grassroots_team', targetId: 'team-1' }) }),
+      );
+    });
+
+    it('404s a non-existent grassroots_team / fixture target', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.fixture.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'nope', reasonCategory: 'harassment_or_bullying', reason: 'x' }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.createReport('reporter-1', { targetType: 'fixture', targetId: 'nope', reasonCategory: 'harassment_or_bullying', reason: 'x' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createReport', () => {
+    it('creates a report against an existing post target, reporterId = the caller', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report());
+
+      const service = buildService(prisma);
+      const result = await service.createReport('reporter-1', {
+        targetType: 'post',
+        targetId: 'post-1',
+        reasonCategory: 'spam_or_scam',
+        reason: 'spam',
+      });
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: {
+          reporterId: 'reporter-1',
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'spam_or_scam',
+          reason: 'spam',
+          concernsMinor: false,
+          severity: 'medium',
+        },
+      });
+      expect(result.id).toBe('report-1');
+    });
+
+    it('defaults severity to medium when omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ severity: 'medium' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', { targetType: 'post', targetId: 'post-1', reasonCategory: 'harassment_or_bullying', reason: 'spam' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'medium' }) }),
+      );
+    });
+
+    it('forwards an explicit severity when given', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ severity: 'critical' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', {
+        targetType: 'post',
+        targetId: 'post-1',
+        reasonCategory: 'spam_or_scam',
+        reason: 'spam',
+        severity: 'critical',
+      });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'critical' }) }),
+      );
+    });
+
+    describe('reason category (B-284, Decision Log #465)', () => {
+      const CATEGORIES = [
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'child_safety_concern',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ] as const;
+
+      function setup() {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report());
+        return { prisma, service: buildService(prisma) };
+      }
+
+      it.each(CATEGORIES)('stores category %s and the description given', async (category) => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: category,
+          reason: 'details',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: category, reason: 'details' }),
+        });
+      });
+
+      it('stores the empty string when a non-other category has no description', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'spam_or_scam',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: 'spam_or_scam', reason: '' }),
+        });
+      });
+
+      // Decision Log #466: child_safety_concern ALWAYS stores concernsMinor = true; severity is not touched.
+      it('child_safety_concern stores concernsMinor true and leaves severity at the default', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'child_safety_concern',
+        });
+        const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data.concernsMinor).toBe(true);
+        expect(data.severity).toBe('medium');
+      });
+
+      it('child_safety_concern does not change an explicit severity either way', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'child_safety_concern',
+          severity: 'low',
+        });
+        const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data).toMatchObject({ concernsMinor: true, severity: 'low' });
+      });
+
+      it.each(CATEGORIES.filter((c) => c !== 'child_safety_concern'))(
+        'every other category (%s) stores concernsMinor false on this route',
+        async (category) => {
+          const { prisma, service } = setup();
+          await service.createReport('reporter-1', {
+            targetType: 'post',
+            targetId: 'post-1',
+            reasonCategory: category,
+            reason: 'details',
+          });
+          const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+          expect(data.concernsMinor).toBe(false);
+        },
+      );
+
+      it("rejects 'other' with no description, with the coded 400 and no database read", async () => {
+        const { prisma, service } = setup();
+        const call = service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'other',
+        });
+        await expect(call).rejects.toThrow(BadRequestException);
+        await expect(call).rejects.toMatchObject({ response: { code: 'report_reason_required' } });
+        expect(prisma.post.findUnique).not.toHaveBeenCalled();
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
+
+      it("rejects 'other' with a whitespace-only description", async () => {
+        const { prisma, service } = setup();
+        await expect(
+          service.createReport('reporter-1', {
+            targetType: 'post',
+            targetId: 'post-1',
+            reasonCategory: 'other',
+            reason: '   ',
+          }),
+        ).rejects.toMatchObject({ response: { code: 'report_reason_required' } });
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
+
+      it("accepts 'other' with a description", async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'other',
+          reason: 'Something else is wrong',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: 'other', reason: 'Something else is wrong' }),
+        });
+      });
+    });
+
+    it('404s when the reported post does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.createReport('reporter-1', { targetType: 'post', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'spam' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+
+    it('404s when the reported comment does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.createReport('reporter-1', { targetType: 'comment', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'abuse' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('404s when the reported user does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.createReport('reporter-1', { targetType: 'user', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'harassment' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('creates a report against an existing user target', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'user', targetId: 'user-9' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', { targetType: 'user', targetId: 'user-9', reasonCategory: 'harassment_or_bullying', reason: 'harassment' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: {
+          reporterId: 'reporter-1',
+          targetType: 'user',
+          targetId: 'user-9',
+          reasonCategory: 'harassment_or_bullying',
+          reason: 'harassment',
+          concernsMinor: false,
+          severity: 'medium',
+        },
+      });
+    });
+  });
+
+  // ---------- POST /reports/:id/appeal ----------
+
+  describe('appealReport', () => {
+    it('404s when the report does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.appealReport('missing', 'user-1', { reason: 'unfair' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it("403s when the report is still 'open' (never actioned)", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
+      const service = buildService(prisma);
+
+      await expect(service.appealReport('report-1', 'reporter-1', { reason: 'unfair' })).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it("403s when the report was dismissed ('reviewed', not 'actioned')", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      const service = buildService(prisma);
+
+      await expect(service.appealReport('report-1', 'post-author', { reason: 'unfair' })).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('403s when the caller is the REPORTER, not the reported user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      const service = buildService(prisma);
+
+      // reporter-1 is the reporter (see report() default), not post-author
+      await expect(service.appealReport('report-1', 'reporter-1', { reason: 'unfair' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('403s when the reported target no longer resolves to anyone (e.g. the post was deleted)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.appealReport('report-1', 'anyone', { reason: 'unfair' })).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('409s when the report has already been appealed', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      const service = buildService(prisma);
+
+      await expect(service.appealReport('report-1', 'post-author', { reason: 'again' })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('the reported user (post author) successfully appeals an actioned report', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending' }),
+      );
+      const service = buildService(prisma);
+
+      const result = await service.appealReport('report-1', 'post-author', { reason: 'I was misidentified' });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: expect.objectContaining({
+          appealStatus: 'pending',
+          appealReason: 'I was misidentified',
+          appealedAt: expect.any(Date),
+        }),
+      });
+      expect(result.appealStatus).toBe('pending');
+    });
+
+    // backend/w6-hold-rule-extension (B-044, Decision Log #376): the appeal window. 30 days by default
+    // (REPORT_APPEAL_WINDOW_DAYS, a placeholder), counted from reviewedAt.
+    describe('appeal window', () => {
+      const reviewedAt = new Date('2026-11-01T10:00:00.000Z');
+      const original = process.env.REPORT_APPEAL_WINDOW_DAYS;
+      afterEach(() => {
+        jest.useRealTimers();
+        if (original === undefined) delete process.env.REPORT_APPEAL_WINDOW_DAYS;
+        else process.env.REPORT_APPEAL_WINDOW_DAYS = original;
+      });
+
+      async function appealAt(now: string) {
+        jest.useFakeTimers({ now: new Date(now) });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', reviewedAt }));
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
+        const promise = buildService(prisma).appealReport('report-1', 'post-author', { reason: 'unfair' });
+        return { prisma, promise };
+      }
+
+      it('is accepted one millisecond before the window closes', async () => {
+        const { prisma, promise } = await appealAt('2026-12-01T09:59:59.999Z');
+        await expect(promise).resolves.toBeDefined();
+        expect(prisma.report.update).toHaveBeenCalled();
+      });
+
+      it('is refused AT the deadline instant with the coded 403, and nothing is written', async () => {
+        const { prisma, promise } = await appealAt('2026-12-01T10:00:00.000Z');
+        await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(promise).rejects.toMatchObject({
+          response: expect.objectContaining({ statusCode: 403, code: 'appeal_window_closed' }),
+        });
+        expect(prisma.report.update).not.toHaveBeenCalled();
+      });
+
+      it('is refused long after, and the message states no duration', async () => {
+        const { promise } = await appealAt('2027-03-01T00:00:00.000Z');
+        const err = (await promise.catch((e: unknown) => e)) as { response: { message: string } };
+        expect(err.response.message).toBe('The time allowed for appealing this report has passed.');
+        expect(err.response.message).not.toMatch(/\d/);
+      });
+
+      it('uses the configured window (7 days here)', async () => {
+        process.env.REPORT_APPEAL_WINDOW_DAYS = '7';
+        const { promise: tooLate } = await appealAt('2026-11-08T10:00:00.000Z');
+        await expect(tooLate).rejects.toMatchObject({ response: expect.objectContaining({ code: 'appeal_window_closed' }) });
+        const { promise: inTime } = await appealAt('2026-11-08T09:59:59.999Z');
+        await expect(inTime).resolves.toBeDefined();
+      });
+
+      it('the check comes AFTER eligibility: a stranger gets the plain 403, not the window code', async () => {
+        jest.useFakeTimers({ now: new Date('2027-03-01T00:00:00.000Z') });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', reviewedAt }));
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        const err = (await buildService(prisma)
+          .appealReport('report-1', 'stranger', { reason: 'x' })
+          .catch((e: unknown) => e)) as { response: unknown };
+        expect(JSON.stringify(err.response)).not.toContain('appeal_window_closed');
+      });
+
+      it('a report re-actioned after an overturned appeal starts a NEW window from its new reviewedAt', async () => {
+        jest.useFakeTimers({ now: new Date('2027-01-10T00:00:00.000Z') });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({ status: 'actioned', reviewedAt: new Date('2027-01-05T00:00:00.000Z'), appealStatus: null }),
+        );
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
+        await expect(buildService(prisma).appealReport('report-1', 'post-author', { reason: 'again' })).resolves.toBeDefined();
+      });
+    });
+
+    it('the reported user (a directly-reported user, targetType user) successfully appeals', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', targetType: 'user', targetId: 'user-9' }),
+      );
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
+      const service = buildService(prisma);
+
+      await service.appealReport('report-1', 'user-9', { reason: 'it was a joke' });
+
+      expect(prisma.report.update).toHaveBeenCalled();
+    });
+  });
+
+  // ---------- GET /admin/moderation/reports ----------
+
+  describe('listReports', () => {
+    it('lists reports newest-first with the default page size and no status filter (vetted admin, no concernsMinor filter added)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([report()]);
+      const service = buildService(prisma);
+
+      const result = await service.listReports({}, 'admin-1');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith({
+        where: {},
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 21,
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('returns reasonCategory on each row (null for a report that was never categorised), next to the free-text reason', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([
+        report({ id: 'a', reasonCategory: 'spam_or_scam', reason: '' }),
+        report({ id: 'b', reasonCategory: null, reason: 'old free text' }),
+      ]);
+      const service = buildService(prisma);
+
+      const { items } = await service.listReports({}, 'admin-1');
+
+      expect(items[0]).toMatchObject({ reasonCategory: 'spam_or_scam', reason: '' });
+      expect(items[1]).toMatchObject({ reasonCategory: null, reason: 'old free text' });
+    });
+
+    it("adds source: 'contact_enquiry' to an enquiry report and leaves every other row exactly as it was", async () => {
+      const prisma = buildPrismaMock();
+      const plain = report({ id: 'plain' });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([
+        report({ id: 'enq', reporterId: null, targetType: 'enquiry', targetId: 'e1' }),
+        plain,
+      ]);
+      const service = buildService(prisma);
+
+      const { items } = await service.listReports({}, 'admin-1');
+
+      expect(items[0]).toMatchObject({ id: 'enq', source: 'contact_enquiry' });
+      // B-292: every row now also carries appealRecordedByStaff (false here); nothing else about it changes.
+      expect(items[1]).toEqual({ ...plain, appealRecordedByStaff: false });
+      expect(items[1]).not.toHaveProperty('source');
+    });
+
+    it('ANDs an explicit status filter into the where clause', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({ status: 'open' }, 'admin-1');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ status: 'open' }] } }),
+      );
+    });
+
+    it('returns a real nextCursor when more rows exist than the page size, and trims the extra row', async () => {
+      const prisma = buildPrismaMock();
+      const rows = Array.from({ length: 3 }, (_, i) =>
+        report({ id: `report-${i}`, createdAt: new Date(2026, 8, 10 - i) }),
+      );
+      (prisma.report.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = buildService(prisma);
+
+      const result = await service.listReports({ limit: 2 }, 'admin-1');
+
+      expect(result.items).toHaveLength(2);
+      expect(result.nextCursor).toBe(
+        encodeModerationCursor({ createdAt: rows[1].createdAt, id: rows[1].id }),
+      );
+    });
+
+    // ---------- child-safety-vetting gate (schema/report-severity-escalation-admin-vetting-application) ----------
+
+    it('freshly checks the CALLING admin (not a cached role) via AdminUser.childSafetyVetted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'admin-42');
+
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'admin-42' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('a NON-vetted admin gets an implicit concernsMinor: false filter ANDed in, regardless of role (role is not even read here)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'unvetted-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ concernsMinor: false }] } }),
+      );
+    });
+
+    it('an admin with no AdminUser row at all (a since-removed account behind a still-valid token) is treated as non-vetted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'ghost-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ concernsMinor: false }] } }),
+      );
+    });
+
+    it('a VETTED admin gets no concernsMinor filter added, ANDed alongside a real status filter', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({ status: 'open' }, 'vetted-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ status: 'open' }] } }),
+      );
+    });
+  });
+
+  // ---------- GET /admin/moderation/reports/:id ----------
+
+  describe('getReportById', () => {
+    it('404s when the report does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('missing', 'admin-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns reasonCategory on the report detail', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ reasonCategory: 'threats_or_violence' }));
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result).toMatchObject({ reasonCategory: 'threats_or_violence', reason: 'spam' });
+    });
+
+    it('returns the report as-is when it does not concern a minor, without checking vetting at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result.id).toBe('report-1');
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('returns the report to a VETTED admin when it concerns a minor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'vetted-admin');
+
+      expect(result.concernsMinor).toBe(true);
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'vetted-admin' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('403s a NON-vetted admin fetching a report where concernsMinor is true — a direct-access backstop, not just a queue-list filter', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('report-1', 'unvetted-admin')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('loads an enquiry report with the source hint and the enquiry it came from, and looks up no user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, targetType: 'enquiry', targetId: 'e1', concernsMinor: false }),
+      );
+      const enquiry = { id: 'e1', name: 'Sam', email: 'sam@example.com', category: 'data', subject: 'S', message: 'M', status: 'new', createdAt: new Date(), userId: null };
+      (prisma as unknown as { contactEnquiry: { findUnique: jest.Mock } }).contactEnquiry = { findUnique: jest.fn().mockResolvedValue(enquiry) };
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result).toMatchObject({ source: 'contact_enquiry', contactEnquiry: enquiry });
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('applies the child-safety gate to an enquiry report that concerns a minor (403 for a non-vetted admin)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, targetType: 'enquiry', targetId: 'e1', concernsMinor: true }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('report-1', 'unvetted-admin')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('settles 404 (existence) BEFORE the 403 vetting check — a non-existent id never touches AdminUser at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('missing', 'unvetted-admin')).rejects.toThrow(NotFoundException);
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- PATCH /admin/moderation/reports/:id ----------
+
+  describe('outcome and appeal-decision emails (feat/moderation-outcome-appeal-emails)', () => {
+    it('emails a logged-in reporter their outcome, using the address on their User row', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: 'reporter-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          where.id === 'reporter-1'
+            ? { email: 'reporter@example.com', accountStatus: 'active' }
+            : { email: 'author@example.com', accountStatus: 'active' },
+        ),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledWith('reporter@example.com', 'content_removed');
+    });
+
+    it('emails a public (no-account) reporter at reporterContactEmail, without looking up a User for them', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'open',
+          reporterId: null,
+          reporterContactEmail: 'parent@example.com',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledWith('parent@example.com', 'dismissed');
+      // A post target resolves its author via post.findUnique, and a public
+      // reporter has no User row to look up — so user.findUnique is never hit.
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('never emails the anonymised address of a deleted reporter (Decision Log #341)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: 'reporter-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        email: 'deleted-reporter-1@deleted.soccernity.internal',
+        accountStatus: 'deleted',
+      });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends no outcome email when a public report has no contact address', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: null, targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends NO outcome email for a report made from a Contact Us enquiry, whatever the action (Decision Log #445)', async () => {
+      // room_deactivated and user_suspended are refused (400) on an enquiry report before a send could happen (the
+      // latter: B-291, an enquiry has no single account behind it; covered in moderation.user-suspension.spec.ts).
+      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated' && a !== 'content_removed' && a !== 'user_suspended')) {
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({
+            status: 'open',
+            reporterId: null,
+            reporterContactEmail: 'sam@example.com',
+            reporterContactName: 'Sam',
+            targetType: 'enquiry',
+            targetId: 'e1',
+          }),
+        );
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+        const emailService = buildEmailServiceMock();
+        const service = buildService(prisma, emailService);
+
+        await service.actionReport('report-1', 'admin-1', { action });
+        await flushPromises();
+
+        expect(prisma.report.update).toHaveBeenCalledTimes(1);
+        expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+        expect(emailService.sendAppealDecisionEmail).not.toHaveBeenCalled();
+        expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
+      }
+    });
+
+    it('room_deactivated on an enquiry report is refused with 400 and sends nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: 'sam@example.com', targetType: 'enquiry', targetId: 'e1' }),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' })).rejects.toThrow(BadRequestException);
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('a failed outcome email never fails the admin action itself', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: 'parent@example.com', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed', actionTaken: 'dismissed' }));
+      const emailService = {
+        ...buildEmailServiceMock(),
+        sendReportActionedEmail: jest.fn().mockRejectedValue(new Error('Postmark down')),
+      };
+      const service = buildService(prisma, emailService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'dismissed' })).resolves.toEqual(
+        expect.objectContaining({ status: 'reviewed' }),
+      );
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('emails the appellant (the reported user) with the upheld decision', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledWith('author@example.com', 'upheld');
+    });
+
+    it('emails the appellant with the overturned decision', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'open', appealStatus: 'overturned' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledWith('author@example.com', 'overturned');
+    });
+
+    it('sends no appeal email when the reported user cannot be resolved (target since deleted)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('actionReport', () => {
+    it('404s when the report does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.actionReport('missing', 'admin-1', { action: 'dismissed' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('closes an enquiry report normally (reviewed, then actioned) and creates NO notification: it has no reporter account and no reported user', async () => {
+      for (const action of ['dismissed', 'warning_issued'] as const) {
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({ status: 'open', reporterId: null, targetType: 'enquiry', targetId: 'e1', reporterContactEmail: 'sam@example.com' }),
+        );
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+        const service = buildService(prisma);
+
+        await service.actionReport('report-1', 'admin-1', { action });
+
+        expect(prisma.report.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ status: action === 'dismissed' ? 'reviewed' : 'actioned', actionTaken: action }) }),
+        );
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+        // The reported-user lookup is the explicit null case: none of the target tables is read.
+        expect(prisma.post.findUnique).not.toHaveBeenCalled();
+        expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      }
+    });
+
+    it("409s when the report is not 'open' (already reviewed once)", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'warning_issued' })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it("dismissed maps to status 'reviewed' and notifies only the reporter when the target is unresolvable", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null); // target deleted
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed', actionTaken: 'dismissed' }));
+      const service = buildService(prisma);
+
+      const result = await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: {
+          status: 'reviewed',
+          actionTaken: 'dismissed',
+          reviewedByAdminId: 'admin-1',
+          reviewedAt: expect.any(Date),
+          appealStatus: null,
+          appealReason: null,
+          appealedAt: null,
+          appealReviewedByAdminId: null,
+          appealReviewedAt: null,
+        },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'reporter-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+      expect(result.status).toBe('reviewed');
+    });
+
+    it("a real action (e.g. content_removed) maps to status 'actioned' and notifies BOTH reporter and reported user when they differ", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'content_removed' }),
+      );
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(2);
+      expect(prisma.notification.create).toHaveBeenNthCalledWith(1, {
+        data: { userId: 'reporter-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+      expect(prisma.notification.create).toHaveBeenNthCalledWith(2, {
+        data: { userId: 'post-author', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+
+    it('notifies only once when the reporter and the reported user are the same person (a self-report)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: 'user-1', targetType: 'user', targetId: 'user-1' }),
+      );
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    // ---------- child-safety-vetting gate ----------
+
+    it('403s a NON-vetted admin acting on a report where concernsMinor is true, regardless of role, and never mutates the report', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(
+        service.actionReport('report-1', 'unvetted-admin', { action: 'content_removed' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'unvetted-admin' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('never checks vetting at all when concernsMinor is false (the common case)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', concernsMinor: false, targetType: 'user', targetId: 'user-1' }),
+      );
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'any-admin', { action: 'dismissed' });
+
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('a VETTED admin may action a report where concernsMinor is true', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', concernsMinor: true, targetType: 'user', targetId: 'user-1' }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned', concernsMinor: true }));
+      const service = buildService(prisma);
+
+      const result = await service.actionReport('report-1', 'vetted-admin', { action: 'warning_issued' });
+
+      expect(result.status).toBe('actioned');
+      expect(prisma.report.update).toHaveBeenCalled();
+    });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful action, with the recorded action as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'content_removed' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-1',
+        'report.actioned',
+        'report',
+        'report-1',
+        'content_removed',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.actionReport('missing', 'admin-1', { action: 'dismissed' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when the report is not open (409)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'warning_issued' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when a non-vetted admin is blocked (403)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.actionReport('report-1', 'unvetted-admin', { action: 'content_removed' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- PATCH /admin/moderation/reports/:id/appeal ----------
+
+  describe('actionReport — banter_room target (Decision Log #357)', () => {
+    it('room_deactivated sets the room inactive through BanterService, inside the same transaction', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'room_deactivated' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' });
+
+      expect(banterService.setRoomStatus).toHaveBeenCalledTimes(1);
+      expect(banterService.setRoomStatus).toHaveBeenCalledWith(prisma, 'room-1', 'inactive');
+    });
+
+    it('a banter_room report with any other action does NOT touch the room status', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'warning_issued' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(banterService.setRoomStatus).not.toHaveBeenCalled();
+    });
+
+    it('room_deactivated against a non-room target is a 400 and records nothing', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', targetType: 'post' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.report.update).not.toHaveBeenCalled();
+      expect(banterService.setRoomStatus).not.toHaveBeenCalled();
+    });
+
+    it('notifies the room creator when their account still exists', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'creator-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+
+    it('a dangling createdBy (creator hard-deleted, Decision Log #44) is skipped rather than failing the transaction', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'gone-user' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'reporter-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+  });
+
+  describe('decideAppeal', () => {
+    it('404s when the report does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.decideAppeal('missing', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it("409s when there is no pending appeal on the report", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', appealStatus: null }));
+      const service = buildService(prisma);
+
+      await expect(service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('403s (Decision Log #138) when the reviewing admin is the SAME admin who actioned the original report', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      const service = buildService(prisma);
+
+      await expect(service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('upheld keeps status actioned, records the second reviewer, and notifies only the reported user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const service = buildService(prisma);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: {
+          appealStatus: 'upheld',
+          appealReviewedByAdmin: { connect: { id: 'admin-2' } },
+          appealReviewedAt: expect.any(Date),
+        },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'post-author', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+
+    it('overturned reverses the report to a non-actioned state and preserves appealStatus as the historical record', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          actionTaken: 'content_removed',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'open', appealStatus: 'overturned' }));
+      const service = buildService(prisma);
+
+      const result = await service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: {
+          appealStatus: 'overturned',
+          appealReviewedByAdmin: { connect: { id: 'admin-2' } },
+          appealReviewedAt: expect.any(Date),
+          status: 'open',
+          reviewedByAdmin: { disconnect: true },
+          reviewedAt: null,
+          actionTaken: null,
+        },
+      });
+      expect(result.status).toBe('open');
+    });
+
+    it('does not notify anyone when the reported target no longer resolves', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const service = buildService(prisma);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    // ---------- child-safety-vetting gate ----------
+
+    it('403s a NON-vetted admin reviewing an appeal on a report where concernsMinor is true, before Decision Log #138 same-admin check even runs', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          concernsMinor: true,
+        }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      // admin-1 is ALSO the original reviewer here (would otherwise also
+      // 403 under #138) -- the vetting gate is checked first and its
+      // own, distinct message/code is what's expected.
+      await expect(
+        service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('a VETTED admin may review an appeal on a report where concernsMinor is true', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          concernsMinor: true,
+        }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld', concernsMinor: true }));
+      const service = buildService(prisma);
+
+      const result = await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(result.appealStatus).toBe('upheld');
+    });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful appeal decision, with the decision as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-2',
+        'report.appeal_decided',
+        'report',
+        'report-1',
+        'upheld',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('missing', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when there is no pending appeal (409)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', appealStatus: null }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when the same admin who actioned the report tries to review its appeal (403, Decision Log #138)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- PATCH /admin/moderation/reports/:id/escalate ----------
+
+  describe('escalateReport', () => {
+    it('404s when the report does not exist, and never checks vetting', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('missing', 'admin-1', { escalationNotes: 'urgent', escalatedToAuthority: false }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('403s a NON-vetted admin, regardless of the report\'s own concernsMinor value', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('report-1', 'unvetted-admin', {
+          escalationNotes: 'needs a second look',
+          escalatedToAuthority: false,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('a vetted admin escalates internally (escalatedToAuthority: false) — sets the full trail', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedAt: new Date(), escalatedByAdminId: 'vetted-admin', escalatedToAuthority: false }),
+      );
+      const service = buildService(prisma);
+
+      const result = await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'flagging for the designated child-safety lead',
+        escalatedToAuthority: false,
+      });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: {
+          escalatedAt: expect.any(Date),
+          escalatedByAdminId: 'vetted-admin',
+          escalationNotes: 'flagging for the designated child-safety lead',
+          escalatedToAuthority: false,
+        },
+      });
+      expect(result.escalatedToAuthority).toBe(false);
+    });
+
+    it('a vetted admin records that they have already made an external report (escalatedToAuthority: true)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedToAuthority: true }),
+      );
+      const service = buildService(prisma);
+
+      await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'reported to the relevant authority this morning',
+        escalatedToAuthority: true,
+      });
+
+      expect(prisma.report.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ escalatedToAuthority: true }) }),
+      );
+    });
+
+    it('escalates a report regardless of its current status (not gated on open/reviewed/actioned)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('report-1', 'vetted-admin', {
+          escalationNotes: 'still escalating after the fact',
+          escalatedToAuthority: false,
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful escalation, with escalatedToAuthority + escalationNotes as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedAt: new Date(), escalatedByAdminId: 'vetted-admin', escalatedToAuthority: true }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'reported to the relevant authority this morning',
+        escalatedToAuthority: true,
+      });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'vetted-admin',
+        'report.escalated',
+        'report',
+        'report-1',
+        'escalatedToAuthority=true: reported to the relevant authority this morning',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.escalateReport('missing', 'admin-1', { escalationNotes: 'urgent', escalatedToAuthority: false }),
+      ).rejects.toThrow(NotFoundException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when a non-vetted admin is blocked (403)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.escalateReport('report-1', 'unvetted-admin', {
+          escalationNotes: 'needs a second look',
+          escalatedToAuthority: false,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- POST /reports/public ----------
+
+  describe('createPublicReport', () => {
+    const dto = {
+      reporterContactEmail: 'concerned-parent@example.com',
+      targetType: 'post' as const,
+      targetId: 'post-1',
+      reasonCategory: 'privacy_or_image_misuse' as const,
+      reason: 'This photo shows my child without consent.',
+      concernsMinor: true,
+    };
+
+    it('creates a report with reporterId null, the given contact email, and concernsMinor set', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, reporterContactEmail: dto.reporterContactEmail, concernsMinor: true }),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      const result = await service.createPublicReport(dto);
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: {
+          reporterId: null,
+          reporterContactEmail: dto.reporterContactEmail,
+          targetType: 'post',
+          targetId: 'post-1',
+          reason: dto.reason,
+          reasonCategory: 'privacy_or_image_misuse',
+          concernsMinor: true,
+          severity: 'medium',
+        },
+      });
+      expect(result.reporterId).toBeNull();
+      expect(result.concernsMinor).toBe(true);
+    });
+
+    it('defaults severity to medium when omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, severity: 'medium' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport(dto);
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'medium' }) }),
+      );
+    });
+
+    it('forwards an explicit severity when given', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, severity: 'high' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport({ ...dto, severity: 'high' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'high' }) }),
+      );
+    });
+
+    it('404s when the reported target does not exist, and never creates a Report or sends an email', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await expect(service.createPublicReport(dto)).rejects.toThrow(NotFoundException);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+      expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends the acknowledgment email to the given contact address on success', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, targetType: 'user' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport({ ...dto, targetType: 'user', targetId: 'user-9' });
+
+      expect(emailService.sendPublicReportAcknowledgementEmail).toHaveBeenCalledWith(dto.reporterContactEmail);
+    });
+
+    it('stores the category, and the empty string when the description is omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+      const service = buildService(prisma, buildEmailServiceMock());
+
+      const { reason, ...withoutReason } = dto;
+      void reason;
+      await service.createPublicReport({ ...withoutReason, reasonCategory: 'impersonation_or_fake_account' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ reasonCategory: 'impersonation_or_fake_account', reason: '', concernsMinor: true }),
+      });
+    });
+
+    // Decision Log #466: the category can only RAISE the flag, never lower it.
+    describe('concernsMinor and the child_safety_concern category (Decision Log #466)', () => {
+      async function stored(category: string, reporterConcernsMinor: boolean): Promise<boolean> {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+        const service = buildService(prisma, buildEmailServiceMock());
+        await service.createPublicReport({
+          ...dto,
+          reasonCategory: category as typeof dto.reasonCategory,
+          concernsMinor: reporterConcernsMinor,
+        });
+        return (prisma.report.create as jest.Mock).mock.calls[0][0].data.concernsMinor;
+      }
+
+      it('child_safety_concern with the flag sent false is stored true', async () => {
+        expect(await stored('child_safety_concern', false)).toBe(true);
+      });
+
+      it('child_safety_concern with the flag sent true is stored true', async () => {
+        expect(await stored('child_safety_concern', true)).toBe(true);
+      });
+
+      it.each([
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ])('%s leaves the reporter\'s value as sent (false stays false, true stays true)', async (category) => {
+        expect(await stored(category, false)).toBe(false);
+        expect(await stored(category, true)).toBe(true);
+      });
+
+      it('does not change severity and still sends the acknowledgement email', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+        const emailService = buildEmailServiceMock();
+        const service = buildService(prisma, emailService);
+        await service.createPublicReport({ ...dto, reasonCategory: 'child_safety_concern', concernsMinor: false });
+        expect((prisma.report.create as jest.Mock).mock.calls[0][0].data.severity).toBe('medium');
+        expect(emailService.sendPublicReportAcknowledgementEmail).toHaveBeenCalledWith(dto.reporterContactEmail);
+      });
+    });
+
+    it("rejects 'other' without a description (coded 400) and creates nothing, sends nothing", async () => {
+      const prisma = buildPrismaMock();
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      const { reason, ...withoutReason } = dto;
+      void reason;
+      await expect(service.createPublicReport({ ...withoutReason, reasonCategory: 'other' })).rejects.toMatchObject({
+        response: { code: 'report_reason_required' },
+      });
+      expect(prisma.report.create).not.toHaveBeenCalled();
+      expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not let a failed acknowledgment email reject report submission', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, targetType: 'comment' }));
+      const emailService = {
+        ...buildEmailServiceMock(),
+        sendPublicReportAcknowledgementEmail: jest.fn().mockRejectedValue(new Error('down')),
+      };
+      const service = buildService(prisma, emailService);
+
+      await expect(
+        service.createPublicReport({ ...dto, targetType: 'comment', targetId: 'comment-1' }),
+      ).resolves.toBeDefined();
+    });
+  });
+});

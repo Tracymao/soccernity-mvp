@@ -1,0 +1,183 @@
+/* Which Club Do I Represent — Selector (ClubRepresentationPage.tsx).
+ * Figma: 5570:7813 (desktop) / 5570:7887 (mobile), Decision Log #74.
+ * Colours reference the app-wide --sn-* properties (src/theme/applyTheme.ts),
+ * never hex. Light theme, the app's single active mode. */
+
+.club-rep {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.club-rep__status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.club-rep__status--error {
+  color: var(--sn-brand-navy);
+}
+
+.club-rep__retry {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--sn-brand-navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.club-rep__back {
+  font: 500 14px/1.4 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.club-rep__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.club-rep__title {
+  font: 600 32px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.club-rep__lead {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.club-rep__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--sn-green-tint-12);
+  font: 400 14px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.club-rep__note-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+}
+
+.club-rep__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.club-rep__card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  cursor: pointer;
+}
+
+.club-rep__card--selected {
+  border: 2px solid var(--sn-brand-navy);
+}
+
+.club-rep__logo {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sn-green-tint-12);
+  font: 600 16px/1 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.club-rep__info {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.club-rep__name {
+  font: 600 16px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.club-rep__current {
+  font: 500 13px/1.3 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.club-rep__meta {
+  font: 400 13px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.club-rep__radio {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.club-rep__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.club-rep__cta {
+  height: 52px;
+  padding: 0 28px;
+  border-radius: 12px;
+  border: none;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 16px/1 "Inter", sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+}
+
+.club-rep__cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.club-rep__feedback {
+  margin: 0;
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.club-rep__feedback--error {
+  color: var(--sn-brand-navy);
+  font-weight: 500;
+}

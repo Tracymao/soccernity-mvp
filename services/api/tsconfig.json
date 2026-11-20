@@ -2,12 +2,42 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2021",
+    // sprint-4/sports-hub-highlightly-backend — adds "DOM" purely for its TYPE
+    // declarations (fetch/Response/Headers/AbortController/RequestInit), not for any
+    // runtime behavior. Needed because the installed @types/node@20.19.43 does not
+    // ambiently type global `fetch` (confirmed directly — no `declare function fetch`
+    // anywhere in node_modules/@types/node), even though the real Node runtime this app
+    // requires (engines >=22.22.0) has had it natively since Node 18. The alternative —
+    // adding a real HTTP client dependency (axios/got/undici) just to get types — would be
+    // a heavier, unnecessary addition for a project whose every prior external-API
+    // integration (Postmark, S3) already uses either a vendor SDK or, here, the runtime's
+    // own built-in fetch. No existing file in this codebase uses a DOM-only global (window/
+    // document/navigator) that this could silently redefine — verified via a clean
+    // `nest build` + full test suite run after adding this line.
+    "lib": ["ES2021", "DOM"],
     "declaration": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    "rootDir": "./src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,
     "skipLibCheck": true
-  }
+  },
+  // Sprint 1 / PR B1 is this project's first PR to add *.spec.ts files.
+  // Without this, `nest build` (plain tsc under the hood) compiles test
+  // files straight into the production dist/ output alongside real
+  // source. jest.config.js points ts-jest at this same tsconfig for
+  // *running* tests, so ts-jest still transforms *.spec.ts on its own
+  // in-memory — only the production build output is affected.
+  //
+  // Sprint 2 / e2e-test-infrastructure added the "test" exclude below for
+  // the same reason: this tsconfig has no "include", so TypeScript's
+  // default file discovery starts from this file's own directory
+  // (services/api/) and would otherwise pull services/api/test/*.ts
+  // (including *.e2e-spec.ts) into `nest build`'s compilation too — and
+  // fail on it, since "test" sits outside rootDir "./src". test/jest-e2e.
+  // config.js's own ts-jest transform still runs those files fine for
+  // `npm run test:e2e`, same "excluded from the build, not from testing"
+  // split *.spec.ts already established.
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

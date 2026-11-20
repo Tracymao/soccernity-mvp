@@ -4,8 +4,8 @@ Read `CLAUDE.md` first — it's the short version of everything below and the fi
 
 ## Full documentation
 
-- `docs/Soccernity_Inventors_Log_Book_v2.10.docx` — strategy, product, market, safeguarding.
-- `docs/Soccernity_MVP_Build_Plan_v1.4.docx` — the document to actually build from: scope, data model, API contract, sprint backlog, definition of done.
+- `docs/Soccernity_Inventors_Log_Book_v2.14.docx` — strategy, product, market, safeguarding.
+- `docs/Soccernity_MVP_Build_Plan_v1.7.docx` — the document to actually build from: scope, data model, API contract, sprint backlog, definition of done.
 
 ## Structure
 
@@ -28,12 +28,22 @@ docs/        the two source documents above
 ```bash
 npm install
 cp .env.example .env   # then fill in the real values
+docker compose up -d   # local Postgres + Redis — see docker-compose.yml
 npm run prisma:generate
 npm run prisma:migrate
 npm run dev:api
 ```
 
-Three items in `.env.example` are marked as open Decision Log items (Build Plan Section 9) — resolve those before Sprint 1 (auth, minimum age) or Sprint 4 (sports data vendor).
+Confirm it's actually working, not just that commands didn't error:
+
+```bash
+curl http://localhost:<port>/health
+# expect {"status":"ok","database":"connected"}
+```
+
+Run the test suite too: `npm test` at the repo root runs every workspace's tests (`--workspaces --if-present`). `services/api` currently has 25 suites / 158 tests passing (as of PR #33, the Postmark email-provider wiring). `apps/web` has its first test suite as of PR #38 (`AgeGateStep.test.tsx`, 7 cases) — most of `apps/web` still has no test coverage, don't assume otherwise.
+
+Two items in `.env.example` are still open Decision Log items and need a real value before deployment — `SPORTS_DATA_API_KEY` (#6) and hosting-platform secrets (#9). `JWT_SECRET` needs a real generated value (`openssl rand -base64 32`) even for local dev — never the placeholder.
 
 ## Branches
 

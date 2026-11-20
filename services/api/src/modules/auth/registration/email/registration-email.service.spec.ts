@@ -1,0 +1,933 @@
+import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { RegistrationEmailService, SUSPENSION_GENERIC_REASON_LINE, suspensionReasonLine } from './registration-email.service';
+
+const mockSendEmail = jest.fn();
+
+jest.mock('postmark', () => ({
+  ServerClient: jest.fn().mockImplementation(() => ({ sendEmail: mockSendEmail })),
+}));
+
+function buildConfig(values: Record<string, string | undefined>): ConfigService {
+  return { get: (key: string) => values[key] } as unknown as ConfigService;
+}
+
+describe('RegistrationEmailService', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('is "wired but inactive" — resolves without throwing when the .env.example placeholder is unset', async () => {
+    const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: undefined }));
+
+    await expect(service.sendVerificationEmail('minor@example.com', 'tok-1')).resolves.toBeUndefined();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('is "wired but inactive" when EMAIL_PROVIDER_API_KEY is still the literal placeholder', async () => {
+    const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+
+    await expect(
+      service.sendGuardianConsentEmail('guardian@example.com', 'consent-tok', 'Minor Name'),
+    ).resolves.toBeUndefined();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  describe('once a real key is set (Decision Log #17 — Postmark live)', () => {
+    it('calls Postmark with the correct recipient, subject, and template data for a verification email', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-1' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendVerificationEmail('minor@example.com', 'tok-1');
+
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          From: 'no-reply@soccernity.example',
+          To: 'minor@example.com',
+          Subject: 'Verify your Soccernity email',
+          HtmlBody: expect.stringContaining('https://app.soccernity.com/verify-email?token=tok-1'),
+          TextBody: expect.stringContaining('https://app.soccernity.com/verify-email?token=tok-1'),
+        }),
+      );
+    });
+
+    it('calls Postmark with the correct recipient, subject, and template data for a guardian-consent email', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-2' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendGuardianConsentEmail('guardian@example.com', 'consent-tok', 'Minor Name');
+
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          From: 'no-reply@soccernity.example',
+          To: 'guardian@example.com',
+          Subject: "Consent requested for Minor Name's Soccernity account",
+          HtmlBody: expect.stringContaining('https://app.soccernity.com/guardian-consent/confirm?token=consent-tok'),
+          TextBody: expect.stringContaining('https://app.soccernity.com/guardian-consent/confirm?token=consent-tok'),
+        }),
+      );
+    });
+
+    it('renders the founder-approved guardian-minor-turned-18 copy verbatim', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-18' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendGuardianMinorTurned18Email('g@example.com', 'Ada Lovelace', 'Grace Hopper');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.Subject).toBe("An update on Ada Lovelace's Soccernity account");
+      expect(sent.TextBody).toBe(
+        `Hi Grace,
+
+` +
+          `We're writing to let you know that Ada Lovelace's Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
+
+` +
+          `This means the guardian consent and oversight settings you originally set up no longer apply — Ada Lovelace now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+
+` +
+          `If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
+
+` +
+          `Thanks for being part of Ada Lovelace's Soccernity journey so far.
+
+` +
+          `— The Soccernity team`,
+      );
+      expect(sent.HtmlBody).toContain('<p>Hi Grace,</p>');
+      expect(sent.HtmlBody).toContain('support@soccernity.com');
+      expect(sent.HtmlBody).not.toMatch(/placeholder|verification code/i);
+    });
+
+    // safeguarding/guardian-email-change-endpoint (Decision Log #365)
+    it('sends the previous guardian address a withdrawn notice that carries no token and asks for nothing', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-replaced' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendGuardianEmailReplacedEmail('old-guardian@example.com', 'Ada Lovelace');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('old-guardian@example.com');
+      expect(sent.Subject).toBe('The Soccernity approval request for Ada Lovelace was withdrawn');
+      expect(sent.TextBody).toContain('no longer works');
+      expect(sent.TextBody).toContain('support@soccernity.com');
+      expect(sent.HtmlBody).toContain('Ada Lovelace');
+      // Never a credential, never the new address.
+      expect(sent.TextBody).not.toMatch(/token|code is|consent code/i);
+    });
+
+    // B-126 (Decision Log #406 item 1)
+    it('warns the minor after a declined-and-abandoned request: new request sent, closure if unanswered, no decline count, not the "first request expired" wording', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-lapse' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendConsentDeclineLapseReminderEmail('minor@example.com', 'Ada', 'parent@example.com');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('minor@example.com');
+      expect(sent.Subject).toBe('Your Soccernity account still needs guardian approval');
+      expect(sent.TextBody).toContain('parent@example.com');
+      expect(sent.TextBody).toContain('closed and scheduled for deletion');
+      // The existing reminder's claim would be untrue here: the guardian answered.
+      expect(sent.TextBody).not.toMatch(/first request has now expired/i);
+      // Never a credential, never a running count.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/token|declined \d|\d of 3|three times/i);
+    });
+
+    // Wording fix (backend/w3e): reached by an unanswered request, by a second
+    // lapse, AND by a request that was declined, reopened by the stale-decline
+    // sweep (B-126) and then not answered. The old text claimed "Your guardian
+    // did not respond to either approval request", untrue for a guardian who
+    // did respond by declining.
+    it('the second-expiry email says only what is true on every route: not approved in time, closed, grace days; never that the guardian did not respond', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-expired' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendConsentExpiredEmail('minor@example.com', 'Ada', 30);
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('minor@example.com');
+      expect(sent.Subject).toBe('Your Soccernity account was not approved in time');
+      expect(sent.TextBody).toContain('Hi Ada,');
+      expect(sent.TextBody).toContain('was not approved in time');
+      expect(sent.TextBody).toContain('permanently deleted in 30 days');
+      expect(sent.HtmlBody).toContain('was not approved in time');
+      expect(sent.HtmlBody).toContain('<strong>30 days</strong>');
+      // The untrue claim, in either body.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/did not respond|either approval request|either request/i);
+      // No history, no count, no credential.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/declin|\d of 3|three times|token/i);
+    });
+
+    // B-028 (Decision Log #373, #394 A5)
+    describe('guardian-approved-minor (B-028)', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+        WEB_APP_BASE_URL: 'https://app.soccernity.com',
+      };
+
+      it("goes to the minor, says 'approved ... continue registration', links to /login, and carries no token", async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-approved' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor');
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('minor@example.com');
+        expect(sent.Subject).toBe('Your guardian approved your Soccernity account');
+        expect(sent.TextBody).toContain('Hi Ada Minor,');
+        expect(sent.TextBody).toMatch(/approved your Soccernity account/i);
+        expect(sent.TextBody).toMatch(/continue registration/i);
+        expect(sent.TextBody).toContain('https://app.soccernity.com/login');
+        expect(sent.HtmlBody).toContain('href="https://app.soccernity.com/login"');
+        // #394 A5: the flow is NOT finished, so it must not claim everything is switched on.
+        expect(sent.TextBody).not.toMatch(/switched on|all set|fully active|full access/i);
+        // A plain link: no credential in the URL.
+        expect(sent.TextBody).not.toMatch(/token=/);
+      });
+
+      it('sends NOTHING (and logs the reason) when WEB_APP_BASE_URL is unusable, rather than an email with no link', async () => {
+        const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, WEB_APP_BASE_URL: undefined }));
+
+        await expect(service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor')).resolves.toBeUndefined();
+
+        expect(mockSendEmail).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('guardian-approved-minor'));
+        error.mockRestore();
+      });
+
+      it('is wired but inactive without a Postmark key: resolves, calls nothing', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor')).resolves.toBeUndefined();
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
+    it('sends a public-report acknowledgement with no outcome/timeline promise', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-report' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendPublicReportAcknowledgementEmail('reporter@example.com');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string };
+      expect(sent.To).toBe('reporter@example.com');
+      expect(sent.Subject).toBe('We received your report');
+      expect(sent.TextBody).toContain('a moderator will review it');
+      expect(sent.TextBody).not.toMatch(/\d+\s*(day|hour|week)/i);
+    });
+
+    // B-033 (Decision Log #398 D3)
+    it('sends the username-revoked email: no admin reason, no link, escaped name, the consequences stated', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      // 2026-12-03 is the last day to ask (the caller computes it from the review-window helper).
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada <b>Obi</b>', new Date(Date.UTC(2026, 11, 3)));
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('user@example.com');
+      expect(sent.Subject).toBe('Your Soccernity username was removed');
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).toContain('Soccernity member');
+        expect(body).toContain("can't use the removed username again");
+        expect(body).toContain('30 days');
+        expect(body).toContain('support@soccernity.com');
+        expect(body).not.toMatch(/https?:\/\//);
+      }
+      expect(sent.HtmlBody).toContain('Ada &lt;b&gt;Obi&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Obi</b>');
+    });
+
+    // backend/b139-username-review (Decision Log #467, as amended): the email says the person can ask for a review,
+    // how, and until which day. Every earlier sentence is unchanged.
+    it('the username-revoked email says how to ask for a review and names the last day, in both bodies; the old sentences are unchanged', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked-2' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada Obi', new Date(Date.UTC(2026, 11, 3)));
+
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).toContain('You can ask for a review of this decision.');
+        expect(body).toContain('"Ask for a review" button');
+        expect(body).toContain('the screen where you choose a new username');
+        expect(body).toContain('You can ask until 3 December 2026.');
+        // the earlier sentences, verbatim
+        expect(body).toContain('A Soccernity moderator has removed your username because it did not follow our username rules.');
+        expect(body).toContain('Until you choose a new username, other people see you as "Soccernity member"');
+        expect(body).toContain('The next time you log in you will be asked to choose a new username.');
+        expect(body).toContain("You can't use the removed username again, and nobody else can take it for 30 days.");
+        expect(body).toContain('If you think this was a mistake, contact support@soccernity.com.');
+        expect(body).not.toMatch(/https?:\/\//);
+        // founder-reviewed wording: NOT tagged for counsel
+        expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+      }
+      // the new paragraph sits before the closing sentence
+      expect(sent.TextBody.indexOf('You can ask for a review')).toBeLessThan(sent.TextBody.indexOf('If you think this was a mistake'));
+    });
+
+    it('the date is read in UTC, whatever the server time zone (a moment late on 3 December UTC is still 3 December)', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked-3' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada', new Date(Date.UTC(2026, 11, 3, 23, 59, 59)));
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string };
+      expect(sent.TextBody).toContain('You can ask until 3 December 2026.');
+    });
+
+    describe('sendContactEnquiryNotificationEmail', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+      };
+
+      it('tells support a new enquiry arrived: category and admin link only', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-contact' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await service.sendContactEnquiryNotificationEmail('support@soccernity.com', 'Technical issues', 'https://admin.soccernity.com/contact-enquiries');
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('support@soccernity.com');
+        expect(sent.Subject).toBe('New Contact Us enquiry: Technical issues');
+        for (const body of [sent.TextBody, sent.HtmlBody]) {
+          expect(body).toContain('Technical issues');
+          expect(body).toContain('https://admin.soccernity.com/contact-enquiries');
+          expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+        }
+      });
+
+      it('still sends, without a link, when none is available', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-contact-2' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+        await service.sendContactEnquiryNotificationEmail('support@soccernity.com', 'Data', null);
+        const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+        expect(sent.TextBody).toContain('Read it in the admin inbox.');
+        expect(sent.TextBody).not.toContain('http');
+        expect(sent.HtmlBody).not.toContain('href');
+      });
+
+      it('escapes the category label in HTML', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'x' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+        await service.sendContactEnquiryNotificationEmail('s@soccernity.com', '<b>x</b>', null);
+        const sent = mockSendEmail.mock.calls[0][0] as { HtmlBody: string };
+        expect(sent.HtmlBody).not.toContain('<b>x</b>');
+      });
+
+      it('is wired but inactive without a Postmark key', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendContactEnquiryNotificationEmail('s@soccernity.com', 'Data', null)).resolves.toBeUndefined();
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('sendLoginLockoutNoticeEmail', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+        WEB_APP_BASE_URL: 'https://app.soccernity.com',
+      };
+
+      it('sends a plain notice with a reset link and nothing about the guesser', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-lockout' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(true);
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('owner@example.com');
+        expect(sent.Subject).toBe('Someone entered the wrong password on your Soccernity account');
+        for (const body of [sent.TextBody, sent.HtmlBody]) {
+          expect(body).toContain('https://app.soccernity.com/forgot-password');
+          expect(body).toContain('there is nothing to do');
+          // No IP address, no times, no counts, no token.
+          expect(body).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+          expect(body).not.toMatch(/\d+\s*(times|attempts|minutes)/i);
+          expect(body).not.toContain('token=');
+          expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+        }
+      });
+
+      it('sends NOTHING and returns false when WEB_APP_BASE_URL is unusable', async () => {
+        const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, WEB_APP_BASE_URL: undefined }));
+
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(false);
+
+        expect(mockSendEmail).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('login-lockout-notice'));
+        error.mockRestore();
+      });
+
+      it('is wired but inactive without a Postmark key: resolves true, calls nothing, logs no content to Postmark', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(true);
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not send a username-revoked email while the provider is not configured (logs only)', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(service.sendUsernameRevokedEmail('user@example.com', 'Ada', new Date(Date.UTC(2026, 11, 3)))).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    // feat/moderation-outcome-appeal-emails
+    it('sends the reporter an outcome email with the mapped copy and no reported-party details', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-actioned' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendReportActionedEmail('reporter@example.com', 'content_removed');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('reporter@example.com');
+      expect(sent.Subject).toBe('An update on your Soccernity report');
+      expect(sent.TextBody).toContain('Outcome: Content removed');
+      expect(sent.TextBody).toContain('has been removed');
+      expect(sent.TextBody).toContain("can't share further details");
+      expect(sent.HtmlBody).toContain('<strong>Outcome:</strong> Content removed');
+    });
+
+    it('maps every ReportAction to its own outcome label', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+      const expected: Record<string, string> = {
+        content_removed: 'Content removed',
+        warning_issued: 'Warning issued',
+        user_suspended: 'Account suspended',
+        dismissed: 'No action taken',
+      };
+
+      for (const [action, label] of Object.entries(expected)) {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: `msg-${action}` });
+        await service.sendReportActionedEmail('reporter@example.com', action);
+        const calls = mockSendEmail.mock.calls;
+        const sent = calls[calls.length - 1][0] as { TextBody: string };
+        expect(sent.TextBody).toContain(`Outcome: ${label}`);
+      }
+    });
+
+    it('rejects an unknown report action before anything is queued', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await expect(service.sendReportActionedEmail('reporter@example.com', 'nuked_from_orbit')).rejects.toThrow(
+        'Unknown report action',
+      );
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('tells the appellant an upheld appeal changed nothing', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-upheld' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendAppealDecisionEmail('appellant@example.com', 'upheld');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { Subject: string; TextBody: string };
+      expect(sent.Subject).toBe('Your appeal has been reviewed');
+      expect(sent.TextBody).toContain('has been upheld, so no change has been made');
+    });
+
+    it('tells the appellant an overturned appeal reopened the report, without claiming any enforced reversal', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-overturned' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendAppealDecisionEmail('appellant@example.com', 'overturned');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+      expect(sent.TextBody).toContain('overturned the original decision');
+      expect(sent.TextBody).toContain('returned to our review queue');
+      expect(sent.TextBody).not.toMatch(/reinstated|restored|lifted|reversed/i);
+      expect(sent.HtmlBody).toContain('returned to our review queue');
+    });
+
+    it('rejects an unknown appeal decision before anything is queued', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await expect(service.sendAppealDecisionEmail('appellant@example.com', 'maybe')).rejects.toThrow(
+        'Unknown appeal decision',
+      );
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('catches a Postmark send failure and logs it, without rejecting or leaking the token', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockSendEmail.mockRejectedValueOnce(new Error('Postmark: invalid API token'));
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await expect(service.sendVerificationEmail('minor@example.com', 'super-secret-token')).resolves.toBeUndefined();
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const loggedMessage = errorSpy.mock.calls[0][0] as string;
+      expect(loggedMessage).not.toContain('super-secret-token');
+
+      errorSpy.mockRestore();
+    });
+  });
+  // B-016 (build register): the emails carried a bare code and nothing built a
+  // URL, so no real user could reach /verify-email or /guardian-consent/confirm.
+  describe('links into apps/web (B-016)', () => {
+    const live = { EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' };
+
+    it('verify-email carries a /verify-email?token= link and no bare "code"', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com' }));
+      await service.sendVerificationEmail('u@example.com', 'a b');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('https://app.soccernity.com/verify-email?token=a+b');
+      expect(sent.HtmlBody).toContain('href="https://app.soccernity.com/verify-email?token=a+b"');
+      expect(sent.TextBody).not.toMatch(/verification code/i);
+    });
+
+    it('guardian-consent carries a /guardian-consent/confirm?token= link and no bare "consent code"', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com/' }));
+      await service.sendGuardianConsentEmail('g@example.com', 'uuid-1', 'Minor Name');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('https://app.soccernity.com/guardian-consent/confirm?token=uuid-1');
+      expect(sent.HtmlBody).toContain('href="https://app.soccernity.com/guardian-consent/confirm?token=uuid-1"');
+      expect(sent.TextBody).not.toMatch(/consent code/i);
+    });
+
+    // B-112 / B-225 (Decision Log #414 item 1).
+    it('guardian-consent also links the withdrawal REQUEST page, with no token and no pre-fill', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com/' }));
+      await service.sendGuardianConsentEmail('g@example.com', 'uuid-1', 'Minor Name');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('withdraw your consent at any time:\n\nhttps://app.soccernity.com/guardian-consent/withdraw\n');
+      expect(sent.HtmlBody).toContain('<a href="https://app.soccernity.com/guardian-consent/withdraw">withdraw your consent</a>');
+      // The consent token must not leak into the withdrawal link, and the
+      // withdrawal link must not carry any query at all.
+      expect(sent.TextBody).not.toContain('guardian-consent/withdraw?');
+      expect(sent.HtmlBody).not.toContain('guardian-consent/withdraw?');
+      // The confirm link is unchanged.
+      expect(sent.TextBody).toContain('https://app.soccernity.com/guardian-consent/confirm?token=uuid-1');
+    });
+
+    it('keeps the withdrawal link when the base URL carries a path prefix', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://soccernity.com/app' }));
+      await service.sendGuardianConsentEmail('g@example.com', 'uuid-1', 'Minor Name');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('https://soccernity.com/app/guardian-consent/withdraw\n');
+    });
+
+    it('withdrawal request carries a link AND keeps the code the designed screen accepts', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com' }));
+      await service.sendGuardianWithdrawalRequestEmail('g@example.com', 'wd-1', 'Minor Name');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('https://app.soccernity.com/guardian-consent/withdraw?token=wd-1');
+      expect(sent.TextBody).toContain('withdrawal code on the page: wd-1');
+      expect(sent.HtmlBody).toContain('href="https://app.soccernity.com/guardian-consent/withdraw?token=wd-1"');
+    });
+
+    it.each([
+      ['unset', undefined],
+      ['blank', '  '],
+      ['a placeholder host', 'https://app.soccernity.example'],
+      ['plain http on a real host', 'http://app.soccernity.com'],
+    ])('FAILS SAFE: sends nothing and logs an error without the token when WEB_APP_BASE_URL is %s', async (_l, base) => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: base }));
+
+      await expect(service.sendVerificationEmail('u@example.com', 'secret-tok')).resolves.toBeUndefined();
+      await expect(service.sendGuardianConsentEmail('g@example.com', 'secret-consent', 'M')).resolves.toBeUndefined();
+      await expect(service.sendGuardianWithdrawalRequestEmail('g@example.com', 'secret-wd', 'M')).resolves.toBeUndefined();
+
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledTimes(3);
+      const logged = errorSpy.mock.calls.map((c) => String(c[0])).join(' | ');
+      expect(logged).toContain('WEB_APP_BASE_URL');
+      expect(logged).not.toMatch(/secret-tok|secret-consent|secret-wd|@example\.com/);
+      errorSpy.mockRestore();
+    });
+
+    it('also fails safe when the provider is not live (nothing is "would-send" logged with a broken link)', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: undefined, WEB_APP_BASE_URL: undefined }));
+      await service.sendVerificationEmail('u@example.com', 'tok');
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(logSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+      logSpy.mockRestore();
+    });
+  });
+
+  // backend/b275-guardian-security-notices (B-275; Decision Log #456).
+  describe('guardian-security-notice', () => {
+    const live = () =>
+      new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+    it('sends the subject, the one-sentence summary and the time, and nothing else', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-sec' });
+
+      await live().sendGuardianSecurityNoticeEmail(
+        'guardian@example.com',
+        "Security change on Sam's Soccernity account",
+        "The password on Sam's Soccernity account was changed.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent).toEqual(
+        expect.objectContaining({ To: 'guardian@example.com', Subject: "Security change on Sam's Soccernity account" }),
+      );
+      expect(sent.TextBody).toContain("The password on Sam's Soccernity account was changed.");
+      expect(sent.TextBody).toContain('When: 1 November 2026, 14:32 UTC');
+      expect(sent.HtmlBody).toContain('1 November 2026, 14:32 UTC');
+      // No link, no token, nothing about the sign-in itself.
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).not.toMatch(/https?:\/\//);
+        expect(body.toLowerCase()).not.toMatch(/ip address|device|location|browser/);
+      }
+    });
+
+    it('escapes a display name containing markup in the HTML body only', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-sec' });
+
+      await live().sendGuardianSecurityNoticeEmail(
+        'guardian@example.com',
+        'Security change',
+        "The password on <b>Sam</b>'s Soccernity account was changed.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('is "wired but inactive" while Postmark is not live: resolves, calls nothing', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(
+        service.sendGuardianSecurityNoticeEmail('g@example.com', 's', 'summary', 'when'),
+      ).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('swallows a provider failure like every other template', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockSendEmail.mockRejectedValueOnce(new Error('postmark down'));
+      await expect(
+        live().sendGuardianSecurityNoticeEmail('g@example.com', 's', 'summary', 'when'),
+      ).resolves.toBeUndefined();
+      errorSpy.mockRestore();
+    });
+  });
+
+  // backend/b276-two-factor-recovery (B-276; Decision Log #455, #456).
+  describe('two-factor recovery templates', () => {
+    const live = () =>
+      new RegistrationEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
+        }),
+      );
+
+    it.each([
+      ['link', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret'), 'https://app.soccernity.com/two-factor-recovery/confirm?token=id.secret'],
+      ['guardian link', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', 'Sam'), 'https://app.soccernity.com/two-factor-recovery/guardian?token=id.secret'],
+      ['waiting', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel', '2 January 2030, 10:00 UTC'), 'https://app.soccernity.com/two-factor-recovery/cancel?token=id.cancel'],
+    ])('the %s email carries the right web link in both bodies', async (_name, send, link) => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-rec' });
+      await send(live());
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain(link);
+      expect(sent.HtmlBody).toContain(link);
+    });
+
+    it('the waiting email says when two-factor will be removed, and the guardian email says it works for 72 hours', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      await live().sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel', '2 January 2030, 10:00 UTC');
+      await live().sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', 'Sam');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('2 January 2030, 10:00 UTC');
+      expect(mockSendEmail.mock.calls[1][0].TextBody).toContain('72 hours');
+      expect(mockSendEmail.mock.calls[1][0].Subject).toContain('Sam');
+    });
+
+    it('the four notices without a link send to the right person and say what happened', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      const s = live();
+      await s.sendTwoFactorRecoveryMinorNoticeEmail('minor@example.com', 'Sam');
+      await s.sendTwoFactorRecoveryCompletedEmail('adult@example.com');
+      await s.sendTwoFactorRecoveryApprovedEmail('minor@example.com', 'Sam');
+      await s.sendTwoFactorRecoveryDeclinedEmail('minor@example.com', 'Sam');
+      const to = mockSendEmail.mock.calls.map((c) => c[0].To);
+      expect(to).toEqual(['minor@example.com', 'adult@example.com', 'minor@example.com', 'minor@example.com']);
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('guardian');
+      expect(mockSendEmail.mock.calls[1][0].TextBody).toContain('removed');
+      expect(mockSendEmail.mock.calls[2][0].TextBody).toContain('approved');
+      expect(mockSendEmail.mock.calls[3][0].TextBody).toContain('change your password');
+    });
+
+    it('escapes a display name containing markup in the HTML bodies only', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      await live().sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', '<b>Sam</b>');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('logs NEITHER the recipient NOR the token NOR the link, whether Postmark is live or not', async () => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      const inactive = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me', WEB_APP_BASE_URL: 'https://app.soccernity.com' }));
+      await inactive.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      await inactive.sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel-token', 'when');
+
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-ok' }).mockRejectedValueOnce(new Error('postmark down'));
+      await live().sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      await live().sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+
+      const logged = [...logSpy.mock.calls, ...errorSpy.mock.calls].map((c) => String(c[0])).join(' | ');
+      expect(logged).toContain('two-factor-recovery-link');
+      expect(logged).not.toMatch(/adult@example\.com|secret-token|cancel-token|two-factor-recovery\/confirm/);
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('sends nothing, and logs an error without the token, when WEB_APP_BASE_URL is unusable', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const broken = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', WEB_APP_BASE_URL: undefined }));
+      await broken.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).not.toMatch(/secret-token|adult@example\.com/);
+      errorSpy.mockRestore();
+    });
+  });
+
+  // backend/b279-guardian-safety-notices (B-279; Decision Log #456 A and C).
+  describe('guardian-safety-notice', () => {
+    const live = (extra: Record<string, string | undefined> = {}) =>
+      new RegistrationEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
+          ...extra,
+        }),
+      );
+
+    it('sends the subject, the one-sentence summary, the time, and a pointer to the Contact Us page, and nothing else', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live().sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        "An update on Sam's Soccernity account",
+        "Soccernity removed content that was posted from Sam's account.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent).toEqual(
+        expect.objectContaining({ To: 'guardian@example.com', Subject: "An update on Sam's Soccernity account" }),
+      );
+      expect(sent.TextBody).toContain("Soccernity removed content that was posted from Sam's account.");
+      expect(sent.TextBody).toContain('When: 1 November 2026, 14:32 UTC');
+      expect(sent.TextBody).toContain('Contact Us page on Soccernity: https://app.soccernity.com/contact');
+      expect(sent.HtmlBody).toContain('<a href="https://app.soccernity.com/contact">Contact Us page</a>');
+      // The only link is the Contact Us page: no token, no account link, nothing about the action itself.
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        const urls = body.match(/https?:\/\/[^\s"<]+/g) ?? [];
+        expect(urls).toEqual(['https://app.soccernity.com/contact']);
+        expect(body.toLowerCase()).not.toMatch(
+          /report|reporter|moderator|reason|guideline|breach|violat|ip address|device|location|browser/,
+        );
+      }
+    });
+
+    it('is still sent, without a link, when WEB_APP_BASE_URL is unusable (the notice matters more than its pointer)', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live({ WEB_APP_BASE_URL: 'replace-me' }).sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        'subject',
+        'The summary.',
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('contact support through the Contact Us page on Soccernity.');
+      expect(sent.TextBody).not.toMatch(/https?:\/\//);
+      expect(sent.HtmlBody).not.toMatch(/href=/);
+    });
+
+    it('escapes a display name containing markup in the HTML body only', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live().sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        'subject',
+        "Soccernity removed content that was posted from <b>Sam</b>'s account.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('is "wired but inactive" while Postmark is not live: resolves, calls nothing', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(service.sendGuardianSafetyNoticeEmail('g@example.com', 's', 'summary', 'when')).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('swallows a provider failure like every other template', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockSendEmail.mockRejectedValueOnce(new Error('postmark down'));
+      await expect(live().sendGuardianSafetyNoticeEmail('g@example.com', 's', 'summary', 'when')).resolves.toBeUndefined();
+      errorSpy.mockRestore();
+    });
+  });
+});
+
+// B-291 (Decision Log #485): the suspension and reinstatement emails. [COPY PENDING LEGAL REVIEW]
+describe('suspensionReasonLine (B-291)', () => {
+  it.each([
+    ['harassment_or_bullying', 'harassing or bullying other people'],
+    ['hate_or_abusive_language', 'using hateful or abusive language'],
+    ['threats_or_violence', 'making threats or encouraging violence'],
+    ['sexual_or_inappropriate_content', 'sharing sexual or inappropriate content'],
+    ['impersonation_or_fake_account', 'pretending to be someone else or running a fake account'],
+    ['spam_or_scam', 'sending spam or running a scam'],
+    ['privacy_or_image_misuse', "sharing other people's private information or images without permission"],
+  ])('%s gets its own plain-words line', (category, line) => {
+    expect(suspensionReasonLine(category)).toBe(line);
+  });
+
+  it.each([['child_safety_concern'], ['other'], [null], [undefined], [''], ['a_category_from_a_newer_server'], ['constructor'], ['__proto__']])(
+    '%s uses the generic line, so the email never names a child-safety matter or free text',
+    (category) => {
+      expect(suspensionReasonLine(category as string | null | undefined)).toBe(SUSPENSION_GENERIC_REASON_LINE);
+    },
+  );
+
+  it('the generic line is exactly "breaching our community rules"', () => {
+    expect(SUSPENSION_GENERIC_REASON_LINE).toBe('breaching our community rules');
+  });
+});
+
+describe('RegistrationEmailService: suspension emails (B-291)', () => {
+  const config = {
+    EMAIL_PROVIDER_API_KEY: 'a-real-key',
+    POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+    WEB_APP_BASE_URL: 'https://app.soccernity.com',
+  };
+
+  afterEach(() => jest.clearAllMocks());
+
+  it('the suspension email gives the fixed reason line, the Contact Us link, and nothing else about the report', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s1' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    await service.sendAccountSuspendedEmail('person@example.com', 'hate_or_abusive_language');
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.To).toBe('person@example.com');
+    expect(sent.Subject).toBe('Your Soccernity account has been suspended');
+    for (const body of [sent.TextBody, sent.HtmlBody]) {
+      expect(body).toContain('suspended for using hateful or abusive language');
+      expect(body).toContain('https://app.soccernity.com/contact');
+      expect(body).toMatch(/appeal/i);
+      // No duration, no reporter, no report.
+      expect(body).not.toMatch(/days|weeks|months|permanent|temporar|report|reporter|moderator/i);
+    }
+  });
+
+  it('a child-safety, other or missing category uses the generic line', async () => {
+    mockSendEmail.mockResolvedValue({ MessageID: 'm' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    for (const category of ['child_safety_concern', 'other', null]) {
+      mockSendEmail.mockClear();
+      await service.sendAccountSuspendedEmail('person@example.com', category);
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('suspended for breaching our community rules.');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).not.toMatch(/child/i);
+    }
+  });
+
+  it('is still sent, naming the Contact Us page without a link, when WEB_APP_BASE_URL is unusable', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s2' });
+    const service = new RegistrationEmailService(buildConfig({ ...config, WEB_APP_BASE_URL: undefined }));
+
+    await service.sendAccountSuspendedEmail('person@example.com', null);
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.TextBody).toContain('Contact Us page on Soccernity');
+    expect(sent.HtmlBody).toContain('Contact Us page on Soccernity');
+    expect(sent.TextBody).not.toContain('http');
+  });
+
+  it('the reinstatement email is short and says nothing about a reason or a report', async () => {
+    mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-s3' });
+    const service = new RegistrationEmailService(buildConfig(config));
+
+    await service.sendAccountReinstatedEmail('person@example.com');
+
+    const sent = mockSendEmail.mock.calls[0][0];
+    expect(sent.Subject).toBe('Your Soccernity account has been reinstated');
+    expect(sent.TextBody).toContain('The suspension on your Soccernity account has been lifted. You can sign in again.');
+    expect(sent.TextBody).not.toMatch(/report|reason|appeal/i);
+  });
+
+  it('neither email writes the recipient or the reason line to the log, live or not (quiet templates)', async () => {
+    const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    mockSendEmail.mockResolvedValue({ MessageID: 'msg-q' });
+    const live = new RegistrationEmailService(buildConfig(config));
+    await live.sendAccountSuspendedEmail('person@example.com', 'spam_or_scam');
+    await live.sendAccountReinstatedEmail('person@example.com');
+    const dry = new RegistrationEmailService(buildConfig({ ...config, EMAIL_PROVIDER_API_KEY: undefined }));
+    await dry.sendAccountSuspendedEmail('person@example.com', 'spam_or_scam');
+
+    const logged = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).not.toContain('person@example.com');
+    expect(logged).not.toContain('sending spam');
+    log.mockRestore();
+  });
+});

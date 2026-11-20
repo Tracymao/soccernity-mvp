@@ -1,0 +1,516 @@
+import { Injectable, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import { User } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { DobEncryptionService } from '../../crypto/dob-encryption.service';
+import { AccountEmailService } from '../account-emails/account-email.service';
+import { TwoFactorRecoveryService } from '../two-factor/recovery/two-factor-recovery.service';
+import { TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
+import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
+import { PasswordService } from './password/password.service';
+import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from './token/token.errors';
+import { TokenService } from './token/token.service';
+
+// A distinct, machine-readable `code` on the 401 login() throws for a
+// deactivated account — mirrors GuardianConsentGuard's own
+// GUARDIAN_CONSENT_PENDING_CODE / Under16RestrictionGuard's
+// UNDER_16_RESTRICTED_CODE convention (throw new XException({ statusCode,
+// error, code, message })), used here for the same reason: so a caller
+// (apps/web's login(), auth.ts) can branch on the *kind* of 401 without
+// pattern-matching the message body, which is fragile against any future
+// copy change. Previously the frontend detected this case with
+// /deactivat/i.test(message) — see auth.ts's own comment, now updated to
+// check this field instead (Decision Log #225's flagged follow-up).
+export const ACCOUNT_DEACTIVATED_CODE = 'account_deactivated';
+
+// Sprint 1 / PR B3 — POST /auth/login, refresh, logout. Section 4.1 lists
+// /auth/login but not a refresh or logout path explicitly; both are
+// required by Section 5.7's "rotated on every use, revocable server-side"
+// spec (and B1 built TokenService/RefreshTokenStore anticipating exactly
+// this), so this PR adds them as the concrete build-out of that spec.
+// Flagging per CLAUDE.md: this is a Decision Log / Section 4 addition
+// candidate, not a silent deviation — see the PR report.
+@Injectable()
+export class AuthService implements OnModuleInit {
+  // Fixed-cost dummy hash so an unknown-email login takes roughly the same
+  // argon2id work as a real one, denying a timing side-channel on top of
+  // the already-generic error message. Generated once at startup from
+  // random bytes (never a guessable constant string).
+  private dummyPasswordHash!: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordService: PasswordService,
+    private readonly tokenService: TokenService,
+    private readonly dobEncryption: DobEncryptionService,
+    // backend/b086-two-factor (B-086): the second step of sign-in for an account that has turned two-factor on.
+    private readonly twoFactor: TwoFactorService,
+    // backend/b276-two-factor-recovery (B-276): a waiting recovery request is reported on the sign-in challenge and
+    // cancelled by a successful two-factor sign-in.
+    private readonly recovery: TwoFactorRecoveryService,
+    // backend/b069-transactional-emails (B-069): the plain "password changed" and "deletion requested" emails.
+    // @Optional(): a module or test that does not provide it sends nothing. Fire-and-log, never awaited.
+    @Optional() private readonly accountEmails?: AccountEmailService,
+  ) {}
+
+  // B-030: the minor's current Guardian.consentStatus, read fresh, for the
+  // onboarding state in the login response. Adults skip the query entirely.
+  // null for an adult or a (corrupt) minor with no Guardian row; the onboarding
+  // derivation treats the latter as restricted (fail-closed).
+  private async guardianConsentStatusOf(user: { id: string; isMinor: boolean }): Promise<string | null> {
+    if (!user.isMinor) return null;
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { minorUserId: user.id },
+      select: { consentStatus: true },
+    });
+    return guardian?.consentStatus ?? null;
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.dummyPasswordHash = await this.passwordService.hash(randomBytes(32).toString('hex'));
+  }
+
+  // `persistent` is the B-245 "Stay signed in" flag; it only decides the cookie lifetime in
+  // cookie mode and is stored on the refresh-token record so rotation keeps it.
+  //
+  // backend/b086-two-factor (B-086): an account with two-factor ON gets NO session here -- the password step ends in a
+  // 200 { twoFactorRequired, challengeToken, challengeExpiresInSeconds } and POST /auth/login/two-factor finishes the
+  // sign-in. The deactivated / not-active checks above run first, so a closed account never reaches a challenge.
+  async login(email: string, password: string, persistent = false): Promise<AuthResponse | TwoFactorChallenge> {
+    // Decision Log #16 (Build Plan Section 9): email is stored lowercase
+    // on write (registration.service.ts's register()) so matching here
+    // must normalize the same way, or a user who registered as
+    // "Temi@x.com" (now stored as "temi@x.com") couldn't log back in
+    // with the casing they originally typed.
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+
+    // Verify against a real hash when the user exists, and against the
+    // fixed dummy hash otherwise — never skip the argon2 call, and never
+    // branch the response on which case happened.
+    const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
+    const passwordValid = await this.passwordService.verify(hashToCheck, password);
+
+    if (!user || !passwordValid) {
+      // Deliberately generic per the non-negotiable in the task spec: never
+      // reveal whether the email or the password was the wrong part.
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return this.signInVerifiedUser(user, persistent);
+  }
+
+  // Everything login() does once the person's identity is PROVEN (the password check above): the status checks, the
+  // two-factor challenge, the session. Kept as its own method after the removal of social sign-in (Decision Log #479),
+  // whose second caller it was; login() is its only caller now.
+  async signInVerifiedUser(user: User, persistent: boolean): Promise<AuthResponse | TwoFactorChallenge> {
+    // sprint-1/f5-f6-missing-endpoints: checked AFTER password
+    // verification succeeds, deliberately — this distinct message is only
+    // ever revealed to someone who already proved they know the correct
+    // password, so it doesn't weaken the non-enumeration posture above
+    // (an attacker without the real password still only ever sees the
+    // generic "Invalid credentials"). A deactivated account gets a
+    // specific, actionable message pointing at reactivateAccount() below;
+    // pending_deletion deliberately does NOT (see deleteAccount()'s own
+    // comment on why that state has no self-service undo in this PR).
+    // sprint-5/admin-users-dashboard-backend: 'suspended' (an
+    // ADMIN-imposed status) deliberately follows pending_deletion's
+    // treatment here, NOT deactivated's — the whole point of a separate
+    // 'suspended' value is that it is NOT user-reversible, and revealing
+    // a distinct "you're suspended" message would only be meaningfully
+    // different from a generic one if it pointed at a real self-service
+    // next step, which does not exist for this state (only
+    // PATCH /admin/users/:id can move a suspended account back to
+    // active). Same reasoning as pending_deletion, extended to a second
+    // state.
+    if (user.accountStatus === 'deactivated') {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: ACCOUNT_DEACTIVATED_CODE,
+        message: 'This account has been deactivated. Use POST /auth/reactivate-account to restore it.',
+      });
+    }
+    if (user.accountStatus !== 'active') {
+      // Covers 'pending_deletion', 'suspended' (and any future non-'active'
+      // state) — deliberately the same generic message as a wrong
+      // password/email, not a distinct one, since neither state has a
+      // self-service undo path this PR builds or should build.
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.totpEnabledAt) {
+      return this.challengeWithRecoveryState(user.id, persistent, 'login');
+    }
+
+    return this.buildAuthResponse(user, persistent);
+  }
+
+  // The sign-in challenge, plus (B-276) whether a two-factor recovery request is waiting for this user and when it will
+  // run. Called only AFTER the password step succeeded, so the field is never shown to someone who has not proved the
+  // password. `recoveryPending` is always present on a user challenge; `recoveryExecuteAt` only when it is true.
+  private async challengeWithRecoveryState(
+    userId: string,
+    persistent: boolean,
+    purpose: 'login' | 'reactivate',
+  ): Promise<TwoFactorChallenge> {
+    const challenge =
+      purpose === 'reactivate'
+        ? await this.twoFactor.issueChallenge('user', userId, persistent, 'reactivate')
+        : await this.twoFactor.issueChallenge('user', userId, persistent);
+    const waiting = await this.recovery.findWaiting(userId);
+    return waiting
+      ? { ...challenge, recoveryPending: true, recoveryExecuteAt: waiting.executeAt.toISOString() }
+      : { ...challenge, recoveryPending: false };
+  }
+
+  // POST /auth/login/two-factor -- the second step of sign-in. The challenge carries the "Stay signed in" choice made
+  // at the password step. Returns the same AuthResponse login() does, plus the flag the cookie layer needs.
+  async completeTwoFactorLogin(
+    challengeToken: string,
+    code: string,
+  ): Promise<{ response: AuthResponse; persistent: boolean }> {
+    const done = await this.twoFactor.completeChallenge('user', challengeToken, code);
+    // B-276: a correct device code or backup code proves the person still has a factor, so a recovery request that is
+    // waiting out its 24 hours is cancelled. Never throws.
+    await this.recovery.cancelWaitingOnSignIn(done.subjectId);
+    let user = await this.prisma.user.findUnique({ where: { id: done.subjectId } });
+    // Re-checked a second time on the full row (completeChallenge already checked the status it needs): the account
+    // may have changed in the milliseconds since.
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (done.purpose === 'reactivate' && user.accountStatus === 'deactivated') {
+      // The reactivation the password step deferred until the second factor was proven.
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'active' } });
+    }
+    if (user.accountStatus !== 'active') throw new UnauthorizedException('Invalid credentials');
+    return { response: await this.buildAuthResponse(user, done.persistent), persistent: done.persistent };
+  }
+
+  // The session + `user` snapshot login() and the two-factor completion both return. `user` was already loaded by
+  // the caller -- this is response-shaping plus the token pair, not a new lookup of the account. See
+  // auth-response.mapper.ts's AuthResponse/toAuthUserSummary comments for why isMinor/verificationStatus are safe to
+  // include here even though they must never appear inside the access token itself.
+  private async buildAuthResponse(user: User, persistent: boolean): Promise<AuthResponse> {
+    const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role, persistent);
+    return {
+      ...toTokenPairResponse(tokenPair),
+      user: toAuthUserSummary(user, this.dobEncryption.decryptNullable(user.dateOfBirth), await this.guardianConsentStatusOf(user)),
+    };
+  }
+
+  // POST /auth/change-password. userId comes from the verified JWT
+  // (JwtAuthGuard), never a request-body field — a caller can only ever
+  // change their own password via this endpoint. Fetches the real,
+  // current passwordHash fresh from Postgres (never trusts anything off
+  // the JWT beyond sub/role) and reuses PasswordService.verify, the exact
+  // same call login() uses, rather than reimplementing argon2 logic.
+  //
+  // Error posture is deliberately distinct from login()'s: this is an
+  // authenticated user who already proved identity via a valid JWT, so
+  // there's no enumeration concern the way login's generic error
+  // protects against (there's nothing to enumerate — the caller already
+  // knows their own account exists). A specific "current password is
+  // incorrect" message is fine here; it still never leaks hash internals.
+  //
+  // Revokes every other active session on success
+  // (tokenService.revokeAllSessionsForUser) — a one-line reuse of the
+  // exact mechanism logout(allSessions=true) and
+  // PasswordResetService.resetPassword already use for the identical
+  // "credential changed, kill other sessions" scenario. Deliberately not
+  // skipped: a changed password that leaves old sessions valid defeats
+  // much of the point of changing it (e.g. after suspecting compromise).
+  //
+  // B-310 (Decision Log #500 follow-up): that revocation also refuses the CALLER's own access token and kills their
+  // refresh token (B-305's marker), which signed the person out although the Change password page promises
+  // "You stay logged in on this device." So after the revoke the caller is issued a FRESH session (a new refresh-token
+  // family, a new access token) and everything else stays revoked. Order matters: (1) read the "Stay signed in" flag of
+  // the caller's current refresh token BEFORE the revoke deletes it (read-only, nothing consumed); (2) write the
+  // password; (3) revoke, and WAIT for it; (4) only then issue. The new access token's `iat` is then >= the revocation
+  // marker, and the marker rule "iat === marker is accepted" keeps it valid. A wrong current password changes nothing
+  // and issues nothing (it throws before step 1 matters).
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentRefreshToken?: string,
+  ): Promise<{ response: TokenPairResponse; persistent: boolean }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      // Same rare-but-real "valid access token for a since-deleted
+      // account" case JwtAuthGuard's own doc comment and
+      // UsersService.getOwnProfile both call out.
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const currentPasswordValid = await this.passwordService.verify(user.passwordHash, currentPassword);
+    if (!currentPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const persistent = await this.tokenService.isRefreshTokenPersistent(currentRefreshToken, userId);
+    const newPasswordHash = await this.passwordService.hash(newPassword);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash } });
+    await this.tokenService.revokeAllSessionsForUser(userId);
+    const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role, persistent);
+    // B-069: the change has committed; tell the person (Figma 1380:2318). Never delays or fails the change.
+    this.accountEmails?.passwordChangedInBackground(userId);
+    return { response: toTokenPairResponse(tokenPair), persistent };
+  }
+
+  // POST /auth/deactivate-account. Requires password re-entry as a
+  // confirmation step (a hard requirement, not optional scope) — a bare
+  // POST with no re-auth must never be able to deactivate an account.
+  // Sets accountStatus = "deactivated" and revokes every existing
+  // session: deactivation blocking *future* logins is meaningless if the
+  // caller's current still-valid access/refresh tokens keep working, so
+  // this is a required consequence, not scope creep.
+  async deactivateAccount(userId: string, password: string): Promise<void> {
+    const user = await this.assertPasswordCorrect(userId, password);
+    // sprint-5/admin-users-dashboard-backend: a SUSPENDED account must not
+    // be able to self-deactivate. Without this check, a suspended user
+    // holding a still-valid (not yet expired) access token from before
+    // PATCH /admin/users/:id revoked their sessions could call this
+    // endpoint, flip their own accountStatus to 'deactivated', and then
+    // later self-reactivate via POST /auth/reactivate-account (which
+    // DOES allow reactivating a 'deactivated' account) — silently
+    // escaping an admin-imposed suspension through a state this PR's own
+    // Decision Log candidate explicitly requires to be NOT
+    // user-reversible. Checked after password verification (same
+    // ordering as login()'s own deactivated/pending_deletion checks),
+    // and deliberately the same generic message login() gives a
+    // suspended account, for the identical reasoning.
+    if (user.accountStatus === 'suspended') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'deactivated' } });
+    await this.tokenService.revokeAllSessionsForUser(userId);
+  }
+
+  // POST /auth/delete-account. Same password-re-entry requirement as
+  // deactivateAccount. Delegates the state change to the shared
+  // startPendingDeletion() below — this handler is only the
+  // authenticated-caller gate (a valid JWT + a re-entered password).
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await this.assertPasswordCorrect(userId, password);
+    // sprint-5/admin-users-dashboard-backend: same reasoning as
+    // deactivateAccount's own 'suspended' guard immediately above — a
+    // suspended account moving itself to 'pending_deletion' would be an
+    // un-reviewed state transition an admin never chose, using a
+    // leftover still-valid token in the brief window before it expires.
+    if (user.accountStatus === 'suspended') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    await this.startPendingDeletion(user.id);
+    // B-069: a self-service request, so the person is told what happens next (Figma 5439:7074).
+    this.accountEmails?.deletionRequestedInBackground(user.id);
+  }
+
+  // POST /auth/delete-inactive-account (sprint-2/account-deactivation-backend).
+  // The unauthenticated counterpart of deleteAccount, for a user who has
+  // already deactivated and therefore has NO valid session to reach the
+  // JwtAuthGuard-protected POST /auth/delete-account with — exactly the
+  // same reason reactivateAccount() below is unauthenticated. Reached
+  // from the "Inactive Account" screen's Delete path (Decision Log #220,
+  // sprint-2/account-deactivation-design).
+  //
+  // Credential verification uses the identical fixed-dummy-hash timing
+  // posture as login()/reactivateAccount() so an unknown email costs the
+  // same real argon2id work as a known one. Only a genuinely
+  // "deactivated" account can be deleted via this path:
+  //
+  //   - "active" → rejected with the generic "Invalid credentials". An
+  //     active user has a session and MUST use the authenticated
+  //     POST /auth/delete-account; this unauthenticated route is not a
+  //     shortcut around that gate, and we don't confirm to an
+  //     unauthenticated caller that an active account exists at this
+  //     email.
+  //   - "pending_deletion" → same generic rejection. The clock is
+  //     already running; this endpoint never re-starts it (that would
+  //     silently push the 30-day mark out) and never confirms the state.
+  //   - unknown email / wrong password → same generic rejection.
+  //
+  // On success it calls the SAME startPendingDeletion() the authenticated
+  // deleteAccount() does — accountStatus → "pending_deletion",
+  // pendingDeletionAt = now(), sessions revoked — so
+  // AccountDeletionSweepService's 30-day grace + hard-delete + cascade +
+  // ConsentAuditRecord retention (Decision Log #42/#44) then applies
+  // byte-for-byte identically, with zero duplicated deletion logic. The
+  // deletion flow itself is untouched by this PR.
+  async deleteInactiveAccount(email: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
+    const passwordValid = await this.passwordService.verify(hashToCheck, password);
+
+    if (!user || !passwordValid || user.accountStatus !== 'deactivated') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    await this.startPendingDeletion(user.id);
+    // B-069: the other self-service entry point (Inactive Account screen); same email as deleteAccount().
+    this.accountEmails?.deletionRequestedInBackground(user.id);
+  }
+
+  // The single place accountStatus flips to "pending_deletion". Sets
+  // pendingDeletionAt = now() (the 30-day grace period
+  // AccountDeletionSweepService measures from — see schema.prisma's
+  // comment on the field) and revokes every session, same reasoning as
+  // deactivation: a deletion request that leaves current tokens working
+  // is meaningless. Deliberately does NOT hard-delete the User row —
+  // Decision Log #42 resolved that as a 30-day-grace-then-sweep flow
+  // (sprint-2/account-deletion-sweep, account-deletion/README.md); this
+  // method only ever starts that clock. Shared by deleteAccount()
+  // (authenticated) and deleteInactiveAccount() (unauthenticated) so the
+  // two entry points can never drift.
+  //
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- made PUBLIC (was
+  // private) for a THIRD caller: GuardianConsentService, when a guardian
+  // declines or withdraws consent, or when two consent requests lapse
+  // unanswered. Exactly the same precedent, and the same reasoning, as
+  // AccountDeletionSweepService.hardDeleteUser being made public for
+  // AdminUsersService (sprint-5/admin-users-dashboard-backend): one
+  // primitive, several entry points, rather than each caller
+  // reimplementing the state transition. This method's own "single place
+  // accountStatus flips to pending_deletion" invariant is precisely why
+  // the guardian-consent path reuses it rather than writing its own
+  // user.update -- that invariant would otherwise have been broken by
+  // this PR. Callers are responsible for their own authorization gate.
+  async startPendingDeletion(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { accountStatus: 'pending_deletion', pendingDeletionAt: new Date() },
+    });
+    await this.tokenService.revokeAllSessionsForUser(userId);
+  }
+
+  // POST /auth/reactivate-account. Unauthenticated (a deactivated
+  // account's existing tokens are already revoked by deactivateAccount()
+  // above, so there is no JWT to gate this behind) — same
+  // credential-verification trust level and timing-safety posture as
+  // login() itself, including the same fixed dummy-hash comparison so an
+  // unknown email takes the same real argon2id work as a known one.
+  //
+  // Only a genuinely "deactivated" account is flipped back to "active"
+  // and issued a fresh token pair — effectively "log in, but first
+  // un-deactivate." An already-"active" account with correct credentials
+  // is treated as a plain, no-state-change login (this endpoint is a
+  // strict superset of login() for that case, not an error) rather than
+  // rejected, since there's no reason to punish a caller who didn't
+  // realize reactivation wasn't necessary. A "pending_deletion" account
+  // is explicitly NOT reactivated by this endpoint — rejected with the
+  // same generic "Invalid credentials" an unknown email/wrong password
+  // gets, deliberately not a distinct message, since this PR builds no
+  // self-service undo path for a deletion request and doesn't want to
+  // even confirm to an unauthenticated caller that the account exists in
+  // that state. Whether a deletion request should ever have a
+  // self-service undo window at all is exactly the open question this
+  // PR's Decision Log candidate raises — see auth/README.md.
+  //
+  // sprint-5/admin-users-dashboard-backend: a "suspended" account is ALSO
+  // explicitly excluded below, for the same reason "pending_deletion" is
+  // — this closes a real gap the introduction of "suspended" would
+  // otherwise have opened, not a hypothetical one. Before this fix, only
+  // "pending_deletion" was rejected up front, and the ternary further
+  // down only ever special-cased "deactivated" → "active" — a
+  // "suspended" user would have fallen through BOTH checks unchanged
+  // (activeUser = user, still "suspended") and still been issued a
+  // working token pair by the line below, silently undoing an
+  // admin-imposed suspension through this self-service endpoint. Found
+  // by tracing every accountStatus branch in this method against the
+  // new value, not assumed safe by default.
+  //
+  // backend/b086-two-factor (B-086): this endpoint issues a session on a password alone, so for an account with
+  // two-factor ON it would be a way round the second factor. It therefore ends in the same challenge as login(); the
+  // reactivation itself (deactivated -> active) is deferred until POST /auth/login/two-factor proves the second
+  // factor. An already-active account with two-factor takes the same path and is simply signed in.
+  async reactivateAccount(email: string, password: string): Promise<AuthResponse | TwoFactorChallenge> {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
+    const passwordValid = await this.passwordService.verify(hashToCheck, password);
+
+    if (
+      !user ||
+      !passwordValid ||
+      user.accountStatus === 'pending_deletion' ||
+      user.accountStatus === 'suspended'
+    ) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.totpEnabledAt) {
+      return this.challengeWithRecoveryState(user.id, false, 'reactivate');
+    }
+
+    const activeUser =
+      user.accountStatus === 'deactivated'
+        ? await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'active' } })
+        : user;
+
+    return this.buildAuthResponse(activeUser, false);
+  }
+
+  // Shared re-auth step for deactivateAccount/deleteAccount: both require
+  // the caller to re-enter their current password as a confirmation
+  // gate, verified fresh against Postgres (never trusting anything off
+  // the JWT beyond sub/role, same non-negotiable changePassword() above
+  // follows).
+  private async assertPasswordCorrect(userId: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const passwordValid = await this.passwordService.verify(user.passwordHash, password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Incorrect password');
+    }
+    return user;
+  }
+
+  async refresh(refreshToken: string): Promise<TokenPairResponse> {
+    return (await this.refreshSession(refreshToken)).response;
+  }
+
+  // Same as refresh(), plus the session's "Stay signed in" flag (B-245) for the
+  // cookie-mode controller. The flag is never part of the response body.
+  async refreshSession(refreshToken: string): Promise<{ response: TokenPairResponse; persistent: boolean }> {
+    try {
+      const tokenPair = await this.tokenService.rotateRefreshToken(refreshToken);
+      return { response: toTokenPairResponse(tokenPair), persistent: tokenPair.persistent };
+    } catch (error) {
+      if (error instanceof RefreshTokenReuseDetectedError) {
+        // The store has already revoked the whole family by this point
+        // (see refresh-token.store.ts's verifyAndConsume) — surface a 401,
+        // not a 500, so the client knows to send the user back to login.
+        throw new UnauthorizedException(
+          'Refresh token reuse detected; all sessions in this family have been revoked',
+        );
+      }
+      if (error instanceof InvalidRefreshTokenError) {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+      throw error;
+    }
+  }
+
+  // Single-session logout always happens. `allSessions` additionally wipes
+  // every other active session for the acting user — that requires proof
+  // of identity, which we get from a still-valid access token rather than
+  // by reimplementing RefreshTokenStore's token-decoding logic here (the
+  // README is explicit: callers should depend on TokenService, not
+  // RefreshTokenStore, directly).
+  // `refreshToken` is optional only for cookie mode (B-245), where a logout with no
+  // cookie still has to clear it and, with allSessions, still revoke every session.
+  async logout(refreshToken: string | undefined, allSessions: boolean, accessToken?: string): Promise<void> {
+    if (refreshToken) await this.tokenService.revokeRefreshToken(refreshToken);
+
+    if (!allSessions) {
+      return;
+    }
+
+    if (!accessToken) {
+      throw new UnauthorizedException(
+        'A valid access token is required to log out of all sessions',
+      );
+    }
+    const { sub: userId } = this.tokenService.verifyAccessToken(accessToken);
+    await this.tokenService.revokeAllSessionsForUser(userId);
+  }
+}

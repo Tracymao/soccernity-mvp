@@ -1,0 +1,210 @@
+// Router-level footer placement (Decision Log #227/#228). Mounts the REAL
+// route tree from ./router.tsx via createMemoryRouter -- no browser
+// history, no mocks: every page reachable here renders statically with an
+// empty session (Home redirects only WITH a token; Leaderboard / Contest
+// render a "log in" prompt and call nothing; Sports Hub / Blog / 404 use
+// dummy data).
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
+import { routes } from "./router";
+import FooterLayout from "../layout/FooterLayout";
+import { seedSession, clearSession } from "../test/session";
+
+afterEach(cleanup);
+beforeEach(() => {
+  clearSession();
+});
+
+async function renderAt(path: string) {
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  render(<RouterProvider router={router} />);
+  // let the router resolve the match
+  await waitFor(() => expect(document.querySelector("main")).not.toBeNull());
+  return router;
+}
+
+/** Every leaf route path that FooterLayout is the parent element of. */
+function footerLayoutRoutePaths(tree: RouteObject[]): string[] {
+  const out: string[] = [];
+  const walk = (nodes: RouteObject[], underFooter: boolean) => {
+    for (const n of nodes) {
+      const isFooterLayout =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (n.element as any)?.type === FooterLayout;
+      const childUnder = underFooter || isFooterLayout;
+      if (n.children) walk(n.children, childUnder);
+      else if (childUnder) out.push(n.path ?? (n.index ? "(index)" : "(pathless)"));
+    }
+  };
+  walk(tree, false);
+  return out;
+}
+
+describe("router — FooterLayout membership (Decision Log #227/#228)", () => {
+  it("FooterLayout wraps exactly Home, Sports Hub, Blog, Article Detail, Scouting, Academy, Contact Us, and 404", () => {
+    expect(footerLayoutRoutePaths(routes).sort()).toEqual(
+      ["(index)", "*", "blog", "blog/:articleId", "sports-hub", "scouting", "academy", "contact"].sort(),
+    );
+  });
+
+  it("does NOT wrap Leaderboard or Contest", () => {
+    const paths = footerLayoutRoutePaths(routes);
+    expect(paths).not.toContain("leaderboard");
+    expect(paths).not.toContain("contest");
+  });
+});
+
+describe("router — rendered footer presence", () => {
+  it("/leaderboard renders no site footer", async () => {
+    await renderAt("/leaderboard");
+    expect(screen.getByText(/Log in to see the Leaderboard/i)).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
+  it("/contest renders no site footer", async () => {
+    await renderAt("/contest");
+    expect(screen.getByText(/Log in to see this month/i)).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
+  it("a genuinely unmatched path 404s AND renders the site footer", async () => {
+    await renderAt("/no-such-page-xyz");
+    expect(screen.getByRole("heading", { name: /page not found/i })).not.toBeNull();
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/ (marketing home) still renders the site footer", async () => {
+    await renderAt("/");
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/sports-hub still renders the site footer", async () => {
+    await renderAt("/sports-hub");
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/scouting renders the shared Coming Soon page with the site footer", async () => {
+    await renderAt("/scouting");
+    expect(screen.getByRole("heading", { name: "Scouting" })).not.toBeNull();
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/academy renders the shared Coming Soon page with the site footer", async () => {
+    await renderAt("/academy");
+    expect(screen.getByRole("heading", { name: "Academy" })).not.toBeNull();
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/contact renders the Contact Us page with the site footer (B-047)", async () => {
+    await renderAt("/contact");
+    expect(screen.getByRole("heading", { name: "Contact Us" })).not.toBeNull();
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("every other route still resolves — /community renders its page, no footer", async () => {
+    await renderAt("/community");
+    // CommunityPage with no session -> its own "log in" prompt, still no footer.
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+    expect(document.querySelector("main")).not.toBeNull();
+  });
+
+  it("/posts/:postId resolves (where a Final week tile opens) -- no session -> a log-in prompt, no footer", async () => {
+    await renderAt("/posts/abc");
+    expect(screen.getByText(/log in to see this post/i)).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
+  it("/search resolves — no session -> its own log-in prompt, no footer", async () => {
+    await renderAt("/search");
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+    expect(document.querySelector("main")).not.toBeNull();
+  });
+});
+
+// Decision Log #311 (code half): the match-centre drill-down sits under
+// AppShell, so it gets the shared Header (icon nav; header 4 / header 7 by
+// session) with no per-page wiring. Data calls are stubbed to fail -- only
+// the chrome is under test.
+describe("router — match-centre carries the shared navbar (Decision Log #311)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("logged out: icon nav + Login (header 7), no site footer", async () => {
+    await renderAt("/sports-hub/matches/abc");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
+  it("logged in: icon nav + account menu (header 4)", async () => {
+    seedSession("x.eyJzdWIiOiJ1MSJ9.y");
+    await renderAt("/sports-hub/matches/abc");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
+  });
+});
+
+describe("router - guardian withdrawal route (B-080 / B-112)", () => {
+  it("/guardian-consent/withdraw renders the request step under the logo-only Top Bar, with no site nav and no footer", async () => {
+    await renderAt("/guardian-consent/withdraw");
+    expect(screen.getByRole("heading", { name: "Withdraw your consent" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(document.querySelector("footer")).toBeNull();
+  });
+
+  it("?token= on that route opens Confirm with the code pre-filled", async () => {
+    await renderAt("/guardian-consent/withdraw?token=tok-123");
+    expect(screen.getByRole("heading", { name: "Confirm withdrawing consent" })).not.toBeNull();
+    expect((screen.getByLabelText("Withdrawal code") as HTMLInputElement).value).toBe("tok-123");
+  });
+
+  it("the guardian confirm route is unaffected by it", async () => {
+    await renderAt("/guardian-consent/confirm");
+    expect(screen.queryByRole("heading", { name: "Withdraw your consent" })).toBeNull();
+  });
+
+  // W9 (B-176): the guardian has no account, so the confirm page sits under the same logo-only Top Bar
+  // as the withdrawal page (Figma 5108:6629 draws no site nav).
+  it("/guardian-consent/confirm renders under the logo-only Top Bar, with no site nav and no footer", async () => {
+    await renderAt("/guardian-consent/confirm?token=tok-123");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Do you give permission for this account to use Soccernity?",
+    );
+    expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
+    expect(document.querySelector("footer")).toBeNull();
+  });
+
+  it("/guardian-consent (the minor's own status page) still sits under the site Header", async () => {
+    await renderAt("/guardian-consent");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+  });
+});
+
+describe("router - user two-factor recovery link pages (B-278)", () => {
+  it.each([
+    ["/two-factor-recovery/confirm"],
+    ["/two-factor-recovery/cancel"],
+    ["/two-factor-recovery/guardian"],
+  ])("%s is public: with no session and no token it renders 'not valid' under the logo-only Top Bar, calling nothing", async (path) => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await renderAt(path);
+      expect(screen.getByRole("heading", { name: "This link isn’t valid" })).not.toBeNull();
+      expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+      expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+      expect(document.querySelector("footer")).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

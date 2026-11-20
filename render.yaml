@@ -1,0 +1,958 @@
+# Render Blueprint - Infrastructure as Code for services/api's web service AND the two static sites (apps/web, apps/admin).
+# Decision Log #26 (Build Plan Section 9 / CLAUDE.md): Render (API) + Neon
+# (Postgres) + Upstash (Redis), unbundled. Imported in Render's dashboard
+# ("New > Blueprint") to create the services below.
+#
+# HOSTING REGION: Render is in Frankfurt (EU). Both API services use
+# `region: frankfurt`. Render does not allow a service's region to be changed
+# after creation (docs.render.com/blueprint-spec: "You can't modify this value
+# after creation"), so this must be right BEFORE the first import. Neon
+# (Postgres) and Upstash (Redis) are created in London (eu-west-2), NOT in the EU (the founder's own
+# choice of 2026-11-19, Decision Log #536: Render has only Frankfurt for Europe). This file cannot
+# enforce that; it is a manual step (docs/deployment.md).
+# The two static sites (apps/web, apps/admin) have NO `region`: Render documents it as unsupported for static sites, which are served
+# from a global CDN. The EU rule therefore covers the API, the database and the cache; the static files are public by design and hold
+# no personal data.
+#
+# VERIFIED AGAINST RENDER'S DOCS (https://render.com/docs/blueprint-spec,
+# read 2026-10-13): `region` accepts a fixed list that includes `frankfurt`; `branch` is a valid per-service key; `runtime` replaces the
+# deprecated `env` field; `preDeployCommand` runs after build and before
+# start. NOT verified live (no Render account): that this file imports cleanly.
+#
+# PRE-DEPLOY ON THE FREE PLAN: https://render.com/docs/deploys says "The
+# pre-deploy command is available for paid web services, private services,
+# and background workers." Staging below is `plan: free`, so its
+# preDeployCommand (migrations + DOB backfill) will probably NOT run. See
+# docs/deployment.md and the PR description for the proposed fix; the plan and
+# commands are deliberately unchanged here pending a decision.
+#
+# NODE_ENV is deliberately NOT set below. Render sets NODE_ENV=production for
+# Node services at runtime only (https://render.com/docs/environment-variables).
+# Setting it as an envVar would also apply it at build time, where `npm
+# install` would then skip devDependencies (@nestjs/cli, prisma, typescript)
+# and the build would fail.
+#
+# `sync: false` = Render prompts for the value at first import and never
+# stores it in this file. `value:` entries equal the code's own default, so
+# they change nothing; they exist so the setting is visible and editable.
+# PORT is not listed: services/api reads process.env.PORT ?? 3000.
+#
+# GEOLITE2 (B-024): the container start script runs fetch-geolite2.js in the background, which
+# downloads MaxMind's GeoLite2-Country database next to the app so the API can
+# derive a registrant's country from their IP locally. It needs MAXMIND_ACCOUNT_ID
+# and MAXMIND_LICENSE_KEY; WITHOUT them (or if the download fails) it logs and
+# exits 0, the start still succeeds, and every country lookup is "unresolved",
+# which applies the STRONGER safeguarding control. See docs/deployment.md.
+
+services:
+  - type: web
+    name: soccernity-api-staging
+    runtime: docker
+    branch: staging
+    plan: free
+    # Free for staging: no guardian-consent traffic depends on its cold start.
+    region: frankfurt
+    # DOCKER (infra/api-docker-ffmpeg): the image carries ffmpeg/ffprobe, which Render's native Node runtime lacks.
+    # buildCommand and startCommand are gone on purpose (Render: "You can't set a build command for services that use
+    # Docker"; the start command is the Dockerfile's CMD). The build context is the repo ROOT (npm workspaces, one lockfile).
+    # WORKDIR is /app, so the preDeployCommand below runs unchanged. See services/api/Dockerfile.
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
+    # without a valid key, which fails the deploy before cut-over).
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
+    healthCheckPath: /health
+    envVars:
+      # --- Database / cache (Neon + Upstash, EU regions; see header) ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # --- Secrets. No code default; generate a DIFFERENT value per variable and per environment. ---
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
+      - key: DOB_ENCRYPTION_KEY
+        sync: false
+      # Key rotation only (docs/dob-encryption-rollback.md). Leave BOTH unset until a rotation: unset means one key,
+      # version 1. During a rotation: DOB_ENCRYPTION_KEY = new key, DOB_ENCRYPTION_KEY_VERSION = 2 (then 3 ...),
+      # DOB_ENCRYPTION_KEY_PREVIOUS = the old key; delete DOB_ENCRYPTION_KEY_PREVIOUS once the re-encrypt script
+      # has verified every value. Never put a key value in this file.
+      - key: DOB_ENCRYPTION_KEY_VERSION
+        sync: false
+      - key: DOB_ENCRYPTION_KEY_PREVIOUS
+        sync: false
+      # --- Auth tuning (code defaults apply when unset/blank) ---
+      - key: JWT_ACCESS_TTL_SECONDS
+        sync: false
+      - key: JWT_REFRESH_TTL_DAYS
+        sync: false
+      - key: AUTH_RATE_LIMIT_MAX
+        sync: false
+      - key: AUTH_RATE_LIMIT_WINDOW_MS
+        sync: false
+      # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
+      # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
+      - key: AUTH_SIGNUP_RATE_LIMIT_MAX
+        value: "30"
+      - key: AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS
+        value: "600000"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_MAX
+        value: "5"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
+        value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
+      - key: AUTH_IP_CEILING_MAX
+        value: "60"
+      - key: AUTH_IP_CEILING_WINDOW_MS
+        value: "600000"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_MAX
+        value: "3"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS
+        value: "3600000"
+      # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
+        value: "5"
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      # Global API rate limit (rate-limit/global-rate-limit.config.ts): signed-in per user, anonymous per IP,
+      # writes (POST/PUT/PATCH/DELETE), and routes that pass file bytes through the API. In memory per instance.
+      - key: GLOBAL_RATE_LIMIT_USER_MAX
+        value: "120"
+      - key: GLOBAL_RATE_LIMIT_USER_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_ANON_MAX
+        value: "600"
+      - key: GLOBAL_RATE_LIMIT_ANON_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_WRITE_MAX
+        value: "30"
+      - key: GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
+        value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
+      - key: RESET_TOKEN_TTL_MINUTES
+        sync: false
+      # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_ACCESS_TTL_SECONDS
+        value: "900"
+      # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_REFRESH_TTL_DAYS
+        value: "7"
+      # ADMIN_2FA_ENFORCED (B-086 / B-270): only the literal "true" makes authenticator-app two-factor mandatory
+      # for admins at sign-in. Set by hand in the dashboard (sync: false) so a Blueprint re-sync can never silently
+      # switch it back off. Unset = off, with a warning logged at start; it MUST be "true" in production at launch
+      # (docs/deployment.md, launch-gate check B-267).
+      - key: ADMIN_2FA_ENFORCED
+        sync: false
+      # MEDIA_UPLOADS_ENABLED (B-306, Decision Log #501): user uploads of images and video (post media, contest
+      # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
+      # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
+      # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
+      # "true" at the launch gate. This is the off switch for uploads: the launch condition is in the launch-gate
+      # runbook (step 8.7) and Decision Log #524; counsel's question list is not a condition (docs/deployment.md).
+      # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
+      - key: MEDIA_UPLOADS_ENABLED
+        sync: false
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+        sync: false
+      # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
+      - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
+        value: "72"
+      # GUARDIAN_DECLINE_LAPSE_DAYS: code default (guardian-decline-cap.constants.ts)
+      - key: GUARDIAN_DECLINE_LAPSE_DAYS
+        value: "14"
+      # --- Email (Postmark) and links ---
+      - key: EMAIL_PROVIDER_API_KEY
+        sync: false
+      - key: POSTMARK_FROM_EMAIL
+        sync: false
+      # Final https origin of apps/web for this environment (single-sourced with the static sites below; a spec keeps them equal).
+      - key: WEB_APP_BASE_URL
+        value: https://staging.soccernity.com
+      # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
+      - key: ADMIN_APP_BASE_URL
+        value: https://admin.staging.soccernity.com
+      # --- Sports data (Highlightly) ---
+      - key: SPORTS_DATA_API_KEY
+        sync: false
+      # SPORTS_DATA_RAPIDAPI_HOST: leave blank for a direct Highlightly account; only set for a RapidAPI subscription
+      - key: SPORTS_DATA_RAPIDAPI_HOST
+        sync: false
+      # SPORTS_DATA_BASE_URL: code default (highlightly-client.service.ts)
+      - key: SPORTS_DATA_BASE_URL
+        value: "https://soccer.highlightly.net"
+      # SPORTS_DATA_PROVIDER: code default
+      - key: SPORTS_DATA_PROVIDER
+        value: "highlightly"
+      # POINTS_DAILY_CAP_GIVEN / POINTS_DAILY_CAP_RECEIVED: the leaderboard daily caps in whole points,
+      # per Europe/London day (docs/contest-spec.md 9b; code defaults 40 and 20)
+      - key: POINTS_DAILY_CAP_GIVEN
+        value: "40"
+      - key: POINTS_DAILY_CAP_RECEIVED
+        value: "20"
+      # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
+      - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
+        value: "100"
+      # SPORTS_LIVE_CACHE_TTL_SECONDS: code default (sports.constants.ts)
+      - key: SPORTS_LIVE_CACHE_TTL_SECONDS
+        value: "60"
+      # SPORTS_SCHEDULED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_SCHEDULED_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_FINISHED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_FINISHED_CACHE_TTL_SECONDS
+        value: "86400"
+      # SPORTS_STANDINGS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_STANDINGS_CACHE_TTL_SECONDS
+        value: "1800"
+      # SPORTS_H2H_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_H2H_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS
+        value: "600"
+      # SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS
+        value: "300"
+      # SPORTS_DATA_MAX_REFRESH_PAGES: code default
+      - key: SPORTS_DATA_MAX_REFRESH_PAGES
+        value: "1"
+      # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
+      # STAGING: S3_BUCKET is the PUBLIC bucket (soccernity-staging-public, served by S3_PUBLIC_BASE_URL, https://media.staging.soccernity.com); S3_PRIVATE_BUCKET is
+      # the PRIVATE one (soccernity-staging-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
+      # https://<account-id>.eu.r2.cloudflarestorage.com. Staging and production never share a bucket, a token or a media host (Decision Log #535).
+      # the PRIVATE one (no public address of any kind). Production refuses to start without a distinct private bucket (B-265).
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_PRIVATE_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      # S3_PUBLIC_BASE_URL: the custom domain on the PUBLIC bucket only (https://media.staging.soccernity.com);
+      # unset keeps <endpoint>/<bucket>/<key>, which is NOT publicly readable on R2
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      # S3_REGION: code default; R2 uses the literal 'auto'
+      - key: S3_REGION
+        value: "auto"
+      # --- User post and contest-entry media (backend/w14-post-media-pipeline, Decision Log #419) ---
+      # All limits below equal the code defaults; they exist so each can be changed without a deploy of code.
+      - key: POST_MEDIA_IMAGE_MAX_BYTES
+        value: "10485760"
+      - key: POST_MEDIA_VIDEO_MAX_BYTES
+        value: "104857600"
+      - key: POST_MEDIA_VIDEO_MAX_SECONDS
+        value: "120"
+      - key: POST_MEDIA_MAX_PER_POST
+        value: "10"
+      - key: POST_MEDIA_UPLOAD_LINK_TTL_SECONDS
+        value: "900"
+      # Per-user upload throttle: at most MAX upload links per WINDOW_SECONDS.
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_MAX
+        value: "30"
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_WINDOW_SECONDS
+        value: "3600"
+      - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
+        value: "24"
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. They are installed in the Docker
+      # image (Debian bookworm package, services/api/Dockerfile) and are on PATH, so the defaults below work as they are.
+      # If they were ever missing, every video upload would fail closed (503).
+      - key: FFMPEG_PATH
+        value: "ffmpeg"
+      - key: FFPROBE_PATH
+        value: "ffprobe"
+      # --- Automatic media check (Amazon Rekognition, EU region; Decision Log #419 item 4) ---
+      # Placeholders/unset = wired but inactive: nothing is checked and NOTHING is approved automatically.
+      - key: REKOGNITION_ACCESS_KEY_ID
+        sync: false
+      - key: REKOGNITION_SECRET_ACCESS_KEY
+        sync: false
+      - key: REKOGNITION_REGION
+        value: "eu-west-1"
+      # Labels at or above PASS keep a file out of auto-approval; a reject category at or above REJECT is
+      # auto-rejected. Stricter for an uploader who is a minor.
+      - key: MEDIA_CHECK_PASS_THRESHOLD
+        value: "40"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD
+        value: "90"
+      - key: MEDIA_CHECK_PASS_THRESHOLD_MINOR
+        value: "20"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD_MINOR
+        value: "80"
+      - key: MEDIA_CHECK_REJECT_CATEGORIES
+        value: "Explicit,Violence,Visually Disturbing,Hate Symbols"
+      - key: MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS
+        value: "5"
+      - key: MEDIA_CHECK_VIDEO_MAX_FRAMES
+        value: "30"
+      - key: MEDIA_CHECK_MAX_ATTEMPTS
+        value: "5"
+      - key: MEDIA_CHECK_BATCH_SIZE
+        value: "10"
+      # Moderator review queue (B-037). Distinct reporters at which an approved file is hidden pending review
+      # (0 = never hide automatically); minutes an UNCHECKED upload waits before it is sent to the queue.
+      - key: MEDIA_REPORT_HIDE_THRESHOLD
+        value: "3"
+      - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
+        value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
+      # Rejected-media deletion (B-283; Decision Log #464), founder-veto-able defaults: the stray sweep deletes no
+      # stored object younger than this many days; at most this many objects per run (the cap convention of the
+      # account purge, 200 per run); "true" makes the sweep only count and log what it WOULD delete. The sweep
+      # needs a LIST permission on the storage key (B-207, launch gate).
+      - key: POST_MEDIA_STRAY_MIN_AGE_DAYS
+        value: "7"
+      - key: POST_MEDIA_STRAY_SWEEP_MAX_DELETES
+        value: "200"
+      - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
+        value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
+      # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # --- Web push (B-285, Decision Log #472 (e)) ---
+      # The VAPID key pair identifies this server to the browsers' push services. The founder generates it once
+      # (`npx web-push generate-vapid-keys`). Unset or "replace-me" = web push reports itself unavailable;
+      # nothing else changes. VAPID_SUBJECT is a mailto: or https:// contact address, e.g. mailto:support@soccernity.com.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
+      - key: COPPA_VERIFICATION_AMOUNT_CENTS
+        value: "50"
+      # --- Country derivation (B-024, Decision Log #368) ---
+      # TRUST_PROXY_HOPS: how many reverse proxies sit in front of the API, so
+      # req.ip is the real client address (X-Forwarded-For). Needed for the
+      # GeoLite2 country lookup AND for per-client rate limiting. Left UNSET it
+      # trusts no proxy (fail-safe: lookups come out "unresolved"). Set it to the
+      # verified hop count (start by testing 1) -- too high lets a client forge
+      # its IP. See docs/deployment.md before setting.
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      # GEOLITE2_DB_PATH: leave blank (default /app/services/api/geoip/GeoLite2-Country.mmdb, owned by the container's non-root user;
+      # a custom path must be writable by that user)
+      - key: GEOLITE2_DB_PATH
+        sync: false
+      # MaxMind account for the GeoLite2 download (fetch-geolite2.js). In the Docker image this runs at CONTAINER START,
+      # not at build, so these keys are runtime variables only and never reach an image layer. Without them it logs and exits 0.
+      - key: MAXMIND_ACCOUNT_ID
+        sync: false
+      - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
+      - key: HELD_INVESTIGATION_ALERT_DAYS
+        value: "90"
+      # B-044 account-hold rules (account-hold.config.ts). PLACEHOLDERS, not counsel-sourced.
+      - key: REPORT_APPEAL_WINDOW_DAYS
+        value: "30"
+      - key: ACCOUNT_HOLD_POST_CLOSURE_MONTHS
+        value: "6"
+      - key: BAD_FAITH_HOLD_MONTHS
+        value: "6"
+      # B-046 / B-018 Contact Us (modules/contact/contact.config.ts). Every value equals the code default
+      # (Decision Log #440, #445); they are listed so they can be tuned on Render. SUPPORT_INBOX_EMAIL is a
+      # public mailbox address, not a secret.
+      - key: SUPPORT_INBOX_EMAIL
+        value: support@soccernity.com
+      - key: CONTACT_ENQUIRY_RETENTION_MONTHS
+        value: "12"
+      - key: MESSAGE_RETENTION_MONTHS
+        value: "12"
+      # B-299 report retention (Decision Log #490, #493). Both equal the code defaults.
+      - key: REPORT_RETENTION_YEARS
+        value: "6"
+      - key: REPORT_RETENTION_CONCERNS_MINOR_YEARS
+        value: "7"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
+        value: "3"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
+        value: "3600000"
+      # --- Error monitoring ---
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: web
+    name: soccernity-api
+    runtime: docker
+    branch: main
+    plan: starter
+    # Starter (not Free) for production: avoids cold-start delay on the guardian-consent email link (Decision Log #26, Build Plan 8.3).
+    region: frankfurt
+    # DOCKER (infra/api-docker-ffmpeg): the image carries ffmpeg/ffprobe, which Render's native Node runtime lacks.
+    # buildCommand and startCommand are gone on purpose (Render: "You can't set a build command for services that use
+    # Docker"; the start command is the Dockerfile's CMD). The build context is the repo ROOT (npm workspaces, one lockfile).
+    # WORKDIR is /app, so the preDeployCommand below runs unchanged. See services/api/Dockerfile.
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
+    # without a valid key, which fails the deploy before cut-over).
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
+    healthCheckPath: /health
+    envVars:
+      # --- Database / cache (Neon + Upstash, EU regions; see header) ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # --- Secrets. No code default; generate a DIFFERENT value per variable and per environment. ---
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
+      - key: DOB_ENCRYPTION_KEY
+        sync: false
+      # Key rotation only (docs/dob-encryption-rollback.md). Leave BOTH unset until a rotation: unset means one key,
+      # version 1. During a rotation: DOB_ENCRYPTION_KEY = new key, DOB_ENCRYPTION_KEY_VERSION = 2 (then 3 ...),
+      # DOB_ENCRYPTION_KEY_PREVIOUS = the old key; delete DOB_ENCRYPTION_KEY_PREVIOUS once the re-encrypt script
+      # has verified every value. Never put a key value in this file.
+      - key: DOB_ENCRYPTION_KEY_VERSION
+        sync: false
+      - key: DOB_ENCRYPTION_KEY_PREVIOUS
+        sync: false
+      # --- Auth tuning (code defaults apply when unset/blank) ---
+      - key: JWT_ACCESS_TTL_SECONDS
+        sync: false
+      - key: JWT_REFRESH_TTL_DAYS
+        sync: false
+      - key: AUTH_RATE_LIMIT_MAX
+        sync: false
+      - key: AUTH_RATE_LIMIT_WINDOW_MS
+        sync: false
+      # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
+      # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
+      - key: AUTH_SIGNUP_RATE_LIMIT_MAX
+        value: "30"
+      - key: AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS
+        value: "600000"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_MAX
+        value: "5"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
+        value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
+      - key: AUTH_IP_CEILING_MAX
+        value: "60"
+      - key: AUTH_IP_CEILING_WINDOW_MS
+        value: "600000"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_MAX
+        value: "3"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS
+        value: "3600000"
+      # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
+        value: "5"
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      # Global API rate limit (rate-limit/global-rate-limit.config.ts): signed-in per user, anonymous per IP,
+      # writes (POST/PUT/PATCH/DELETE), and routes that pass file bytes through the API. In memory per instance.
+      - key: GLOBAL_RATE_LIMIT_USER_MAX
+        value: "120"
+      - key: GLOBAL_RATE_LIMIT_USER_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_ANON_MAX
+        value: "600"
+      - key: GLOBAL_RATE_LIMIT_ANON_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_WRITE_MAX
+        value: "30"
+      - key: GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
+        value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
+      - key: RESET_TOKEN_TTL_MINUTES
+        sync: false
+      # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_ACCESS_TTL_SECONDS
+        value: "900"
+      # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_REFRESH_TTL_DAYS
+        value: "7"
+      # ADMIN_2FA_ENFORCED (B-086 / B-270): only the literal "true" makes authenticator-app two-factor mandatory
+      # for admins at sign-in. Set by hand in the dashboard (sync: false) so a Blueprint re-sync can never silently
+      # switch it back off. Unset = off, with a warning logged at start; it MUST be "true" in production at launch
+      # (docs/deployment.md, launch-gate check B-267).
+      - key: ADMIN_2FA_ENFORCED
+        sync: false
+      # MEDIA_UPLOADS_ENABLED (B-306, Decision Log #501): user uploads of images and video (post media, contest
+      # entries, profile picture, cover photo) answer 403 media_uploads_disabled unless this is exactly "true".
+      # Render sets NODE_ENV=production on staging too, so it is off on BOTH services until set by hand. Set by hand
+      # in the dashboard (sync: false) so a Blueprint re-sync can never silently switch it on. The founder sets it to
+      # "true" at the launch gate. This is the off switch for uploads: the launch condition is in the launch-gate
+      # runbook (step 8.7) and Decision Log #524; counsel's question list is not a condition (docs/deployment.md).
+      # Unset = off, with a warning logged at start. Staff upload (POST /admin/media/upload) is not affected.
+      - key: MEDIA_UPLOADS_ENABLED
+        sync: false
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+        sync: false
+      # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
+      - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
+        value: "72"
+      # GUARDIAN_DECLINE_LAPSE_DAYS: code default (guardian-decline-cap.constants.ts)
+      - key: GUARDIAN_DECLINE_LAPSE_DAYS
+        value: "14"
+      # --- Email (Postmark) and links ---
+      - key: EMAIL_PROVIDER_API_KEY
+        sync: false
+      - key: POSTMARK_FROM_EMAIL
+        sync: false
+      # Final https origin of apps/web for this environment (single-sourced with the static sites below; a spec keeps them equal).
+      - key: WEB_APP_BASE_URL
+        value: https://soccernity.com
+      # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
+      - key: ADMIN_APP_BASE_URL
+        value: https://admin.soccernity.com
+      # --- Sports data (Highlightly) ---
+      - key: SPORTS_DATA_API_KEY
+        sync: false
+      # SPORTS_DATA_RAPIDAPI_HOST: leave blank for a direct Highlightly account; only set for a RapidAPI subscription
+      - key: SPORTS_DATA_RAPIDAPI_HOST
+        sync: false
+      # SPORTS_DATA_BASE_URL: code default (highlightly-client.service.ts)
+      - key: SPORTS_DATA_BASE_URL
+        value: "https://soccer.highlightly.net"
+      # SPORTS_DATA_PROVIDER: code default
+      - key: SPORTS_DATA_PROVIDER
+        value: "highlightly"
+      # POINTS_DAILY_CAP_GIVEN / POINTS_DAILY_CAP_RECEIVED: the leaderboard daily caps in whole points,
+      # per Europe/London day (docs/contest-spec.md 9b; code defaults 40 and 20)
+      - key: POINTS_DAILY_CAP_GIVEN
+        value: "40"
+      - key: POINTS_DAILY_CAP_RECEIVED
+        value: "20"
+      # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
+      - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
+        value: "100"
+      # SPORTS_LIVE_CACHE_TTL_SECONDS: code default (sports.constants.ts)
+      - key: SPORTS_LIVE_CACHE_TTL_SECONDS
+        value: "60"
+      # SPORTS_SCHEDULED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_SCHEDULED_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_FINISHED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_FINISHED_CACHE_TTL_SECONDS
+        value: "86400"
+      # SPORTS_STANDINGS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_STANDINGS_CACHE_TTL_SECONDS
+        value: "1800"
+      # SPORTS_H2H_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_H2H_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS
+        value: "600"
+      # SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS
+        value: "300"
+      # SPORTS_DATA_MAX_REFRESH_PAGES: code default
+      - key: SPORTS_DATA_MAX_REFRESH_PAGES
+        value: "1"
+      # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
+      # PRODUCTION: S3_BUCKET is the PUBLIC bucket (soccernity-media-public, served by S3_PUBLIC_BASE_URL, https://media.soccernity.com); S3_PRIVATE_BUCKET is
+      # the PRIVATE one (soccernity-media-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
+      # https://<account-id>.eu.r2.cloudflarestorage.com. Staging and production never share a bucket, a token or a media host (Decision Log #535).
+      # the PRIVATE one (no public address of any kind). Production refuses to start without a distinct private bucket (B-265).
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_PRIVATE_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      # S3_PUBLIC_BASE_URL: the custom domain on the PUBLIC bucket only (https://media.soccernity.com);
+      # unset keeps <endpoint>/<bucket>/<key>, which is NOT publicly readable on R2
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      # S3_REGION: code default; R2 uses the literal 'auto'
+      - key: S3_REGION
+        value: "auto"
+      # --- User post and contest-entry media (backend/w14-post-media-pipeline, Decision Log #419) ---
+      # All limits below equal the code defaults; they exist so each can be changed without a deploy of code.
+      - key: POST_MEDIA_IMAGE_MAX_BYTES
+        value: "10485760"
+      - key: POST_MEDIA_VIDEO_MAX_BYTES
+        value: "104857600"
+      - key: POST_MEDIA_VIDEO_MAX_SECONDS
+        value: "120"
+      - key: POST_MEDIA_MAX_PER_POST
+        value: "10"
+      - key: POST_MEDIA_UPLOAD_LINK_TTL_SECONDS
+        value: "900"
+      # Per-user upload throttle: at most MAX upload links per WINDOW_SECONDS.
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_MAX
+        value: "30"
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_WINDOW_SECONDS
+        value: "3600"
+      - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
+        value: "24"
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. They are installed in the Docker
+      # image (Debian bookworm package, services/api/Dockerfile) and are on PATH, so the defaults below work as they are.
+      # If they were ever missing, every video upload would fail closed (503).
+      - key: FFMPEG_PATH
+        value: "ffmpeg"
+      - key: FFPROBE_PATH
+        value: "ffprobe"
+      # --- Automatic media check (Amazon Rekognition, EU region; Decision Log #419 item 4) ---
+      # Placeholders/unset = wired but inactive: nothing is checked and NOTHING is approved automatically.
+      - key: REKOGNITION_ACCESS_KEY_ID
+        sync: false
+      - key: REKOGNITION_SECRET_ACCESS_KEY
+        sync: false
+      - key: REKOGNITION_REGION
+        value: "eu-west-1"
+      # Labels at or above PASS keep a file out of auto-approval; a reject category at or above REJECT is
+      # auto-rejected. Stricter for an uploader who is a minor.
+      - key: MEDIA_CHECK_PASS_THRESHOLD
+        value: "40"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD
+        value: "90"
+      - key: MEDIA_CHECK_PASS_THRESHOLD_MINOR
+        value: "20"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD_MINOR
+        value: "80"
+      - key: MEDIA_CHECK_REJECT_CATEGORIES
+        value: "Explicit,Violence,Visually Disturbing,Hate Symbols"
+      - key: MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS
+        value: "5"
+      - key: MEDIA_CHECK_VIDEO_MAX_FRAMES
+        value: "30"
+      - key: MEDIA_CHECK_MAX_ATTEMPTS
+        value: "5"
+      - key: MEDIA_CHECK_BATCH_SIZE
+        value: "10"
+      # Moderator review queue (B-037). Distinct reporters at which an approved file is hidden pending review
+      # (0 = never hide automatically); minutes an UNCHECKED upload waits before it is sent to the queue.
+      - key: MEDIA_REPORT_HIDE_THRESHOLD
+        value: "3"
+      - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
+        value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
+      # Rejected-media deletion (B-283; Decision Log #464), founder-veto-able defaults: the stray sweep deletes no
+      # stored object younger than this many days; at most this many objects per run (the cap convention of the
+      # account purge, 200 per run); "true" makes the sweep only count and log what it WOULD delete. The sweep
+      # needs a LIST permission on the storage key (B-207, launch gate).
+      - key: POST_MEDIA_STRAY_MIN_AGE_DAYS
+        value: "7"
+      - key: POST_MEDIA_STRAY_SWEEP_MAX_DELETES
+        value: "200"
+      - key: POST_MEDIA_STRAY_SWEEP_DRY_RUN
+        value: "false"
+      # Suspected illegal imagery (B-206; founder decision 2026-11-15), founder-veto-able default: days a file a
+      # child-safety-vetted admin set aside is kept from deletion after the set-aside, even once its filing is decided.
+      - key: SUSPECTED_MEDIA_PRESERVE_DAYS
+        value: "365"
+      # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # --- Web push (B-285, Decision Log #472 (e)) ---
+      # The VAPID key pair identifies this server to the browsers' push services. The founder generates it once
+      # (`npx web-push generate-vapid-keys`). Unset or "replace-me" = web push reports itself unavailable;
+      # nothing else changes. VAPID_SUBJECT is a mailto: or https:// contact address, e.g. mailto:support@soccernity.com.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
+      - key: COPPA_VERIFICATION_AMOUNT_CENTS
+        value: "50"
+      # --- Country derivation (B-024, Decision Log #368) ---
+      # TRUST_PROXY_HOPS: how many reverse proxies sit in front of the API, so
+      # req.ip is the real client address (X-Forwarded-For). Needed for the
+      # GeoLite2 country lookup AND for per-client rate limiting. Left UNSET it
+      # trusts no proxy (fail-safe: lookups come out "unresolved"). Set it to the
+      # verified hop count (start by testing 1) -- too high lets a client forge
+      # its IP. See docs/deployment.md before setting.
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      # GEOLITE2_DB_PATH: leave blank (default /app/services/api/geoip/GeoLite2-Country.mmdb, owned by the container's non-root user;
+      # a custom path must be writable by that user)
+      - key: GEOLITE2_DB_PATH
+        sync: false
+      # MaxMind account for the GeoLite2 download (fetch-geolite2.js). In the Docker image this runs at CONTAINER START,
+      # not at build, so these keys are runtime variables only and never reach an image layer. Without them it logs and exits 0.
+      - key: MAXMIND_ACCOUNT_ID
+        sync: false
+      - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
+      - key: HELD_INVESTIGATION_ALERT_DAYS
+        value: "90"
+      # B-044 account-hold rules (account-hold.config.ts). PLACEHOLDERS, not counsel-sourced.
+      - key: REPORT_APPEAL_WINDOW_DAYS
+        value: "30"
+      - key: ACCOUNT_HOLD_POST_CLOSURE_MONTHS
+        value: "6"
+      - key: BAD_FAITH_HOLD_MONTHS
+        value: "6"
+      # B-046 / B-018 Contact Us (modules/contact/contact.config.ts). Every value equals the code default
+      # (Decision Log #440, #445); they are listed so they can be tuned on Render. SUPPORT_INBOX_EMAIL is a
+      # public mailbox address, not a secret.
+      - key: SUPPORT_INBOX_EMAIL
+        value: support@soccernity.com
+      - key: CONTACT_ENQUIRY_RETENTION_MONTHS
+        value: "12"
+      - key: MESSAGE_RETENTION_MONTHS
+        value: "12"
+      # B-299 report retention (Decision Log #490, #493). Both equal the code defaults.
+      - key: REPORT_RETENTION_YEARS
+        value: "6"
+      - key: REPORT_RETENTION_CONCERNS_MINOR_YEARS
+        value: "7"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
+        value: "3"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
+        value: "3600000"
+      # --- Error monitoring ---
+      - key: SENTRY_DSN
+        sync: false
+
+  # =====================================================================================================
+  # STATIC SITES: apps/web and apps/admin, per environment (build register B-179, B-088; Decision Log #409, #437, #450).
+  # Three services per environment: the API above, the web app and the admin app, each on its own https origin under
+  # soccernity.com (production: soccernity.com, admin.soccernity.com, api.soccernity.com; staging: staging.soccernity.com,
+  # admin.staging.soccernity.com, api.staging.soccernity.com). `domains:` is deliberately NOT listed here: attaching domains,
+  # DNS records and the Cloudflare proxy are founder steps at the launch gate (docs/deployment.md, static sites). Until then each
+  # site is reachable only on its onrender.com address, where the host-only same-site refresh cookie will not work (B-249).
+  # Field names checked against https://render.com/docs/blueprint-spec, /docs/redirects-rewrites and /docs/static-site-headers
+  # (read 2026-11-14). NOT validated by an import: no Render account exists.
+  # =====================================================================================================
+  - type: web
+    name: soccernity-web-staging
+    runtime: static
+    branch: staging
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # STAGING builds with the plain build: no pending-copy check, so staging can go up before counsel has cleared the tagged strings.
+    buildCommand: npm install && npm run build --workspace=apps/web
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.staging.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
+    # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
+    # the exact host then. The public bucket is served at https://media.staging.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.staging.soccernity.com; media-src 'self' https://media.staging.soccernity.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      # The push service worker (B-285): the browser must always re-check it. Served as a real file, never the rewrite above.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+
+  - type: web
+    name: soccernity-admin-staging
+    runtime: static
+    branch: staging
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # STAGING builds with the plain build: no pending-copy check, so staging can go up before counsel has cleared the tagged strings.
+    buildCommand: npm install && npm run build --workspace=apps/admin
+    staticPublishPath: ./apps/admin/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.staging.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
+    # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
+    # the exact host then. The public bucket is served at https://media.staging.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; media-src 'self' https://media.staging.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.staging.soccernity.com; frame-src 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+
+  - type: web
+    name: soccernity-web
+    runtime: static
+    branch: main
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # PRODUCTION builds with `build:release`: it builds BOTH apps and then runs `check:pending-copy` on both dist folders, so this
+    # build FAILS while any [COPY PENDING LEGAL REVIEW] text would ship. That is the gate (B-124), intended to fail until counsel clears the strings.
+    buildCommand: npm install && npm run build:release
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
+    # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
+    # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com https://*.js.stripe.com; style-src 'self'; img-src 'self' data: blob: https://media.soccernity.com; media-src 'self' https://media.soccernity.com; font-src 'self'; connect-src 'self' https://api.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com https://api.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; worker-src 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      # The push service worker (B-285): the browser must always re-check it. Served as a real file, never the rewrite above.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+
+  - type: web
+    name: soccernity-admin
+    runtime: static
+    branch: main
+    # No `region` and no `plan`: Render documents both as unsupported for static sites (global CDN, no compute plan).
+    # PRODUCTION builds with `build:release`: it builds BOTH apps and then runs `check:pending-copy` on both dist folders, so this
+    # build FAILS while any [COPY PENDING LEGAL REVIEW] text would ship. That is the gate (B-124), intended to fail until counsel clears the strings.
+    buildCommand: npm install && npm run build:release
+    staticPublishPath: ./apps/admin/dist
+    envVars:
+      # Read at BUILD time (Vite inlines VITE_*). Changing it means a rebuild (trigger a deploy). It is the same origin as the API's
+      # own address and as `connect-src` in the headers below; a spec keeps the three equal.
+      - key: VITE_API_BASE_URL
+        value: https://api.soccernity.com
+    # Every path that is not a real file is the single-page app. Render serves a real file at a path before it applies a rule,
+    # so /sw.js, /assets/* and the favicon are NOT rewritten (https://render.com/docs/redirects-rewrites).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Response headers (Decision Log #420, #422, #450; docs/security-headers-csp-audit-report.md). Render cannot interpolate
+    # variables into this file, so the origins are written out. the two R2 wildcards below stand for S3_ENDPOINT (every bucket is in the EU jurisdiction, so the real host is
+    # <account-id>.eu.r2.cloudflarestorage.com; the older https://*.r2.cloudflarestorage.com is kept beside it): its real host contains the
+    # Cloudflare account id, which is only known once the R2 bucket exists (a founder step at the launch gate), so tighten that one to
+    # the exact host then. The public bucket is served at https://media.soccernity.com (S3_PUBLIC_BASE_URL, B-265), which is what
+    # img-src and media-src name (docs/deployment.md, static sites). These headers can move to the Cloudflare
+    # proxy if B-251 is built; if both set a header, check the response for a duplicate.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://media.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; media-src 'self' https://media.soccernity.com https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com; font-src 'self'; connect-src 'self' https://api.soccernity.com; frame-src 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), usb=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"

@@ -1,0 +1,100 @@
+/* Username reviews (B-139 part (c); Decision Log #467). Figma Admin Username Reviews: list 6955:42228, detail
+ * 6955:43541, decide dialog 6955:44021. Tokens only; the alert colour stays an accent (callout bar, field border),
+ * never text or a button fill. Most classes come from moderation.css (mod-*, hi-*, ce-*). */
+
+.ur-table__row {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 100px 100px 90px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.ur-table__row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ur-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.ur-table__row + .ur-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.ur-pill--neutral {
+  background-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.ur-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* decide dialog: the two boxed choices */
+
+.ur-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ur-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background-color: var(--sn-background-surface);
+  cursor: pointer;
+}
+
+.ur-option--selected {
+  border-color: var(--sn-brand-navy);
+}
+
+.ur-option input {
+  margin-top: 3px;
+  accent-color: var(--sn-brand-navy);
+}
+
+.ur-option:focus-within {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.ur-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ur-option__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ur-option__help {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ur-hint-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}

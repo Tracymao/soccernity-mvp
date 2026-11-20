@@ -1,0 +1,433 @@
+// Sports Hub / Highlightly API client -- Build Plan Section 4.6, the
+// SportsService built by sprint-4/sports-hub-highlightly-backend
+// (services/api/src/modules/sports/). Every READ here is genuinely public
+// and works logged out, matching api/blog.ts's convention.
+//
+// B-070 (Decision Log #472) -- ONE EXCEPTION, on purpose. The three reads that
+// carry a per-caller `kickoffAlert` flag (GET /sports/live-scores, /fixtures and
+// /matches/:id) sit behind the backend's OptionalJwtAuthGuard: they never reject,
+// but they only fill the flag in for a request that presents the signed-in
+// person's access token. Without it the flag is always false, so those three
+// reads send `Authorization: Bearer <token>` WHEN A SESSION EXISTS and send
+// nothing when logged out (same response as before). Every other read stays
+// credential-free. The two kickoff-alert writes (PUT/DELETE
+// /sports/matches/:id/subscription) require a session.
+//
+// Response shapes mirror sports.service.ts's Public* interfaces exactly
+// -- this file never invents a field the backend doesn't return.
+//
+// Two real, confirmed Highlightly data gaps this client does NOT paper
+// over (see modules/sports/README.md's own disclosure):
+//   1. PublicMatchStatistics is TEAM-LEVEL only -- there is no per-player
+//      box-score endpoint. The Figma redesign this page converts assumed
+//      player rows were available; they are not, from this vendor.
+//   2. PublicStandingRow carries no `form` (recent-results) field --
+//      Highlightly's own /standings response has none. This client does
+//      not fabricate one; `form` is optional and present only if the
+//      server sends it.
+// Per Decision Log #378 / #462 item (h) the page HIDES a field the
+// vendor does not supply (no placeholder, no notice).
+import { getStoredAccessToken } from "../lib/session";
+import { errorBodyCode } from "./twoFactorCodes";
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export type MatchPhase = "scheduled" | "live" | "finished" | "postponed" | "cancelled";
+
+export interface TeamRef {
+  id: string;
+  name: string;
+  logo: string | null;
+}
+
+export interface MatchSummary {
+  id: string;
+  competition: string;
+  league: { id: string | null; name: string | null; season: string | null; round: string | null };
+  venue: string | null;
+  kickoffTime: string;
+  status: MatchPhase;
+  statusDetail: string | null;
+  homeTeam: TeamRef;
+  awayTeam: TeamRef;
+  homeScore: number | null;
+  awayScore: number | null;
+  score: string | null;
+}
+
+// A match as the list reads and GET /sports/matches/:id return it: the summary plus
+// the signed-in caller's own kickoff-alert flag (B-070). The server always sends it
+// (false when logged out, or when the caller has no alert); typed optional so a
+// response from before B-070 still types.
+export interface MatchListItem extends MatchSummary {
+  kickoffAlert?: boolean;
+}
+
+export interface MatchesPage {
+  items: MatchListItem[];
+  nextCursor: string | null;
+}
+
+export interface StatisticItem {
+  label: string;
+  value: number | string | null;
+}
+
+export interface TeamStatistics {
+  team: TeamRef;
+  statistics: StatisticItem[];
+}
+
+// Three-state signal the backend attaches to any vendor-dependent field
+// (services/api/src/modules/sports/sports-data-provider.constants.ts).
+// 'not_available_from_provider' and 'no_data' must render differently: the
+// first means the current data vendor cannot supply the field at all, the
+// second means the vendor can but nothing is cached for this match.
+export type FieldAvailability = "available" | "no_data" | "not_available_from_provider";
+
+// Only the metrics with no source at all on the team-level statistics feed. Ratings and xG come from the
+// per-player box score (MatchBoxScoreAvailability below).
+export interface MatchAvailability {
+  pressureIndex: FieldAvailability;
+  shotMaps: FieldAvailability;
+}
+
+// Team-level only -- see this file's own header comment, data gap #1.
+export interface MatchStatistics {
+  home: TeamStatistics | null;
+  away: TeamStatistics | null;
+  updatedAt: string | null;
+  availability: MatchAvailability;
+}
+
+export interface BoxScorePlayer {
+  id: string | null;
+  name: string;
+  shirtNumber: number | null;
+  position: string | null;
+  isSubstitute: boolean;
+  minutesPlayed: number | null;
+  rating: number | null;
+  expectedGoals: number | null;
+  expectedAssists: number | null;
+}
+
+export interface TeamBoxScore {
+  team: TeamRef;
+  // Sum of the players' xG, or null when none carries one. The vendor does not publish a team total.
+  expectedGoals: number | null;
+  players: BoxScorePlayer[];
+}
+
+export interface MatchBoxScoreAvailability {
+  playerRatings: FieldAvailability;
+  expectedGoals: FieldAvailability;
+}
+
+// Per-player box score. Fetched only when the Statistics tab opens, never on a list view.
+export interface MatchBoxScore {
+  home: TeamBoxScore | null;
+  away: TeamBoxScore | null;
+  updatedAt: string | null;
+  availability: MatchBoxScoreAvailability;
+}
+
+export interface LineupPlayer {
+  id: string | null;
+  name: string;
+  number: number | null;
+  position: string | null;
+}
+
+export interface TeamLineup {
+  team: TeamRef;
+  formation: string | null;
+  rows: LineupPlayer[][];
+  startingXI: LineupPlayer[];
+  substitutes: LineupPlayer[];
+  missingPlayers: LineupPlayer[];
+  coach: string | null;
+}
+
+export interface Substitution {
+  minute: number;
+  side: "home" | "away" | null;
+  playerOff: string | null;
+  playerOn: string | null;
+}
+
+export interface Lineups {
+  home: TeamLineup;
+  away: TeamLineup;
+  substitutions: Substitution[];
+  expectedLineups: FieldAvailability;
+  updatedAt: string | null;
+}
+
+// An automated match-event feed -- NEVER editorial commentary (matching
+// the Figma "Live Commentary" design's own on-screen disclosure). Newest
+// first.
+export interface MatchEvent {
+  minute: number;
+  addedTime: number;
+  displayMinute: string;
+  type: string;
+  side: "home" | "away" | null;
+  player: string | null;
+  assist: string | null;
+  detail: string | null;
+}
+
+export interface MatchEvents {
+  items: MatchEvent[];
+  updatedAt: string | null;
+}
+
+export interface MomentumBar {
+  minute: number;
+  home: number;
+  away: number;
+}
+
+export interface MomentumMarker {
+  minute: number;
+  side: "home" | "away" | null;
+  type: string;
+  label: string;
+}
+
+export interface Momentum {
+  bars: MomentumBar[];
+  markers: MomentumMarker[];
+  updatedAt: string | null;
+}
+
+export interface HeadToHeadAggregate {
+  played: number;
+  homeTeamWins: number;
+  awayTeamWins: number;
+  draws: number;
+  homeTeamGoals: number;
+  awayTeamGoals: number;
+}
+
+export interface HeadToHead {
+  meetings: MatchSummary[];
+  aggregate: HeadToHeadAggregate;
+  updatedAt: string | null;
+}
+
+// `form` is present only when the active data provider supplies it (the server adds the
+// key only if the capability registry says so and the row carries data). With Highlightly
+// it is always absent, so the FORM column is not drawn.
+export interface StandingRow {
+  position: number;
+  team: TeamRef;
+  points: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  form?: ("W" | "D" | "L")[];
+}
+
+export interface StandingsGroup {
+  name: string | null;
+  rows: StandingRow[];
+}
+
+export interface Standings {
+  leagueId: string;
+  season: string;
+  groups: StandingsGroup[];
+  updatedAt: string | null;
+}
+
+export interface Highlight {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  url: string;
+  embedUrl: string | null;
+  source: string | null;
+  category: string | null;
+}
+
+export interface Highlights {
+  items: Highlight[];
+  updatedAt: string | null;
+}
+
+export class SportsApiError extends Error {
+  readonly status?: number;
+  // The API's machine-readable error code, when the body carries one (for example
+  // "match_already_started" on a kickoff-alert PUT). Callers branch on this, never on the message.
+  readonly code?: string;
+
+  constructor(message: string, options?: { status?: number; code?: string }) {
+    super(message);
+    this.name = "SportsApiError";
+    this.status = options?.status;
+    this.code = options?.code;
+  }
+}
+
+
+// `withCredentials`: send the access token when a session exists (see the header comment).
+// Only the three reads that carry `kickoffAlert` pass it; everything else is credential-free.
+async function get<T>(path: string, options?: { withCredentials?: boolean }): Promise<T> {
+  let response: Response;
+  try {
+    const token = options?.withCredentials ? getStoredAccessToken() : null;
+    // Logged out (or a credential-free read): the request is exactly what it always was.
+    response = token
+      ? await fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+      : await fetch(`${API_BASE_URL}${path}`);
+  } catch {
+    throw new SportsApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new SportsApiError(`Couldn't load that (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as T;
+}
+
+// GET /sports/live-scores?league=&cursor= -- reads status='live' MatchData
+// rows only. `league` is an additional, optional filter beyond Section
+// 4.6's literal contract (flagged in the backend's own README, same
+// category as Blog's categoryId/categorySlug).
+export async function listLiveScores(options?: { league?: string; cursor?: string }): Promise<MatchesPage> {
+  const params = new URLSearchParams();
+  if (options?.league) params.set("league", options.league);
+  if (options?.cursor) params.set("cursor", options.cursor);
+  const qs = params.toString();
+  return get<MatchesPage>(`/sports/live-scores${qs ? `?${qs}` : ""}`, { withCredentials: true });
+}
+
+// GET /sports/fixtures?date=&league=&cursor= -- `date` is required
+// (YYYY-MM-DD).
+export async function listFixtures(
+  date: string,
+  options?: { league?: string; cursor?: string },
+): Promise<MatchesPage> {
+  const params = new URLSearchParams({ date });
+  if (options?.league) params.set("league", options.league);
+  if (options?.cursor) params.set("cursor", options.cursor);
+  return get<MatchesPage>(`/sports/fixtures?${params.toString()}`, { withCredentials: true });
+}
+
+// GET /sports/matches/:id
+export async function getMatchById(matchId: string): Promise<MatchListItem> {
+  return get<MatchListItem>(`/sports/matches/${matchId}`, { withCredentials: true });
+}
+
+// PUT / DELETE /sports/matches/:id/subscription -- turn the signed-in person's kickoff alert on
+// (true) or off (false). Resolves to the server's own answer ({ subscribed }). A match that has
+// already started is a 409 with code "match_already_started" (surfaced on SportsApiError.code).
+// Requires a session; with none it fails before any request.
+export const MATCH_ALREADY_STARTED_CODE = "match_already_started";
+
+export async function setKickoffAlert(matchId: string, subscribed: boolean): Promise<boolean> {
+  const token = getStoredAccessToken();
+  if (!token) {
+    throw new SportsApiError("Log in to set a kickoff alert.", { status: 401 });
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/sports/matches/${encodeURIComponent(matchId)}/subscription`, {
+      method: subscribed ? "PUT" : "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new SportsApiError("Couldn't reach the Soccernity server.");
+  }
+  if (!response.ok) {
+    throw new SportsApiError(`Couldn't update the alert (${response.status}).`, {
+      status: response.status,
+      code: (await errorBodyCode(response)) ?? undefined,
+    });
+  }
+  const body = (await response.json()) as { subscribed?: boolean };
+  return body.subscribed === true;
+}
+
+// GET /sports/matches/:id/stats
+export async function getMatchStatistics(matchId: string): Promise<MatchStatistics> {
+  return get<MatchStatistics>(`/sports/matches/${matchId}/stats`);
+}
+
+// GET /sports/matches/:id/box-score -- per-player ratings and xG from the vendor's box score.
+export async function getMatchBoxScore(matchId: string): Promise<MatchBoxScore> {
+  return get<MatchBoxScore>(`/sports/matches/${matchId}/box-score`);
+}
+
+// GET /sports/matches/:id/lineups -- also carries a substitutions
+// timeline derived server-side from the cached events document.
+export async function getMatchLineups(matchId: string): Promise<Lineups> {
+  return get<Lineups>(`/sports/matches/${matchId}/lineups`);
+}
+
+// GET /sports/matches/:id/h2h
+export async function getHeadToHead(matchId: string): Promise<HeadToHead> {
+  return get<HeadToHead>(`/sports/matches/${matchId}/h2h`);
+}
+
+// GET /sports/matches/:id/momentum -- NOT in Section 4.6's literal
+// endpoint list (a genuine addition, flagged in the backend's own
+// README), built to back the Figma redesign's Match Momentum section.
+export async function getMatchMomentum(matchId: string): Promise<Momentum> {
+  return get<Momentum>(`/sports/matches/${matchId}/momentum`);
+}
+
+// GET /sports/matches/:id/events -- also NOT in Section 4.6's literal
+// list, same Decision Log candidate as momentum. Backs "Live
+// Commentary" -- an automated event feed, never editorial narration.
+export async function getMatchEvents(matchId: string): Promise<MatchEvents> {
+  return get<MatchEvents>(`/sports/matches/${matchId}/events`);
+}
+
+// GET /sports/standings?league=&season= -- `season` is optional; the
+// backend defaults it to whatever season is already cached for that
+// league (see GetStandingsQueryDto's own comment / README).
+export async function getStandings(league: string, season?: string): Promise<Standings> {
+  const params = new URLSearchParams({ league });
+  if (season) params.set("season", season);
+  return get<Standings>(`/sports/standings?${params.toString()}`);
+}
+
+export interface TopScorer {
+  rank: number;
+  player: { id: string | null; name: string };
+  team: TeamRef;
+  goals: number;
+  assists: number | null;
+}
+
+export interface TopScorers {
+  leagueId: string;
+  season: string | null;
+  availability: FieldAvailability;
+  items: TopScorer[];
+}
+
+// GET /sports/top-scorers?league=&season= -- availability says whether the
+// current provider can supply top scorers at all, so the UI can label an
+// empty list correctly.
+export async function getTopScorers(league: string, season?: string): Promise<TopScorers> {
+  const params = new URLSearchParams({ league });
+  if (season) params.set("season", season);
+  return get<TopScorers>(`/sports/top-scorers?${params.toString()}`);
+}
+
+// GET /sports/highlights/:matchId -- not paginated (a single match's
+// clip count is naturally small).
+export async function getHighlights(matchId: string): Promise<Highlights> {
+  return get<Highlights>(`/sports/highlights/${matchId}`);
+}

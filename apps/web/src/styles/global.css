@@ -1,0 +1,39 @@
+/* Global baseline for apps/web.
+ *
+ * Colour values come from CSS custom properties set at runtime by
+ * src/theme/applyTheme.ts, which mirrors packages/shared/src/tokens.
+ * Do not hardcode a hex colour in this file or any component --
+ * reference `var(--sn-*)` so a token change propagates automatically.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "Inter",
+    "Montserrat",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background-color: var(--sn-background-page);
+  color: var(--sn-text-primary);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+}

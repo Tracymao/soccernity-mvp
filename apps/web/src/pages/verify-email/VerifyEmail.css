@@ -1,0 +1,323 @@
+/* Verify Email (F7) -- four states rendered by VerifyEmailPage.tsx,
+ * derived from Figma nodes 5143:6635 (Verifying), 5143:6648 (Verified),
+ * 5143:6661 (Link Invalid Or Expired), 5143:6674 (Missing Token).
+ *
+ * Layout note (same approach GuardianConsent.css / ClubPickerStep.css
+ * take): the source frames each draw their own full-bleed top bar with an
+ * embedded Soccernity wordmark, but this route renders under AppShell,
+ * which renders the shared site Header above routed content
+ * (src/layout/AppShell.tsx) -- duplicating a second wordmark bar here
+ * would double up under it. Built to render *within* AppShell's content
+ * area instead, using a negative margin to cancel its padding so the
+ * background still reads as full-bleed below the real header. (The four
+ * core auth routes use the AuthChrome logo-only Top Bar instead --
+ * Decision Log #172 -- but /verify-email is not one of them.)
+ *
+ * Colour values reference the --verify-* custom properties set inline
+ * from verifyEmailThemeVars.ts -- do not hardcode hex here. */
+
+.verify-page {
+  min-height: calc(100vh - var(--sn-chrome-height, 90px)); /* B-187: AppShell 90/64px, AuthChrome 90px */
+  margin: -32px;
+  padding: 64px 32px;
+  background-color: var(--verify-bg);
+  color: var(--verify-text-primary);
+  font-family: "Inter", sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+.verify-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.verify-card {
+  background-color: var(--verify-surface);
+  border: 1px solid var(--verify-icon-inactive);
+  border-radius: 12px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.verify-card--tint {
+  background-color: var(--verify-green-tint);
+  border: none;
+  padding: 24px 28px;
+  gap: 14px;
+}
+
+.verify-card--centered {
+  align-items: center;
+  gap: 24px;
+  padding: 56px;
+  text-align: center;
+}
+
+.verify-card__title {
+  font: 600 18px "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-primary);
+  width: 100%;
+}
+
+.verify-card__footnote {
+  font: 400 12px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+  width: 100%;
+}
+
+.verify-spinner {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 6px solid var(--verify-icon-inactive);
+  border-top-color: var(--verify-brand-green);
+  animation: verify-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes verify-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.verify-icon-circle {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.verify-icon-circle--success {
+  background-color: var(--verify-green-tint-28);
+  color: var(--verify-brand-green);
+}
+
+.verify-icon-circle--neutral {
+  background-color: var(--verify-icon-inactive);
+  color: var(--verify-text-primary);
+}
+
+.verify-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.verify-header--centered {
+  align-items: center;
+  text-align: center;
+}
+
+.verify-heading {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-primary);
+}
+
+.verify-subheading {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-secondary);
+}
+
+.verify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.verify-list--tight {
+  gap: 10px;
+}
+
+.verify-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.verify-row__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: var(--verify-green-tint-28);
+  color: var(--verify-brand-navy);
+}
+
+.verify-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.verify-row__title {
+  font: 600 15px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-primary);
+  margin: 0;
+}
+
+.verify-row__body {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}
+
+.verify-actions {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.verify-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 316px;
+  height: 64px;
+  border-radius: 6px;
+  font: 600 16px "Inter", sans-serif;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.verify-button--primary {
+  background-color: var(--verify-brand-green);
+  color: var(--verify-text-on-green);
+}
+
+.verify-button--secondary {
+  background-color: transparent;
+  color: var(--verify-text-primary);
+  border: 1px solid var(--verify-icon-inactive);
+}
+
+.verify-status-message {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}
+
+/* "Resend verification email" (Figma 6750:29429 / 6750:29480): an underlined
+ * text link under the buttons, with its status line below. */
+.verify-resend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.verify-link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: 400 14px "Inter", sans-serif;
+  color: var(--verify-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
+.verify-link-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.verify-resend__message {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .verify-button {
+    width: 100%;
+  }
+}
+
+/* W9 / B-174: the verify-email PROMPT (VerifyEmailPromptPage) compared with the
+ * frames 6750:29378 / 29429 / 29480 (desktop) and 6750:29531 / 29582 / 29633
+ * (mobile). Scoped to .verify-page--prompt: the other four states (Verifying,
+ * Verified, Link invalid, Missing token) use frames this pass did not read.
+ * Differences fixed: the exported 88px (72px on mobile) mail icon instead of a
+ * text glyph, step numbers at weight 600, 60px (20px on mobile) from the chrome
+ * to the content, the 26px subheading line height, and the resend row (14/18
+ * link and status lines, 10px gap). */
+.verify-page--prompt {
+  padding-top: 60px;
+}
+
+.verify-prompt-icon {
+  display: block;
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+}
+
+.verify-page--prompt .verify-heading {
+  line-height: 44px;
+}
+
+.verify-page--prompt .verify-subheading {
+  line-height: 26px;
+}
+
+.verify-page--prompt .verify-row__icon {
+  font-weight: 600;
+}
+
+.verify-page--prompt .verify-resend {
+  gap: 10px;
+}
+
+.verify-page--prompt .verify-link-button,
+.verify-page--prompt .verify-resend__message {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+@media (max-width: 520px) {
+  .verify-page--prompt {
+    padding: 20px 24px 64px;
+  }
+
+  .verify-page--prompt .verify-prompt-icon {
+    width: 72px;
+    height: 72px;
+  }
+
+  .verify-page--prompt .verify-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

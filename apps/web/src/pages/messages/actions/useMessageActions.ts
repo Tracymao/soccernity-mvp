@@ -1,0 +1,220 @@
+// State for the per-message actions (B-067): the menu, edit mode, and the
+// delete flow. Used by both conversation surfaces, which each own their
+// message list and pass its setter in. Every change that succeeds updates
+// that list in place, so nothing reloads.
+import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  deleteMessage,
+  editMessage,
+  isDeletedMessage,
+  isRemovedMessage,
+  MESSAGE_REMOVED_CODE,
+  MessagingApiError,
+  type DeleteMessageScope,
+  type Message,
+  type ThreadMessage,
+} from "../../../api/messaging";
+import {
+  deleteFailure,
+  editFailure,
+  firstNameOf,
+  reportContextRows,
+  type EditFailureStatus,
+} from "./messageActionRules";
+
+export interface EditState {
+  id: string;
+  original: string;
+  draft: string;
+  status: "idle" | "saving" | EditFailureStatus;
+  error: string | null;
+}
+
+export type DeleteStep = "choice" | "confirm-me" | "confirm-everyone";
+
+export interface DeleteState {
+  id: string;
+  mine: boolean;
+  step: DeleteStep;
+  status: "idle" | "deleting" | "error";
+  error: string | null;
+}
+
+export interface UseMessageActionsArgs {
+  accessToken: string;
+  conversationId: string;
+  currentUserId: string;
+  otherName: string | null | undefined;
+  /** The thread as the surface holds it now, oldest first: the source of the report's context rows. */
+  messages: readonly ThreadMessage[];
+  setMessages: Dispatch<SetStateAction<ThreadMessage[]>>;
+}
+
+export function useMessageActions({
+  accessToken,
+  conversationId,
+  currentUserId,
+  otherName,
+  messages,
+  setMessages,
+}: UseMessageActionsArgs) {
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [edit, setEdit] = useState<EditState | null>(null);
+  const [del, setDel] = useState<DeleteState | null>(null);
+  // The id of the message whose report dialog is open (B-284). The dialog itself is ReportAction, rendered
+  // by that message's MessageHost; the server decides everything about whether the report is allowed.
+  const [reportId, setReportId] = useState<string | null>(null);
+  // Bumped after a change that succeeded, so a surface can refresh anything
+  // derived from the list (the Community sidebar's preview) without doing so
+  // on every load.
+  const [changeTick, setChangeTick] = useState(0);
+
+  // The server refused an edit or delete with message_removed: a moderator removed it since the page loaded.
+  // Show the stub the next load would show, and close whatever was open for it. Only the sender is
+  // refused with message_removed (the recipient may still delete for themselves), so it is the viewer's.
+  const markRemoved = useCallback(
+    (id: string) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id ? { id: m.id, sentAt: m.sentAt, removedByModeration: true as const, isMine: true } : m,
+        ),
+      );
+      setEdit((e) => (e && e.id === id ? null : e));
+      setDel((d) => (d && d.id === id ? null : d));
+    },
+    [setMessages],
+  );
+
+  const openMenu = useCallback((id: string) => setMenuId(id), []);
+  const closeMenu = useCallback(() => setMenuId(null), []);
+
+  const startReport = useCallback((message: Message) => {
+    setMenuId(null);
+    setReportId(message.id);
+  }, []);
+  const closeReport = useCallback(() => setReportId(null), []);
+
+  const startEdit = useCallback((message: Message) => {
+    setMenuId(null);
+    setEdit({ id: message.id, original: message.contentText, draft: message.contentText, status: "idle", error: null });
+  }, []);
+  const setEditDraft = useCallback((draft: string) => {
+    setEdit((e) => (e ? { ...e, draft } : e));
+  }, []);
+  const cancelEdit = useCallback(() => {
+    setEdit((e) => (e && e.status === "saving" ? e : null));
+  }, []);
+
+  async function saveEdit() {
+    if (!edit || edit.status === "saving" || edit.status === "window-closed" || edit.status === "not-editable") return;
+    const text = edit.draft.trim();
+    if (!text || text === edit.original) return;
+    const id = edit.id;
+    setEdit({ ...edit, status: "saving", error: null });
+    try {
+      const result = await editMessage(accessToken, conversationId, id, text);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id && !isDeletedMessage(m) && !isRemovedMessage(m)
+            ? { ...m, contentText: result.contentText, editedAt: result.editedAt ?? new Date().toISOString() }
+            : m,
+        ),
+      );
+      setEdit(null);
+      setChangeTick((t) => t + 1);
+    } catch (err) {
+      if (err instanceof MessagingApiError && err.code === MESSAGE_REMOVED_CODE) {
+        markRemoved(id);
+        return;
+      }
+      const failure = editFailure(err);
+      setEdit((e) => (e && e.id === id ? { ...e, status: failure.status, error: failure.text } : e));
+    }
+  }
+
+  const startDelete = useCallback(
+    (message: Message) => {
+      setMenuId(null);
+      setDel({
+        id: message.id,
+        mine: message.senderId === currentUserId,
+        step: "choice",
+        status: "idle",
+        error: null,
+      });
+    },
+    [currentUserId],
+  );
+  const chooseDelete = useCallback((scope: DeleteMessageScope) => {
+    setDel((d) =>
+      d ? { ...d, step: scope === "me" ? "confirm-me" : "confirm-everyone", status: "idle", error: null } : d,
+    );
+  }, []);
+  const cancelDelete = useCallback(() => {
+    setDel((d) => (d && d.status === "deleting" ? d : null));
+  }, []);
+
+  async function confirmDelete() {
+    if (!del || del.status === "deleting" || del.step === "choice") return;
+    const { id } = del;
+    const scope: DeleteMessageScope = del.step === "confirm-me" ? "me" : "everyone";
+    setDel({ ...del, status: "deleting", error: null });
+    try {
+      await deleteMessage(accessToken, conversationId, id, scope);
+      setMessages((prev) =>
+        scope === "me"
+          ? prev.filter((m) => m.id !== id)
+          : prev.map((m) =>
+              m.id === id && !isRemovedMessage(m)
+                ? {
+                    id: m.id,
+                    conversationId: m.conversationId,
+                    senderId: m.senderId,
+                    sentAt: m.sentAt,
+                    editedAt: null,
+                    deletedForEveryone: true,
+                    contentText: null,
+                  }
+                : m,
+            ),
+      );
+      setEdit((e) => (e && e.id === id ? null : e));
+      setDel(null);
+      setChangeTick((t) => t + 1);
+    } catch (err) {
+      if (err instanceof MessagingApiError && err.code === MESSAGE_REMOVED_CODE) {
+        markRemoved(id);
+        return;
+      }
+      setDel((d) => (d && d.id === id ? { ...d, status: "error", error: deleteFailure(err) } : d));
+    }
+  }
+
+  // The messages offered as context when this message is reported (B-286). Read from the loaded thread.
+  const contextRowsFor = (id: string) => reportContextRows(messages, id, currentUserId, otherName);
+
+  return {
+    accessToken,
+    reportId,
+    contextRowsFor,
+    startReport,
+    closeReport,
+    menuId,
+    openMenu,
+    closeMenu,
+    edit,
+    startEdit,
+    setEditDraft,
+    cancelEdit,
+    saveEdit,
+    del,
+    startDelete,
+    chooseDelete,
+    cancelDelete,
+    confirmDelete,
+    changeTick,
+    otherFirstName: firstNameOf(otherName),
+  };
+}
+
+export type MessageActions = ReturnType<typeof useMessageActions>;

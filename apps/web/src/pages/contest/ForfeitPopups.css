@@ -1,0 +1,55 @@
+.forfeit-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.forfeit-dialog {
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--sn-background-surface);
+  border-radius: 12px;
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 24px 56px var(--sn-shadow-key);
+}
+
+/* semantic/alert as an accent bar only, never text (Decision Log #408 item 4). */
+.forfeit-dialog__bar {
+  width: 34px;
+  height: 3px;
+  background-color: var(--sn-semantic-alert);
+}
+
+.forfeit-dialog__title {
+  margin: 0;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.forfeit-dialog__body {
+  margin: 0;
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.forfeit-dialog__ok {
+  height: 44px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-background-surface);
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}

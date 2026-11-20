@@ -1,0 +1,130 @@
+/* Shared by ReportAction (dialog) and ReportPage. Figma: docs/figma-report-reason-categories.md.
+ * Light-theme --sn-* tokens only. The app loads no Montserrat file; text uses the same Inter stack as the
+ * files this replaces (ReportAction.css, ReportPage.css). */
+
+.report-fields__category {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-fields__legend {
+  padding: 0;
+  font: 600 13px/1.2 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin-bottom: 8px;
+}
+
+.report-fields__options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-fields__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.report-fields__option--selected {
+  background: var(--sn-green-tint-12);
+}
+
+.report-fields__option-label {
+  font: 500 14px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+/* A real radio input, drawn as the frame's 20px ring with a navy dot. */
+.report-fields__radio {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--sn-brand-navy);
+  border-radius: 50%;
+  background: transparent;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.report-fields__radio::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+  transform: scale(0);
+}
+
+.report-fields__radio:checked::before {
+  transform: scale(1);
+}
+
+.report-fields__radio:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.report-fields__category:disabled .report-fields__option,
+.report-fields__category:disabled .report-fields__radio {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.report-fields__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-fields__label {
+  font: 600 13px/1.2 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.report-fields__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  font: 500 14px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  resize: vertical;
+  outline: none;
+}
+
+.report-fields__textarea::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.report-fields__textarea:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.report-fields__hint {
+  margin: 0;
+  font: 600 12px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.report-fields__counter {
+  margin: 0;
+  text-align: right;
+  font: 600 10px/1.2 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}

@@ -1,0 +1,92 @@
+import {
+  calculateAge,
+  computeIsMinor,
+  computeIsUnder16,
+  isPlausibleDateOfBirth,
+  MINIMUM_SIGNUP_AGE,
+  meetsMinimumSignupAge,
+} from './age.util';
+
+describe('age.util', () => {
+  const asOf = new Date('2026-08-16T00:00:00.000Z');
+
+  describe('calculateAge', () => {
+    it('computes exact age when the birthday already happened this year', () => {
+      expect(calculateAge(new Date('2000-01-01'), asOf)).toBe(26);
+    });
+
+    it('computes exact age when the birthday has not happened yet this year', () => {
+      expect(calculateAge(new Date('2000-12-25'), asOf)).toBe(25);
+    });
+
+    it('turns exactly 18 on the birthday itself', () => {
+      expect(calculateAge(new Date('2008-08-16'), asOf)).toBe(18);
+    });
+
+    it('is still 17 the day before an 18th birthday', () => {
+      expect(calculateAge(new Date('2008-08-17'), asOf)).toBe(17);
+    });
+  });
+
+  describe('computeIsMinor', () => {
+    it('is true for a 17-year-old', () => {
+      expect(computeIsMinor(new Date('2009-01-01'), asOf)).toBe(true);
+    });
+
+    it('is false for someone who turned 18 today', () => {
+      expect(computeIsMinor(new Date('2008-08-16'), asOf)).toBe(false);
+    });
+
+    it('is false for a clearly-adult date of birth', () => {
+      expect(computeIsMinor(new Date('1990-01-01'), asOf)).toBe(false);
+    });
+
+    it('is true for a young child (Decision Log #8: no separate 13 threshold)', () => {
+      expect(computeIsMinor(new Date('2020-01-01'), asOf)).toBe(true);
+    });
+  });
+
+  describe('computeIsUnder16', () => {
+    it('is true at 15 and false at exactly 16, 17 and adults', () => {
+      expect(computeIsUnder16(new Date('2011-08-17'), asOf)).toBe(true); // turns 15 tomorrow -> age 14
+      expect(computeIsUnder16(new Date('2010-08-17'), asOf)).toBe(true); // 15, 16th birthday tomorrow
+      expect(computeIsUnder16(new Date('2010-08-16'), asOf)).toBe(false); // exactly 16 today
+      expect(computeIsUnder16(new Date('2009-01-01'), asOf)).toBe(false); // 17
+      expect(computeIsUnder16(new Date('1990-01-01'), asOf)).toBe(false);
+    });
+  });
+
+  describe('isPlausibleDateOfBirth', () => {
+    it('accepts an ordinary adult date of birth', () => {
+      expect(isPlausibleDateOfBirth(new Date('1990-01-01'), asOf)).toBe(true);
+    });
+
+    it('rejects a future date of birth', () => {
+      expect(isPlausibleDateOfBirth(new Date('2027-01-01'), asOf)).toBe(false);
+    });
+
+    it('rejects an unparseable date', () => {
+      expect(isPlausibleDateOfBirth(new Date('not-a-date'), asOf)).toBe(false);
+    });
+
+    it('rejects an implausibly old date of birth', () => {
+      expect(isPlausibleDateOfBirth(new Date('1850-01-01'), asOf)).toBe(false);
+    });
+  });
+
+  describe('meetsMinimumSignupAge (Decision Log #19, QA D-02)', () => {
+    const now = new Date(2026, 5, 15, 12);
+    it('the floor is 5', () => {
+      expect(MINIMUM_SIGNUP_AGE).toBe(5);
+    });
+    it('is false at 4, including the day before the 5th birthday', () => {
+      expect(meetsMinimumSignupAge(new Date(2022, 5, 15), now)).toBe(false);
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 16), now)).toBe(false);
+    });
+    it('is true on the 5th birthday and after', () => {
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 15), now)).toBe(true);
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 14), now)).toBe(true);
+      expect(meetsMinimumSignupAge(new Date(1990, 0, 1), now)).toBe(true);
+    });
+  });
+});

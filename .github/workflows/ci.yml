@@ -13,9 +13,48 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Without this the GitHub default (360 minutes) applies. On 2026-11-07 two
+    # runs sat in "Run e2e tests" for 1 to 2+ hours after Jest finished,
+    # because Jest did not exit ("too many clients already" from the CI
+    # Postgres left leaked connections open). A normal run is 13 to 18 minutes
+    # end to end, so 40 minutes fails a hang fast and visibly.
+    timeout-minutes: 40
     env:
       DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
+      # One-line, additive deviation from this PR's own brief (which asked
+      # for ci.yml to be left completely untouched) — flagged explicitly,
+      # not silently done. prisma/schema.prisma's datasource block now
+      # declares `directUrl` (Decision Log #26, Neon's pooled-vs-direct
+      # connection split — see .env.example's own DIRECT_URL comment).
+      # Confirmed by literally reproducing it locally: running
+      # `npx prisma migrate deploy` with this exact env shape (DATABASE_URL
+      # set, DIRECT_URL unset) fails with Prisma error P1012,
+      # "Environment variable not found: DIRECT_URL" — which would have
+      # broken this job's existing "Run database migrations" step on the
+      # very next push without this line. No pooler sits in front of CI's
+      # own ephemeral Postgres service container, so the same value as
+      # DATABASE_URL above is correct here, identical to local dev's own
+      # .env/.env.test pattern.
+      DIRECT_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
       REDIS_URL: redis://localhost:6379
+      # Required by JwtModule.registerAsync (auth-foundation.module.ts) —
+      # no code-level default, unlike JWT_ACCESS_TTL_SECONDS/
+      # JWT_REFRESH_TTL_DAYS/etc. Missing here caused PR #59's own first
+      # CI run to fail ("Run e2e tests" step) with "secretOrPrivateKey
+      # must have a value" the instant a real jwtService.sign() call ran
+      # through a genuinely bootstrapped AppModule for the first time —
+      # see services/api/test/README.md and .env.test.example for the
+      # full explanation. Obviously-fake, test-only value: must never
+      # match any real deployment secret.
+      JWT_SECRET: ci-test-only-jwt-secret-do-not-use-in-any-real-environment
+      # sprint-2/admin-console-account-entity — same requirement as
+      # JWT_SECRET above (admin-auth-foundation.module.ts's own
+      # JwtModule.registerAsync has no fallback), added proactively this
+      # time rather than waiting for a first failing CI run to surface it.
+      # Deliberately a different value from JWT_SECRET — that difference
+      # is part of what admin-auth-isolation.e2e-spec.ts proves.
+      ADMIN_JWT_SECRET: ci-test-only-admin-jwt-secret-do-not-use-in-any-real-environment
+      DOB_ENCRYPTION_KEY: ZTJlLXRlc3Qtb25seS1kb2Ita2V5LTMyLWJ5dGVzISE=
     services:
       postgres:
         image: postgres:16
@@ -36,24 +75,131 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: "20"
+          # Full history so the docs-only check below can diff against the
+          # base commit (the default shallow clone has no base to diff).
+          fetch-depth: 0
+
+      # Docs-only changes (docs/**, any *.md) skip everything below: install,
+      # lint, unit tests, e2e tests and build take about 18 minutes and
+      # cannot be affected by a document. The job and its name still run and
+      # report success, so the required "build-and-test" check is satisfied
+      # (a workflow-level paths-ignore would leave it pending forever).
+      #
+      # Files that code or tests read from docs/ are NOT treated as docs, see
+      # .github/scripts/docs-only-change.sh. Any error in this step, an
+      # unreachable base commit, or an empty file list means "not docs-only":
+      # the full CI runs. Fail safe, never fail open.
+      - name: Detect docs-only change
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          docs_only=false
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # HEAD is the PR merged into its base; HEAD^1 is the base tip.
+            base="$(git rev-parse HEAD^1 2>/dev/null || true)"
+          else
+            base="$PUSH_BEFORE"
+          fi
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            if files="$(git diff --name-only "$base" HEAD)"; then
+              echo "Changed files:"
+              echo "$files"
+              docs_only="$(printf '%s\n' "$files" | bash .github/scripts/docs-only-change.sh || echo false)"
+            fi
+          else
+            echo "No usable base commit; running the full CI."
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          if [ "$docs_only" = "true" ]; then
+            echo "::notice::Docs-only change: install, lint, tests and build skipped."
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.changes.outputs.docs_only != 'true'
+        with:
+          node-version: "22.22.0"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm install
 
       - name: Generate Prisma client
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run prisma:generate
 
+      - name: Run database migrations
+        if: steps.changes.outputs.docs_only != 'true'
+        working-directory: services/api
+        run: npx prisma migrate deploy
+
       - name: Lint
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run lint
 
       - name: Test
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run test
 
+      - name: Run e2e tests
+        if: steps.changes.outputs.docs_only != 'true'
+        working-directory: services/api
+        # Normal: 13 minutes. A tighter step limit than the job's, so a Jest
+        # that finished but will not exit is cut off with the log intact.
+        timeout-minutes: 30
+        # Prints the open Postgres connection count after each spec file
+        # ([e2e-connections] lines), to find what leaks. test/connection-reporter.js
+        env:
+          E2E_LOG_CONNECTIONS: '1'
+        run: npm run test:e2e
+
       - name: Build
+        if: steps.changes.outputs.docs_only != 'true'
         run: npm run build
+
+  # Dependency audit. Decision Log #423, build-register B-250.
+  #
+  # Gate: fail on High or Critical advisories in PRODUCTION dependencies of the
+  # deployed workspaces only. apps/mobile is deliberately not gated: it has no
+  # application code and its react-native tooling advisories (shell-quote,
+  # image-size via metro) are deferred by Decision Log #20 tier 3.
+  #
+  # Report-only: the same audit including dev dependencies, plus apps/mobile
+  # in full. These steps never fail the job (continue-on-error) so the findings
+  # are visible in the log without blocking a merge.
+  #
+  # `npm audit` reads package-lock.json; no install is needed.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+
+      - name: Audit production dependencies (gate, High and above)
+        # .github/scripts/audit-gate.mjs runs the same `npm audit --omit=dev` per workspace
+        # and removes only the time-boxed entries in .github/audit-allowlist.json
+        # (currently GHSA-fc5q-39xc-vjpf, picomatch, no patch published; expires 2026-12-17).
+        run: node .github/scripts/audit-gate.mjs services/api apps/web apps/admin packages/shared
+
+      - name: Audit including dev dependencies (report only)
+        continue-on-error: true
+        run: |
+          for ws in services/api apps/web apps/admin packages/shared; do
+            echo "::group::npm audit --workspace=$ws (all dependencies)"
+            npm audit --workspace="$ws" --audit-level=high || true
+            echo "::endgroup::"
+          done
+
+      - name: Audit apps/mobile (report only, Decision Log #20 tier 3)
+        continue-on-error: true
+        run: npm audit --workspace=apps/mobile --audit-level=high

@@ -1,0 +1,16 @@
+/* The placeholder box already sets aspect-ratio, radius and tint on its
+   own class; this only clips and fills it when a real cover is present. */
+.cover-media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.cover-media__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

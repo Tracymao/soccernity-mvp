@@ -1,0 +1,379 @@
+// Banter Room -- a single room's feed + posting. Route: /banter/:roomId.
+//
+// NO Figma frame exists for this screen -- the Bants frames this file's
+// sibling BanterPage.tsx converts (2256:6802 / 2448:2179) only ever show
+// the room LIST, never a room's own feed. Built plain and flagged, same
+// "no dedicated screen exists" precedent ClubFanPage.tsx / EditProfileModal
+// established for their own unbacked corners -- necessary because
+// join/leave and posting-in-a-room (BanterModule, Decision Log #275/#276)
+// need somewhere to actually happen once api/banter.ts exists.
+//
+// B-117 (Decision Log #403 item 16, #404 item 10): Bants is an OPEN FORUM.
+// Any eligible signed-in account may post and comment in a room whether or
+// not they "joined" it; join / leave are only the My Bants bookmark
+// ("Add to My Bants" / "In My Bants", Figma 6998:54688 / 6999:54768), never
+// a gate. Eligibility (under-16, consent, verified email, complete profile)
+// is enforced server-side; this page does no membership check of its own.
+// An inactive room shows the grey dot and an "Inactive" pill (Figma
+// 6999:55292) to everyone.
+//
+// B-071 (Decision Log #472): the room's CREATOR (the token's subject equals the
+// server's `createdBy` on the room read -- no name is ever compared) gets
+// creator-only controls, all server-enforced (404 then 403 for anyone else):
+// a room menu (Deactivate / Reactivate room, PATCH /banter-rooms/:id/status),
+// topic chips with a remove cross (DELETE /banter-rooms/:id/topics/:topicId)
+// and an Add topic chip (POST /banter-rooms/:id/topics, with the topic
+// catalogue from GET /banter-rooms/topics). Everyone else sees the read-only
+// chips. Figma W8 Bants frames M3 to M19 / D2 to D17
+// (docs/figma-w8-bants.md section 2).
+//
+// Real data (Build Plan Section 4.4):
+//   - GET /banter-rooms/:id        -- name, scope, member count, joined
+//   - GET /banter-rooms/:id/posts  -- the room feed, identical
+//     FeedPage/FeedPostWithViewerState shape to GET /posts/feed
+//     (delegates server-side to FeedService.getBanterRoomFeed) -- rendered
+//     with the same, reused PostCard.tsx as Community/Club Fan Page, real
+//     like/comment/save/follow.
+//   - one Add to My Bants / In My Bants button (BanterJoinButton,
+//     bookmark variant)
+//   - a composer -> POST /banter-rooms/:id/posts: contentText (required, 1 to
+//     3,000 characters) plus optional `mediaIds`. B-042 (founder decision
+//     2026-11-14): Bants takes photos and video EXACTLY like Create Post -- the
+//     same attach buttons, the same tray and states, the same limits (up to 10
+//     pictures and one video, uploaded straight to storage through one-time
+//     links, services/api POST /media/uploads), the same "Uploads aren't
+//     available right now" state when the server has uploads switched off
+//     (useMediaUploads.ts, MediaAttach.tsx, MediaUploadTray.tsx are shared with
+//     PostComposer). A post whose file is still being checked shows to its
+//     author only until it is approved -- the API and PostCard handle that.
+//     Open to any eligible signed-in account; a refusal (e.g. guardian
+//     consent) is shown as the server's own message.
+//
+// Feed loads independently of the room header (a failure shows a soft
+// in-section message, matching ClubFanPage.tsx). A missing / 404 room
+// renders an honest "Room not found" state with a link back to /banter.
+// GET /banter-rooms/:id is JwtAuthGuard-only; a no-session visit shows a
+// "log in" prompt and never calls the API.
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useParams } from "react-router";
+import {
+  getRoomById,
+  getRoomFeed,
+  postToRoom,
+  BanterApiError,
+  type BanterRoom,
+  type BanterRoomScopeType,
+  type BanterTopic,
+} from "../api/banter";
+import type { FeedPost } from "../api/feed";
+import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
+import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
+import BanterJoinButton from "./banter/BanterJoinButton";
+import BanterStatusDot from "./banter/BanterStatusDot";
+import RoomStatusControls from "./banter/RoomStatusControls";
+import RoomTopicsEditor from "./banter/RoomTopicsEditor";
+import PostCard from "./community/PostCard";
+import { MediaAttachButtons, MediaUploadStatus } from "./community/MediaAttach";
+import { useMediaUploads } from "./community/useMediaUploads";
+import "./banter/BanterPage.css";
+import "./banter/BanterRoomPage.css";
+import "./banter/BanterRoomControls.css";
+import "./community/CommunityPage.css";
+
+type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
+type SectionState = "loading" | "loaded" | "error";
+
+const MAX_LENGTH = 3000;
+
+const SCOPE_LABELS: Record<BanterRoomScopeType, string> = {
+  club: "Club",
+  league: "League",
+  country: "Country",
+  topic: "Topic",
+};
+
+function memberLine(count: number): string {
+  return `${count.toLocaleString("en-GB")} ${count === 1 ? "member" : "members"}`;
+}
+
+export default function BanterRoomPage() {
+  const { roomId } = useParams<{ roomId: string }>();
+  const token = getStoredAccessToken();
+  const decoded = token ? decodeAccessToken(token) : null;
+
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [restricted, setRestricted] = useState(false);
+  const [room, setRoom] = useState<BanterRoom | null>(null);
+
+  const [feedState, setFeedState] = useState<SectionState>("loading");
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [feedCursor, setFeedCursor] = useState<string | null>(null);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
+
+  const [draft, setDraft] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  // Hooks run before the early returns below; with no session the hook is simply never used.
+  const uploads = useMediaUploads({ accessToken: token ?? "" });
+
+  const load = useCallback(async () => {
+    if (!token) {
+      setLoadState("no-session");
+      return;
+    }
+    if (!roomId) {
+      setLoadState("not-found");
+      return;
+    }
+    setLoadState("loading");
+
+    let roomResult: BanterRoom;
+    try {
+      roomResult = await getRoomById(token, roomId);
+    } catch (err) {
+      setRestricted(isUnder16Restricted(err));
+      setLoadState(err instanceof BanterApiError && err.status === 404 ? "not-found" : "error");
+      return;
+    }
+    setRoom(roomResult);
+    setLoadState("loaded");
+
+    setFeedState("loading");
+    try {
+      const page = await getRoomFeed(token, roomId);
+      setPosts(page.items);
+      setFeedCursor(page.nextCursor);
+      setFeedState("loaded");
+    } catch {
+      setFeedState("error");
+    }
+  }, [token, roomId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function loadMorePosts() {
+    if (!token || !roomId || !feedCursor || feedLoadingMore) return;
+    setFeedLoadingMore(true);
+    try {
+      const page = await getRoomFeed(token, roomId, feedCursor);
+      setPosts((prev) => [...prev, ...page.items]);
+      setFeedCursor(page.nextCursor);
+    } catch {
+      /* keep what we have; the button stays and can be retried */
+    } finally {
+      setFeedLoadingMore(false);
+    }
+  }
+
+  async function handlePost(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !roomId || posting) return;
+    const contentText = draft.trim();
+    if (!contentText || !uploads.canPublish) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      const created = await postToRoom(token, roomId, {
+        contentText,
+        ...(uploads.mediaIds.length > 0 ? { mediaIds: uploads.mediaIds } : {}),
+      });
+      // POST /banter-rooms/:id/posts (like POST /posts) doesn't return the
+      // per-caller viewer-state fields (Decision Log #153) -- for a post
+      // you just created they're all deterministically false.
+      setPosts((prev) => [
+        { ...created, isLiked: false, isSaved: false, author: { ...created.author, isFollowing: false } },
+        ...prev,
+      ]);
+      setDraft("");
+      uploads.clear();
+    } catch (err) {
+      setPostError(err instanceof BanterApiError ? err.message : "Couldn't post in this room.");
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  if (loadState === "no-session") {
+    return (
+      <div className="banter-status" role="status">
+        Log in to view this room. <Link to="/login">Log in</Link>
+      </div>
+    );
+  }
+
+  if (loadState === "loading") {
+    return (
+      <div className="banter-room-page">
+        <p className="banter-status" role="status">
+          Loading room…
+        </p>
+      </div>
+    );
+  }
+
+  if (loadState === "not-found") {
+    return (
+      <div className="banter-room-page">
+        <Link to="/banter" className="banter-room-page__back">
+          ← Bants
+        </Link>
+        <p className="banter-status" role="status">
+          Room not found. <Link to="/banter">Back to all rooms</Link>
+        </p>
+      </div>
+    );
+  }
+
+  if (loadState === "error" || !room) {
+    return (
+      <div className="banter-room-page">
+        <Link to="/banter" className="banter-room-page__back">
+          ← Bants
+        </Link>
+        <p className="banter-status" role="alert">
+          {restricted ? UNDER_16_MESSAGE : "Couldn’t load this room. Please try again shortly."}
+        </p>
+      </div>
+    );
+  }
+
+  // The server tells the page who created the room (`createdBy`, an opaque
+  // user id); the token's subject is compared to it, never a display name.
+  const isCreator = decoded?.sub !== undefined && decoded.sub === room.createdBy;
+
+  return (
+    <div className="banter-room-page">
+      <Link to="/banter" className="banter-room-page__back">
+        ← Bants
+      </Link>
+
+      <div className="banter-room-page__identity">
+        <span className="banter-room-page__avatar" aria-hidden="true">
+          {room.name.trim()[0]?.toUpperCase() ?? "?"}
+        </span>
+        <div className="banter-room-page__text">
+          <div className="banter-room-page__title-row">
+            <h1 className="banter-room-page__name">
+              <BanterStatusDot status={room.status} />
+              {room.name}
+            </h1>
+            {isCreator && token && (
+              <RoomStatusControls
+                accessToken={token}
+                roomId={room.id}
+                status={room.status}
+                onChanged={(updated) => setRoom((prev) => (prev ? { ...prev, status: updated.status } : prev))}
+              />
+            )}
+          </div>
+          {/* Optional room description (Figma pass Y 7061:63659 / 63660 / 63661),
+              directly under the title. Rendered as a React text node, never as
+              HTML, the same safe way the room name is. */}
+          {room.description && <p className="banter-room-page__description">{room.description}</p>}
+          {room.status === "inactive" && <span className="banter-room-page__inactive-pill">Inactive</span>}
+          <p className="banter-room-page__meta">
+            {SCOPE_LABELS[room.scopeType]} &middot; {memberLine(room.memberCount)}
+          </p>
+        </div>
+      </div>
+
+      {isCreator && token ? (
+        <RoomTopicsEditor
+          accessToken={token}
+          roomId={room.id}
+          topics={room.topics ?? []}
+          onTopicsReplaced={(next: BanterTopic[]) => setRoom((prev) => (prev ? { ...prev, topics: next } : prev))}
+          onTopicRemoved={(topicId) =>
+            setRoom((prev) => (prev ? { ...prev, topics: (prev.topics ?? []).filter((t) => t.id !== topicId) } : prev))
+          }
+        />
+      ) : (
+        room.topics &&
+        room.topics.length > 0 && (
+          <ul className="banter-room-page__topics" aria-label="Topics">
+            {room.topics.map((topic) => (
+              <li key={topic.id} className="banter-room-page__topic">
+                {topic.name}
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+
+      <BanterJoinButton
+        variant="bookmark"
+
+        accessToken={token!}
+        roomId={room.id}
+        joined={room.joined}
+        onToggled={(next) => setRoom((prev) => (prev ? { ...prev, joined: next.joined, memberCount: next.memberCount } : prev))}
+        className="banter-join--block"
+      />
+
+      <hr className="banter-room-page__divider" />
+
+      <section className="banter-room-page__section" aria-labelledby="banter-room-feed-title">
+        <h2 id="banter-room-feed-title" className="banter-room-page__section-title">
+          Room feed
+        </h2>
+
+        <form className="banter-room-composer" onSubmit={handlePost}>
+          <textarea
+            className="banter-room-composer__input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={`Say something to ${room.name}…`}
+            maxLength={MAX_LENGTH}
+            rows={3}
+          />
+          <div className="banter-room-composer__row">
+            <MediaAttachButtons uploads={uploads} />
+            <button
+              type="submit"
+              className="banter-room-composer__submit"
+              disabled={posting || !draft.trim() || !uploads.canPublish}
+            >
+              {posting ? "Posting…" : "Post"}
+            </button>
+          </div>
+          <MediaUploadStatus uploads={uploads} />
+          {postError && (
+            <p className="banter-room-composer__error" role="alert">
+              {postError}
+            </p>
+          )}
+        </form>
+
+        {feedState === "loading" && (
+          <p className="banter-status" role="status">
+            Loading posts…
+          </p>
+        )}
+        {feedState === "error" && (
+          <p className="banter-status" role="alert">
+            Couldn&rsquo;t load this room&rsquo;s posts.
+          </p>
+        )}
+        {feedState === "loaded" && posts.length === 0 && (
+          <p className="banter-status" role="status">
+            No posts in this room yet.
+          </p>
+        )}
+        {feedState === "loaded" && token && decoded && (
+          <div className="banter-room-page__feed">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} accessToken={token} currentUserId={decoded.sub} />
+            ))}
+          </div>
+        )}
+        {feedCursor && feedState === "loaded" && (
+          <button type="button" className="banter-load-more" onClick={loadMorePosts} disabled={feedLoadingMore}>
+            {feedLoadingMore ? "Loading…" : "Load more posts"}
+          </button>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,458 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { notBlockedWith } from '../block/block.util';
+import { decodeClubCursor, encodeClubCursor } from './cursor.util';
+import {
+  CLUB_MEMBERS_DEFAULT_PAGE_SIZE,
+  CLUB_MEMBERS_MAX_PAGE_SIZE,
+  ListClubMembersQueryDto,
+} from './dto/list-club-members-query.dto';
+import { CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE, ListClubsQueryDto } from './dto/list-clubs-query.dto';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
+import {
+  decodeUserNameCursor,
+  USER_NAME_ORDER_BY,
+  userNameAfterCursor,
+  userNameCursorOf,
+} from '../users/user-name-keyset.util';
+
+// Response shape for every GET /clubs and GET /clubs/:id entry (Build
+// Plan Section 4.4). Deliberately does NOT select `members` or
+// `affiliatedPlayers` — same low-bandwidth discipline Section 5.5
+// already applied to feed/comment lists (see feed.service.ts's
+// POST_SELECT comment): a club with thousands of members returned
+// inline on every page would be exactly the unbounded payload that
+// discipline exists to prevent. Member data is served by the dedicated,
+// separately-paginated GET /clubs/:id/members roster endpoint
+// (getClubMembers, sprint-2/club-fan-page-backend), never inline here.
+const CLUB_SELECT = {
+  id: true,
+  name: true,
+  league: true,
+  country: true,
+  logoUrl: true,
+  memberCount: true,
+} as const;
+
+export type ClubSummary = Prisma.ClubPageGetPayload<{ select: typeof CLUB_SELECT }>;
+
+// What GET /clubs and GET /clubs/:id actually return to a client: the
+// lean club row plus ONE per-request-user-computed boolean (Decision Log
+// #154). `joined` is NOT a stored column — it's `true` iff a
+// `ClubPage.members` relation row exists for (this club, the CALLING
+// user). Same discipline as feed.service.ts's `FeedPostWithViewerState`
+// (Decision Log #153): the field is an intersection on top, never added
+// to CLUB_SELECT itself.
+//
+// Resolved WITHOUT an N+1: `listClubs()` resolves a whole page with a
+// single batched `clubPage.findMany({ where: { id: { in: [...] },
+// members: { some: { id: userId } } } })`; `getClubById()` resolves the
+// single club with one `findFirst`. Both use a plain Prisma relation
+// filter — a read-only existence check needs none of the raw-SQL
+// atomicity `joinClub`/`leaveClub` require for their INSERT/DELETE.
+export type ClubSummaryWithViewerState = ClubSummary & { joined: boolean };
+
+export interface ClubPageResult {
+  items: ClubSummaryWithViewerState[];
+  nextCursor: string | null;
+}
+
+// `joined` is a plain boolean (not the `true`/`false` literal split you
+// might expect from separate join/leave types) — mirroring
+// FeedService.LikeState's own precedent (`liked: boolean`, shared by
+// both likePost and unlikePost) rather than inventing a parallel
+// JoinState/LeaveState pair for a single-field difference.
+export interface JoinState {
+  clubId: string;
+  joined: boolean;
+  memberCount: number;
+}
+
+// GET /clubs/:id/members roster entry (sprint-2/club-fan-page-backend).
+// Deliberately the same { id, displayName }-only shape
+// UsersService.FOLLOW_USER_SELECT and FeedService.POST_AUTHOR_SELECT
+// already established for "what any other user sees about someone else"
+// — re-declared here rather than imported (both of those are private,
+// unexported consts in other modules). No email, phone, dateOfBirth,
+// isMinor, verificationStatus, or passwordHash ever leaves Postgres via
+// this select. `@handle` / avatar aren't here because `User` has no such
+// column (parked backend requirements, Decision Log #58) — the Figma
+// roster's handle text is decorative, same as everywhere else.
+// Sends { id, publicName } (username if set, else displayName), never the raw
+// displayName -- see users/public-name.util.ts. Ordering/cursor below stay on
+// displayName (flagged follow-up: sort by the public name).
+const CLUB_MEMBER_SELECT = {
+  id: true,
+  ...PUBLIC_NAME_SELECT,
+} as const;
+
+// Decision Log #224: the roster entry also carries the caller's own
+// follow state for that member, so the Follow button renders correctly on
+// first paint. Same batched per-caller discipline as FeedService's
+// attachViewerState (Decision Log #153) — an intersection on top of the
+// lean select, never a stored column.
+export type ClubMember = {
+  id: string;
+  publicName: string;
+  isFollowing: boolean;
+};
+
+export interface ClubMemberPage {
+  items: ClubMember[];
+  nextCursor: string | null;
+}
+
+// Roster visibility filter: exclude restricted-pending minors from the
+// member list (CLAUDE.md non-negotiable #1; Build Plan Section 8.3 — "the
+// minor's account exists but is restricted" and a minor's profile is not
+// visible outside the guardian relationship before consent is recorded).
+// A restricted-pending minor CAN join a club fan page (POST /clubs/:id/join
+// is JwtAuthGuard-only, not GuardianConsentGuard — see this file's guard
+// reasoning), so without this they'd surface by displayName in a roster
+// readable by any authenticated caller — the same category of leak
+// UsersService.assertFollowGraphVisible closes for a restricted-pending
+// minor's own follower/following graph (Decision Log #31/#41).
+//
+// "Not restricted-pending" = a non-minor, OR a minor whose Guardian row
+// exists AND has consentStatus 'confirmed'. A minor with a pending
+// guardian, or (the data-invariant case) no Guardian row at all, is
+// excluded. Consequence, flagged in clubs/README.md and Decision Log
+// #217: the visible roster length can be smaller than ClubPage.memberCount
+// (which counts raw _ClubMembership rows) — acceptable, memberCount is
+// explicitly "not authoritative in isolation" per its own schema comment,
+// and restricted-pending minors joining clubs is an edge case.
+//
+// sprint-2/account-deactivation-backend (Decision Log #221): the roster
+// also excludes deactivated / pending_deletion accounts (accountStatus
+// !== 'active'). A deactivated user may have joined a club fan page while
+// active (POST /clubs/:id/join is JwtAuthGuard-only), and their
+// displayName should not surface in a roster readable by any
+// authenticated caller — the same "an inactive account should not
+// appear" principle behind the feed and follow-list filters. The same
+// memberCount-can-be-larger-than-the-visible-roster note above applies;
+// reactivation makes the entry reappear with no backfill.
+const VISIBLE_CLUB_MEMBER_FILTER: Prisma.UserWhereInput = {
+  accountStatus: 'active',
+  OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
+};
+
+@Injectable()
+export class ClubsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // GET /clubs. Ordered alphabetically by `name` (ClubPage has no
+  // timestamp field to order most-recent-first by, unlike every other
+  // list endpoint in this codebase — see cursor.util.ts), `id` as the
+  // keyset tiebreaker for two clubs sharing an identical name. Keyset
+  // (not offset) pagination, same Section 5.5 discipline as every other
+  // list endpoint here — see dto/list-clubs-query.dto.ts.
+  async listClubs(query: ListClubsQueryDto, userId: string): Promise<ClubPageResult> {
+    const limit = Math.min(query.limit ?? CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE);
+
+    const filters: Prisma.ClubPageWhereInput[] = [];
+    if (query.league) filters.push({ league: query.league });
+    if (query.country) filters.push({ country: query.country });
+    if (query.cursor) filters.push(this.buildCursorFilter(query.cursor));
+
+    const where: Prisma.ClubPageWhereInput = filters.length > 0 ? { AND: filters } : {};
+
+    // take: limit + 1 — the standard "fetch one extra row" trick to know
+    // whether a next page exists without a separate COUNT() query, same
+    // as every other paginated query in this codebase.
+    const rows = await this.prisma.clubPage.findMany({
+      where,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      select: CLUB_SELECT,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor = hasMore && last ? encodeClubCursor({ name: last.name, id: last.id }) : null;
+
+    const joinedIds = await this.membershipSubset(
+      userId,
+      trimmed.map((c) => c.id),
+    );
+    const items = trimmed.map((club) => ({ ...club, joined: joinedIds.has(club.id) }));
+
+    return { items, nextCursor };
+  }
+
+  // Decision Log #154 — the subset of `clubIds` the caller is a member
+  // of, resolved in ONE batched query, never one lookup per club (no
+  // N+1). Empty input → empty Set with no query issued (same
+  // zero-item short-circuit feed.service.ts's attachViewerState uses).
+  // A plain Prisma relation filter (`members: { some: { id } }`) is the
+  // right tool for a read-only existence check — `joinClub`/`leaveClub`
+  // only needed raw SQL against "_ClubMembership" for the atomicity an
+  // INSERT/DELETE + memberCount update requires, which doesn't apply to
+  // a read.
+  private async membershipSubset(userId: string, clubIds: string[]): Promise<Set<string>> {
+    if (clubIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.prisma.clubPage.findMany({
+      where: { id: { in: clubIds }, members: { some: { id: userId } } },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
+
+  private buildCursorFilter(rawCursor: string): Prisma.ClubPageWhereInput {
+    const cursor = decodeClubCursor(rawCursor);
+    // Ascending-order (alphabetical) counterpart of feed.service.ts's
+    // buildCursorFilter: "greater than" instead of "less than", since
+    // GET /clubs pages A-to-Z rather than newest-first.
+    return {
+      OR: [{ name: { gt: cursor.name } }, { name: cursor.name, id: { gt: cursor.id } }],
+    };
+  }
+
+  // GET /clubs/:id. Same CLUB_SELECT as the list entries — no divergence
+  // needed, nothing about viewing a single club calls for more or fewer
+  // fields than viewing it in the catalog list. A non-existent :id is a
+  // 404, never a silent null 200, matching FeedService.getPostById's
+  // precedent.
+  //
+  // Takes `userId` (the caller, from @CurrentUser() — a real controller-
+  // signature change made alongside this, see clubs.controller.ts) so the
+  // response can carry the same per-caller `joined` flag `listClubs` does
+  // (Decision Log #154). One club, so a single `findFirst` existence
+  // check — no batching needed. The 404 for a missing club is still
+  // thrown before the membership lookup.
+  async getClubById(clubId: string, userId: string): Promise<ClubSummaryWithViewerState> {
+    const club = await this.prisma.clubPage.findUnique({ where: { id: clubId }, select: CLUB_SELECT });
+    if (!club) {
+      throw new NotFoundException('Club not found');
+    }
+    const membership = await this.prisma.clubPage.findFirst({
+      where: { id: clubId, members: { some: { id: userId } } },
+      select: { id: true },
+    });
+    return { ...club, joined: membership !== null };
+  }
+
+  // Shared existence check for getClubById and joinClub, mirroring
+  // FeedService.assertPostExists / UsersService.assertUserExists's exact
+  // shape/intent: "does :id reference a real ClubPage" is the first move,
+  // and a well-formed but non-existent id must 404, never a raw FK
+  // violation surfaced as 400/500.
+  //
+  // Deliberately public (not private, as originally written) as of
+  // sprint-2/auto-join-on-signup: RegistrationService needs to validate
+  // a caller-supplied clubId *before* committing the new User row, so a
+  // bad clubId 404s the whole registration without leaving an orphaned,
+  // club-less User behind (see registration.service.ts's own comment on
+  // this ordering). Reusing this exact check — rather than duplicating
+  // it or calling the heavier getClubById (which selects the full club
+  // record RegistrationService has no use for) — keeps "does this
+  // clubId exist" defined in exactly one place.
+  async assertClubExists(clubId: string): Promise<void> {
+    const club = await this.prisma.clubPage.findUnique({ where: { id: clubId }, select: { id: true } });
+    if (!club) {
+      throw new NotFoundException('Club not found');
+    }
+  }
+
+  // GET /clubs/:id/members (sprint-2/club-fan-page-backend). The club
+  // fan-page roster — the users in `ClubPage.members` (the many-to-many
+  // POST /clubs/:id/join populates and `memberCount` caches), minus
+  // restricted-pending minors (VISIBLE_CLUB_MEMBER_FILTER above).
+  //
+  // Schema judgment call, flagged (Decision Log #217): the Club — Fan
+  // Page design's roster is captioned "users whose represented club is
+  // this club," but there is no represented-club field or endpoint —
+  // Decision Log #74's selector is designed, not built, and
+  // User.clubAffiliationId (the closest existing column) is written by
+  // nothing. `ClubPage.members` is the only populated club-membership
+  // mechanism that exists, it is what `memberCount` counts and what the
+  // Fan Page header shows, so the roster is fan-page membership. When
+  // represented-club lands, whether the roster should show fans vs.
+  // representers is a real open question — flagged, not pre-decided.
+  //
+  // Keyset pagination (Section 5.5) alphabetically by PUBLIC name -- the
+  // username, accounts without one last, `id` as the tiebreaker (B-034,
+  // users/user-name-keyset.util.ts) -- the same "no timestamp on the model,
+  // order by name" approach GET /clubs itself uses (User has no per-club
+  // "joined at" timestamp; the implicit _ClubMembership table has only its
+  // A/B id columns). Neither the order nor the cursor ever carries a real
+  // displayName.
+  //
+  // JwtAuthGuard only (ClubsController) — reading a roster is no more
+  // safety-sensitive than GET /clubs or GET /clubs/:id, same reasoning
+  // as those.
+  //
+  // `isFollowing` (Decision Log #224) is resolved for the whole page with
+  // ONE batched Follow lookup over the page's member ids, never one query
+  // per row. The caller is excluded from that lookup — a self-follow row
+  // can't exist, so their own roster entry is always false with nothing
+  // queried for it. An empty page issues no follow query at all.
+  async getClubMembers(clubId: string, userId: string, query: ListClubMembersQueryDto): Promise<ClubMemberPage> {
+    await this.assertClubExists(clubId);
+
+    const limit = Math.min(query.limit ?? CLUB_MEMBERS_DEFAULT_PAGE_SIZE, CLUB_MEMBERS_MAX_PAGE_SIZE);
+
+    const filters: Prisma.UserWhereInput[] = [
+      { clubMemberships: { some: { id: clubId } } },
+      VISIBLE_CLUB_MEMBER_FILTER,
+    ];
+    if (query.cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(query.cursor)));
+    // B-039: members blocked in either direction with the caller are hidden from
+    // the caller's roster view (#402 item 4); memberCount is unchanged.
+    filters.push(notBlockedWith(userId));
+
+    const rows = await this.prisma.user.findMany({
+      where: { AND: filters },
+      orderBy: USER_NAME_ORDER_BY,
+      take: limit + 1,
+      select: CLUB_MEMBER_SELECT,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor = hasMore && last ? userNameCursorOf(last) : null;
+
+    const followedIds = await this.followedSubset(
+      userId,
+      trimmed.filter((m) => m.id !== userId).map((m) => m.id),
+    );
+    const items = trimmed.map((member) => ({
+      ...toPublicUser(member),
+      isFollowing: followedIds.has(member.id),
+    }));
+
+    return { items, nextCursor };
+  }
+
+  // The subset of `followeeIds` the caller follows, in ONE batched query.
+  // Empty input → empty Set with no query issued (same short-circuit as
+  // membershipSubset above and FeedService.attachViewerState).
+  private async followedSubset(userId: string, followeeIds: string[]): Promise<Set<string>> {
+    if (followeeIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.prisma.follow.findMany({
+      where: { followerId: userId, followeeId: { in: followeeIds } },
+      select: { followeeId: true },
+    });
+    return new Set(rows.map((r) => r.followeeId));
+  }
+
+  // POST /clubs/:id/join. See clubs/README.md's "verified Prisma
+  // behavior" section for the full investigation this implementation
+  // rests on. Short version: this repo's Prisma version does NOT throw
+  // on a duplicate implicit-many-to-many `connect` (verified directly
+  // against a live client, not assumed) — unlike Like/SavedPost/Follow's
+  // own idempotency, which all rely on catching a real Postgres P2002
+  // unique-constraint violation. That means the P2002-catch pattern
+  // likePost/followUser use is NOT available here; a different atomicity
+  // mechanism is needed to avoid double-incrementing `memberCount` on a
+  // duplicate join.
+  //
+  // This method issues a raw parameterized INSERT ... ON CONFLICT DO
+  // NOTHING directly against "_ClubMembership" (the implicit join table
+  // Prisma generates for the ClubPage.members <-> User.clubMemberships
+  // relation — see schema.prisma's @relation("ClubMembership") comment
+  // and this PR's migration, 20260819204443_fix_club_membership_relation,
+  // for the exact table/column names this relies on: "A" = ClubPage.id,
+  // "B" = User.id, alphabetized by model name). $executeRaw returns the
+  // number of affected rows, which for ON CONFLICT DO NOTHING is exactly
+  // 1 on a genuine new insert and 0 on a duplicate — an atomic,
+  // race-safe signal enforced by the join table's own unique index at
+  // the database engine level, not by an application-level
+  // findFirst-then-conditionally-update inside the transaction (which
+  // was considered and rejected: under Postgres's default READ COMMITTED
+  // isolation, two concurrent joinClub calls could both observe "not yet
+  // a member" before either commits, double-incrementing memberCount
+  // even though the join row itself would stay singular). memberCount is
+  // only incremented when the raw insert actually affected a row, inside
+  // the same transaction, so the two writes can never drift apart.
+  async joinClub(userId: string, clubId: string): Promise<JoinState> {
+    await this.assertClubExists(clubId);
+
+    await this.prisma.$transaction(async (tx) => {
+      const affected = await tx.$executeRaw`INSERT INTO "_ClubMembership" ("A", "B") VALUES (${clubId}, ${userId}) ON CONFLICT DO NOTHING`;
+      if (affected > 0) {
+        await tx.clubPage.update({ where: { id: clubId }, data: { memberCount: { increment: 1 } } });
+      }
+      // affected === 0 means this user was already a member — idempotent
+      // success, memberCount left untouched, matching the codebase's
+      // established idempotency convention for join/like/follow-style
+      // actions (never double-count a repeat call).
+    });
+
+    return { clubId, joined: true, memberCount: await this.currentMemberCount(clubId) };
+  }
+
+  // DELETE /clubs/:id/join. Symmetric with joinClub above — mirrors its
+  // exact structure and idempotency discipline (assertClubExists first,
+  // same raw-SQL-against-"_ClubMembership" mechanism, same
+  // interactive-transaction pairing of the row mutation with the
+  // memberCount update) rather than inventing a different approach for
+  // the reverse direction. See clubs/README.md's "join-only, no leave"
+  // section (now closed) for the full history of why this didn't exist
+  // until now.
+  //
+  // Two things combine to guard memberCount against ever going negative,
+  // deliberately layered rather than relying on either alone:
+  //
+  // 1. The raw DELETE's own affected-row count (`affected > 0`) is
+  //    checked before touching memberCount at all — exactly the same
+  //    "only mutate the counter when the row mutation actually did
+  //    something" discipline joinClub's `INSERT ... ON CONFLICT DO
+  //    NOTHING` already established for the insert direction. Leaving a
+  //    club you were never a member of (or already left) affects 0 rows,
+  //    so memberCount is never touched — that alone makes leaveClub
+  //    idempotent, same as joinClub.
+  // 2. Even when the DELETE does affect a row, the decrement itself uses
+  //    `updateMany` with a `memberCount: { gt: 0 }` where-clause guard —
+  //    the exact pattern FeedService.unlikePost uses for `likeCount`, so
+  //    a decrement can never push memberCount below 0 even in a
+  //    hypothetical drift scenario (e.g. memberCount was already
+  //    manually reset to 0 while a stale membership row still existed).
+  //    Under normal operation #1 alone would already prevent this, but
+  //    #2 is cheap, already-established codebase precedent, and costs
+  //    nothing to include as a second line of defense.
+  //
+  // Leaving a club you're not a member of is treated as idempotent
+  // success (joined: false, memberCount unchanged), never a 404 — "you
+  // don't have this membership" and "you successfully ensured you don't
+  // have this membership" land on the same observable end state, the
+  // same reasoning unlikePost/unfollowUser/unsavePost already established
+  // for their own DELETE endpoints. A non-existent clubId is still a 404
+  // (via assertClubExists), matching joinClub's own 404 case exactly.
+  async leaveClub(userId: string, clubId: string): Promise<JoinState> {
+    await this.assertClubExists(clubId);
+
+    await this.prisma.$transaction(async (tx) => {
+      const affected = await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "A" = ${clubId} AND "B" = ${userId}`;
+      if (affected > 0) {
+        await tx.clubPage.updateMany({
+          where: { id: clubId, memberCount: { gt: 0 } },
+          data: { memberCount: { decrement: 1 } },
+        });
+        // Leaving the club you represent clears the representation in the
+        // same transaction — a user must never represent a club they no
+        // longer belong to (Decision Log #74). Leaving any other club
+        // leaves it untouched.
+        await tx.user.updateMany({
+          where: { id: userId, representedClubId: clubId },
+          data: { representedClubId: null },
+        });
+      }
+      // affected === 0 means this user was not a member (never joined, or
+      // already left) — idempotent success, memberCount left untouched.
+    });
+
+    return { clubId, joined: false, memberCount: await this.currentMemberCount(clubId) };
+  }
+
+  private async currentMemberCount(clubId: string): Promise<number> {
+    const club = await this.prisma.clubPage.findUnique({ where: { id: clubId }, select: { memberCount: true } });
+    return club?.memberCount ?? 0;
+  }
+}

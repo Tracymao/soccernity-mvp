@@ -1,0 +1,704 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { hasBlockBetween } from '../block/block.util';
+import {
+  decodeFixtureCursor,
+  decodeTeamCursor,
+  encodeFixtureCursor,
+  encodeTeamCursor,
+} from './cursor.util';
+import { CreateFixtureDto } from './dto/create-fixture.dto';
+import { CreateTeamDto } from './dto/create-team.dto';
+import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
+import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
+import { LogResultDto } from './dto/log-result.dto';
+import { UpdateFixtureStatusDto } from './dto/update-fixture-status.dto';
+import {
+  SENSITIVE_CONTENT_REVIEW_MESSAGE,
+  SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
+  SensitiveFieldFlag,
+  buildSensitiveContentReportReason,
+  screenSensitiveContent,
+} from '../sensitive-content/sensitive-content.util';
+import {
+  FixtureStatus,
+  GRASSROOTS_DEFAULT_PAGE_SIZE,
+  GRASSROOTS_MAX_PAGE_SIZE,
+} from './grassroots.constants';
+
+// ---------- Response shapes (all via Prisma `select`, never a post-hoc strip) ----------
+
+// GET /teams and GET /teams/:id. Deliberately does NOT include the
+// organiser's nested `User` — no email, phone, displayName, isMinor. Only
+// `createdById` (the opaque id) is exposed, so a client can tell whether
+// the current user is the organiser without leaking any organiser PII.
+// Same discipline as feed's POST_AUTHOR_SELECT.
+const TEAM_SELECT = {
+  id: true,
+  name: true,
+  city: true,
+  leagueType: true,
+  createdById: true,
+  verified: true,
+} as const;
+
+export type GrassrootsTeamView = Prisma.GrassrootsTeamGetPayload<{ select: typeof TEAM_SELECT }>;
+
+// POST /teams response: the team plus whether it was a takeover of a
+// dormant team (`reclaimed`) rather than a fresh row, with an explanatory
+// `message` on the takeover path.
+export type CreateTeamResult = GrassrootsTeamView & { reclaimed: boolean; message?: string };
+
+// Pre-publication sensitive-content screen gate. Throws a 422 carrying a
+// machine-readable code and the flagged FIELD NAMES + categories (never the
+// submitted text) unless the submitter already confirmed. Returns the flags
+// when a flagged submission was confirmed, so the caller can log it for
+// moderation after the record is created; [] when nothing was flagged.
+function gateSensitiveContent(
+  fields: Record<string, string | null | undefined>,
+  confirmSensitive: boolean | undefined,
+): SensitiveFieldFlag[] {
+  const flags = screenSensitiveContent(fields);
+  if (flags.length > 0 && confirmSensitive !== true) {
+    throw new UnprocessableEntityException({
+      statusCode: 422,
+      error: 'Unprocessable Entity',
+      code: SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
+      message: SENSITIVE_CONTENT_REVIEW_MESSAGE,
+      flaggedFields: flags,
+    });
+  }
+  return flags;
+}
+
+// Identity key for the (name, city) match: trimmed + lowercased, used only
+// to derive the advisory-lock key, never stored.
+function teamIdentityKey(name: string, city: string): string {
+  return `grassroots-team:${name.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
+}
+
+// Minimal team shape embedded inside a fixture — enough to render a
+// fixture row without a second request, nothing more.
+const FIXTURE_TEAM_SELECT = {
+  id: true,
+  name: true,
+  city: true,
+  verified: true,
+} as const;
+
+const RESULT_SELECT = {
+  id: true,
+  scoreA: true,
+  scoreB: true,
+  enteredById: true,
+  enteredAt: true,
+} as const;
+
+const FIXTURE_SELECT = {
+  id: true,
+  teamAId: true,
+  teamBId: true,
+  // Free-text away-opponent name (Decision Log #256). `string | null` — the
+  // API never renders the "Opponent TBC" fallback; that stays a frontend
+  // concern. Deliberately NOT on FIXTURE_AUTHZ_SELECT (not permission-relevant).
+  opponentName: true,
+  scheduledAt: true,
+  venue: true,
+  status: true,
+  teamA: { select: FIXTURE_TEAM_SELECT },
+  teamB: { select: FIXTURE_TEAM_SELECT },
+  result: { select: RESULT_SELECT },
+} as const;
+
+export type FixtureView = Prisma.FixtureGetPayload<{ select: typeof FIXTURE_SELECT }>;
+
+export interface TeamPage {
+  items: GrassrootsTeamView[];
+  nextCursor: string | null;
+}
+
+export interface FixturePage {
+  items: FixtureView[];
+  nextCursor: string | null;
+}
+
+// The permission-relevant fields of a fixture — who created each side, so
+// GrassrootsService can decide whether the caller may act on it.
+const FIXTURE_AUTHZ_SELECT = {
+  id: true,
+  status: true,
+  teamBId: true,
+  teamA: { select: { createdById: true } },
+  teamB: { select: { createdById: true } },
+  result: { select: { id: true } },
+} as const;
+
+type FixtureAuthzRow = Prisma.FixtureGetPayload<{ select: typeof FIXTURE_AUTHZ_SELECT }>;
+
+// The two legal forward transitions PATCH /fixtures/:id/status permits.
+// POST /fixtures/:id/result performs the third path (scheduled|live ->
+// full_time) via a different route. Everything not in this map is a 409.
+const LEGAL_STATUS_TRANSITIONS: Record<string, FixtureStatus[]> = {
+  scheduled: ['live'],
+  live: ['full_time'],
+  full_time: [],
+};
+
+@Injectable()
+export class GrassrootsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ---------- Teams ----------
+
+  // POST /teams. createdById is the caller, taken from the access token —
+  // never the body. Guards (JwtAuthGuard + GuardianConsentGuard) are on
+  // the controller: a team page is a public-facing record, so creating one
+  // is a "posting"-class action under Section 5.7's broad reading
+  // (Decision Log #21).
+  //
+  // backend/team-organiser-flag: the moment team creation succeeds,
+  // User.isTeamOrganiser flips to true in the SAME transaction as the
+  // GrassrootsTeam row — never settable any other way, never unset. This
+  // is a genuine addition beyond Section 3's literal User field list,
+  // flagged as a Decision Log candidate (see the field's own schema
+  // comment and grassroots/README.md). Deliberately distinct from
+  // User.role, which this flag does not touch or repurpose.
+  //
+  // sprint-5/grassroots-team-dormant-reclaim: before creating, the request
+  // is matched against existing teams on (name, city), trimmed and
+  // case-insensitive (there is no normalised/unique column -- adding one
+  // would be a schema change; see the Decision Log candidate in
+  // grassroots/README.md). Outcomes:
+  //   - a LIVE match (createdById set) -> 409, a plain duplicate;
+  //   - a DORMANT match (createdById null, left behind by an anonymised
+  //     organiser, Decision Log #341) -> the existing row is reassigned to
+  //     the caller instead of a duplicate being created, and the response
+  //     says so (`reclaimed: true`) so the caller knows they took over an
+  //     existing team with its fixtures/results, not a fresh one. The
+  //     existing row's name/city/leagueType/verified are kept as they are;
+  //     the request's leagueType is ignored on this path;
+  //   - no match -> the original create path.
+  // A per-key transaction-scoped advisory lock serialises concurrent
+  // registrations of the same (name, city), so two racing requests cannot
+  // both pass the match check and create duplicates; the reassignment
+  // itself is an updateMany guarded on `createdById: null`, so even
+  // without the lock two claimants of one dormant team cannot both win.
+  async createTeam(userId: string, dto: CreateTeamDto): Promise<CreateTeamResult> {
+    const name = dto.name.trim();
+    const city = dto.city.trim();
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${teamIdentityKey(name, city)}))`;
+
+      const matches = await tx.grassrootsTeam.findMany({
+        where: {
+          name: { equals: name, mode: 'insensitive' },
+          city: { equals: city, mode: 'insensitive' },
+        },
+        orderBy: { id: 'asc' },
+        select: TEAM_SELECT,
+      });
+
+      if (matches.some((m) => m.createdById !== null)) {
+        throw new ConflictException('A team with this name already exists in this city');
+      }
+
+      let team: GrassrootsTeamView;
+      let reclaimed = false;
+      const dormant = matches[0];
+      // Screen only a genuinely new record: a takeover republishes the
+      // existing, already-public name/city unchanged, so the submitter is
+      // not disclosing anything new. Thrown inside the transaction, before
+      // any write, so a refused submission leaves nothing behind.
+      const sensitiveFlags = dormant
+        ? []
+        : gateSensitiveContent({ name, city }, dto.confirmSensitive);
+      if (dormant) {
+        const claimed = await tx.grassrootsTeam.updateMany({
+          where: { id: dormant.id, createdById: null },
+          data: { createdById: userId },
+        });
+        if (claimed.count === 0) {
+          throw new ConflictException('A team with this name already exists in this city');
+        }
+        team = { ...dormant, createdById: userId };
+        reclaimed = true;
+      } else {
+        team = await tx.grassrootsTeam.create({
+          data: {
+            name,
+            city,
+            leagueType: dto.leagueType,
+            createdById: userId,
+            // `verified` stays at its @default(false). No endpoint sets it in
+            // MVP -- it's an operations/trust decision, not self-service.
+          },
+          select: TEAM_SELECT,
+        });
+      }
+
+      if (sensitiveFlags.length > 0) {
+        await this.logSensitiveContentReport(tx, 'grassroots_team', team.id, sensitiveFlags);
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { isTeamOrganiser: true },
+      });
+
+      return reclaimed
+        ? {
+            ...team,
+            reclaimed: true,
+            message:
+              'This team was already registered on Soccernity but had no organiser. You are now its organiser, and its existing fixtures and results are unchanged.',
+          }
+        : { ...team, reclaimed: false };
+    });
+  }
+
+  // Logs a flagged-AND-confirmed submission into the existing Moderation
+  // Queue (the Report table) -- no parallel queue. Runs inside the same
+  // transaction as the record it describes, so a report never exists for a
+  // record that failed to save and vice versa. reporterId and
+  // reporterContactEmail are both null: the only report shape that is
+  // neither a logged-in user's nor a public reporter's (the public route
+  // requires the email), i.e. system-generated. The reason carries an
+  // [Automated ...] prefix and lists flagged field names + categories,
+  // never the text itself. Severity stays at its default; concernsMinor
+  // stays false (inferring it from leagueType school/academy is a flagged
+  // follow-up, not decided here).
+  private async logSensitiveContentReport(
+    tx: Prisma.TransactionClient,
+    targetType: 'grassroots_team' | 'fixture',
+    targetId: string,
+    flags: SensitiveFieldFlag[],
+  ): Promise<void> {
+    await tx.report.create({
+      data: {
+        reporterId: null,
+        targetType,
+        targetId,
+        reason: buildSensitiveContentReportReason(flags),
+      },
+    });
+  }
+
+  // DELETE /teams/:id -- the smallest team-deletion capability, existing
+  // only so a caller who does not want to take over a dormant team can
+  // clear the way for a genuinely new one. Deliberately narrow:
+  //   - DORMANT teams only (createdById null). A live team is never
+  //     end-user-deletable: 409, under any framing.
+  //   - Only a team with NO fixtures (as teamA or teamB). Fixtures/results
+  //     are other organisers' records too, so a team with history can only
+  //     be taken over via POST /teams, never deleted: 409.
+  //   - 404 (existence) settles before 409 (state), the module convention.
+  // Who may call it (currently any consent-confirmed user) is a Decision
+  // Log candidate, see grassroots/README.md.
+  async deleteDormantTeam(teamId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const team = await tx.grassrootsTeam.findUnique({
+        where: { id: teamId },
+        select: { id: true, createdById: true, _count: { select: { fixturesHome: true, fixturesAway: true } } },
+      });
+      if (!team) {
+        throw new NotFoundException('Team not found');
+      }
+      if (team.createdById !== null) {
+        throw new ConflictException('Only a team with no organiser can be deleted');
+      }
+      if (team._count.fixturesHome + team._count.fixturesAway > 0) {
+        throw new ConflictException(
+          'This team has fixtures on record and cannot be deleted; register it to take it over instead',
+        );
+      }
+      // Guarded on createdById: null so a reclaim landing between the read
+      // and the delete cannot delete a now-live team.
+      const deleted = await tx.grassrootsTeam.deleteMany({ where: { id: teamId, createdById: null } });
+      if (deleted.count === 0) {
+        throw new ConflictException('Only a team with no organiser can be deleted');
+      }
+    });
+  }
+
+  // GET /teams/:id. 404 for a non-existent id, never a null 200 — matching
+  // FeedService.getPostById / ClubsService.getClubById. No organiser PII.
+  async getTeamById(teamId: string): Promise<GrassrootsTeamView> {
+    const team = await this.prisma.grassrootsTeam.findUnique({
+      where: { id: teamId },
+      select: TEAM_SELECT,
+    });
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+    return team;
+  }
+
+  // GET /teams?city=. Keyset pagination alphabetically by name, id
+  // tiebreaker — GrassrootsTeam has no timestamp column (same as ClubPage
+  // — see cursor.util.ts). `city` is an optional exact-match equality
+  // filter ANDed alongside the cursor filter.
+  async listTeams(query: ListTeamsQueryDto): Promise<TeamPage> {
+    const limit = Math.min(query.limit ?? GRASSROOTS_DEFAULT_PAGE_SIZE, GRASSROOTS_MAX_PAGE_SIZE);
+
+    const filters: Prisma.GrassrootsTeamWhereInput[] = [];
+    if (query.city) filters.push({ city: query.city });
+    if (query.cursor) {
+      const cursor = decodeTeamCursor(query.cursor);
+      filters.push({
+        OR: [{ name: { gt: cursor.name } }, { name: cursor.name, id: { gt: cursor.id } }],
+      });
+    }
+    const where: Prisma.GrassrootsTeamWhereInput = filters.length > 0 ? { AND: filters } : {};
+
+    const rows = await this.prisma.grassrootsTeam.findMany({
+      where,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      select: TEAM_SELECT,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeTeamCursor({ name: last.name, id: last.id }) : null;
+
+    return { items: trimmed, nextCursor };
+  }
+
+  // Shared existence check — mirrors ClubsService.assertClubExists /
+  // FeedService.assertPostExists. Public so future callers (and the
+  // GET /teams/:id/fixtures path) can reuse it without the heavier
+  // getTeamById select.
+  async assertTeamExists(teamId: string): Promise<void> {
+    const team = await this.prisma.grassrootsTeam.findUnique({
+      where: { id: teamId },
+      select: { id: true },
+    });
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+  }
+
+  // ---------- Fixtures ----------
+
+  // POST /fixtures. Permission model (Decision Log #255): the caller must
+  // be the `createdById` of teamA — the team registering the fixture.
+  // "Either team's creator may create a fixture" was considered and NOT
+  // chosen (a fixture is created by the organiser scheduling it, from
+  // their own team's context).
+  //
+  // Ordering, matching FeedService.deleteComment: resource existence
+  // (404) is settled before authorization (403). So both teams are
+  // asserted to exist first, THEN the teamA-creator check runs.
+  async createFixture(userId: string, dto: CreateFixtureDto): Promise<FixtureView> {
+    await this.assertTeamExists(dto.teamAId);
+    if (dto.teamBId !== undefined) {
+      await this.assertTeamExists(dto.teamBId);
+    }
+
+    // A team cannot play itself. Checked after existence so a bad id still
+    // 404s rather than 400.
+    if (dto.teamBId !== undefined && dto.teamBId === dto.teamAId) {
+      throw new BadRequestException('A fixture cannot have the same team on both sides');
+    }
+
+    // teamBId XOR opponentName (or neither) — the cross-field rule for the
+    // away side (Decision Log #256). An empty/whitespace-only opponentName
+    // is treated as absent (never stored as "").
+    const opponentName = dto.opponentName?.trim() || undefined;
+    if (dto.teamBId !== undefined && opponentName !== undefined) {
+      throw new BadRequestException(
+        'Provide either a registered opponent team or an opponent name, not both.',
+      );
+    }
+
+    const teamA = await this.prisma.grassrootsTeam.findUniqueOrThrow({
+      where: { id: dto.teamAId },
+      select: { createdById: true },
+    });
+    if (teamA.createdById !== userId) {
+      throw new ForbiddenException('You may only create fixtures for a team you registered');
+    }
+
+    // Pre-publication sensitive-content screen over the free-text fields.
+    // After the 403 so a non-organiser learns nothing about the screen;
+    // before any write, so a refused submission saves nothing.
+    const sensitiveFlags = gateSensitiveContent(
+      { opponentName, venue: dto.venue },
+      dto.confirmSensitive,
+    );
+
+    // teamB's createdById, needed only to pick the fixture_scheduled
+    // Notification recipient below — stays null when the away side is a
+    // free-text opponentName (no registered team, so no one to notify).
+    let teamBCreatedById: string | null = null;
+    if (dto.teamBId !== undefined) {
+      const teamB = await this.prisma.grassrootsTeam.findUniqueOrThrow({
+        where: { id: dto.teamBId },
+        select: { createdById: true },
+      });
+      teamBCreatedById = teamB.createdById;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const fixture = await tx.fixture.create({
+        data: {
+          teamAId: dto.teamAId,
+          teamBId: dto.teamBId ?? null,
+          // null (not "") when absent or whitespace-only.
+          opponentName: opponentName ?? null,
+          scheduledAt: new Date(dto.scheduledAt),
+          venue: dto.venue ?? null,
+          // status stays at its @default('scheduled').
+        },
+        select: FIXTURE_SELECT,
+      });
+
+      if (sensitiveFlags.length > 0) {
+        await this.logSensitiveContentReport(tx, 'fixture', fixture.id, sensitiveFlags);
+      }
+
+      // fixture_scheduled Notification (Decision Log #87's audit) --
+      // recipient is teamB's organiser, only when teamB is a real
+      // registered team (a free-text opponentName has no user to
+      // notify). Guarded against self-notification: the schema does not
+      // stop one person from being createdById of BOTH teamA and teamB
+      // (two different teams they registered themselves), in which case
+      // teamAId !== teamBId is true but the recipient would still be the
+      // actor -- skipped in that case.
+      // B-197: and not where the two organisers have a Block between them.
+      if (
+        teamBCreatedById !== null &&
+        teamBCreatedById !== userId &&
+        !(await hasBlockBetween(tx, userId, teamBCreatedById))
+      ) {
+        await tx.notification.create({
+          data: {
+            userId: teamBCreatedById,
+            type: 'fixture_scheduled',
+            payloadRefId: fixture.id,
+          },
+        });
+      }
+
+      return fixture;
+    });
+  }
+
+  // GET /fixtures/:id. 404 for a non-existent id. Includes status, both
+  // teams (minimal shape), and the result if present.
+  async getFixtureById(fixtureId: string): Promise<FixtureView> {
+    const fixture = await this.prisma.fixture.findUnique({
+      where: { id: fixtureId },
+      select: FIXTURE_SELECT,
+    });
+    if (!fixture) {
+      throw new NotFoundException('Fixture not found');
+    }
+    return fixture;
+  }
+
+  // GET /teams/:id/fixtures. Every fixture the team is in (as teamA OR
+  // teamB), keyset-paginated newest-scheduled-first. 404 if the team
+  // itself is missing.
+  async listTeamFixtures(teamId: string, query: ListFixturesQueryDto): Promise<FixturePage> {
+    await this.assertTeamExists(teamId);
+
+    const limit = Math.min(query.limit ?? GRASSROOTS_DEFAULT_PAGE_SIZE, GRASSROOTS_MAX_PAGE_SIZE);
+
+    const filters: Prisma.FixtureWhereInput[] = [
+      { OR: [{ teamAId: teamId }, { teamBId: teamId }] },
+    ];
+    if (query.cursor) {
+      const cursor = decodeFixtureCursor(query.cursor);
+      // Descending (newest-first) keyset: "before this (scheduledAt, id)".
+      filters.push({
+        OR: [
+          { scheduledAt: { lt: cursor.scheduledAt } },
+          { scheduledAt: cursor.scheduledAt, id: { lt: cursor.id } },
+        ],
+      });
+    }
+
+    const rows = await this.prisma.fixture.findMany({
+      where: { AND: filters },
+      orderBy: [{ scheduledAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: FIXTURE_SELECT,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeFixtureCursor({ scheduledAt: last.scheduledAt, id: last.id }) : null;
+
+    return { items: trimmed, nextCursor };
+  }
+
+  // POST /fixtures/:id/result. Permission model (Decision Log #255): the
+  // caller must be the creator of EITHER team in the fixture (unlike
+  // POST /fixtures, which is teamA-only).
+  //
+  // "First submission is final" race fix, enforced at the API layer:
+  //   - Pre-checks (outside the transaction): 404 fixture, 403 not a
+  //     manager, 409 wrong status. Ordered existence -> authz -> state so
+  //     the status of the fixture is never leaked to a non-manager.
+  //   - Inside a single interactive $transaction: re-read the fixture; if
+  //     a Result row already exists -> 409 (never overwrite); create the
+  //     Result with enteredById = caller; move the fixture to full_time.
+  //   - Result.fixtureId is @unique, so a genuine concurrent race (both
+  //     requests pass the pre-check, both enter their transaction) has one
+  //     winner and one P2002 on tx.result.create — caught and re-thrown as
+  //     the SAME 409, never a raw 500. Same belt-and-braces pattern as
+  //     FeedService.likePost's P2002 handling.
+  async logResult(userId: string, fixtureId: string, dto: LogResultDto): Promise<FixtureView> {
+    const fixture = await this.loadFixtureForAuthz(fixtureId);
+    this.assertFixtureManager(fixture, userId);
+
+    // Order matters: "a result already exists" is checked BEFORE the
+    // status check, so the "first write is final" case reports the
+    // informative message rather than "wrong status" (a fixture with a
+    // result is always already full_time). The status check still fires
+    // for the other path to full_time — a PATCH live -> full_time with no
+    // score entered, after which logResult must not be usable.
+    if (fixture.result) {
+      // Fast path — a result already exists. The transaction below is the
+      // authoritative check; this just avoids opening one needlessly.
+      throw new ConflictException(
+        "A result has already been recorded for this fixture and can't be changed",
+      );
+    }
+    if (fixture.status !== 'scheduled' && fixture.status !== 'live') {
+      throw new ConflictException(
+        `A result can only be recorded while a fixture is "scheduled" or "live" (this fixture is "${fixture.status}")`,
+      );
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const fresh = await tx.fixture.findUniqueOrThrow({
+          where: { id: fixtureId },
+          select: { status: true, result: { select: { id: true } } },
+        });
+        if (fresh.result) {
+          throw new ConflictException(
+            "A result has already been recorded for this fixture and can't be changed",
+          );
+        }
+        if (fresh.status !== 'scheduled' && fresh.status !== 'live') {
+          throw new ConflictException(
+            `A result can only be recorded while a fixture is "scheduled" or "live" (this fixture is "${fresh.status}")`,
+          );
+        }
+
+        await tx.result.create({
+          data: {
+            fixtureId,
+            scoreA: dto.scoreA,
+            scoreB: dto.scoreB,
+            enteredById: userId,
+          },
+        });
+        await tx.fixture.update({ where: { id: fixtureId }, data: { status: 'full_time' } });
+
+        // result_logged Notification (Decision Log #87's audit) --
+        // recipient is the OTHER team's organiser, never the submitter.
+        // `fixture` here is FIXTURE_AUTHZ_SELECT's shape, loaded before
+        // this transaction by loadFixtureForAuthz. Skipped when there's
+        // no registered teamB (free-text opponent -- no one to notify)
+        // or when the same person manages both teams (self-notification,
+        // since "the other side" would still resolve to the actor).
+        const otherManagerId =
+          userId === fixture.teamA.createdById
+            ? fixture.teamB?.createdById ?? null
+            : fixture.teamA.createdById;
+        if (
+          otherManagerId !== null &&
+          otherManagerId !== userId &&
+          !(await hasBlockBetween(tx, userId, otherManagerId))
+        ) {
+          await tx.notification.create({
+            data: { userId: otherManagerId, type: 'result_logged', payloadRefId: fixtureId },
+          });
+        }
+
+        return tx.fixture.findUniqueOrThrow({ where: { id: fixtureId }, select: FIXTURE_SELECT });
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // The true concurrent race: another request created the Result row
+        // between this request's pre-check and its own tx.result.create.
+        throw new ConflictException(
+          "A result has already been recorded for this fixture and can't be changed",
+        );
+      }
+      throw err;
+    }
+  }
+
+  // PATCH /fixtures/:id/status — the dedicated status-transition endpoint
+  // (Decision Log #254). Permission model: same as logResult — either
+  // team's creator. Body target is `live` | `full_time` (DTO-validated);
+  // this enforces the legal machine:
+  //   scheduled -> live       ("Start match")
+  //   live      -> full_time  ("End match" with no score entered)
+  // Everything else (full_time -> *, scheduled -> full_time via this
+  // route, a no-op same-status PATCH, any backwards move) -> 409 naming
+  // the current and requested status.
+  async updateFixtureStatus(
+    userId: string,
+    fixtureId: string,
+    dto: UpdateFixtureStatusDto,
+  ): Promise<FixtureView> {
+    const fixture = await this.loadFixtureForAuthz(fixtureId);
+    this.assertFixtureManager(fixture, userId);
+
+    const allowed = LEGAL_STATUS_TRANSITIONS[fixture.status] ?? [];
+    if (!allowed.includes(dto.status)) {
+      throw new ConflictException(
+        `A fixture cannot move from "${fixture.status}" to "${dto.status}"`,
+      );
+    }
+
+    await this.prisma.fixture.update({ where: { id: fixtureId }, data: { status: dto.status } });
+    return this.prisma.fixture.findUniqueOrThrow({ where: { id: fixtureId }, select: FIXTURE_SELECT });
+  }
+
+  // ---------- shared helpers ----------
+
+  private async loadFixtureForAuthz(fixtureId: string): Promise<FixtureAuthzRow> {
+    const fixture = await this.prisma.fixture.findUnique({
+      where: { id: fixtureId },
+      select: FIXTURE_AUTHZ_SELECT,
+    });
+    if (!fixture) {
+      throw new NotFoundException('Fixture not found');
+    }
+    return fixture;
+  }
+
+  // The caller must be the createdById of teamA, OR (when teamB is set)
+  // the createdById of teamB. Neither -> 403, the same "authenticated but
+  // not authorized for this resource" convention
+  // FeedService.deleteComment / UsersController.assertSelf established.
+  private assertFixtureManager(fixture: FixtureAuthzRow, userId: string): void {
+    const isTeamAManager = fixture.teamA.createdById === userId;
+    const isTeamBManager = fixture.teamBId !== null && fixture.teamB?.createdById === userId;
+    if (!isTeamAManager && !isTeamBManager) {
+      throw new ForbiddenException(
+        'You may only manage fixtures for a team you registered',
+      );
+    }
+  }
+}

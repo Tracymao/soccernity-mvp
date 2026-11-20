@@ -1,0 +1,582 @@
+# account-deletion module
+
+> ## Purge of anonymised rows — Decision Log #375 (`backend/w6-purge-anonymised-rows`, B-043)
+>
+> **The only place a `User` row is ever deleted.** `AccountDeletionSweepService` still never runs a
+> `DELETE` on it (#341, below). `AnonymizedRowPurgeService` (daily `@Cron` at 03:30, after the 03:00
+> sweep; **not** exposed over HTTP, irreversible like the sweep) hard-deletes an anonymised row **30 days
+> after anonymisation**, and only if nothing refers to it any more. This **supersedes #344's "no purge
+> timer, by design"** (a dated note, not a rewrite — #344's reasoning about RESTRICT/cascade is exactly why
+> the check below is explicit).
+>
+> - **The clock.** `User.anonymizedAt` (new, nullable, migration `20261101090000_add_user_anonymized_at`),
+>   written in the *same* transaction as `accountStatus -> 'deleted'` by `anonymizeUser` — so the daily
+>   sweep **and** the admin immediate delete both stamp it. The first value wins if the anonymiser is
+>   re-run. **No backfill** (the platform is not live): a row anonymised before this column existed keeps
+>   `NULL` and is **never** purged by the timer.
+> - **Selection.** `accountStatus = 'deleted' AND anonymizedAt <= now − 30 days`, oldest first, at most
+>   **200 per run** (`ANONYMIZED_PURGE_MAX_PER_RUN`; a backlog drains over several runs and the run logs
+>   that it was capped). `purgeAnonymizedRows(now?)` takes an explicit `now` for tests.
+> - **One transaction per row, re-checked inside it.** The selection is only a work list. Each row runs in
+>   its own **Serializable** transaction that re-reads the row, runs the reference check, and deletes with a
+>   `deleteMany` guarded on the same conditions. A `Report` filed between the list and the delete makes one
+>   of the two abort (the row is reported as errored and retried next run), never slip through. One row
+>   failing never stops the others.
+> - **Eligibility (#375).** (a) a never-approved minor — `isMinor` and no `ConsentAuditRecord` with
+>   `consentStatus = 'confirmed'`; or (b) any account with no content. **A row meeting (a) that still has
+>   anything pointing at it is not purged and not forced.** Because every reference blocks, a row with none
+>   satisfies (b) by construction, so (a) cannot currently widen eligibility; it is computed so the log says
+>   *why* a row went (`never_approved_minor` / `no_content`).
+> - **What counts as "still referenced" — the 'no content' test #375 left open.** Checked explicitly (one
+>   lookup each), **never by trying the DELETE**: five FKs into `User` CASCADE (`ContestEntry`,
+>   `ContestRoundWinner`, `ContestStanding`, `PointsLedgerEntry`, `CommunityGroup.createdById`), so a
+>   DELETE would have silently destroyed them, and several references have no FK at all.
+>   - *Every relation FROM a model TO `User`* — **derived from `Prisma.dmmf`** at run time
+>     (`anonymized-row-purge.references.ts`), so a model added later is checked automatically. Two
+>     classification lists make a human decide each one: **content** (Post, Comment, Message, Result,
+>     Report.reporter, PostView, PostMediaReport, LeaderboardEntry, ContestEntry/Vote/Engagement/
+>     RoundWinner/Standing, PointsLedgerEntry, CommunityGroup.createdBy) and **anonymiser deletes these
+>     first** (Guardian, GrassrootsTeam.createdBy, Banter/Community-Group membership, Notification,
+>     SavedPost, Like, Follow, Block, MatchSubscription, ContestImpression, PostMedia, and the
+>     `_ClubMembership` join table). **Both lists block**; a row left in the second is logged as an
+>     *anomaly* (something wrote to an anonymised account). A spec fails the build if a derived relation is
+>     in neither list.
+>   - *No-FK references*: a `Report` filed against the user, or against a post/comment they authored (any
+>     status); `RevokedUsername.userId`; `AdminActionLog` rows with `targetType = 'user'`. **Veto-able
+>     defaults, added beyond the three #375 names:** `ContestVoteEvent.voterId`,
+>     `AgeReclassificationLog.userId`, `BanterRoom.createdBy`, `Conversation.participantIds` also block.
+>     `ConsentAuditRecord.minorUserId` is *excluded* (it survives on its own 6-month clock) and another
+>     user's `Notification.actorId` is *tolerated* (an opaque id on someone else's row).
+> - **Consequence worth knowing.** Several `RESTRICT` tables the anonymiser does **not** empty (`PostView`,
+>   `LeaderboardEntry`, `ContestVote`, `ContestEngagement`, `PointsLedgerEntry`) mean most accounts that
+>   did anything are kept; the purge mainly removes accounts that left nothing behind. Having the anonymiser
+>   delete those ephemeral rows is a separate decision, not made here.
+> - **Stored media (B-283, Decision Log #462 (g), #464).** *Superseded:* this bullet used to say a *rejected*
+>   post-media file's private object stays in the bucket. It no longer does. A rejected file's private object
+>   is deleted with the account at anonymisation (`deleteUserPostMedia`), unless the uploader is under an
+>   active admin hold or the post has a report not yet closed — then a `PostMediaDeferredDeletion` record is
+>   written in the same transaction and the daily sweep deletes it later. As a safety net the purge job asks
+>   `RejectedMediaSweepService.deleteUploaderObjects` to remove whatever is still stored under the purged
+>   user's media prefixes right after the row is deleted (best effort; it never undoes the purge). See
+>   `post-media/README.md`. Evidence handling beyond an active hold stays OPEN under counsel (B-206).
+> - **Untouched:** `ConsentAuditRecord` (its own 6-month clock), the investigation hold (B-044), admin
+>   screens (B-045).
+>
+> ### Revoked-username retention — B-139 (founder decision 2026-10-30; `backend/b139-revoked-username-retention`)
+>
+> *Dated note, 2026-10-30: this replaces the earlier "`RevokedUsername.userId` always blocks the purge,
+> retention OPEN" default; the history above is kept.* **Rule: a `RevokedUsername` record is kept while its
+> user's account exists, and deleted when the account has been anonymised (`accountStatus = 'deleted'`,
+> `anonymizedAt` set) AND `holdUntil` has passed.**
+>
+> 1. **At anonymisation.** `anonymizeUser` deletes, in its existing transaction, that user's records whose
+>    `holdUntil <= now`. A hold still running stays (so the handle stays unavailable to everyone else until
+>    `holdUntil`, as before).
+> 2. **Daily cleanup.** `AnonymizedRowPurgeService.cleanupRevokedUsernames(now?)` (called first in the 03:30
+>    job) deletes the records whose user is anonymised and whose hold has since passed. SQL join (the table
+>    has no foreign key), oldest hold first, at most **200 per run** (logged when capped), one delete per
+>    record so a failure is isolated and retried; a cleanup error is logged and the purge still runs.
+> 3. **In the purge.** `RevokedUsername.userId` is no longer an unconditional blocker. `purgeOne` first
+>    deletes the examined row's expired-hold records (so a capped or failed cleanup cannot strand a record
+>    pointing at a purged row), then the existing lookup finds only **running** holds: such a row is kept this
+>    run and retried the next.
+> 4. **Unchanged while the account exists:** the handle is unavailable to others until `holdUntil`, and the
+>    revoked user can never take it back (`UsernamePolicyService.assertAssignable`). A user anonymised before
+>    `holdUntil` keeps the record until `holdUntil`, then it is deleted. **Records of accounts that are not
+>    anonymised are never touched** (including `deleted` rows with a NULL `anonymizedAt`).
+> 5. **No reinstate action.** No route or service reinstates a revoked username (checked by reading
+>    `admin-user-username-revoke.service.ts` and the username policy); it needs a design and is a later item.
+>    *Dated note, 2026-11-03 (`backend/b139-username-review`, Decision Log #467): the review route now exists
+>    (`modules/username-review/README.md`). A request for a review (`UsernameReviewRequest`) hangs off the
+>    `RevokedUsername` record by a cascading foreign key, so it is deleted with the record on every path above.
+>    `anonymizeUser` also deletes the user's requests explicitly, even while a hold keeps the record (the message is
+>    the user's own free text). A reinstatement deletes the record, and so the request.*
+>
+> ---
+
+> **CURRENT BEHAVIOUR — Decision Log #341 (`sprint-2/account-anonymization-reconsideration`)
+> supersedes Decision Log #44's cascade resolution, and #42's "hard-delete the
+> `User` row" step. Everything below the "Historical" divider describes the
+> superseded design and is kept only as a record.**
+>
+> **What happens now.** A `pending_deletion` account (self-service
+> `POST /auth/delete-account`, `POST /auth/delete-inactive-account`, or a
+> guardian refusal/expiry) gets the same 30-day grace period. At the end of it
+> `AccountDeletionSweepService.anonymizeUser` **anonymizes the `User` row in
+> place** — one atomic transaction, `accountStatus -> 'deleted'` — and **never
+> runs a `DELETE` on it** (the only `DELETE` of a `User` row is the 30-day purge above, #375).
+>
+> **Why.** The cascade model deleted *other users'* `Comment`/`Like`/`SavedPost`
+> rows on a departing user's `Post`: a bigger erasure than "this user's own
+> footprint is gone" needs, and than GDPR Art. 17 obliges (another user's
+> comment is that user's own data). Anonymized data that can no longer be
+> attributed to a person is outside the regulation (Recital 26), and this is
+> the pattern major platforms use. It is also mechanically far safer: one
+> `UPDATE` instead of a multi-table cascading delete — the class of operation
+> that produced the `Fixture`/`Result` RESTRICT bug.
+>
+> **The transaction (`anonymizeUser`):**
+>
+> | Target | Action |
+> |---|---|
+> | `User` | `email` -> `deleted-<id>@deleted.soccernity.internal` (deterministic, unique); `phone` -> null; `displayName` -> `"[deleted user]"`; `passwordHash` -> `"!anonymized"` (not a valid argon2 string, `PasswordService.verify` returns false — defence in depth); `dateOfBirth` -> null (column is now nullable); `clubAffiliationId` -> null; `pendingDeletionAt` -> null; `accountStatus` -> `'deleted'`. `role`/`isMinor` untouched. |
+> | `GrassrootsTeam.createdById` (now nullable) | set to `null` for every team they organised. The existing `createdById !== caller -> 403` checks then make the team read-only with no new guard code (proven by e2e). |
+> | `Follow` (both directions), `Like`, `SavedPost`, `Notification` | deleted outright (ephemeral signal). `Post.likeCount` is decremented for each removed like so the denormalized cache never drifts. |
+> | `Guardian` (minors) | unchanged from #42: snapshot into `ConsentAuditRecord`, then delete the `Guardian` row. The audit record keeps its own 6-month purge clock, measured from anonymization time. |
+> | `Post`, `Comment`, `Message`, `Result` | **untouched** — their FKs keep pointing at the now-anonymized row, which is the point. |
+> |  | *(B-287: direct `Message` rows are removed 12 months after `sentAt` by `MessageRetentionService`, independent of the account; see messaging/README.md "Retention".)* |
+> | `Report` | **never touched**, regardless of investigation status. |
+>
+> **`'deleted'` vs `'pending_deletion'`.** `pending_deletion` = the 30-day grace
+> period, or held pending investigation. `'deleted'` = anonymization has run;
+> terminal. Both block login identically (generic "Invalid credentials";
+> `reactivateAccount` also rejects `deleted`). Feed read-visibility
+> (`ACTIVE_AUTHOR_POST_FILTER`) allows `'active'` **and** `'deleted'` authors so
+> an anonymized user's posts keep showing as "[deleted user]"; every other
+> surface (rosters, follow graph, leaderboard, new DMs) still requires
+> `'active'`. An admin cannot change the status of a `'deleted'` user (409).
+>
+> **RESTRICT restored.** All 15 FKs `sprint-2/account-deletion-cascade` had
+> flipped to `CASCADE` are `RESTRICT` again (migration
+> `20260919144308_account_anonymization_restrict_and_nullable`), so an
+> accidental real `DELETE FROM "User"` fails loudly. `GrassrootsTeam.createdById`
+> is nullable + `RESTRICT`. `Guardian.minorUserId` was never changed.
+> Cascades added by *later* PRs under #44's banner (`BanterRoomMember`,
+> `CommunityGroupMember`, `ContestEntry`/`ContestRoundWinner`/
+> `ContestStanding`/`PointsLedgerEntry`, `CommunityGroup.createdBy`) are left
+> as they were: inert for the anonymiser (#341), and **live again for the purge (#375)**, which
+> checks them explicitly before deleting so they cannot cascade silently.
+>
+> **Investigation hold.** Before anonymizing a due account the sweep runs
+> `hasOpenInvestigation`. If a non-terminal `Report` involves the user —
+> `status = 'open'`, or `status = 'actioned' AND appealStatus = 'pending'` (an
+> overturned appeal flips back to `open`) — the account is **skipped this
+> cycle**: fully identifiable, still login-blocked via `pending_deletion`, and
+> retried every run. No new "held" flag; it is a query predicate. "Involves":
+> the user is the `reporterId`; or `targetType = 'user'` and `targetId` is them;
+> **or** `targetType` is `post`/`comment` and the target's author is them
+> (correlated `EXISTS` through `Post.authorId`/`Comment.authorId` — built
+> because it was a clean single query; Decision Log #341). The sweep result is
+> `{ anonymizedUserIds, heldUserIds }`. The admin-triggered immediate delete
+> (`PATCH /admin/users/:id {status:'deleted'}`) calls `anonymizeUser` directly
+> and deliberately skips both the grace period and the hold.
+>
+> **Updated by `sprint-2/anonymization-followups` (Decision Log #344/#345):**
+> `anonymizeUser` now also deletes the leaver's Banter Room / Community Group /
+> Club memberships and decrements each `memberCount`. A hold still has no
+> maximum duration by design, but `GET /admin/users/held-investigations`
+> (default 90 days, tunable) surfaces stalled holds to admins. No retention
+> timer on the anonymized row, **by design** (#344): a later hard-delete would
+> fail on RESTRICT FKs or cascade away other users' content.
+> **[#375, 2026-10: superseded — a purge timer now exists, with the explicit
+> reference check described at the top of this file.]**
+>
+> **Still flagged, not built:** Grassroots dormant-team reassignment is a
+> separate follow-up; the notification rows other users hold *about* the
+> leaver now resolve to "[deleted user]".
+>
+> **[B-044, `backend/w6-hold-rule-extension`, Decision Log #376: the hold rule
+> is extended — see `modules/account-hold/README.md`.]** `hasOpenInvestigation`
+> is gone: the sweep, `listStalledHolds` and the admin immediate delete go through
+> `resolveAccountHold`. A hold now lasts through the appeal window and for
+> `ACCOUNT_HOLD_POST_CLOSURE_MONTHS` after the report closes (reported person and
+> authors of reported content; the reporter only while the report is open or in
+> appeal), and an admin can place a `legal_hold` or a `bad_faith` hold
+> (`AccountHold`, `HoldService`). An **admin hold** skips the account in full; a
+> **report hold** makes the sweep call `minimiseHeldUser` (clear non-evidence
+> data, keep the evidence) instead of leaving it untouched. The sweep result gains
+> `minimisedUserIds`; each `listStalledHolds` item gains `holdType`. The admin
+> immediate delete still skips a report hold but is refused (`409
+> account_hold_active`) while a legal or bad-faith hold is active. The three
+> numbers are configuration and **not counsel-sourced** (see that README).
+>
+> ---
+> ### Historical (superseded by Decision Log #341)
+>
+
+Build target: Sprint 2, `sprint-2/account-deletion-sweep` — implements
+Build Plan Section 9, **Decision Log #42** (and closes the "ARCHITECTURE
+IMPLICATION, not yet built" paragraph inside that same entry). **Extended
+by `sprint-2/account-deletion-cascade`**, implementing the founder's
+resolution of **Decision Log #44** (option a, cascade) — see that
+section below.
+
+## What Decision Log #42 actually decided (read from the docx directly,
+not from any summary)
+
+1. A `"pending_deletion"` account (`POST /auth/delete-account`, PR #78)
+   gets a **30-day grace period** before anything permanent happens.
+2. At the end of that window, the `User` row is **hard-deleted** — a
+   real `DELETE`, not an anonymize/scramble.
+3. Guardian/consent records are the one deliberate exception: they
+   **survive the `User` row's hard-delete**, retained separately for
+   **6 months** after the 30-day grace period expires (so ~7 months
+   total from the original `delete-account` request), for legal-defense
+   purposes (proof that guardian consent was validly obtained). Basis:
+   the ICO does not set a fixed statutory retention period for consent
+   data under UK GDPR — only that data be kept no longer than necessary
+   for its original purpose. 6 months is the founder's own applied
+   reading of that principle, not a number sourced from counsel.
+4. Nigeria (NDPA) cross-check: fully resolved, no jurisdictional split
+   needed. `POST /auth/delete-account` is the single unified withdrawal
+   mechanism for both UK and Nigeria (see Decision Log #43, closed as
+   "not needed" — no separate guardian-initiated withdrawal endpoint).
+5. Left explicitly unbuilt by #42 itself: "no code exists yet for the
+   30-day sweep job, the hard-delete, or the decoupled consent-audit
+   table that needs to survive independently of `User` and purge itself
+   on the 6-month timer." **That is this module.**
+
+`#42`'s own "ARCHITECTURE IMPLICATION" paragraph sketched one field
+("populated at consent-confirmation time") that this module does **not**
+follow literally — see "One deliberate deviation from #42's own
+architecture sketch" below for why, and why the entry's own retention
+math only works the way this module implements it.
+
+## Investigation, done before writing any code
+
+**1. Does `User` have a timestamp for when `pending_deletion` started?**
+No — confirmed directly by reading `prisma/schema.prisma` before this PR.
+`accountStatus` records the current state, not when it started. Without
+one, a 30-day sweep has no clock to measure against. Added
+`User.pendingDeletionAt DateTime?`, written by `AuthService.deleteAccount`
+at the same moment `accountStatus` flips to `"pending_deletion"`
+(`auth.service.ts`) — migration `20260823234607_add_account_deletion_sweep`.
+A genuine schema addition beyond Section 3's literal field list, flagged
+here per CLAUDE.md's "the data model is a fixed spec" rule, same as
+`accountStatus` itself was.
+
+**2. `Guardian`'s actual `ON DELETE` behavior — confirmed, not assumed.**
+Read directly from the real migration SQL
+(`prisma/migrations/20260815233230_init/migration.sql`):
+
+```sql
+ALTER TABLE "Guardian" ADD CONSTRAINT "Guardian_minorUserId_fkey"
+  FOREIGN KEY ("minorUserId") REFERENCES "User"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+```
+
+`#42`'s own architecture paragraph guessed hard-deleting `User` "would
+cascade-orphan or cascade-delete `Guardian` too" — **neither is what
+actually happens.** `RESTRICT` means Postgres rejects the `User` delete
+outright with a foreign-key-violation error the moment a `Guardian` row
+still references it. There is no silent cascade and no orphaning to
+defend against; there is a hard failure to route around correctly.
+
+**3. Every other foreign key referencing `User` — also checked, not
+assumed to be fine by extension.** Grepped every `ON DELETE` clause
+across every migration file. Result: `Post.authorId`, `Comment.authorId`,
+`Follow.followerId`/`followeeId`, `Like.userId`, `SavedPost.userId`,
+`Notification.userId`, `Report.reporterId`, `Message.senderId`,
+`LeaderboardEntry.userId`, `GrassrootsTeam.createdById`, and
+`Result.enteredById` are **all** `ON DELETE RESTRICT` against `User`.
+Only the implicit `_ClubMembership` many-to-many join table is
+`ON DELETE CASCADE`. This is the real, separate gap Decision Log #42
+itself never addressed (its own bullet list asks "what happens to rows
+that reference it" and leaves it open) — see "Decision Log #44
+candidate" below; this PR does not resolve it, per its own brief's
+explicit instruction not to.
+
+## Architecture
+
+### `User.pendingDeletionAt` (new field)
+
+See investigation point 1. Set once, at `deleteAccount()` time; never
+cleared (there is no reactivation path from `"pending_deletion"` —
+`reactivateAccount()` explicitly refuses one, unchanged by this PR).
+
+### `ConsentAuditRecord` (new, deliberately decoupled model)
+
+```prisma
+model ConsentAuditRecord {
+  id                 String    @id @default(uuid())
+  minorUserId        String    // plain string, NOT a foreign key
+  consentStatus      String    // snapshot of Guardian.consentStatus
+  consentConfirmedAt DateTime? // snapshot of Guardian.consentTimestamp
+  consentMethod      String    @default("guardian-consent-link")
+  createdAt          DateTime  @default(now())
+
+  @@index([createdAt])
+}
+```
+
+`minorUserId` is a plain `String`, not a `@relation` — this is the whole
+point of the table. It must survive independently of the `User` row it
+describes, and it is only ever written at the exact moment that row is
+about to be hard-deleted; a real foreign key would make "survives the
+`User` row's hard-delete" structurally impossible (the same `RESTRICT`
+problem `Guardian` itself has today would just move one table over).
+
+**Deliberately not full `Guardian` PII** — no `name`, no `email`, no
+`relationship`. Decision Log #42 asks for "what's needed to prove
+consent occurred" for a future legal-defense claim, not a mirror of the
+`Guardian` row. `consentStatus` + `consentConfirmedAt` is that minimum:
+enough to show whether (and when) a guardian confirmed consent for this
+specific `minorUserId` before the account was deleted. Proven
+structurally, not just by omission, in
+`account-deletion-sweep.e2e-spec.ts`: the snapshot test asserts the
+record's own key set is exactly
+`{id, minorUserId, consentStatus, consentConfirmedAt, consentMethod, createdAt}`
+and that the real guardian's name/email never appear anywhere in it.
+
+### One deliberate deviation from #42's own architecture sketch
+
+Decision Log #42's own text describes the sketched table as "populated
+**at consent-confirmation time**." This module populates it **at
+hard-delete time** instead — a deliberate reading, not an oversight, for
+two reasons:
+
+1. **The entry's own retention math only works this way.** #42 states the
+   consent record is retained "for 6 months after the 30-day grace period
+   expires (so ~7 months total from the original delete-account
+   request)." If the 6-month clock started at the (possibly years-earlier)
+   original consent-confirmation time instead, that arithmetic wouldn't
+   hold at all — a guardian could confirm consent long before any deletion
+   is ever requested, making "~7 months total from the delete request" a
+   meaningless claim.
+2. **Populating at consent-confirmation time would create an audit record
+   for every minor who is never deleted**, immediately starting a 6-month
+   countdown on an account that might be active for years — the opposite
+   of what a legal-defense retention record is for.
+
+`ConsentAuditRecord.createdAt` is therefore the hard-delete moment, and
+`consentConfirmedAt` (sourced from `Guardian.consentTimestamp`) is what
+actually preserves the original confirmation time, separately.
+
+### `AccountDeletionSweepService`
+
+Two independently callable methods (each takes an optional `now: Date`
+parameter specifically so tests can prove the boundaries deterministically,
+without mocking global time):
+
+- **`sweepPendingDeletions(now?)`** — finds every `accountStatus =
+  'pending_deletion'` row with `pendingDeletionAt <= now - 30 days`. For
+  each: if `isMinor` and a `Guardian` row exists, snapshots it into
+  `ConsentAuditRecord` and deletes the `Guardian` row, then deletes the
+  `User` row — all inside one interactive `$transaction`, so a failure at
+  any step rolls back the whole thing. As of `sprint-2/account-deletion-cascade`
+  (Decision Log #44), that final `User` delete now cascades through the
+  eleven tables listed in "Decision Log #44" below, including other
+  users' content on this user's own `Post`s — no per-table deletion code
+  is needed here, the database does it in one statement. Returns
+  `{hardDeletedUserIds, blockedUserIds}` — see "Decision Log #44" below
+  for what `blockedUserIds` means (now an unexpected/drift signal, not a
+  routine outcome).
+- **`purgeExpiredConsentAuditRecords(now?)`** — deletes every
+  `ConsentAuditRecord` with `createdAt <= now - 6 calendar months`.
+  Entirely independent of `sweepPendingDeletions` and of any `User`
+  row's existence or state — proven directly in
+  `account-deletion-sweep.e2e-spec.ts` by a test that seeds an expired
+  record with **zero** `User` rows in the database at all.
+- **`runDailySweep()`** — the `@Cron(CronExpression.EVERY_DAY_AT_3AM)`
+  entry point, calling both of the above and logging a summary.
+
+**Scheduled, not a manually-triggered endpoint** — per this PR's brief.
+No controller exists in this module at all. A destructive, irreversible
+sweep over every account on the platform has no legitimate reason to be
+reachable on demand by any caller, including an admin one. `@nestjs/
+schedule` (`^6.1.3`, confirmed compatible with this codebase's NestJS 11
+via its own published `peerDependencies`) is a genuinely new dependency
+this PR adds — nothing in this codebase used `@Cron`/`ScheduleModule`
+before. `ScheduleModule.forRoot()` is registered once, globally, in
+`app.module.ts` (any future `@Cron`/`@Interval`/`@Timeout` job would need
+it too — it doesn't belong to this module specifically).
+
+## Decision Log #44 — RESOLVED (option a, cascade), implemented in `sprint-2/account-deletion-cascade`
+
+**What happens to a hard-deleted user's `Post`, `Comment`, `Follow`,
+`Like`, `SavedPost`, `Notification`, `Report`, `Message`,
+`LeaderboardEntry`, `GrassrootsTeam`, and `Result` rows?** Confirmed (see
+"Investigation" above) that every one of these foreign keys was `ON
+DELETE RESTRICT` — meaning, as originally shipped by PR #88, a
+hard-delete attempt on any account with real activity failed outright at
+the database level. This was not decided by Decision Log #42's own text
+(its bullet list poses the question and leaves it open); PR #88
+deliberately shipped the conservative option (c) below and flagged the
+question rather than silently picking an answer.
+
+**The founder resolved this as Decision Log #44, option (a) — cascade.**
+Stated principle: deleting an account removes that user's entire digital
+footprint from the platform, not a partial erasure — framed explicitly
+as a safety measure, including for minors, protecting everyone's data
+and identity. Applies to the eleven tables below; does **not** apply to
+`Guardian`, which Decision Log #42 already resolved separately
+(snapshotted into `ConsentAuditRecord`, then deleted — that mechanism is
+unchanged by this PR, still `RESTRICT`, still explicit
+snapshot-then-delete, never a bare cascade).
+
+**The real mechanical consequence, stated plainly per the founder's own
+framing so it is never rediscovered as a surprise:** cascading `Post`
+also cascades away `Comment`/`Like`/`SavedPost` rows written by OTHER,
+unrelated users on that post — e.g. if User A deletes their account,
+User B's own comment on User A's post is deleted too, not just User A's
+content. This is the accepted, understood consequence of the decision,
+not an oversight to work around or soften. Proven directly, not just
+asserted, by `account-deletion-sweep.e2e-spec.ts`'s cross-user cascade
+test — see "Verification" below.
+
+**A second-order discovery made while implementing this, not itself a
+new open question:** flipping only the eleven FKs that reference `User`
+directly is not sufficient to make this cascade actually complete.
+`Comment.postId`, `SavedPost.postId`, and `Like.postId` were *also*
+`ON DELETE RESTRICT` — against `Post`, not `User`. Once `Post.authorId`
+became `CASCADE`, a `User` delete that reaches a `Post` with any
+`Comment`/`SavedPost`/`Like` row on it (from any user, including the
+deleting user's own) would still abort the whole transaction the moment
+Postgres tried to cascade-delete that `Post` and hit those three
+RESTRICT constraints one level down. This is exactly the cross-user
+consequence the founder's own resolution text describes — cascading
+`Post` was always meant to reach those three tables — so this PR flips
+all three to `CASCADE` as well, as the literal, necessary implementation
+of the one decision already made, not a separate policy question.
+Confirmed empirically against real Postgres (`account-deletion-sweep.e2e-spec.ts`),
+not just reasoned about.
+
+**A known, currently-unreachable incompleteness, flagged rather than
+silently left inconsistent:** `Fixture.teamAId`/`teamBId` and
+`Result.fixtureId` are not `User`-referencing FKs and are out of this
+PR's literal scope. `GrassrootsModule` is not wired into `app.module.ts`
+(Sprint 5, commented out, no controller/service exists), so no live
+endpoint can create a `GrassrootsTeam`, `Fixture`, or `Result` row
+today — this chain is unreachable in practice, even though
+`GrassrootsTeam.createdById` and `Result.enteredById` are now `CASCADE`.
+Whoever builds Grassroots endpoints should revisit `Fixture`'s and
+`Result`'s own FKs under this same cascade principle then, since a user
+who created a team with existing fixtures would otherwise hit the exact
+same RESTRICT wall this PR fixes for `Post`/`Comment`/`Like`.
+
+### Options considered (kept for the historical record — PR #88's original write-up, unchanged)
+
+**(a) Cascade-delete all related content alongside the `User` row.**
+Simplest to implement (change every relevant FK to `ON DELETE CASCADE`).
+Con: the blast radius is much larger than "this one user's own data" — a
+`Comment` on someone else's `Post` is that other person's content
+context too; deleting a `Post` this way would also cascade away
+`Comment`/`Like`/`SavedPost` rows written by *other, unrelated* users,
+which is a much bigger and more surprising erasure than the deleting
+user themselves would reasonably expect "delete my account" to cause.
+
+**(b) Orphan the content, reassigned to a placeholder "deleted user"
+sentinel account.** Common pattern (a permanent, real `User` row like
+"[deleted]" that every FK gets reassigned to before the real row is
+removed). Con: real, non-trivial migration work — most of the affected
+columns (`authorId`, `userId`, etc.) are non-nullable `String`, not
+`String?`, so `ON DELETE SET NULL` isn't available without also making
+every one of them nullable; a sentinel-reassignment approach needs an
+explicit `UPDATE ... SET authorId = <sentinel-id>` step per table before
+the real delete, and a decision on whether that sentinel is a schema
+constant, a seeded row, or something else.
+
+**(c) Leave the RESTRICT behavior in place; a User with any related
+content simply cannot be hard-deleted until a separate decision is made
+for that content.** What this PR actually ships, as the most
+conservative default it could ship without inventing a cascade or
+anonymization policy: `sweepPendingDeletions` catches the real `P2003`
+foreign-key-violation error, leaves the account in `pending_deletion`
+untouched (no data lost, no partial state), reports it in
+`blockedUserIds`, logs a warning pointing at this README section, and
+moves on to the next account rather than crashing the whole sweep run.
+The account is re-attempted on every future sweep run for free, with no
+extra bookkeeping needed, until (a) or (b) — or some other option — is
+actually decided and implemented.
+
+**PR #88 shipped (c)** — plainly stated at the time, not implied: an
+account with any real activity would not actually be hard-deleted by the
+sweep as originally built; it would sit in `pending_deletion`, blocked,
+indefinitely. **This is now superseded by `sprint-2/account-deletion-cascade`,
+which ships (a).** An account with real activity (a post, a comment, a
+like, a follow either direction, a saved post, a notification, a report,
+a message, or a leaderboard entry) that reaches its 30-day mark is now
+genuinely hard-deleted, cascading through all of that content — and,
+per the mechanical consequence above, through other users' `Comment`/
+`Like`/`SavedPost` rows on that user's own `Post`s too.
+`AccountDeletionSweepService.sweepPendingDeletions`'s `blockedUserIds`
+should stay empty in normal operation now; see that method's own
+updated comment for what a non-empty result means post-cascade (schema
+drift, not a routine outcome).
+
+## Verification
+
+See the PR description for exact, freshly re-run `tsc`/`build`/`lint`/test
+counts (mocked suite and e2e suite, both before and after each branch).
+
+**`sprint-2/account-deletion-sweep` (PR #88) — original verification,
+partly superseded by the cascade change below; kept for the historical
+record, not to be read as describing current behavior:**
+
+- `account-deletion-sweep.service.spec.ts` (mocked `PrismaService`) —
+  the 30-day cutoff query shape, the minor-with-confirmed-Guardian
+  snapshot-then-delete ordering, the minor-with-pending-Guardian
+  `consentConfirmedAt: null` case, the minor-with-no-Guardian-row case,
+  the `P2003`-caught-and-blocked path (including that one blocked
+  account doesn't stop the rest of the sweep), a non-`P2003` error
+  rethrown rather than swallowed, and the 6-month purge cutoff math.
+- `test/account-deletion-sweep.e2e-spec.ts` (real Postgres) — the actual
+  30-day boundary (a 29-day-old request untouched, a 31-day-old one
+  hard-deleted, both side by side in one sweep run), active/deactivated
+  accounts left alone regardless of age, the real `Guardian` `RESTRICT`
+  constraint genuinely exercised (confirmed/pending consent snapshot
+  survives a real `User`+`Guardian` hard-delete, structurally proven to
+  carry no more PII than the model's own columns allow), a real `Post`
+  genuinely blocking a hard-delete via a real `P2003` from Postgres (not
+  a mocked one — **this specific scenario no longer blocks, see below**),
+  a blocked account not preventing an unrelated eligible one from being
+  hard-deleted in the same run, and the 6-month purge firing with
+  **zero** `User` rows in the database at all — the direct proof that it
+  is independent of account-deletion timing, not just independent in
+  theory.
+
+**`sprint-2/account-deletion-cascade` — what changed:**
+
+- `account-deletion-sweep.service.spec.ts` — the old "a `Post` blocks a
+  hard-delete via `P2003`" mocked test is replaced with the opposite: a
+  user with related content (`isMinor: false`, no special mocking needed
+  since cascade is a database-level concern a mock can't exercise
+  either way) now hard-deletes successfully with no `P2003` in the
+  picture at all. The `P2003`-caught-and-blocked path is kept as a
+  defensive-fallback test (still proven reachable and still proven not
+  to crash the rest of the sweep, per this PR's own brief), but its
+  test name and comments now say plainly that this is an
+  unexpected/drift scenario, not a routine one.
+- `test/account-deletion-sweep.e2e-spec.ts` — the old "a real `Post`
+  genuinely blocking a hard-delete" test is replaced with real-Postgres
+  proof that it does NOT block: hard-deleting a user with a `Post`,
+  `Comment`, `Like`, and `Follow` succeeds, and all of those rows are
+  confirmed gone afterward. **The single most important new test in this
+  PR** — the cross-user cascade proof the founder's own resolution text
+  calls out explicitly: User A posts, User B comments on and likes that
+  post; hard-deleting User A confirms User B's `Comment` and `Like` rows
+  are ALSO gone, not just User A's own content — proving the real blast
+  radius, not just the same-user case. `Guardian`/`ConsentAuditRecord`
+  coverage from PR #88 is kept and re-confirmed unchanged: a minor with
+  a `Guardian` row still goes through the explicit snapshot-then-delete
+  path (never a bare cascade), and `Guardian.minorUserId` is confirmed
+  to still be `RESTRICT` by seeding a `Guardian` row and confirming the
+  sweep's transactional ordering (delete `Guardian` before `User`) is
+  still what makes the hard-delete succeed, not a cascade doing it for
+  free.
+
+## Status update — `hardDeleteUser` made public, a second caller (`sprint-5/admin-users-dashboard-backend`)
+
+`hardDeleteUser` (private since this module's own first PR) is now
+`public` — `AdminUsersService.updateUserStatus`'s `"deleted"` branch
+calls it directly for an admin-triggered **immediate** delete,
+deliberately skipping the 30-day grace period `sweepPendingDeletions`
+waits for (a moderation action, not a self-service request — see
+`admin-users/README.md`'s own Decision Log candidate #2 for the full
+reasoning). This is reuse of the exact same Guardian-snapshot +
+`ConsentAuditRecord` + cascade-delete sequence, not a second
+implementation — one primitive, two entry points now: the scheduled
+sweep (unchanged, still only ever acts on genuinely 30-days-past-due
+`pending_deletion` rows) and the new admin path (on demand, any account,
+any current `accountStatus`). `sweepPendingDeletions`/`runDailySweep`
+themselves are untouched by this PR. See that method's own updated
+comment for the caller-responsibility note (a real, irreversible hard
+delete with no confirmation step of its own — the caller owns
+authorization/confirmation, here `AdminRolesGuard` plus the admin having
+already chosen "delete" in the Users console).
+
+## Post media (backend/w14-post-media-pipeline; Decision Log #419 item 9)
+
+`anonymizeUser` also deletes every `PostMedia` row the user uploaded, removes those files' URLs from the `Post.mediaUrls` of posts
+that survive anonymisation (#341 keeps the post), and, after the transaction commits, removes the stored objects (public and
+quarantine) best effort. A storage failure never fails the anonymisation; the key is logged for manual cleanup.

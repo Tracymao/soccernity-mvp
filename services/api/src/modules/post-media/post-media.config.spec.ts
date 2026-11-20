@@ -1,0 +1,119 @@
+import { ConfigService } from '@nestjs/config';
+import { POST_MEDIA_DEFAULTS, PostMediaConfig } from './post-media.config';
+
+const cfg = (env: Record<string, string> = {}) => new PostMediaConfig(new ConfigService(env));
+
+describe('PostMediaConfig', () => {
+  it('defaults match the founder-stated limits (Decision Log #419)', () => {
+    const c = cfg();
+    expect(c.limits).toEqual({ imageMaxBytes: 10 * 1024 * 1024, videoMaxBytes: 100 * 1024 * 1024, videoMaxSeconds: 120, maxPerPost: 10 });
+    expect(c.quarantineMaxAgeHours).toBe(24);
+    expect(c.uploadLinkTtlSeconds).toBe(900);
+    expect(c.uploadRateLimit).toEqual({ max: 30, windowSeconds: 3600 });
+    expect(c.ffmpegPath).toBe('ffmpeg');
+    expect(c.ffprobePath).toBe('ffprobe');
+  });
+
+  it('reads overrides from configuration', () => {
+    const c = cfg({ POST_MEDIA_VIDEO_MAX_SECONDS: '60', POST_MEDIA_IMAGE_MAX_BYTES: '2048', FFMPEG_PATH: '/opt/ff/ffmpeg', POST_MEDIA_UPLOAD_RATE_LIMIT_MAX: '3' });
+    expect(c.limits.videoMaxSeconds).toBe(60);
+    expect(c.limits.imageMaxBytes).toBe(2048);
+    expect(c.ffmpegPath).toBe('/opt/ff/ffmpeg');
+    expect(c.uploadRateLimit.max).toBe(3);
+  });
+
+  it('a value that is not a whole number in range falls back to the default instead of producing a nonsense limit', () => {
+    const c = cfg({
+      POST_MEDIA_VIDEO_MAX_SECONDS: 'abc',
+      POST_MEDIA_IMAGE_MAX_BYTES: '-5',
+      POST_MEDIA_MAX_PER_POST: '99',
+      POST_MEDIA_UPLOAD_LINK_TTL_SECONDS: '1.5',
+    });
+    expect(c.limits.videoMaxSeconds).toBe(POST_MEDIA_DEFAULTS.videoMaxSeconds);
+    expect(c.limits.imageMaxBytes).toBe(POST_MEDIA_DEFAULTS.imageMaxBytes);
+    expect(c.limits.maxPerPost).toBe(10); // capped at the DTO's own maximum
+    expect(c.uploadLinkTtlSeconds).toBe(POST_MEDIA_DEFAULTS.uploadLinkTtlSeconds);
+  });
+
+  describe('moderation thresholds', () => {
+    it('a minor uploader gets stricter defaults than an adult', () => {
+      const c = cfg();
+      const adult = c.thresholdsFor(false);
+      const minor = c.thresholdsFor(true);
+      expect(minor.pass).toBeLessThan(adult.pass);
+      expect(minor.reject).toBeLessThan(adult.reject);
+    });
+
+    it('reads each pair from its own variables', () => {
+      const c = cfg({
+        MEDIA_CHECK_PASS_THRESHOLD: '55',
+        MEDIA_CHECK_REJECT_THRESHOLD: '95',
+        MEDIA_CHECK_PASS_THRESHOLD_MINOR: '10',
+        MEDIA_CHECK_REJECT_THRESHOLD_MINOR: '70',
+      });
+      expect(c.thresholdsFor(false)).toMatchObject({ pass: 55, reject: 95 });
+      expect(c.thresholdsFor(true)).toMatchObject({ pass: 10, reject: 70 });
+    });
+
+    it('a reject threshold below the pass threshold is invalid: BOTH values fall back to the defaults', () => {
+      const c = cfg({ MEDIA_CHECK_PASS_THRESHOLD: '80', MEDIA_CHECK_REJECT_THRESHOLD: '50' });
+      expect(c.thresholdsFor(false)).toMatchObject({ pass: POST_MEDIA_DEFAULTS.passThreshold, reject: POST_MEDIA_DEFAULTS.rejectThreshold });
+    });
+
+    it('the reject categories are configurable, trimmed and compared case-insensitively', () => {
+      const c = cfg({ MEDIA_CHECK_REJECT_CATEGORIES: ' Explicit , Gambling ,' });
+      expect([...c.rejectCategories].sort()).toEqual(['explicit', 'gambling']);
+      expect(cfg().rejectCategories.has('explicit')).toBe(true);
+    });
+  });
+
+  it('the review-queue settings have bounded defaults and are configurable (B-037)', () => {
+    expect(cfg().reportHideThreshold).toBe(3);
+    expect(cfg().uncheckedToReviewAfterMinutes).toBe(30);
+    expect(cfg().reviewViewUrlTtlSeconds).toBe(300);
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '5', MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: '10' }).reportHideThreshold).toBe(5);
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '0' }).reportHideThreshold).toBe(0); // 0 = never hide automatically
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '-1' }).reportHideThreshold).toBe(3);
+    expect(cfg({ MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: 'soon' }).uncheckedToReviewAfterMinutes).toBe(30);
+  });
+
+  it('the stray-sweep settings have the veto-able defaults and are configurable (B-283)', () => {
+    const c = cfg();
+    expect(c.strayMinAgeDays).toBe(7);
+    expect(c.strayMinAgeDays).toBe(c.unattachedMaxAgeDays); // starts equal to the B-259 window
+    expect(c.straySweepMaxDeletes).toBe(200);
+    expect(c.straySweepDryRun).toBe(false);
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: '14', POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '50' }).strayMinAgeDays).toBe(14);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '50' }).straySweepMaxDeletes).toBe(50);
+    // a bad value falls back to the default rather than producing a nonsense limit
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: '0' }).strayMinAgeDays).toBe(7);
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: 'soon' }).strayMinAgeDays).toBe(7);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '-5' }).straySweepMaxDeletes).toBe(200);
+  });
+
+  it('the dry run is on only for the literal "true" (any case, trimmed)', () => {
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: 'true' }).straySweepDryRun).toBe(true);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: ' TRUE ' }).straySweepDryRun).toBe(true);
+    for (const v of ['false', '1', 'yes', '', 'on']) expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: v }).straySweepDryRun).toBe(false);
+  });
+
+  it('video sampling and retry settings have bounded defaults', () => {
+    const c = cfg();
+    expect(c.videoSampling).toEqual({ intervalSeconds: 5, maxFrames: 30 });
+    expect(c.checkMaxAttempts).toBe(5);
+    expect(c.checkBatchSize).toBe(10);
+    expect(cfg({ MEDIA_CHECK_VIDEO_MAX_FRAMES: '12', MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS: '2' }).videoSampling).toEqual({ intervalSeconds: 2, maxFrames: 12 });
+  });
+  describe('suspected-media preservation period (B-206)', () => {
+    it('defaults to 365 days and reads SUSPECTED_MEDIA_PRESERVE_DAYS', () => {
+      expect(cfg().suspectedMediaPreserveDays).toBe(365);
+      expect(cfg({ SUSPECTED_MEDIA_PRESERVE_DAYS: '30' }).suspectedMediaPreserveDays).toBe(30);
+    });
+
+    it('a value that is not a whole number in range falls back to 365', () => {
+      for (const bad of ['0', '-1', 'abc', '1.5', '99999', '']) {
+        expect(cfg({ SUSPECTED_MEDIA_PRESERVE_DAYS: bad }).suspectedMediaPreserveDays).toBe(365);
+      }
+    });
+  });
+});

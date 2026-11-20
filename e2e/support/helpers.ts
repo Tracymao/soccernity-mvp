@@ -1,0 +1,522 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { createRequire } from 'module';
+import { expect, type Browser, type Page } from '@playwright/test';
+import { ADMIN_CREDENTIALS, API_LOG, QA_REDIS_DB, REPO, URLS, USER_PASSWORD, qaDatabaseUrl } from './stack';
+
+const requireFromApi = createRequire(path.join(REPO, 'services', 'api', 'package.json'));
+
+// ---------------------------------------------------------------------------
+// Unique data per run so tests never collide in the shared QA database.
+// ---------------------------------------------------------------------------
+const RUN_ID = Date.now().toString(36);
+let counter = 0;
+export function uniqueEmail(label: string): string {
+  counter += 1;
+  return `${label}.${RUN_ID}.${counter}@qa.soccernity.test`;
+}
+export function uniqueUsername(label: string): string {
+  counter += 1;
+  // <= 30 chars, letters/digits/underscore. Built so it can never contain the
+  // account's own email local-part (label + RUN_ID + counter), which the
+  // personal-data rule would reject.
+  const rev = RUN_ID.split('').reverse().join('');
+  return `u${rev}${counter}x${label}`.replace(/[^A-Za-z0-9_]/g, '').slice(0, 30);
+}
+
+// ---------------------------------------------------------------------------
+// Dates of birth that stay correct whenever the suite is run.
+// ---------------------------------------------------------------------------
+export interface Dob {
+  day: string;
+  month: string;
+  year: string;
+  iso: string;
+}
+/** A date of birth that makes someone exactly `age` today, plus ~6 months. */
+export function dobForAge(age: number, extraMonths = 6): Dob {
+  const d = new Date();
+  d.setUTCMonth(d.getUTCMonth() - extraMonths);
+  d.setUTCFullYear(d.getUTCFullYear() - age);
+  d.setUTCDate(Math.min(d.getUTCDate(), 28));
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(d.getUTCFullYear());
+  return { day, month, year, iso: `${year}-${month}-${day}` };
+}
+
+// ---------------------------------------------------------------------------
+// Outbound email, read back from the API log. The API runs with no Postmark
+// key, so every email it would send is logged with its full template data.
+// ---------------------------------------------------------------------------
+export interface LoggedEmail {
+  template: string;
+  to: string;
+  data: Record<string, string>;
+}
+const EMAIL_LINE = /Would send "([^"]+)" to (\S+) with data=(\{.*\})\s*$/;
+
+export function allEmails(): LoggedEmail[] {
+  if (!fs.existsSync(API_LOG)) return [];
+  const out: LoggedEmail[] = [];
+  for (const line of fs.readFileSync(API_LOG, 'utf8').split(/\r?\n/)) {
+    const m = EMAIL_LINE.exec(line);
+    if (!m) continue;
+    try {
+      out.push({ template: m[1], to: m[2], data: JSON.parse(m[3]) });
+    } catch {
+      /* partial line */
+    }
+  }
+  return out;
+}
+export function emailsFor(to: string, template?: string): LoggedEmail[] {
+  return allEmails().filter((e) => e.to.toLowerCase() === to.toLowerCase() && (!template || e.template === template));
+}
+/** Waits for the `nth` (1-based) email of this template to this address. */
+export async function waitForEmail(to: string, template: string, nth = 1, timeoutMs = 15_000): Promise<LoggedEmail> {
+  const start = Date.now();
+  for (;;) {
+    const found = emailsFor(to, template);
+    if (found.length >= nth) return found[nth - 1];
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`No ${nth}x "${template}" email to ${to} after ${timeoutMs}ms (saw ${found.length})`);
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+export function linkPath(link: string): string {
+  const u = new URL(link);
+  return `${u.pathname}${u.search}`;
+}
+
+// ---------------------------------------------------------------------------
+// Real database access, used ONLY to assert state and for the clearly
+// labelled workarounds. Product behaviour is always driven through the UI/API.
+// ---------------------------------------------------------------------------
+function rootDatabaseUrl(): string {
+  if (process.env.QA_BASE_DATABASE_URL) return process.env.QA_BASE_DATABASE_URL;
+  const text = fs.readFileSync(path.join(REPO, '.env'), 'utf8');
+  const m = /^DATABASE_URL="?([^"\r\n]+)"?/m.exec(text);
+  if (!m) throw new Error('DATABASE_URL not found in root .env');
+  return m[1];
+}
+let prismaSingleton: any;
+export function db(): any {
+  if (!prismaSingleton) {
+    const { PrismaClient } = requireFromApi('@prisma/client');
+    prismaSingleton = new PrismaClient({ datasources: { db: { url: qaDatabaseUrl(rootDatabaseUrl()) } } });
+  }
+  return prismaSingleton;
+}
+export async function userByEmail(email: string): Promise<any> {
+  return db().user.findUnique({ where: { email: email.toLowerCase() }, include: { guardian: true } });
+}
+
+// ---------------------------------------------------------------------------
+// Direct API calls (used for things with no UI: admin endpoints, state probes).
+// ---------------------------------------------------------------------------
+export async function api(
+  method: string,
+  route: string,
+  opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<{ status: number; body: any }> {
+  const res = await fetch(`${URLS.api}${route}`, {
+    method,
+    headers: {
+      ...(opts.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+      ...opts.headers,
+    },
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  });
+  const text = await res.text();
+  let body: any = text;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    /* non-JSON */
+  }
+  return { status: res.status, body };
+}
+// The admin login is limited to 5 per 15 minutes per IP in production (Decision Log #190). The QA stack raises the
+// number of attempts with ADMIN_LOGIN_RATE_LIMIT_MAX (support/api-process.ts; the API refuses to start in production
+// with it set), but the harness still spends as few real admin logins as it can: one per (email, password) per run,
+// so a run that is pointed at an API without that variable still fits the limit. A cached token is reused for 10 minutes (the API's access token lives
+// 15 minutes); a different password for the same email is a different key, so a test that changes an admin's password
+// and signs in again still gets a real new login. Pass `fresh: true` to force a real login (a test that is ABOUT the
+// sign-in itself should call api('POST', '/admin/auth/login') directly instead).
+const ADMIN_TOKEN_TTL_MS = 10 * 60 * 1000;
+const adminTokenCache = new Map<string, { token: string; at: number }>();
+export async function adminToken(email: string, password: string, opts: { fresh?: boolean } = {}): Promise<string> {
+  const key = `${email}\u0000${password}`;
+  const hit = adminTokenCache.get(key);
+  if (!opts.fresh && hit && Date.now() - hit.at < ADMIN_TOKEN_TTL_MS) return hit.token;
+  const res = await api('POST', '/admin/auth/login', { body: { email, password } });
+  if (res.status !== 200 && res.status !== 201) throw new Error(`admin login failed: ${res.status} ${JSON.stringify(res.body)}`);
+  adminTokenCache.set(key, { token: res.body.accessToken as string, at: Date.now() });
+  return res.body.accessToken as string;
+}
+export async function userLogin(email: string, password = USER_PASSWORD): Promise<{ status: number; body: any }> {
+  return api('POST', '/auth/login', { body: { email, password } });
+}
+
+// ---------------------------------------------------------------------------
+// UI drivers.
+// ---------------------------------------------------------------------------
+export interface SignUpInput {
+  email: string;
+  age: number;
+  country?: string; // ISO code as used by the select, default GB
+  first?: string;
+  last?: string;
+  password?: string;
+  guardian?: { name: string; email: string; relationship: string };
+  /** where the browser is expected to land after "Create account" */
+  expectUrl?: RegExp;
+}
+
+export async function fillAgeGate(page: Page, dob: Dob, country = 'GB'): Promise<void> {
+  await page.getByLabel('Day of birth').fill(dob.day);
+  await page.getByLabel('Month of birth').fill(dob.month);
+  await page.getByLabel('Year of birth').fill(dob.year);
+  await page.getByLabel('Country you live in').selectOption(country);
+  await page.getByRole('button', { name: 'Continue' }).click();
+}
+
+export async function signUpViaUi(page: Page, input: SignUpInput): Promise<Dob> {
+  const dob = dobForAge(input.age);
+  await page.goto('/signup');
+  await fillAgeGate(page, dob, input.country ?? 'GB');
+  if (input.age < 18) {
+    if (!input.guardian) throw new Error('guardian details required for a minor');
+    await expect(page.getByRole('heading', { name: /Ask a parent or guardian/ })).toBeVisible();
+    await page.getByLabel(/Guardian.s full name/).fill(input.guardian.name);
+    await page.getByLabel(/Guardian.s email address/).fill(input.guardian.email);
+    await page.getByLabel(/Their relationship to you/).selectOption(input.guardian.relationship);
+    await page.getByRole('button', { name: 'Send approval request' }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Register' })).toBeVisible();
+  await page.getByLabel('First name').fill(input.first ?? 'Casey');
+  await page.getByLabel('Last name').fill(input.last ?? 'Tester');
+  await page.getByLabel('Email', { exact: true }).fill(input.email);
+  await page.getByLabel('Password', { exact: true }).fill(input.password ?? USER_PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  if (input.expectUrl) await expect(page).toHaveURL(input.expectUrl);
+  return dob;
+}
+
+export async function loginViaUi(page: Page, email: string, password = USER_PASSWORD): Promise<void> {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: /^Log ?in$/i }).click();
+}
+
+export async function clearBrowserSession(page: Page): Promise<void> {
+  await page.context().clearCookies();
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The web session (B-246, Decision Log #422). The access token lives in the
+// app's MEMORY only and the refresh token is the httpOnly `sn_rt` cookie, so a
+// test can no longer plant or read either in browser storage. These helpers
+// reach the app's own in-memory store: the QA stack serves apps/web from the
+// Vite dev server, where `import('/src/lib/session.ts')` resolves to the SAME
+// module instance the running app uses.
+// ---------------------------------------------------------------------------
+const SESSION_MODULE = '/src/lib/session.ts';
+
+/** The access token the page is holding in memory right now (null = signed out). */
+export async function heldAccessToken(page: Page): Promise<string | null> {
+  return page.evaluate(async (mod) => {
+    const session = await import(/* @vite-ignore */ mod);
+    return session.getStoredAccessToken() as string | null;
+  }, SESSION_MODULE);
+}
+
+/** Puts `token` into the page's in-memory session (no cross-tab broadcast), e.g. an EXPIRED one. */
+export async function plantAccessToken(page: Page, token: string): Promise<void> {
+  await page.evaluate(
+    async ([mod, t]) => {
+      const session = await import(/* @vite-ignore */ mod);
+      session.storeSession({ accessToken: t });
+    },
+    [SESSION_MODULE, token],
+  );
+}
+
+/** Every key and value in both browser storages, plus document.cookie, as one string. */
+export async function everythingScriptCanRead(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const parts: string[] = [document.cookie, window.location.href];
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i) as string;
+        parts.push(key, store.getItem(key) ?? '');
+      }
+    }
+    return parts.join('\n');
+  });
+}
+
+/** The refresh cookie the API set for the browser context, if any. */
+export async function refreshCookie(page: Page) {
+  // All cookies, filtered by name: the cookie's Path is /auth, so a URL-scoped lookup of the API root would not match it.
+  const cookies = await page.context().cookies();
+  return cookies.find((c) => c.name === 'sn_rt');
+}
+
+/** POST /auth/refresh exactly as a browser on the web origin would, with the given cookie value. */
+export async function refreshWithCookie(value: string): Promise<{ status: number; body: any }> {
+  return api('POST', '/auth/refresh', {
+    headers: { 'X-Auth-Mode': 'cookie', Origin: URLS.web, Cookie: `sn_rt=${value}` },
+  });
+}
+
+export const GUARDIAN = (label = 'guardian') => ({
+  name: 'Pat Guardian',
+  email: uniqueEmail(label),
+  relationship: 'Parent',
+});
+
+// ---------------------------------------------------------------------------
+// Fast, API-driven account factories (the UI flows are covered in their own
+// specs; these put an account into a known onboarding state quickly).
+// ---------------------------------------------------------------------------
+export interface Account {
+  email: string;
+  userId: string;
+  accessToken: string;
+  guardianEmail?: string;
+}
+
+function tokenFromLink(link: string): string {
+  return new URL(link).searchParams.get('token')!;
+}
+
+export async function registerViaApi(opts: {
+  age: number;
+  label?: string;
+  displayName?: string;
+  country?: string;
+}): Promise<Account> {
+  const email = uniqueEmail(opts.label ?? 'acct');
+  const guardianEmail = opts.age < 18 ? uniqueEmail('g') : undefined;
+  const res = await api('POST', '/auth/register', {
+    body: {
+      email,
+      password: USER_PASSWORD,
+      displayName: opts.displayName ?? 'Quinn Player',
+      dateOfBirth: dobForAge(opts.age).iso,
+      countryCode: opts.country ?? 'GB',
+      ...(guardianEmail ? { guardian: { name: 'Pat Guardian', email: guardianEmail, relationship: 'Parent' } } : {}),
+    },
+  });
+  if (res.status !== 201) throw new Error(`register failed ${res.status} ${JSON.stringify(res.body)}`);
+  return { email, userId: res.body.user.id, accessToken: res.body.accessToken, guardianEmail };
+}
+
+export async function verifyEmailViaApi(acct: Account): Promise<void> {
+  const mail = await waitForEmail(acct.email, 'verify-email');
+  const res = await api('POST', '/auth/verify-email', { body: { token: tokenFromLink(mail.data.link) } });
+  if (res.status !== 200 && res.status !== 201) throw new Error(`verify failed ${res.status} ${JSON.stringify(res.body)}`);
+}
+
+export async function guardianConfirmViaApi(acct: Account): Promise<void> {
+  const mail = await waitForEmail(acct.guardianEmail!, 'guardian-consent');
+  const res = await api('POST', '/auth/guardian-consent', { body: { consentToken: tokenFromLink(mail.data.link) } });
+  if (res.status !== 200 && res.status !== 201) throw new Error(`consent failed ${res.status} ${JSON.stringify(res.body)}`);
+}
+
+export async function guardianDeclineViaApi(acct: Account, nth = 1): Promise<void> {
+  const mail = await waitForEmail(acct.guardianEmail!, 'guardian-consent', nth);
+  const res = await api('POST', '/auth/guardian-consent/decline', { body: { consentToken: tokenFromLink(mail.data.link) } });
+  if (res.status !== 200 && res.status !== 201) throw new Error(`decline failed ${res.status} ${JSON.stringify(res.body)}`);
+}
+
+/** Fresh access token + the server's view of where onboarding stands. */
+export async function me(acct: { email: string }): Promise<{ token: string; user: any }> {
+  const res = await userLogin(acct.email);
+  if (res.status !== 200 && res.status !== 201) throw new Error(`login failed ${res.status}`);
+  return { token: res.body.accessToken, user: res.body.user };
+}
+
+// ---------------------------------------------------------------------------
+// Admin token, cached on disk so the suite stays far below the 5-logins /
+// 15-minutes admin throttle (Decision Log #190).
+// ---------------------------------------------------------------------------
+const ADMIN_TOKEN_FILE = path.join(path.dirname(API_LOG), 'admin-token.json');
+export async function getAdminToken(): Promise<string> {
+  try {
+    const cached = JSON.parse(fs.readFileSync(ADMIN_TOKEN_FILE, 'utf8')) as { token: string; exp: number };
+    if (cached.exp * 1000 > Date.now() + 60_000) return cached.token;
+  } catch {
+    /* no cache yet */
+  }
+  const token = await adminToken(ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  const exp = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).exp as number;
+  fs.writeFileSync(ADMIN_TOKEN_FILE, JSON.stringify({ token, exp }));
+  return token;
+}
+
+// Email-verification tokens live in Redis (48h TTL, key auth:email-verify:<token>).
+// Making one "expire" = letting Redis expire it, which is exactly what time does.
+export async function expireEmailVerifyToken(token: string): Promise<void> {
+  const Redis = requireFromApi('ioredis');
+  // Same order as global-setup.ts: QA_BASE_REDIS_URL (set by the on-demand CI workflow, which has no root .env),
+  // then the root .env, then localhost.
+  let raw = process.env.QA_BASE_REDIS_URL;
+  if (!raw) {
+    const text = fs.existsSync(path.join(REPO, '.env')) ? fs.readFileSync(path.join(REPO, '.env'), 'utf8') : '';
+    const line = text.split(/\r?\n/).find((l) => l.startsWith('REDIS_URL='));
+    raw = line ? line.slice('REDIS_URL='.length).replace(/^"|"$/g, '') : 'redis://localhost:6379';
+  }
+  const base = raw.replace(/\/\d+$/, '');
+  const redis = new Redis(`${base}/${QA_REDIS_DB}`);
+  try {
+    const n = await redis.pexpire(`auth:email-verify:${token}`, 1);
+    if (n !== 1) throw new Error('verification token key not found in Redis');
+    await new Promise((r) => setTimeout(r, 20));
+  } finally {
+    await redis.quit();
+  }
+}
+
+// D-16 (fixed, FC3a). VerifyEmailPage used to consume the single-use token inside
+// a useEffect that React StrictMode (the dev servers) runs twice: the first
+// (successful) response was discarded as "cancelled" and the second request
+// found the token already used, so a valid link could end on "no longer valid".
+// The page now submits each token exactly once, so opening a valid link must
+// show the verified screen. The `info` argument is kept so existing call sites
+// still compile; it is no longer used.
+export async function expectVerifyScreen(
+  page: Page,
+  verifiedHeading: string | RegExp,
+  _info?: { annotations: Array<{ type: string; description?: string }> },
+): Promise<void> {
+  await expect(page.getByRole('heading', { name: verifiedHeading })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /no longer valid/ })).toHaveCount(0);
+}
+
+// ---------------------------------------------------------------------------
+// B-304 additions.
+// ---------------------------------------------------------------------------
+
+/**
+ * The pending-copy tag, kept in ONE place so removing it later (when counsel clears a string) is a one-line change
+ * here. Several strings in the apps end with this literal tag (docs/pending-copy-manifest.md); specs that assert such
+ * a string build the expected text with `tagged()`.
+ */
+export const COPY_TAG = '[COPY PENDING LEGAL REVIEW]';
+/** `text` followed by the tag, the way the apps render a tagged sentence. */
+export function tagged(text: string): string {
+  return COPY_TAG ? `${text} ${COPY_TAG}` : text;
+}
+
+function adminJwtSecret(): string {
+  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
+  const text = fs.readFileSync(path.join(REPO, '.env'), 'utf8');
+  const m = /^ADMIN_JWT_SECRET="?([^"\r\n]+)"?/m.exec(text);
+  if (!m) throw new Error('ADMIN_JWT_SECRET not found in root .env');
+  return m[1];
+}
+
+export interface QaAdmin {
+  id: string;
+  email: string;
+  fullName: string;
+  role: 'moderator' | 'editor' | 'superadmin';
+  token: string;
+}
+
+/**
+ * Creates an extra admin account in Postgres and returns a REAL access token for it, signed with the API's own
+ * ADMIN_JWT_SECRET (the payload the API's AdminTokenService signs: { sub, role, aud: 'admin-console' }). Why not
+ * sign in through POST /admin/auth/login: that route is limited to 5 per 15 minutes per IP (Decision Log #190) and
+ * the suite already spends most of that budget. The real admin sign-in (cookie, session) is covered by spec 08; every
+ * request made with this token goes through the API's real guards, which re-read the admin row and the child-safety
+ * vetting flag from Postgres on each call. `vetted` writes the same three columns the vetting route writes.
+ */
+export async function createQaAdmin(
+  role: 'moderator' | 'editor' | 'superadmin',
+  fullName: string,
+  opts: { vetted?: boolean } = {},
+): Promise<QaAdmin> {
+  const qa = await db().adminUser.findUnique({ where: { email: ADMIN_CREDENTIALS.email } });
+  const email = `qa-${role}-${RUN_ID}-${(counter += 1)}@soccernity.test`;
+  const row = await db().adminUser.create({
+    data: {
+      email,
+      fullName,
+      // Not a valid hash: this account is only ever used through the minted token below.
+      passwordHash: '!qa-minted-token-only',
+      role,
+      accountStatus: 'active',
+      ...(opts.vetted ? { childSafetyVetted: true, vettedAt: new Date(), vettedByAdminId: qa.id } : {}),
+    },
+  });
+  const jwt = requireFromApi('jsonwebtoken');
+  const token = jwt.sign({ sub: row.id, role, aud: 'admin-console' }, adminJwtSecret(), { expiresIn: 3600 });
+  return { id: row.id, email, fullName, role, token };
+}
+
+/**
+ * adminPage(), but the console's start-up refresh is answered with THIS admin's access token (the same stand-in
+ * support/admin-ui.ts uses for the QA superadmin).
+ */
+export async function adminPageAs(browser: Browser, token: string): Promise<Page> {
+  const ctx = await browser.newContext({ baseURL: URLS.admin });
+  const cors = {
+    'access-control-allow-origin': URLS.admin,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': 'content-type, authorization, x-auth-mode',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    vary: 'Origin',
+  };
+  await ctx.route(`${URLS.api}/admin/auth/refresh`, async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: token,
+        accessTokenExpiresIn: 900,
+        refreshTokenExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      }),
+    });
+  });
+  return ctx.newPage();
+}
+
+/** A verified adult with a username, ready to use the messaging and report routes. */
+export interface Verified extends Account {
+  token: string;
+  username: string;
+}
+export async function verifiedAccount(label: string, age = 30, opts: { guardianConfirms?: boolean } = {}): Promise<Verified> {
+  const a = await registerViaApi({ age, label });
+  await verifyEmailViaApi(a);
+  if (age < 18 && opts.guardianConfirms !== false) await guardianConfirmViaApi(a);
+  const { token } = await me(a);
+  // A generated handle can by chance contain something the personal-data rule refuses (for example the year of
+  // birth); a different counter gives a different handle, so try a few times.
+  // Digits are left out of the label: the username rules refuse a handle with too many digits in total
+  // (phone-like, username-rules.util.ts revealsOwnDetails), and the generated handle already carries several.
+  const letterLabel = label.replace(/\d/g, '');
+  let username = uniqueUsername(letterLabel);
+  let res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
+  for (let attempt = 0; attempt < 4 && res.status === 400 && res.body?.code === 'username_not_allowed'; attempt += 1) {
+    username = uniqueUsername(`${letterLabel}${'abcd'[attempt]}`);
+    res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
+  }
+  if (res.status !== 200) throw new Error(`username failed ${res.status} ${JSON.stringify(res.body)}`);
+  return { ...a, token, username };
+}

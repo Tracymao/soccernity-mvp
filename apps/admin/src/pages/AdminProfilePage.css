@@ -1,0 +1,167 @@
+/* Admin Profile — Figma 5403:7327 / card 5405:7173. */
+
+.admin-profile__card {
+  max-width: 760px;
+  background-color: var(--sn-background-surface);
+  border-radius: 12px;
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.admin-profile__header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.admin-profile__avatar {
+  flex: 0 0 88px;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 28px;
+}
+
+.admin-profile__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-profile__name {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.admin-profile__role {
+  font-size: 15px;
+  color: var(--sn-text-secondary);
+}
+
+.admin-profile__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-profile__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+/* Figma draws the value box at a fixed 100px height with top-aligned
+ * text. For a single-line value that reads as an empty box, so this uses
+ * a comfortable min-height instead — a deliberate, disclosed deviation
+ * from the literal spec. */
+.admin-profile__value {
+  min-height: 48px;
+  padding: 14px 16px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 15px;
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
+
+.admin-profile__value--locked {
+  opacity: 0.75;
+}
+
+.admin-profile__field input {
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background-color: var(--sn-background-surface);
+  font: inherit;
+  font-size: 15px;
+  color: var(--sn-text-primary);
+}
+
+.admin-profile__field input:focus {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.admin-profile__hint {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.admin-profile__actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.admin-btn {
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.admin-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.admin-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.admin-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.admin-profile__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-profile__panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.admin-profile__panel-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* No invented error hue — navy text on a navy-tint wash with a border,
+ * matching apps/web's Auth.css convention and this app's login screen. */
+.admin-profile__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-profile__loading {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}

@@ -1,0 +1,45 @@
+/* Global baseline for apps/admin (Admin & Operations Console).
+ *
+ * Dynamic colour values come from CSS custom properties set at runtime by
+ * src/theme/adminTheme.ts (mirrored from @soccernity/shared's design
+ * tokens). Do not hardcode a hex colour in a component — reference
+ * `var(--sn-*)` so a token change propagates automatically.
+ *
+ * `--sn-text-on-navy` is static here: it is #FFFFFF in both Figma theme
+ * modes and the Admin Console is a light-only internal tool. A future
+ * dark-mode admin would move this into adminTheme.ts. */
+:root {
+  --sn-text-on-navy: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "Montserrat",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background-color: var(--sn-background-page);
+  color: var(--sn-text-primary);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}

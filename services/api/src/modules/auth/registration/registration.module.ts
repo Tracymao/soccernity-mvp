@@ -1,0 +1,52 @@
+import { Module } from '@nestjs/common';
+import { GeoIpModule } from '../../../geoip/geoip.module';
+import { PrismaModule } from '../../../prisma/prisma.module';
+import { RedisModule } from '../../../redis/redis.module';
+import { AccountEmailsModule } from '../../account-emails/account-emails.module';
+import { ClubsModule } from '../../clubs/clubs.module';
+import { AuthFoundationModule } from '../auth-foundation.module';
+import { GuardianConsentModule } from '../guardian-consent/guardian-consent.module';
+import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
+import { ResendVerificationLimiter } from './email-verification/resend-verification.limiter';
+import { ResendVerificationService } from './email-verification/resend-verification.service';
+import { RegistrationEmailService } from './email/registration-email.service';
+import { RegistrationController } from './registration.controller';
+import { RegistrationService } from './registration.service';
+
+// Sprint 1 / PR B2 — POST /auth/register, POST /auth/verify-email
+// (Build Plan Section 4.1), built against B1's AuthFoundationModule
+// (PasswordService, TokenService, @AuthRateLimit()).
+//
+// Deliberately its own self-contained module — not "AuthModule" — so
+// this PR doesn't collide with B3/B4/B6, which are being built
+// concurrently in their own worktrees and will also need to wire
+// endpoints into app.module.ts. Each of those PRs should do the same
+// (its own scoped module), per this task's brief. A small, expected
+// merge-order conflict in app.module.ts when these land sequentially is
+// fine and not something to architect around.
+// ClubsModule imported (sprint-2/auto-join-on-signup) so RegistrationService
+// can inject ClubsService and implement auto-join on signup
+// (RegisterDto.clubId) — Build Plan Section 6's Sprint 2 line, left unbuilt
+// when club pages themselves shipped in PR #58. No circularity risk:
+// ClubsModule imports AuthFoundationModule (not AuthRegistrationModule),
+// same as this module already does directly.
+//
+// GuardianConsentModule imported (sprint-2/verify-email-consent-status-field,
+// Decision Log #38) so RegistrationService can inject GuardianConsentService
+// and reuse getConsentStatusForUser() rather than re-deriving guardian
+// consent status a second, parallel way. No circularity risk: like
+// ClubsModule, GuardianConsentModule does not import AuthRegistrationModule
+// (or any module that does) — see guardian-consent.module.ts's own comment.
+@Module({
+  imports: [PrismaModule, AuthFoundationModule, RedisModule, ClubsModule, GuardianConsentModule, GeoIpModule, AccountEmailsModule],
+  controllers: [RegistrationController],
+  providers: [
+    RegistrationService,
+    EmailVerificationTokenStore,
+    RegistrationEmailService,
+    // B-128: POST /auth/resend-verification-email.
+    ResendVerificationService,
+    ResendVerificationLimiter,
+  ],
+})
+export class AuthRegistrationModule {}

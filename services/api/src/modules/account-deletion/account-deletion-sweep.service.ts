@@ -1,0 +1,614 @@
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
+import { deleteStoredObjects, deleteUserPostMedia } from '../post-media/post-media-cleanup.util';
+import { profileKeysToDeleteNow } from '../users/profile-image-evidence.util';
+import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
+import { addDays, resolveHoldRuleConfig } from '../account-hold/account-hold.config';
+import { HoldType, resolveAccountHold } from '../account-hold/account-hold.rules';
+
+// Build Plan Section 9, Decision Log #42 (30-day grace period + consent-
+// record retention) as RECONSIDERED by Decision Log #341
+// (sprint-2/account-anonymization-reconsideration), which supersedes
+// Decision Log #44's cascade resolution and #42's "hard-delete the User
+// row" step.
+//
+// A "pending_deletion" account (AuthService.deleteAccount, an admin
+// delete, or a guardian refusal) gets a 30-day grace period from
+// User.pendingDeletionAt. At the end of it this service ANONYMIZES the
+// User row IN PLACE -- one UPDATE, accountStatus -> 'deleted' -- and
+// NEVER runs a literal DELETE on it. Why: the earlier cascade model
+// removed OTHER users' Comment/Like/SavedPost rows on a departing user's
+// Post as a side effect, a bigger erasure than the principle ("this
+// user's own footprint is gone") needs, and than GDPR Art. 17 requires
+// (another user's comment is that user's own data). Anonymized data that
+// can no longer be attributed to the person falls outside the regulation
+// (Recital 26). It is also mechanically far safer: a single UPDATE
+// instead of a multi-table cascading delete -- the class of operation
+// that produced the Fixture/Result RESTRICT bug.
+//
+// B-043 (Decision Log #375, which supersedes #344): this service still never DELETEs the User row. The
+// ONLY place a User row is deleted is AnonymizedRowPurgeService, 30 days after anonymizeUser stamps
+// User.anonymizedAt, and only for a row nothing refers to any more (see that service and
+// anonymized-row-purge.references.ts).
+//
+// What anonymizeUser does, in one transaction: overwrite the User row's
+// identifying fields; null GrassrootsTeam.createdById on teams they
+// organised (the team goes dormant/read-only -- the existing
+// createdById !== caller -> 403 checks already do that); delete their
+// Follow / Like / SavedPost / Notification rows and their Banter Room /
+// Community Group / Club memberships (ephemeral signal, not content)
+// keeping Post.likeCount and every memberCount honest; and, for a minor with a
+// Guardian row, snapshot into ConsentAuditRecord then delete the
+// Guardian row (Decision Log #42, unchanged -- ConsentAuditRecord keeps
+// its own 6-month purge clock, measured from anonymization time).
+// Post / Comment / Message / Result are untouched: their FKs keep
+// pointing at the now-anonymized row, which is the whole point. Report
+// rows are NEVER touched -- the moderation audit trail stays intact.
+//
+// HOLDS (Decision Log #341 / #345, extended by #376, B-044): before anonymizing a due account the sweep
+// asks resolveAccountHold (account-hold.rules.ts) whether it is held. Two kinds:
+//   * an ADMIN hold (an active AccountHold row: legal_hold, or the six-month bad_faith hold on a reporter)
+//     holds the account IN FULL -- skipped, nothing cleared;
+//   * a REPORT hold (derived from Report: open report, appeal window, six months after closure, for the
+//     reported person and authors of reported content; open report / appeal only, for the reporter) pauses
+//     erasure but MINIMISES the account at the end of its grace period (minimiseHeldUser): the evidence is
+//     kept, the non-evidence data is cleared.
+// Either way the account stays login-blocked via 'pending_deletion' and is retried on every later run;
+// when the last hold ends the next run anonymises it normally. No "held" flag: a hold is a predicate.
+//
+// All FKs into User that #44 had flipped to CASCADE are RESTRICT again,
+// so an accidental real DELETE FROM "User" fails loudly instead of
+// silently cascading.
+//
+// AdminUsersService.updateUserStatus('deleted') also calls anonymizeUser
+// directly (skipping the grace period, and a REPORT hold -- the admin has explicitly chosen it; but it
+// REFUSES while an active legal_hold or bad_faith hold exists, B-044). The scheduled sweep only ever acts on
+// 30-days-past-due "pending_deletion" rows.
+//
+// GRACE_PERIOD_DAYS is exported so guardian-consent emails can quote the
+// real grace period rather than hardcoding it.
+export const GRACE_PERIOD_DAYS = 30;
+const CONSENT_AUDIT_RETENTION_MONTHS = 6;
+
+// Starting default for "this hold has stalled" -- tunable, a judgment
+// call (Decision Log #343-adjacent; see admin-users/README.md).
+export const HELD_INVESTIGATION_ALERT_DAYS = 90;
+
+// B-018: the default above is now overridable with the HELD_INVESTIGATION_ALERT_DAYS
+// environment variable (it was a bare constant, so the "tunable" threshold could
+// only be changed by a code edit). Read at call time, not import time. A value
+// that is not a positive whole number falls back to the constant rather than
+// silently producing a nonsense cutoff.
+export function resolveHeldInvestigationAlertDays(raw: string | undefined = process.env.HELD_INVESTIGATION_ALERT_DAYS): number {
+  const v = raw?.trim();
+  if (!v || !/^\d+$/.test(v)) return HELD_INVESTIGATION_ALERT_DAYS;
+  const n = Number(v);
+  return n >= 1 ? n : HELD_INVESTIGATION_ALERT_DAYS;
+}
+
+export interface StalledHold {
+  userId: string;
+  displayName: string;
+  email: string;
+  heldSince: Date;
+  daysHeld: number;
+  // B-044: WHY it is held (the strongest reason if several apply). Additive; every field above is unchanged.
+  holdType: HoldType;
+  // backend/w6-hold-admin-endpoints (B-045): true when the strongest hold is one an ADMIN placed (legal_hold or
+  // bad_faith), false when it is derived from a report. The screen's "marker" for a hold that can be lifted
+  // from the Report detail. Additive.
+  isAdminHold: boolean;
+  // backend/b045-held-list-hold-ids (B-045 follow-up): the ids needed to lift an admin hold
+  // (PATCH /admin/moderation/holds/:holdId/lift). Set ONLY when isAdminHold is true, and then they are the
+  // AccountHold the holdType comes from; null for a report-derived hold (nothing to lift). reportId can be
+  // null even for an admin hold if that hold was not placed against a report. Additive.
+  holdId: string | null;
+  reportId: string | null;
+}
+
+export interface SweepPendingDeletionsResult {
+  anonymizedUserIds: string[];
+  // Due accounts skipped this run because an open moderation Report
+  // involves them (see hasOpenInvestigation). Left untouched in
+  // pending_deletion and retried on the next run.
+  heldUserIds: string[];
+  // B-044: the subset of heldUserIds held ONLY by a report rule, whose non-evidence data was cleared this
+  // run (minimiseHeldUser). An account under a legal / bad-faith hold is in heldUserIds but never here.
+  minimisedUserIds: string[];
+}
+
+export interface PurgeConsentAuditRecordsResult {
+  purgedCount: number;
+}
+
+// What an anonymized User row looks like. The email is deterministic on
+// the user's own id, so it is unique with no collision checking.
+export const DELETED_USER_DISPLAY_NAME = DELETED_USER_PUBLIC_NAME;
+// Not a valid argon2 PHC string: PasswordService.verify returns false for
+// it (it catches the parse error), so it can never authenticate. Defence
+// in depth -- accountStatus 'deleted' is the primary login block.
+export const UNUSABLE_PASSWORD_HASH = '!anonymized';
+export function deletedUserEmail(userId: string): string {
+  return `deleted-${userId}@deleted.soccernity.internal`;
+}
+
+@Injectable()
+export class AccountDeletionSweepService {
+  private readonly logger = new Logger(AccountDeletionSweepService.name);
+
+  // `storage` is optional so the sweep still runs where no object store is wired
+  // (unit specs); in the app it is always injected (AccountDeletionModule imports
+  // StorageModule). It is used for ONE thing: removing the anonymized user's
+  // avatar object after the transaction commits (B-035, best effort).
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly storage?: StorageService,
+  ) {}
+
+  // Scheduled, deliberately NOT also exposed as an HTTP endpoint: an
+  // irreversible sweep over every account has no legitimate on-demand
+  // caller. The methods stay callable in-process (tests pass an explicit
+  // `now`).
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async runDailySweep(): Promise<void> {
+    const result = await this.sweepPendingDeletions();
+    const purgeResult = await this.purgeExpiredConsentAuditRecords();
+    this.logger.log(
+      `Account deletion sweep complete: anonymized=${result.anonymizedUserIds.length} ` +
+        `heldForInvestigation=${result.heldUserIds.length} consentAuditRecordsPurged=${purgeResult.purgedCount}`,
+    );
+  }
+
+  // (a) — finds accountStatus = 'pending_deletion' rows past their 30-day
+  // mark and anonymizes each one, unless an open investigation holds it.
+  // `now` is an explicit parameter so tests can prove the boundary
+  // without mocking global time.
+  async sweepPendingDeletions(now: Date = new Date()): Promise<SweepPendingDeletionsResult> {
+    const cutoff = new Date(now.getTime() - GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+
+    const dueUsers = await this.prisma.user.findMany({
+      where: {
+        accountStatus: 'pending_deletion',
+        pendingDeletionAt: { lte: cutoff },
+      },
+      select: { id: true, isMinor: true },
+    });
+
+    const anonymizedUserIds: string[] = [];
+    const heldUserIds: string[] = [];
+    const minimisedUserIds: string[] = [];
+    const cfg = resolveHoldRuleConfig();
+
+    for (const user of dueUsers) {
+      const hold = await resolveAccountHold(this.prisma, user.id, now, cfg);
+      if (hold) {
+        this.logger.log(`Account deletion sweep: user ${user.id} held (${hold.type}).`);
+        heldUserIds.push(user.id);
+        // An admin hold (legal / bad faith) holds the account IN FULL: nothing is cleared. A report hold
+        // minimises it instead of leaving it untouched.
+        if (hold.kind === 'report') {
+          await this.minimiseHeldUser(user.id);
+          minimisedUserIds.push(user.id);
+        }
+        continue;
+      }
+      await this.anonymizeUser(user.id, user.isMinor, now);
+      anonymizedUserIds.push(user.id);
+    }
+
+    return { anonymizedUserIds, heldUserIds, minimisedUserIds };
+  }
+
+  // Accounts currently held for longer than `thresholdDays`, with WHY (holdType). A hold has no maximum
+  // duration BY DESIGN (auto-expiring it would undermine evidence integrity), so this is the visibility half:
+  // a stalled hold becomes an admin's problem to chase. Read-only -- never acts on the account. "Held since"
+  // is the moment the account first became due for anonymization (pendingDeletionAt + GRACE_PERIOD_DAYS); an
+  // account is listed once that moment is more than thresholdDays ago AND it is still held. Bounded by
+  // nature (only accounts held past their grace period), so unpaginated. holdType is the STRONGEST reason
+  // (legal_hold, bad_faith, open_report, appeal_window, post_closure -- account-hold.rules.ts). Note a
+  // post_closure hold lasts months by design, so it can appear here without anything being wrong; the type
+  // is there so a reader can tell it from an open report.
+  async listStalledHolds(
+    thresholdDays: number = resolveHeldInvestigationAlertDays(),
+    now: Date = new Date(),
+  ): Promise<StalledHold[]> {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const cutoff = new Date(now.getTime() - (GRACE_PERIOD_DAYS + thresholdDays) * dayMs);
+    const candidates = await this.prisma.user.findMany({
+      where: { accountStatus: 'pending_deletion', pendingDeletionAt: { lte: cutoff } },
+      select: { id: true, displayName: true, email: true, pendingDeletionAt: true },
+      orderBy: { pendingDeletionAt: 'asc' },
+    });
+    const cfg = resolveHoldRuleConfig();
+    const stalled: StalledHold[] = [];
+    for (const c of candidates) {
+      if (!c.pendingDeletionAt) continue;
+      const hold = await resolveAccountHold(this.prisma, c.id, now, cfg);
+      if (!hold) continue;
+      const heldSince = addDays(c.pendingDeletionAt, GRACE_PERIOD_DAYS);
+      stalled.push({
+        userId: c.id,
+        displayName: c.displayName,
+        email: c.email,
+        heldSince,
+        daysHeld: Math.floor((now.getTime() - heldSince.getTime()) / dayMs),
+        holdType: hold.type,
+        isAdminHold: hold.kind === 'admin',
+        holdId: hold.holdId,
+        reportId: hold.reportId,
+      });
+    }
+    return stalled;
+  }
+
+  // The rows that describe a user's behaviour and relationships rather than what they authored: Likes (with
+  // Post.likeCount kept honest), saves, follows, blocks (both directions), notifications, carousel
+  // impressions, kickoff subscriptions and Banter / Community Group / Club memberships (each memberCount
+  // kept honest). Shared by anonymizeUser and minimiseHeldUser so the two cannot drift. Runs inside the
+  // caller's transaction.
+  private async deleteBehaviouralRows(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+    // Removing this user's Likes must keep Post.likeCount honest (it is
+    // a denormalized cache, see schema.prisma). Like has
+    // @@unique([userId, postId]) so each liked post loses exactly 1.
+    await tx.$executeRaw`
+      UPDATE "Post" SET "likeCount" = GREATEST("likeCount" - 1, 0)
+      WHERE "id" IN (SELECT "postId" FROM "Like" WHERE "userId" = ${userId})
+    `;
+    await tx.like.deleteMany({ where: { userId } });
+    await tx.savedPost.deleteMany({ where: { userId } });
+    // B-086: the hashes of the user's two-factor backup codes (the secret itself is cleared on the User row by
+    // both callers). Credential material: it goes whenever the account can no longer sign in.
+    await tx.userBackupCode.deleteMany({ where: { userId } });
+    // B-276: open two-factor recovery requests (link/cancel token hashes). Ephemeral and security-sensitive; nothing
+    // to keep once the account can no longer sign in.
+    await tx.twoFactorRecoveryRequest.deleteMany({ where: { userId } });
+    // B-059: an open email-change request holds the address a person asked to move to and a link-token hash.
+    await tx.emailChangeRequest.deleteMany({ where: { userId } });
+    // B-062: the person's notification filter options. Personal preference data; nothing to keep.
+    await tx.notificationPreference.deleteMany({ where: { userId } });
+    // B-285: the person's web-push subscriptions (browser endpoints and encryption keys). A held or anonymised
+    // account must not keep receiving pushes, and the keys are credential-like data.
+    await tx.pushSubscription.deleteMany({ where: { userId } });
+    await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
+    // B-039: a Block is a personal-relationship record in BOTH directions (the
+    // ones this user made, and the ones made against them); like Follow it is
+    // not content other users depend on, and its FKs are RESTRICT.
+    await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
+    await tx.notification.deleteMany({ where: { userId } });
+    // B-092: per-viewer Final-week carousel impressions are behavioural data about this viewer and
+    // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
+    await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
+    await tx.matchSubscription.deleteMany({ where: { userId } });
+    // B-067: the user's own "delete for me" / "delete chat" view settings. They hide messages from THIS user's reads
+    // only; the Message rows themselves (and any edit original) are content and stay (Message.sender is RESTRICT).
+    await tx.messageHide.deleteMany({ where: { userId } });
+    await tx.conversationHide.deleteMany({ where: { userId } });
+    // B-036: the automatic image check's retry bookkeeping for this user's avatar and cover (no image, no labels).
+    await tx.profileImageCheck.deleteMany({ where: { userId } });
+
+    // Membership rows (Banter Rooms, Community Groups, Club pages) are
+    // ephemeral participation signal, the same category as Follow/Like,
+    // not authored content other users depend on. Deleting them here,
+    // at the source, keeps each denormalized memberCount honest: every
+    // affected room/group/club loses exactly 1 (each join table is
+    // unique per user+target). Same GREATEST(..., 0) floor as likeCount.
+    // ClubPage membership is an implicit m2m: "A" = ClubPage.id,
+    // "B" = User.id (see ClubsService.joinClub).
+    await tx.$executeRaw`
+      UPDATE "BanterRoom" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "banterRoomId" FROM "BanterRoomMember" WHERE "userId" = ${userId})
+    `;
+    await tx.banterRoomMember.deleteMany({ where: { userId } });
+    await tx.$executeRaw`
+      UPDATE "CommunityGroup" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "communityGroupId" FROM "CommunityGroupMember" WHERE "userId" = ${userId})
+    `;
+    await tx.communityGroupMember.deleteMany({ where: { userId } });
+    await tx.$executeRaw`
+      UPDATE "ClubPage" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "A" FROM "_ClubMembership" WHERE "B" = ${userId})
+    `;
+    await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "B" = ${userId}`;
+  }
+
+  // B-044 (Decision Log #376): what a REPORT-held account gets at the end of its grace period instead of
+  // being left untouched. One transaction, idempotent (re-running rewrites the same values and finds the
+  // behavioural rows already gone). Clears NON-EVIDENCE data; keeps what the report may need.
+  //   CLEARED: passwordHash (to the unusable value -- the account cannot sign in), the two-factor secret fields
+  //     and backup codes (B-086), phone, bio, preferredClub,
+  //     profileCountry, avatar and cover (columns and, after the commit, the stored objects),
+  //     clubAffiliationId, representedClubId, and the behavioural rows deleteBehaviouralRows removes.
+  //   KEPT: id, email, displayName, username, dateOfBirth, isMinor, declared/derived country (safeguarding),
+  //     the Guardian row and consent data (a minor's consent proof), Post, Comment, Message, Result, Report,
+  //     PostMedia, GrassrootsTeam ownership, points and leaderboard rows, and every audit row.
+  // accountStatus stays 'pending_deletion'. Public so the sweep and tests reach it; the scheduled sweep is
+  // its only caller.
+  async minimiseHeldUser(userId: string): Promise<void> {
+    const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
+    let dataExportKeys: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
+      await this.keysToRemove(tx, userId, before, stored, new Date());
+
+      await this.deleteBehaviouralRows(tx, userId);
+      dataExportKeys = await this.deleteDataExportRows(tx, userId);
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: UNUSABLE_PASSWORD_HASH,
+          // B-086: authenticator-app two-factor is credential material. The encrypted secret goes with the
+          // account's ability to sign in; the backup-code hashes are deleted in deleteBehaviouralRows.
+          totpSecretEncrypted: null,
+          totpEnabledAt: null,
+          totpLastUsedStep: null,
+          phone: null,
+          bio: null,
+          preferredClub: null,
+          profileCountry: null,
+          clubAffiliationId: null,
+          representedClubId: null,
+          // B-061: read receipts back to "use the age default" (NULL).
+          readReceipts: null,
+          // avatar / cover: all columns of each together (the CHECK constraints need it)
+          avatarUrl: null,
+          avatarKey: null,
+          avatarStatus: null,
+          avatarRejectionReason: null,
+          coverUrl: null,
+          coverKey: null,
+          coverStatus: null,
+          coverRejectionReason: null,
+          // B-037: the upload times go with the pictures.
+          avatarUploadedAt: null,
+          coverUploadedAt: null,
+        },
+      });
+    });
+
+    await this.removeProfileImageObjects(userId, stored, 'Minimisation');
+    await deleteStoredObjects(this.storage, this.logger, dataExportKeys, `Minimisation of ${userId}: data export`);
+  }
+
+  // backend/b060-data-export (B-060; Decision Log #472 (g)): the person's 'Download my data' requests and their
+  // stored JSON files. The file holds their messages, posts and profile, so it goes whenever the account can no
+  // longer sign in -- at anonymisation AND at the minimisation of a report-held account (both call this). Deletes
+  // the rows inside the caller's transaction and returns the file keys; the OBJECTS are removed after the commit
+  // (best effort, deleteStoredObjects), so a storage outage never undoes the deletion. Deliberately NOT in
+  // deleteBehaviouralRows: that helper returns nothing and its callers have no use for keys.
+  private async deleteDataExportRows(tx: Prisma.TransactionClient, userId: string): Promise<string[]> {
+    const rows = await tx.dataExportRequest.findMany({ where: { userId }, select: { fileKey: true } });
+    await tx.dataExportRequest.deleteMany({ where: { userId } });
+    return rows.map((r) => r.fileKey).filter((k): k is string => Boolean(k));
+  }
+
+  // backend/suspected-illegal-profile-images (B-206): which of the person's profile objects may be removed from
+  // storage after this transaction commits. A picture or cover SET ASIDE as suspected illegal imagery is kept: its
+  // deletion is written to PostMediaDeferredDeletion INSIDE this transaction (so the account is changed and the
+  // deferral exists together, or neither) and finished later by RejectedMediaSweepService.processDeferred. Every other
+  // picture is removed as before. The account is anonymised or minimised exactly the same either way.
+  private async keysToRemove(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    before: { avatarKey: string | null; coverKey: string | null } | null,
+    stored: { avatarKey: string | null; coverKey: string | null },
+    now: Date,
+  ): Promise<void> {
+    const refs = [
+      ...(before?.avatarKey ? [{ kind: 'avatar' as const, userId, key: before.avatarKey }] : []),
+      ...(before?.coverKey ? [{ kind: 'cover' as const, userId, key: before.coverKey }] : []),
+    ];
+    const free = new Set(await profileKeysToDeleteNow(tx, refs, now));
+    stored.avatarKey = before?.avatarKey && free.has(before.avatarKey) ? before.avatarKey : null;
+    stored.coverKey = before?.coverKey && free.has(before.coverKey) ? before.coverKey : null;
+  }
+
+  // Best effort, AFTER a commit: the row no longer points at the object, so a storage outage (or no store)
+  // must not undo the change. A failure leaves an orphaned object, logged with its key.
+  private async removeProfileImageObjects(
+    userId: string,
+    stored: { avatarKey: string | null; coverKey: string | null },
+    what: string,
+  ): Promise<void> {
+    for (const [label, key] of [
+      ['avatar', stored.avatarKey],
+      ['cover', stored.coverKey],
+    ] as const) {
+      if (!key || !this.storage) continue;
+      try {
+        await this.storage.delete(key);
+      } catch (err) {
+        this.logger.warn(
+          `${what} of ${userId}: ${label} object ${key} was NOT removed from storage (${
+            err instanceof Error ? err.message : String(err)
+          }).`,
+        );
+      }
+    }
+  }
+
+  // One transaction -- the whole anonymization happens or none of it
+  // does. Public because AdminUsersService calls it directly for an
+  // admin-triggered immediate delete; that caller owns its own
+  // authorization/confirmation gate. Idempotent: re-running on an
+  // already-anonymized row rewrites the same values.
+  async anonymizeUser(userId: string, isMinor: boolean, now: Date = new Date()): Promise<void> {
+    const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
+    let postMediaKeys: string[] = [];
+    let dataExportKeys: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      // B-035: remember where the avatar object lives, so it can be removed from
+      // storage once the row no longer points at it.
+      // B-196: the cover photo object is removed the same way.
+      const before = await tx.user.findUnique({
+        where: { id: userId },
+        select: { avatarKey: true, coverKey: true, anonymizedAt: true },
+      });
+      await this.keysToRemove(tx, userId, before, stored, now);
+
+      // Decision Log #349: no longer gated on isMinor -- a user reclassified
+      // as an adult (turned 18) may still hold a Guardian row whose consent
+      // proof must be snapshotted and the row removed like any other's.
+      // `isMinor` stays in the signature for existing callers.
+      void isMinor;
+      {
+        const guardian = await tx.guardian.findUnique({
+          where: { minorUserId: userId },
+          select: {
+            consentStatus: true,
+            consentTimestamp: true,
+            consentScreenVersion: true,
+            consentDeviceType: true,
+            consentVerificationMethod: true,
+            consentVerificationAt: true,
+          },
+        });
+        // Not every minor has a Guardian row (rare edge case) -- nothing
+        // to snapshot or delete then.
+        if (guardian) {
+          await tx.consentAuditRecord.create({
+            data: {
+              minorUserId: userId,
+              consentStatus: guardian.consentStatus,
+              consentConfirmedAt: guardian.consentTimestamp,
+              consentScreenVersion: guardian.consentScreenVersion,
+              deviceType: guardian.consentDeviceType,
+              // sprint-1/coppa-card-verification
+              verificationMethod: guardian.consentVerificationMethod,
+              verificationAt: guardian.consentVerificationAt,
+            },
+          });
+          await tx.guardian.delete({ where: { minorUserId: userId } });
+        }
+      }
+
+      await this.deleteBehaviouralRows(tx, userId);
+      // B-060: the 'Download my data' requests and their stored files go with the account.
+      dataExportKeys = await this.deleteDataExportRows(tx, userId);
+      // B-046 (Decision Log #440, #444): the Contact Us enquiries this user sent while signed in go with the
+      // account -- EXCEPT an escalated one (escalatedReportId set), which became (or sits beside) a report or
+      // case record and follows that record's retention instead. The escalated ones are what is left, and
+      // 'ContactEnquiry.user' is classed as content in anonymized-row-purge.references.ts, so one blocks the
+      // purge of this row exactly like a report does. Deliberately NOT in deleteBehaviouralRows: a
+      // report-held account is minimised, not erased, and keeps what a case may need.
+      await tx.contactEnquiry.deleteMany({ where: { userId, escalatedReportId: null } });
+      // B-280 (Decision Log #458): the "withhold guardian notices" flag goes with the account, in this same
+      // transaction. Deliberately NOT in deleteBehaviouralRows: a report-held account is minimised, not erased,
+      // and keeps its flag (the guardian notices stay off for it). The flag's history lives in AdminActionLog.
+      await tx.guardianNoticeWithhold.deleteMany({ where: { userId } });
+      // backend/w14-post-media-pipeline (Decision Log #419 item 9): the files this user uploaded for posts
+      // and contest entries go with the account. The rows are deleted here, their URLs are removed from
+      // the (surviving, #341) posts, and the stored objects are removed after the commit below.
+      // (A minimised report-held account KEEPS its PostMedia: it may be the reported content, B-044.)
+      // B-283: the private object of a REJECTED file goes too (unless held / open report, then deferred).
+      postMediaKeys = await deleteUserPostMedia(tx, userId, now);
+
+      // Teams they organised go dormant: no organiser, so every
+      // createdById-based authorization check fails closed (403).
+      await tx.grassrootsTeam.updateMany({ where: { createdById: userId }, data: { createdById: null } });
+
+      // B-139 (founder decision 2026-10-30): a RevokedUsername record lives while its user's account exists
+      // and is deleted once the account is anonymised AND its hold has passed. So: delete this user's
+      // records whose hold is already over; a hold still running stays and is deleted by
+      // AnonymizedRowPurgeService.cleanupRevokedUsernames the first run after holdUntil. Same transaction
+      // as the anonymisation, so a record is never left behind for an account that is already gone.
+      await tx.revokedUsername.deleteMany({ where: { userId, holdUntil: { lte: now } } });
+      // backend/b139-username-review (Decision Log #467): a revoked user's request for a review of the removal.
+      // Deleted here for EVERY record of this user, including ones whose hold is still running (the records stay
+      // for the hold, their requests do not): the message is the user's own free text, and there is nothing left
+      // to reinstate on an anonymised account. A request whose record is deleted just above also goes by cascade.
+      await tx.usernameReviewRequest.deleteMany({ where: { userId } });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          email: deletedUserEmail(userId),
+          phone: null,
+          displayName: DELETED_USER_DISPLAY_NAME,
+          // profile/username-column-and-display-convention: release the handle
+          // (it is personal data, and would otherwise stay reserved forever).
+          username: null,
+          passwordHash: UNUSABLE_PASSWORD_HASH,
+          // B-086: authenticator-app two-factor is credential material. The encrypted secret goes with the
+          // account's ability to sign in; the backup-code hashes are deleted in deleteBehaviouralRows.
+          totpSecretEncrypted: null,
+          totpEnabledAt: null,
+          totpLastUsedStep: null,
+          dateOfBirth: null,
+          // B-023: country is personal data too; the coherence CHECK on User
+          // allows the all-NULL state, so clearing all four together is valid.
+          declaredCountry: null,
+          derivedCountry: null,
+          countryDerivationMethod: null,
+          countryDerivedAt: null,
+          clubAffiliationId: null,
+          // B-038 / B-035: free-text profile content, the optional profile
+          // country and the avatar reference are personal data too. All three
+          // avatar columns are cleared together (the CHECK needs it).
+          bio: null,
+          preferredClub: null,
+          profileCountry: null,
+          // B-061: read receipts back to "use the age default" (NULL).
+          readReceipts: null,
+          // B-060: an anonymised account goes back to the default (public). Its posts survive as
+          // "[deleted user]" (Decision Log #341) and must stay readable, not become followers-only.
+          isProfilePublic: true,
+          avatarUrl: null,
+          avatarKey: null,
+          avatarStatus: null,
+          // B-214: the rejection reasons go with the status (the CHECK needs it).
+          avatarRejectionReason: null,
+          // B-196: the cover photo reference, all three columns together.
+          coverUrl: null,
+          coverKey: null,
+          coverStatus: null,
+          coverRejectionReason: null,
+          // B-037: the upload times go with the pictures.
+          avatarUploadedAt: null,
+          coverUploadedAt: null,
+          accountStatus: 'deleted',
+          pendingDeletionAt: null,
+          // B-043 (#375): when this row became 'deleted' -- the 30-day purge clock starts here. The FIRST
+          // value wins: re-running on an already-anonymised row must not restart the clock.
+          anonymizedAt: before?.anonymizedAt ?? now,
+        },
+      });
+    });
+
+    // Best effort, AFTER the commit: the row is already anonymized, so a storage
+    // outage (or an unconfigured store) must not undo or fail the anonymization.
+    // A failure leaves an orphaned object whose only pointer is gone; it is
+    // logged with the key so it can be cleaned up by hand.
+    await deleteStoredObjects(this.storage, this.logger, postMediaKeys, `Anonymization of ${userId}: post media`);
+    await this.removeProfileImageObjects(userId, stored, 'Anonymization');
+    await deleteStoredObjects(this.storage, this.logger, dataExportKeys, `Anonymization of ${userId}: data export`);
+  }
+
+  // (b) — purges ConsentAuditRecord rows past their OWN 6-month mark,
+  // measured from createdAt (hard-delete time — see this file's header
+  // comment), entirely independent of any User row's deletion timing.
+  // Calendar months (via setUTCMonth), not a fixed day count —
+  // deliberately matching Decision Log #42's own "6 months" language
+  // rather than converting it into an arbitrary day count that isn't
+  // what was actually decided. setUTCMonth specifically, NOT setMonth —
+  // a real, caught-by-test bug during this PR: setMonth reads/writes
+  // local-time calendar fields, so subtracting 6 months across a
+  // Northern-Hemisphere DST boundary (e.g. August BST -> February GMT)
+  // silently shifted the computed cutoff by an hour in UTC terms.
+  // setUTCMonth operates on UTC calendar fields throughout, which is
+  // what this cutoff should mean regardless of the server's local
+  // timezone or time of year.
+  async purgeExpiredConsentAuditRecords(now: Date = new Date()): Promise<PurgeConsentAuditRecordsResult> {
+    const cutoff = new Date(now);
+    cutoff.setUTCMonth(cutoff.getUTCMonth() - CONSENT_AUDIT_RETENTION_MONTHS);
+
+    const result = await this.prisma.consentAuditRecord.deleteMany({
+      where: { createdAt: { lte: cutoff } },
+    });
+
+    return { purgedCount: result.count };
+  }
+}

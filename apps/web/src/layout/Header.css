@@ -1,0 +1,318 @@
+/* Colour values reference CSS custom properties from src/theme/applyTheme.ts
+ * (mirroring packages/shared/src/tokens) -- do not hardcode hex here.
+ *
+ * Phase 2 navbar (Decision Log #161): icon nav from the Figma "header 4"
+ * / "header 7" variants (2838:3502 / 2841:4104). */
+
+.sn-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 90px;
+  padding: 0 32px;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0px 12px 58px 0px rgba(101, 101, 101, 0.06);
+}
+
+.sn-header__brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sn-header__logo-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.sn-header__logo-mark {
+  display: block;
+}
+
+.sn-header__wordmark {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 240px;
+  height: 31px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-header__search-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.sn-header__search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-family: "Montserrat", sans-serif;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__search-input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.sn-header__nav {
+  flex: 1;
+  min-width: 0;
+}
+
+.sn-header__nav-list {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.sn-header__nav-link {
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity 0.12s ease-in-out;
+}
+
+.sn-header__nav-link:hover,
+.sn-header__nav-link:focus-visible {
+  opacity: 1;
+}
+
+.sn-header__nav-link--active {
+  opacity: 1;
+}
+
+.sn-header__nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sn-header__nav-icon img {
+  display: block;
+  height: 32px;
+  width: auto;
+}
+
+/* Sports Hub + Clubs export as a bare stroke glyph; the Figma frame sits
+ * them on their own green-tint tile (the other four bake the tile into
+ * the SVG). */
+.sn-header__nav-icon--tinted {
+  width: 31px;
+  height: 31px;
+  border-radius: 3px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-header__nav-icon--tinted img {
+  height: 22px;
+}
+
+.sn-header__auth {
+  flex-shrink: 0;
+}
+
+.sn-header__login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 41px;
+  padding: 0 24px;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.sn-header__account {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sn-header__messages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sn-header__messages img {
+  display: block;
+}
+
+.sn-header__avatar {
+  position: relative;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--sn-green-tint-12);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* B-230: initials (no approved picture) or the approved picture. Figma
+ * "Avatar - Initials": Montserrat SemiBold 12px, color/text/primary on
+ * brand/green-tint, inside the 31px circle (the widest pair, WW, is 28px). */
+.sn-header__avatar-initials {
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.sn-header__avatar:focus-visible {
+  outline: 2px solid var(--sn-brand-green);
+  outline-offset: 2px;
+}
+
+/* "Has Unread" indicator (Figma Avatar component, Decision Log #99/#103).
+ * Substitutes brand/green for the Figma-bound semantic/alert -- that
+ * token isn't exposed to apps/web (packages/shared/src/tokens has no
+ * semantic-alert entry), the same substitution the Grassroots LIVE
+ * indicator already made rather than hardcoding a new colour. */
+.sn-header__avatar-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--sn-brand-green);
+  border: 1.5px solid var(--sn-background-surface);
+}
+
+/* Mobile (QA D-12, register B-132; superseded by FC4, B-178 below): at <= 820px Header.tsx no
+ * longer renders the search box or the nine-icon row at all -- the Figma mobile header draws
+ * neither -- so what is left here only tightens spacing. The 820px breakpoint matches
+ * useIsMobile(). */
+@media (max-width: 820px) {
+  .sn-header {
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  .sn-header__search {
+    display: none;
+  }
+
+  .sn-header__wordmark {
+    font-size: 18px;
+  }
+
+  .sn-header__nav-list {
+    gap: 12px;
+  }
+
+  .sn-header__login-button {
+    padding: 0 16px;
+    font-size: 15px;
+  }
+}
+
+/* FC4 (Decision Log #408 item 8, B-178): the mobile header as the Figma header 4 / header 7
+ * -- mobile frames (K4 frames 6784:29454 / 6784:29476) draw it. 64px tall; the logo on the
+ * left; a search icon, then (signed in) the messages glyph and the avatar, or (logged out)
+ * the Login button and a menu control. The nine-icon row and the search box are not rendered
+ * on mobile (Header.tsx), so nothing here can overflow at 390px. */
+.sn-header__search-link,
+.sn-header__menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sn-header__search-link img,
+.sn-header__menu-button img {
+  display: block;
+}
+
+.sn-header__menu-button {
+  width: 48px;
+  height: 48px;
+}
+
+.sn-header__search-link:focus-visible,
+.sn-header__menu-button:focus-visible {
+  outline: 2px solid var(--sn-brand-green);
+  outline-offset: 2px;
+}
+
+@media (min-width: 821px) {
+  .sn-header__search-link,
+  .sn-header__menu-button {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .sn-header--mobile {
+    justify-content: space-between;
+    height: 64px;
+    gap: 8px;
+    padding: 0 8px 0 16px;
+  }
+
+  .sn-header--mobile .sn-header__auth {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* The Figma Login button is 80 x 41 at 16px / 600; the shared rule above is a touch wider. */
+  .sn-header--mobile .sn-header__login-button {
+    height: 41px;
+    padding: 0 16px;
+  }
+
+  .sn-header--mobile .sn-header__account {
+    gap: 18px;
+    padding-right: 8px;
+  }
+}

@@ -1,0 +1,217 @@
+// Moderation Queue — Figma node 5794:8635.
+//
+// Real data: GET /admin/moderation/reports (Build Plan Section 4.8,
+// Decision Log #135/#189, built by sprint-5/admin-moderation-queue-backend).
+// Two tabs, matching the real backend state machine rather than the old
+// stub's static "Open Reports (6) / Appeals (2)" sample counts:
+//   - "Open Reports"  -> status: 'open'     (reports awaiting a first action)
+//   - "Appeals"       -> status: 'actioned' results, filtered client-side
+//                        to appealStatus === 'pending' -- the backend has
+//                        no dedicated appeals-only filter
+//                        (list-reports-query.dto.ts only takes 'open' |
+//                        'reviewed' | 'actioned').
+//
+// A "Review" link on each row opens the real Report Detail (open tab) or
+// Appeal Review (appeals tab) screen, passing the row's own already-fetched
+// Report via router `state` -- see api/moderation.ts's own Decision Log
+// candidate #4 comment for why (no GET /reports/:id exists).
+//
+// schema/report-severity-escalation-admin-vetting-application: a "Flags"
+// column shows severity (every report has one) and, when true, a
+// "Concerns a minor" badge. A non-vetted admin never sees a
+// concernsMinor row here at all -- the backend's listReports silently
+// filters those out (moderation.service.ts) -- so no frontend gate is
+// needed on this screen; see ReportDetailPage.tsx/AppealReviewPage.tsx
+// for the "somehow linked directly" restricted state this can't cover.
+import { Link, useSearchParams } from "react-router";
+import { useState } from "react";
+import AdminPageHeader from "../../layout/AdminPageHeader";
+import { listReports, reasonCategoryLabel, type Report } from "../../api/moderation";
+import {
+  MinorFlagBadge,
+  reporterCellLabel,
+  reporterFullLabel,
+  SeverityPill,
+  targetLabel,
+  useAsyncData,
+} from "./moderationShared";
+import "./moderation.css";
+
+type Tab = "open" | "appeals";
+
+function ReportRow({ report, tab }: { report: Report; tab: Tab }) {
+  const reviewTo = tab === "open" ? `/moderation/reports/${report.id}` : `/moderation/appeals/${report.id}`;
+  return (
+    <div className="mod-table__row" key={report.id}>
+      <span className="mod-cell--primary" title={report.targetId}>
+        {report.targetId.slice(0, 8)}…
+      </span>
+      <span>{targetLabel(report.targetType)}</span>
+      <span className="mod-flags">
+        <SeverityPill severity={report.severity} />
+        {report.concernsMinor ? <MinorFlagBadge /> : null}
+      </span>
+      {/* B-284: the category (Figma 6947:40930); the reporter's own description is on Report Detail and is kept here as the hover text. */}
+      <span className="mod-cell--secondary mod-cell--truncate" title={report.reason || undefined}>
+        {reasonCategoryLabel(report.reasonCategory)}
+      </span>
+      <span className="mod-cell--secondary" title={reporterFullLabel(report)}>
+        {reporterCellLabel(report)}
+      </span>
+      <span>
+        <span className={`mod-pill ${report.status === "open" ? "mod-pill--strong" : "mod-pill--soft"}`}>
+          {report.status}
+        </span>
+      </span>
+      <span>
+        <Link className="mod-link" to={reviewTo} state={{ report }}>
+          Review ›
+        </Link>
+      </span>
+    </div>
+  );
+}
+
+export default function ModerationQueuePage() {
+  // The Contact enquiries tab links back here with ?tab=appeals for the Appeals tab.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "appeals" ? "appeals" : "open");
+  const backendStatus = tab === "open" ? "open" : "actioned";
+  const { data, loading, error, reload } = useAsyncData(
+    () => listReports({ status: backendStatus, limit: 50 }),
+    [backendStatus],
+  );
+
+  // useAsyncData refetches (a fresh first page, extraItems reset) whenever
+  // `backendStatus` changes, so `data.items` is always this tab's own
+  // items -- `extraItems` only ever accumulates additional pages of the
+  // SAME tab's fetch.
+  const [extraItems, setExtraItems] = useState<Report[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const allItems = data ? [...data.items, ...extraItems] : [];
+  const rows = tab === "open" ? allItems : allItems.filter((r) => r.appealStatus === "pending");
+
+  const effectiveCursor = extraItems.length > 0 ? cursor : data?.nextCursor ?? null;
+
+  async function loadMore() {
+    if (!effectiveCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await listReports({ status: backendStatus, cursor: effectiveCursor, limit: 50 });
+      setExtraItems((prev) => [...prev, ...page.items]);
+      setCursor(page.nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function switchTab(next: Tab) {
+    setTab(next);
+    setExtraItems([]);
+    setCursor(null);
+  }
+
+  return (
+    <>
+      <AdminPageHeader title="Moderation Queue" />
+      <div className="mod-page">
+        <div className="mod-tabs">
+          <button
+            type="button"
+            className={`mod-tab ${tab === "open" ? "mod-tab--active" : ""}`}
+            onClick={() => switchTab("open")}
+          >
+            Open Reports
+          </button>
+          <button
+            type="button"
+            className={`mod-tab ${tab === "appeals" ? "mod-tab--active" : ""}`}
+            onClick={() => switchTab("appeals")}
+          >
+            Appeals
+          </button>
+          <Link className="mod-tab" to="/moderation/media">
+            Media review
+          </Link>
+          <Link className="mod-tab" to="/moderation/contact-enquiries">
+            Contact enquiries
+          </Link>
+          <Link className="mod-tab" to="/moderation/held-investigations">
+            Held investigations
+          </Link>
+        </div>
+
+        <p className="mod-note">
+          Appeals are reviewed by a <strong>different</strong> admin or moderator than the one who
+          made the original decision. Both the reporter and the reported user are notified of the
+          outcome.
+        </p>
+
+        {loading ? <p className="mod-loading">Loading the moderation queue…</p> : null}
+        {error ? (
+          <p className="mod-error" role="alert">
+            {error}{" "}
+            <button type="button" className="mod-link" onClick={reload}>
+              Retry
+            </button>
+          </p>
+        ) : null}
+
+        {!loading && !error && rows.length === 0 ? (
+          <div className="mod-card">
+            <h2 className="mod-card__title">
+              {tab === "open" ? "No open reports" : "No pending appeals"}
+            </h2>
+            <p className="mod-note">
+              {tab === "open"
+                ? "Nothing is currently waiting for a first decision."
+                : "No actioned report currently has a pending appeal."}
+            </p>
+          </div>
+        ) : null}
+
+        {rows.length > 0 ? (
+          <div className="mod-table">
+            <div className="mod-table__row mod-table__row--head">
+              <span>Reported</span>
+              <span>Type</span>
+              <span>Flags</span>
+              <span>Reason category</span>
+              <span>Reporter</span>
+              <span>Status</span>
+              <span aria-hidden />
+            </div>
+            {rows.map((r) => (
+              <ReportRow key={r.id} report={r} tab={tab} />
+            ))}
+          </div>
+        ) : null}
+
+        {effectiveCursor && !loading ? (
+          <button type="button" className="mod-btn mod-btn--outline mod-btn--sm" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        ) : null}
+
+        <div className="mod-callout">
+          <span className="mod-callout__bar" aria-hidden />
+          <p>
+            Reported content and the reporter are shown by id. Names and a content preview are not
+            shown in the queue.
+          </p>
+        </div>
+        <div className="mod-callout">
+          <span className="mod-callout__bar" aria-hidden />
+          <p>
+            Actioning a report notifies both parties. Remove Content hides the reported post, comment
+            or message from everyone but the moderators. Suspend User suspends the account behind a
+            user, post, comment or message report, after you confirm. Warn User and Dismiss Report
+            only record the decision.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}

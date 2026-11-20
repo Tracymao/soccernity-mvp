@@ -1,0 +1,163 @@
+/* Colour values reference the app-wide --sn-* custom properties -- no hex here.
+ * Figma: K6 profile picture / cover photo states (6799:29324 and 6800:29312
+ * families). The error bar uses semantic/alert as an accent only (Decision Log
+ * #408 item 4), never as a text colour. */
+
+.profile-image {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-image__label {
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.profile-image__row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.profile-image__frame {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 32px "Inter", sans-serif;
+}
+
+/* Avatar: a circle. */
+.profile-image--avatar .profile-image__frame {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+}
+
+/* Cover: the cover slot's shape (796 x 192 on the profile frames). The picture
+ * is already cropped to this ratio in the browser; object-fit keeps any file
+ * that could not be cropped looking right too. */
+.profile-image--cover .profile-image__frame {
+  width: 240px;
+  aspect-ratio: 796 / 192;
+  border-radius: 8px;
+}
+
+.profile-image__preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-image__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-image__title {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.profile-image__note,
+.profile-image__filename {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-image__alert {
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+}
+
+.profile-image__pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 12px "Inter", sans-serif;
+}
+
+.profile-image__pill--approved {
+  background-color: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.profile-image__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-image__button {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-brand-navy);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 500 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.profile-image__button--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-background-surface);
+}
+
+.profile-image__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-image__bar {
+  width: 180px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--sn-green-tint-12);
+  overflow: hidden;
+}
+
+.profile-image__bar-fill {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background-color: var(--sn-brand-green);
+  animation: profile-image-progress 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes profile-image-progress {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(150%);
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-image__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-image--cover .profile-image__frame {
+    width: 100%;
+  }
+}

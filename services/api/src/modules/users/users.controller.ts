@@ -1,0 +1,217 @@
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AccessTokenPayload } from '../auth/token/token.types';
+import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { SetRepresentedClubDto } from './dto/set-represented-club.dto';
+import { SuggestedUsersQueryDto } from './dto/suggested-users-query.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserSettingsDto } from './dto/update-user-settings.dto';
+import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
+import { UsersService } from './users.service';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+
+// ---------------------------------------------------------------------
+// SPEC NOTE (flagged, not silently resolved — see PR report): this PR's
+// task brief asked for `GET /users/me` / `PATCH /users/me`, but Build
+// Plan Section 4.2 (User Service) actually specifies:
+//
+//   GET    /users/:id
+//   PATCH  /users/:id
+//   GET    /users/:id/profile
+//   POST   /users/:id/follow
+//   DELETE /users/:id/follow
+//   GET    /users/:id/followers
+//   GET    /users/:id/following
+//
+// There is no `/users/me` in the spec, and no `GET /auth/me` here either
+// — that's Section 4.1 (Auth Service), a separate B2-B4 endpoint. This
+// controller implements the literal spec routes (`GET`/`PATCH
+// /users/:id`), scoped to self only for this PR: both handlers 403 if
+// `:id` isn't the authenticated user's own id. That matches this PR's
+// actual brief (view/edit "my" profile) without inventing an undocumented
+// `/me` alias.
+//
+// Deliberately OUT of scope for this PR (B6), left for later work:
+// `GET /users/:id/profile` (the public-facing view of *another* user —
+// needs field curation for non-owners, not just auth) and the
+// follow/follower endpoints (social graph, pagination — Section 5.5).
+// Both are genuinely separate concerns from "does the owner's own
+// profile view/edit endpoint work," which was B6's whole scope.
+//
+// UPDATE (Sprint 2, sprint-2/follow-and-notifications): the four
+// follow/follower endpoints described above as deferred are now built
+// below (`follow`/`unfollow`/`followers`/`following`). `GET
+// /users/:id/profile` remains deliberately unbuilt — still no field
+// curation for a non-owner's view exists anywhere in this codebase, and
+// nothing in this PR's brief asked for it. See users/README.md for the
+// guard-choice and scope reasoning behind each of the four new routes.
+// ---------------------------------------------------------------------
+@Controller('users')
+@UseGuards(JwtAuthGuard)
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  // GET /users/suggested?limit= — the Search & Trending "Suggested"
+  // follow panel (Build Plan Section 4.7, Decision Log #139;
+  // sprint-6/suggested-people-backend). Declared BEFORE @Get(':id') below,
+  // not after — Nest/Express match a controller's routes in declaration
+  // order, so a :id-first ordering would let :id's own
+  // ForbiddenException-on-mismatch swallow this route entirely (:id would
+  // bind to the literal string "suggested"). Same static-route-before-
+  // dynamic-:id convention BanterController already establishes for
+  // GET /banter-rooms/search and GET /banter-rooms/mine.
+  //
+  // JwtAuthGuard only (class-level, above) — see
+  // UsersService.getSuggestedUsers's own header comment for the full
+  // exclusion-rule and ranking-heuristic reasoning.
+  @Get('suggested')
+  async suggested(@CurrentUser() user: AccessTokenPayload, @Query() query: SuggestedUsersQueryDto) {
+    const limit = Math.min(query.limit ?? SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT);
+    return this.usersService.getSuggestedUsers(user.sub, limit);
+  }
+
+  // GET/PATCH /users/me/settings (B-061, Decision Log #472 (d) and (i)): the caller's own DM
+  // permission and sensitive-media toggle. Declared BEFORE every :id route, for the same reason
+  // as 'suggested' above: GET :id / PATCH :id would otherwise bind :id to the literal "me" and
+  // answer 403. JwtAuthGuard only (class level): both settings only tighten or soften
+  // presentation, so a restricted-pending or unverified account may still use them.
+  @Get('me/settings')
+  async getMySettings(@CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getOwnSettings(user.sub);
+  }
+
+  @Patch('me/settings')
+  async updateMySettings(@CurrentUser() user: AccessTokenPayload, @Body() dto: UpdateUserSettingsDto) {
+    return this.usersService.updateOwnSettings(user.sub, dto);
+  }
+
+  // GET /users/:id/public-profile -- viewer-scoped card (any authenticated
+  // user): displayName + guardianContact for a current minor. GET /users/:id
+  // stays self-only. See UsersService.getPublicProfile.
+  @Get(':id/public-profile')
+  async getPublicProfile(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getPublicProfile(id, user.sub);
+  }
+
+  @Get(':id')
+  async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    this.assertSelf(id, user);
+    return this.usersService.getOwnProfile(user.sub);
+  }
+
+  // B-020 (Decision Log #367): email verification is required before the
+  // profile can be completed. This is the write Create Profile will call, so it
+  // is the one route gated here; reads and every other write are unchanged.
+  // JwtAuthGuard (class level) has already attached request.user by now.
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
+  @Patch(':id')
+  async updateById(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateUserDto,
+  ) {
+    this.assertSelf(id, user);
+    return this.usersService.updateOwnProfile(user.sub, dto);
+  }
+
+  // PATCH /users/:id/represented-club (Decision Log #74) — a dedicated
+  // route, not UpdateUserDto's generic allowlist, because the value needs
+  // a cross-entity check (must be one of the caller's own club
+  // memberships). Self-only, same assertSelf check as PATCH /users/:id.
+  @Patch(':id/represented-club')
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
+  async setRepresentedClub(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: SetRepresentedClubDto,
+  ) {
+    this.assertSelf(id, user);
+    return this.usersService.setRepresentedClub(user.sub, dto.clubId);
+  }
+
+  // NOTE: user.sub (from the verified JWT) is what's actually passed to
+  // UsersService, not the :id path param — the path param is only used
+  // for this ownership check. This means even if the check below were
+  // ever weakened, the service call itself can't act on any id other
+  // than the token holder's own.
+  private assertSelf(id: string, user: AccessTokenPayload): void {
+    if (id !== user.sub) {
+      throw new ForbiddenException('You may only view or edit your own profile via this endpoint');
+    }
+  }
+
+  // POST/DELETE /users/:id/follow — JwtAuthGuard only, deliberately NOT
+  // GuardianConsentGuard. Re-argued specifically for follow, not
+  // inherited from POST /posts or the like endpoints' own conclusions —
+  // see users/README.md's "Is following 'posting'?" section for the full
+  // reasoning. Short version: a follow relationship produces even less
+  // visible content than a like does (feed/README.md already argued a
+  // like isn't "posting" because it creates no content of its own beyond
+  // a number changing) — a follow doesn't even change a number anyone
+  // else sees, since there's no follower/following count field anywhere
+  // in schema.prisma. HttpCode(200) on the POST here, same reasoning as
+  // FeedController's like/save endpoints: a follow/unfollow toggle
+  // doesn't always "create a resource" on a given call (idempotency
+  // below), so 200-with-resulting-state fits better than a "Created"
+  // status that may not have created anything this call.
+  //
+  // Self-follow/self-unfollow (:id === caller's own id) → 400, and
+  // :id not referencing a real User → 404 — both are UsersService
+  // business rules (assertUserExists / the followerId === followeeId
+  // check), not controller-level checks, the same "cross-field/business
+  // rules belong in the service" precedent FeedService established.
+  @Post(':id/follow')
+  @HttpCode(200)
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
+  async follow(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.followUser(user.sub, id);
+  }
+
+  @Delete(':id/follow')
+  @UseGuards(GuardianConsentGuard)
+  async unfollow(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.unfollowUser(user.sub, id);
+  }
+
+  // GET /users/:id/followers, GET /users/:id/following — JwtAuthGuard
+  // only, and deliberately NOT self-scoped (unlike GET/PATCH /users/:id
+  // above, or GET /users/:id/saved-posts in the feed module). See
+  // users/README.md's "followers/following public-scope reasoning" for
+  // the full argument: followers/following lists are standard public
+  // social graph data on essentially every platform this product is
+  // modeled after, and nothing in Section 8.3 step 5's *enumerated*
+  // restricted-pending list or Section 5.7's safety-sensitive-action list
+  // names them. This is a deliberate departure from the self-only default
+  // the saved-posts endpoint chose under the same kind of spec silence —
+  // not an unexamined default here, a different judgment call reached
+  // because there's an actual signal to reason from this time. Paginated
+  // with the same keyset-cursor FeedQueryDto/cursor.util.ts machinery as
+  // every other list endpoint in this codebase (Section 5.5). :id not
+  // referencing a real, visible User → 404
+  // (UsersService.assertFollowGraphVisible).
+  //
+  // sprint-2/followers-scope-fix: Decision Log #31's public-scope
+  // conclusion above was reasoned entirely from product parity and only
+  // checked whether Section 8.3 step 5's enumerated list named these
+  // routes (it doesn't) — it never cross-checked Section 8.3's broader
+  // principle that a minor's profile shouldn't be visible outside the
+  // guardian relationship before consent is recorded. A restricted-
+  // pending minor as the TARGET (:id) now 404s on both routes for every
+  // caller, same as a non-existent user — see
+  // UsersService.assertFollowGraphVisible and users/README.md's
+  // "followers/following restricted-pending gap" section. This revisits
+  // #31, it does not silently override it: flagged as superseding #31,
+  // pending founder review before the Build Plan's own Decision Log text
+  // is updated.
+  @Get(':id/followers')
+  async followers(@Param('id') id: string, @Query() query: FeedQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getFollowers(id, query, user.sub);
+  }
+
+  @Get(':id/following')
+  async following(@Param('id') id: string, @Query() query: FeedQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getFollowing(id, query, user.sub);
+  }
+}

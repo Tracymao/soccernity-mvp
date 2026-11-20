@@ -1,0 +1,180 @@
+/* Bants filter form (Decision Log #358). Light theme --sn-* tokens only,
+ * matching BanterPage.css. Used by the desktop modal and the mobile panel. */
+
+.banter-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.banter-filter__group {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.banter-filter__legend {
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.banter-filter__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.banter-filter__chip {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-filter__chip--active {
+  background: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.banter-filter__dates {
+  display: flex;
+  gap: 10px;
+}
+
+.banter-filter__field {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  min-width: 0;
+}
+
+.banter-filter input,
+.banter-filter select {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 400 14px "Inter", sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.banter-filter__error {
+  margin: 0;
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.banter-filter__note {
+  margin: 0;
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.banter-filter__link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--sn-brand-navy);
+  font: 600 13px "Inter", sans-serif;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.banter-filter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.banter-filter__apply,
+.banter-filter__clear {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-filter__apply {
+  border: none;
+  background: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  flex: 1 1 140px;
+}
+
+.banter-filter__apply:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banter-filter__clear {
+  border: 1px solid var(--sn-icon-inactive);
+  background: transparent;
+  color: var(--sn-text-primary);
+}
+
+/* Desktop modal shell (BanterPage). */
+.banter-filter-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--sn-overlay-scrim);
+}
+
+.banter-filter-dialog {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--sn-background-surface);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--sn-shadow-elevated) 0 8px 24px;
+  box-sizing: border-box;
+}
+
+.banter-filter-dialog__title {
+  margin: 0 0 16px;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-align: center;
+}
+
+/* Mobile full-screen panel (BanterPage). */
+.banter-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 32px;
+}
+
+.banter-filter-panel__back {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--sn-brand-navy);
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}

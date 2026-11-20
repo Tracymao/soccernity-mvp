@@ -15,10 +15,52 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
+    "check:pending-copy": "node scripts/check-pending-copy-dist.mjs",
+    "build:release": "npm run build --workspace=apps/web --workspace=apps/admin && npm run check:pending-copy",
     "prisma:generate": "npm run prisma:generate --workspace=services/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=services/api"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.22.0"
+  },
+  "overrides": {
+    "multer": "2.5.0",
+    "@soccernity/web": {
+      "react-router": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "@testing-library/react": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "@stripe/react-stripe-js": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "qrcode.react": {
+        "react": "^19.2.8"
+      }
+    },
+    "@soccernity/admin": {
+      "react-router": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "@testing-library/react": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "qrcode.react": {
+        "react": "^19.2.8"
+      }
+    }
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "argon2@0.45.1": true,
+    "esbuild@0.21.5": true,
+    "prisma@5.22.0": true
   }
 }

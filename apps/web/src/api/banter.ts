@@ -1,0 +1,365 @@
+// Banter Rooms client -- Build Plan Section 4.4 (the /banter-rooms half).
+//
+// Backs BanterPage.tsx / BanterRoomPage.tsx. The full BanterModule is
+// merged in services/api (sprint-3/banter-rooms-backend; Decision Log
+// #275/#276) -- this is not sample-data scaffolding (see
+// pages/banter/banterData.ts's own header comment for what's still
+// illustrative: Trending News, Fixtures, Suggested -- none of that is a
+// Banter Room concern), every function here hits a real endpoint.
+//
+// Follows the api/*.ts convention (api/clubs.ts, api/grassroots.ts): a
+// shared authedFetch wrapper, a typed BanterApiError carrying `.status`
+// for 404 handling at the call site, API_BASE_URL from
+// VITE_API_BASE_URL, a Bearer access-token header on every call,
+// cursor-based pagination.
+//
+// Guard notes worth knowing at the call site (banter.controller.ts):
+//   - GET /banter-rooms, GET /banter-rooms/search, GET /banter-rooms/mine,
+//     GET /banter-rooms/:id and GET /banter-rooms/:id/posts are all
+//     JwtAuthGuard only.
+//   - POST /banter-rooms, POST/DELETE /banter-rooms/:id/join and POST
+//     /banter-rooms/:id/posts are ADDITIONALLY gated by
+//     GuardianConsentGuard -- a restricted-pending minor gets a 403 on
+//     those. The write helpers below surface the server's own message
+//     verbatim so the caller can tell a 403 (consent) from a 403
+//     (not-a-member, on posting) apart.
+//   - POST /banter-rooms/:id/posts does NOT require membership (B-117, open
+//     forum); eligibility (consent, verified email, complete profile) is
+//     enforced by the guards on the server.
+//   - PATCH /banter-rooms/:id/status, POST /banter-rooms/:id/topics and
+//     DELETE /banter-rooms/:id/topics/:topicId are room-CREATOR only (B-071).
+//
+// Response shapes mirror services/api/src/modules/banter/banter.service.ts's
+// ROOM_SELECT / BanterRoomView / BanterRoomPage exactly.
+import type { FeedPage, CreatedPost } from "./feed";
+
+import { apiFailure } from "../lib/under16";
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+// BanterRoom.scopeType allow-list (banter.constants.ts: BANTER_ROOM_SCOPE_TYPES).
+export type BanterRoomScopeType = "club" | "league" | "country" | "topic";
+
+// GET /banter-rooms, GET /banter-rooms/search, GET /banter-rooms/mine,
+// GET /banter-rooms/:id, POST /banter-rooms (ROOM_SELECT). `createdBy` is
+// an opaque id (no organiser PII) so a client can tell whether the caller
+// created the room. `joined` is per-caller, computed server-side
+// (Decision Log #154 pattern) -- never derived client-side.
+// BanterRoom.status (Decision Log #357) — drives the room's status dot.
+export type BanterRoomStatus = "active" | "inactive";
+
+// Topic reference as embedded on a room (services/api TOPIC_SELECT: id + name).
+export interface BanterTopic {
+  id: string;
+  name: string;
+}
+
+export interface BanterRoom {
+  id: string;
+  name: string;
+  scopeType: BanterRoomScopeType;
+  createdBy: string;
+  status: BanterRoomStatus;
+  // Decision Log #358 -- ISO timestamp, used only by the list filters.
+  createdAt: string;
+  memberCount: number;
+  joined: boolean;
+  // Optional text-only description (backend B-042/B-117, founder decision
+  // 2026-11-14). null when none was given (and for rooms created before the
+  // column existed). Optional in the type only so older fixtures still type.
+  description?: string | null;
+  // sprint-3/banter-room-topics -- returned on every room read. Optional here only
+  // so older fixtures still type; the room page renders them read-only.
+  topics?: BanterTopic[];
+}
+
+export interface BanterRoomPage {
+  items: BanterRoom[];
+  nextCursor: string | null;
+}
+
+// scopeRef is required for a "club" room (the club the caller is a member of)
+// and rejected for every other scopeType -- only send it when scopeType is
+// "club".
+export interface CreateBanterRoomRequest {
+  name: string;
+  scopeType: BanterRoomScopeType;
+  scopeRef?: string;
+  // Optional. Send it trimmed and only when non-empty (the server trims it
+  // too and stores a blank one as NULL).
+  description?: string;
+}
+
+// The server's limit on a room description
+// (services/api banter.constants.ts BANTER_ROOM_DESCRIPTION_MAX_LENGTH). It is
+// counted in UTF-16 code units (String.length), the way class-validator's
+// @MaxLength counts, so an emoji outside the Basic Multilingual Plane counts
+// as 2. ONE constant: the create dialog's counter, the textarea limit and the
+// emoji insertion guard all read it.
+export const BANTER_ROOM_DESCRIPTION_MAX_LENGTH = 500;
+
+// POST/DELETE /banter-rooms/:id/join.
+export interface JoinRoomState {
+  roomId: string;
+  joined: boolean;
+  memberCount: number;
+}
+
+export class BanterApiError extends Error {
+  readonly status?: number;
+  readonly code?: string;
+
+  constructor(message: string, options?: { status?: number; code?: string }) {
+    super(message);
+    this.name = "BanterApiError";
+    this.status = options?.status;
+    this.code = options?.code;
+  }
+}
+
+interface AuthedFetchInit {
+  method?: string;
+  body?: string;
+}
+
+async function authedFetch(path: string, accessToken: string, init?: AuthedFetchInit): Promise<Response> {
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      method: init?.method,
+      body: init?.body,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      },
+    });
+  } catch {
+    throw new BanterApiError("Couldn't reach the Soccernity server.");
+  }
+}
+
+// Pull the server's own message off a NestJS error body ({ message } or
+// { message: string[] }). Same helper feed.ts / grassroots.ts use.
+// POST /banter-rooms -- JwtAuthGuard + GuardianConsentGuard. A 403 means
+// the caller is a restricted-pending minor. The creator is auto-joined
+// server-side (BanterService.createRoom), so the returned room already
+// has `joined: true`.
+export async function createRoom(accessToken: string, payload: CreateBanterRoomRequest): Promise<BanterRoom> {
+  const response = await authedFetch("/banter-rooms", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't create that room (${response.status}).`, true);
+  }
+  return (await response.json()) as BanterRoom;
+}
+
+// GET /banter-rooms -- optional `scopeType` exact-match filter, optional
+// `q` case-insensitive substring match on `name` (real server-side search
+// -- Section 4.4's own GET /banter-rooms/search?q= shares this same
+// filter mechanism, see searchRooms below). Keyset-paginated.
+export interface BanterRoomFilters {
+  scopeType?: BanterRoomScopeType;
+  // Free-text "Tag" search: topic name, creator displayName, or scoped club name.
+  tagQuery?: string;
+  // ISO date (YYYY-MM-DD), inclusive, whole UTC day on the server.
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  cursor?: string;
+}
+
+export async function listRooms(accessToken: string, opts?: BanterRoomFilters): Promise<BanterRoomPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms`);
+  if (opts?.scopeType) url.searchParams.set("scopeType", opts.scopeType);
+  if (opts?.tagQuery) url.searchParams.set("tagQuery", opts.tagQuery);
+  if (opts?.dateFrom) url.searchParams.set("dateFrom", opts.dateFrom);
+  if (opts?.dateTo) url.searchParams.set("dateTo", opts.dateTo);
+  if (opts?.q) url.searchParams.set("q", opts.q);
+  if (opts?.cursor) url.searchParams.set("cursor", opts.cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load rooms (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterRoomPage;
+}
+
+// GET /banter-rooms/search?q= -- Section 4.4's literal search route.
+// Shares the exact same filter mechanism as listRooms (BanterService
+// backs both with one method) -- kept as a separate client function only
+// because it's the named endpoint the search box maps to.
+export async function searchRooms(
+  accessToken: string,
+  q: string,
+  cursor?: string,
+): Promise<BanterRoomPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/search`);
+  url.searchParams.set("q", q);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't search rooms (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterRoomPage;
+}
+
+// GET /banter-rooms/mine -- "My Bants" (Build Plan Section 6, Sprint 3).
+// Every item's `joined` is a hard `true` (the room list is defined as
+// "rooms the caller is a member of").
+export async function getMyRooms(accessToken: string, cursor?: string): Promise<BanterRoomPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/mine`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load your rooms (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterRoomPage;
+}
+
+// GET /banter-rooms/:id -- a single room. A missing room is a real 404
+// from the server, surfaced here as a BanterApiError with status 404
+// (the caller inspects `.status`, same as ClubFanPage/GrassrootsTeamPage).
+export async function getRoomById(accessToken: string, roomId: string): Promise<BanterRoom> {
+  const response = await authedFetch(`/banter-rooms/${roomId}`, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load that room (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterRoom;
+}
+
+// POST /banter-rooms/:id/join -- JwtAuthGuard + GuardianConsentGuard.
+// Idempotent (already a member -> 200, unchanged memberCount).
+export async function joinRoom(accessToken: string, roomId: string): Promise<JoinRoomState> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/join`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't join that room (${response.status}).`, true);
+  }
+  return (await response.json()) as JoinRoomState;
+}
+
+// DELETE /banter-rooms/:id/join -- JwtAuthGuard + GuardianConsentGuard.
+// Idempotent (not a member -> 200, unchanged memberCount).
+export async function leaveRoom(accessToken: string, roomId: string): Promise<JoinRoomState> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/join`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't leave that room (${response.status}).`, true);
+  }
+  return (await response.json()) as JoinRoomState;
+}
+
+// POST /banter-rooms/:id/posts -- JwtAuthGuard + GuardianConsentGuard +
+// room membership (403 if not a member -- "You must join this Banter
+// Room before posting in it"). Delegates server-side to
+// FeedService.createPost, so the response is a plain FeedPost (no
+// per-caller viewer-state fields -- Decision Log #153's exact "a post you
+// just created" case, same as api/feed.ts's createPost/CreatedPost).
+export interface CreateBanterPostRequest {
+  contentText: string;
+  /** Ids of files uploaded through POST /media/uploads (api/postMedia.ts); never a URL. */
+  mediaIds?: string[];
+}
+
+export async function postToRoom(
+  accessToken: string,
+  roomId: string,
+  payload: CreateBanterPostRequest,
+): Promise<CreatedPost> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/posts`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't post in that room (${response.status}).`, true);
+  }
+  return (await response.json()) as CreatedPost;
+}
+
+// GET /banter-rooms/:id/posts -- the room feed. Identical FeedPage /
+// FeedPostWithViewerState shape to GET /posts/feed / GET /clubs/:id/feed
+// (BanterController delegates to FeedService.getBanterRoomFeed
+// server-side, the exact same cross-module-DI pattern
+// GET /clubs/:id/feed uses) -- reuse api/feed.ts's own FeedPage type
+// rather than redeclaring it here, matching api/clubs.ts's getClubFeed.
+export async function getRoomFeed(accessToken: string, roomId: string, cursor?: string): Promise<FeedPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/${roomId}/posts`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load this room's posts (${response.status}).`, false);
+  }
+  return (await response.json()) as FeedPage;
+}
+
+// PATCH /banter-rooms/:id/status -- JwtAuthGuard + GuardianConsentGuard, room
+// CREATOR only (404 for a missing room, then 403 for anyone else). Returns
+// the room as BanterRoomView (same shape as GET /banter-rooms/:id).
+export async function updateRoomStatus(
+  accessToken: string,
+  roomId: string,
+  status: BanterRoomStatus,
+): Promise<BanterRoom> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/status`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't change the room status (${response.status}).`, true);
+  }
+  return (await response.json()) as BanterRoom;
+}
+
+// POST /banter-rooms/:id/topics -- room CREATOR only. 1 to 5 free-text names
+// of 2 to 60 characters each; each is find-or-created (case-insensitive) and
+// attached, and an already-attached name is a no-op. The answer is the room's
+// FULL current topic list, so the caller simply replaces its local state.
+export interface AttachTopicsResult {
+  roomId: string;
+  topics: BanterTopic[];
+}
+
+export async function attachTopics(accessToken: string, roomId: string, names: string[]): Promise<AttachTopicsResult> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/topics`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ names }),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't add the topic (${response.status}).`, true);
+  }
+  return (await response.json()) as AttachTopicsResult;
+}
+
+// GET /banter-rooms/topics -- the topic catalogue, alphabetical, cursor-paged
+// (20 a page by default). JwtAuthGuard only.
+export interface BanterTopicPage {
+  items: BanterTopic[];
+  nextCursor: string | null;
+}
+
+export async function listTopics(accessToken: string, cursor?: string): Promise<BanterTopicPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/topics`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load topics (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterTopicPage;
+}
+
+// DELETE /banter-rooms/:id/topics/:topicId -- room CREATOR only, 204. Removes
+// only the room-to-topic link (the shared Topic stays). Idempotent for a topic
+// that exists but is not attached.
+export async function removeTopic(accessToken: string, roomId: string, topicId: string): Promise<void> {
+  const response = await authedFetch(
+    `/banter-rooms/${roomId}/topics/${encodeURIComponent(topicId)}`,
+    accessToken,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't remove the topic (${response.status}).`, true);
+  }
+}

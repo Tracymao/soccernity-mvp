@@ -1,0 +1,79 @@
+/* "Removed by Soccernity" (B-289, Figma M1 to M5 / D1 to D4). Icon strokes brand/navy, label in the
+ * primary text colour, Montserrat Medium, not italic. The tag is the frames' smaller 9px segment. */
+.removed-placeholder {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--sn-text-primary);
+  font-family: "Montserrat", "Inter", sans-serif;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.removed-placeholder__body {
+  min-width: 0;
+}
+
+.removed-placeholder__text {
+  margin: 0;
+  font: 500 14px/1.4 "Montserrat", "Inter", sans-serif;
+}
+
+.removed-placeholder__icon {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.removed-placeholder__tag {
+  font: 500 9px/1.4 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.removed-placeholder__tag--own-line {
+  display: block;
+}
+
+.removed-placeholder__meta {
+  display: block;
+  margin-top: 4px;
+  font: 400 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* A chat bubble: brand/green-tint fill, no border. */
+.removed-placeholder--bubble {
+  display: inline-flex;
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--sn-green-tint-12);
+}
+
+/* A comment: no fill, the icon sits in a small tint disc like an avatar. */
+.removed-placeholder--row {
+  align-items: center;
+  padding: 8px 0;
+}
+
+.removed-placeholder--row .removed-placeholder__icon {
+  box-sizing: content-box;
+  margin-top: 0;
+  padding: 9px;
+  border-radius: 50%;
+  background: var(--sn-green-tint-12);
+}
+
+/* The post notice for its author. */
+.removed-placeholder--heading {
+  align-items: center;
+  padding: 16px 0 8px;
+}
+
+.removed-placeholder--heading .removed-placeholder__icon {
+  margin-top: 0;
+}
+
+.removed-placeholder--heading .removed-placeholder__text {
+  font: 700 22px/1.3 "Montserrat", "Inter", sans-serif;
+}

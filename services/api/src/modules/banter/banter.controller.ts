@@ -1,0 +1,237 @@
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AccessTokenPayload } from '../auth/token/token.types';
+import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { BanterService } from './banter.service';
+import { AttachBanterRoomTopicsDto } from './dto/attach-banter-room-topics.dto';
+import { CreateBanterPostDto } from './dto/create-banter-post.dto';
+import { CreateBanterRoomDto } from './dto/create-banter-room.dto';
+import { ListBanterRoomsQueryDto } from './dto/list-banter-rooms-query.dto';
+import { ListBanterTopicsQueryDto } from './dto/list-banter-topics-query.dto';
+import { MyBantsQueryDto } from './dto/my-bants-query.dto';
+import { UpdateBanterRoomStatusDto } from './dto/update-banter-room-status.dto';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
+
+// Build Plan Section 4.4 (Club & Banter Service) — the /banter-rooms
+// half, Sprint 3. The /clubs half lives on ClubsController.
+//
+// Section 4.4 lists: GET /banter-rooms, GET /banter-rooms/:id, POST
+// /banter-rooms, POST /banter-rooms/:id/topics, GET
+// /banter-rooms/search?q=. This controller now builds ALL of those,
+// including POST /banter-rooms/:id/topics (sprint-3/banter-room-topics
+// resolves Decision Log #276 — see schema.prisma's Topic/BanterRoomTopic
+// models and banter/README.md's Permission model section for the
+// cardinality and guard reasoning). It also adds four endpoints Section
+// 4.4's literal list omits but Section 6's Sprint 3 description +
+// Post.banterRoomId's existence require: POST/DELETE
+// /banter-rooms/:id/join, GET /banter-rooms/mine ("My Bants"), POST/GET
+// /banter-rooms/:id/posts, and GET /banter-rooms/topics (the topics
+// catalog — without it, ?topicId= filtering has nothing for a client to
+// discover ids from). All flagged in the README the same way
+// GrassrootsController flagged PATCH /fixtures/:id/status (Decision Log
+// #254).
+//
+// Guard reasoning per route is inline below and in banter/README.md.
+// sprint-1/under-16-restrictions: whole controller off for isUnder16 accounts
+// (reads included). Class-level guards run BEFORE route-level ones, so
+// JwtAuthGuard is repeated here to attach request.user first.
+@UseGuards(JwtAuthGuard, Under16RestrictionGuard)
+@RestrictUnder16('banter')
+@Controller('banter-rooms')
+export class BanterController {
+  constructor(private readonly banter: BanterService) {}
+
+  // POST /banter-rooms — JwtAuthGuard + GuardianConsentGuard. A Banter
+  // Room is a public-facing, persistent, named record other users see
+  // and join: a "posting"-class action under Section 5.7's broad reading
+  // (Decision Log #21), so a restricted-pending minor cannot create one.
+  // `createdBy` = the caller. Permission model: ANY consent-confirmed
+  // authenticated user (default, matching POST /teams — Decision Log
+  // #255); flagged as a Decision Log candidate whether room creation
+  // should later be moderator-gated (an unbounded supply of user-named
+  // public rooms on a minors' platform is a real spam/safeguarding
+  // surface). Nest's default 201 is correct here — this genuinely
+  // creates a resource, unlike the join toggle below.
+  @Post()
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
+  async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateBanterRoomDto) {
+    return this.banter.createRoom(user.sub, dto);
+  }
+
+  // GET /banter-rooms — JwtAuthGuard only. Browsing the room catalog is
+  // not a safety-sensitive action under Section 5.7 (all action-verbs);
+  // same reasoning as GET /clubs. Optional ?scopeType= filter; response
+  // carries a per-caller `joined` flag (Decision Log #154 pattern).
+  //
+  // Declared before GET /banter-rooms/:id so Nest matches a bare
+  // /banter-rooms request here.
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async list(@Query() query: ListBanterRoomsQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.listRooms(query, user.sub);
+  }
+
+  // GET /banter-rooms/search?q= — Section 4.4's literal search route.
+  // Shares BanterService.listRooms with GET /banter-rooms (same
+  // scopeType + name filter mechanism, the GrassrootsPage server-side
+  // filter precedent); this route exists because Section 4.4 names it.
+  // Declared before /:id.
+  @Get('search')
+  @UseGuards(JwtAuthGuard)
+  async search(@Query() query: ListBanterRoomsQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.listRooms(query, user.sub);
+  }
+
+  // GET /banter-rooms/mine — "My Bants" (Build Plan Section 6, Sprint 3).
+  // JwtAuthGuard only — reading your own memberships. Declared before
+  // /:id so "mine" isn't matched as a room id.
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  async mine(@Query() query: MyBantsQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.getMyRooms(user.sub, query);
+  }
+
+  // GET /banter-rooms/topics — the topics catalog
+  // (sprint-3/banter-room-topics, Decision Log #276). JwtAuthGuard only,
+  // same reasoning as list/search/mine — browsing a small tag catalog is
+  // no more safety-sensitive than browsing rooms. Declared before /:id
+  // (the same "search"/"mine" convention) so Nest never matches
+  // "topics" as a room id.
+  @Get('topics')
+  @UseGuards(JwtAuthGuard)
+  async topics(@Query() query: ListBanterTopicsQueryDto) {
+    return this.banter.listTopics(query);
+  }
+
+  // GET /banter-rooms/:id — JwtAuthGuard only, reading a single room is
+  // no more safety-sensitive than reading the catalog. 404 for a
+  // non-existent id (BanterService.getRoomById). Carries per-caller
+  // `joined`.
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.getRoomById(id, user.sub);
+  }
+
+  // POST /banter-rooms/:id/join — JwtAuthGuard + GuardianConsentGuard.
+  // This is the one action Section 5.7 AND Section 8.3 step 5 both name
+  // literally ("joining a Banter Room" / "no participation in Banter
+  // Rooms beyond read-only"), so it is consent-gated without
+  // interpretation — a deliberate divergence from POST /clubs/:id/join
+  // (JwtAuthGuard only), whose own reasoning rested on "a ClubPage join
+  // is NOT a Banter Room". HttpCode(200): an idempotent toggle, not a
+  // resource creation — same as like/save/follow/club-join.
+  @Post(':id/join')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
+  async join(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.joinRoom(user.sub, id);
+  }
+
+  // DELETE /banter-rooms/:id/join — same path as POST (follow/like/save/
+  // club-join convention). JwtAuthGuard + GuardianConsentGuard: a short
+  // confirmation of join's own argument. HttpCode(200), idempotent
+  // (leaving a room you're not in is a 200, not a 404), memberCount
+  // floor-guarded >= 0.
+  @Delete(':id/join')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async leave(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.banter.leaveRoom(user.sub, id);
+  }
+
+  // GET /banter-rooms/:id/posts — the room feed. JwtAuthGuard only
+  // (reading, like GET /clubs/:id/feed and GET /posts/feed). Room
+  // existence checked first (404), then delegated to
+  // FeedService.getBanterRoomFeed — identical FeedPage /
+  // FeedPostWithViewerState shape to GET /posts/feed. Not in Section
+  // 4.4's literal list; flagged in the README as the obvious
+  // read-counterpart of posting and a 1:1 mirror of GET /clubs/:id/feed.
+  @Get(':id/posts')
+  @UseGuards(JwtAuthGuard)
+  async roomFeed(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: FeedQueryDto,
+  ) {
+    await this.banter.assertRoomExists(id);
+    return this.banter.getRoomFeed(id, user.sub, query);
+  }
+
+  // POST /banter-rooms/:id/posts — JwtAuthGuard + GuardianConsentGuard
+  // (posting). Delegates to FeedService.createPost with banterRoomId set
+  // — the single post-creation path, not a parallel one. 404 room ->
+  // create. NO room membership is required (B-117, Decision Log #404
+  // item 10): a room is an open thread and "join" is only the My Bants
+  // bookmark. Nest's default 201 (this really does create a Post).
+  @Post(':id/posts')
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
+  async postToRoom(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: CreateBanterPostDto,
+  ) {
+    return this.banter.postToRoom(user.sub, id, dto);
+  }
+
+  // POST /banter-rooms/:id/topics — Section 4.4's literal,
+  // previously-unbuilt route (sprint-3/banter-room-topics resolves
+  // Decision Log #276). JwtAuthGuard + GuardianConsentGuard (attaching a
+  // topic tag changes the room's own public-facing categorization
+  // metadata — a short confirmation of POST /banter-rooms's own
+  // "posting"-class reasoning above, not a fresh argument).
+  //
+  // PERMISSION MODEL, argued in full in BanterService.attachTopics's own
+  // comment and banter/README.md: only the room's CREATOR may attach
+  // topics — not any member, and not any authenticated user (403
+  // otherwise). 404 room -> 403 not-creator, in that order
+  // (BanterService.attachTopics settles existence before ownership).
+  //
+  // HttpCode(200): the same "idempotent ensure-attached action, not a
+  // resource-creation action" characterization join/leave already use —
+  // a call where every requested topic is already attached does nothing
+  // new, unlike POST /banter-rooms itself.
+  // PATCH /banter-rooms/:id/status — the room creator's active/inactive
+  // toggle (Decision Log #357). JwtAuthGuard only; creator-only at the
+  // service layer (404 before 403). Moderators reach the same status via
+  // the Report/moderation queue's room_deactivated action, not this route.
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async updateStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateBanterRoomStatusDto,
+  ) {
+    return this.banter.updateRoomStatus(user.sub, id, dto);
+  }
+
+  @Post(':id/topics')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
+  async attachTopics(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: AttachBanterRoomTopicsDto,
+  ) {
+    return this.banter.attachTopics(user.sub, id, dto);
+  }
+
+  // DELETE /banter-rooms/:id/topics/:topicId — remove one topic tag from a
+  // room. Same guards and same 404-room -> 403-not-creator order as the
+  // attach route above; removes only the room-to-topic link, never the
+  // shared Topic. 204, idempotent. See BanterService.detachTopic.
+  @Delete(':id/topics/:topicId')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
+  async detachTopic(
+    @Param('id') id: string,
+    @Param('topicId') topicId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<void> {
+    await this.banter.detachTopic(user.sub, id, topicId);
+  }
+}

@@ -1,0 +1,424 @@
+// Feed Service client -- Build Plan Section 4.3.
+//
+// Follows the api/*.ts convention established by api/clubs.ts and
+// api/users.ts: an own fetch wrapper, an own typed *ApiError class, an
+// API_BASE_URL constant reading VITE_API_BASE_URL (falling back to
+// services/api's default local port), a Bearer access-token auth header
+// on every call, and cursor-based pagination on the list endpoints.
+//
+// Every route here requires a real access token -- there is no
+// public/unauthenticated feed route (see feed.controller.ts). Guard
+// notes worth knowing at the call site:
+//   - POST /posts and POST /posts/:id/comments are additionally gated by
+//     GuardianConsentGuard, so a restricted-pending minor gets a 403 on
+//     those two specific actions (createPost / addComment surface that as
+//     FeedApiError with status 403 -- the caller decides how to present
+//     it, e.g. a link to /guardian-consent).
+//   - like/unlike, save/unsave, and GET /posts/feed are JwtAuthGuard-only.
+//
+// Response shapes mirror services/api/src/modules/feed/feed.service.ts's
+// POST_SELECT / COMMENT_SELECT / LikeState / SaveState / FeedPage /
+// CommentPage exactly.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export type CommentPermission = "everyone" | "followers" | "off";
+
+export interface FeedPostAuthor {
+  id: string;
+  // username if set, else displayName (services/api users/public-name.util.ts)
+  publicName: string;
+  // Per-calling-user viewer state (Decision Log #153, services/api PR #136).
+  // `true` iff the caller follows this author. Always `false` for the
+  // caller's own posts (you can't follow yourself).
+  isFollowing: boolean;
+}
+
+// One file attached to a post (services/api feed.service.ts FeedPostMedia). `id` is the upload id the media
+// routes take; `kind` is the real media type (no guessing from the file name). `viewUrl` is present ONLY on
+// the post author's own read and ONLY for a file that is not public yet (under review, held or rejected): a
+// short-lived signed link, and the only address the author may use to see such a file. For every other file
+// the public address is the matching entry of `mediaUrls` (same order).
+export interface FeedPostMedia {
+  id: string;
+  kind: "image" | "video";
+  viewUrl?: string;
+}
+
+export interface FeedPost {
+  id: string;
+  authorId: string;
+  author: FeedPostAuthor;
+  contentText: string;
+  mediaUrls: string[];
+  // The attached files, in the same order as `mediaUrls` (B-259).
+  media: FeedPostMedia[];
+  // The AUTHOR's "sensitive media" setting at read time (B-061, Decision Log #472 default (d)): when true the
+  // card blurs the files behind "Tap to view", for every viewer including the author. False for a post with no
+  // media. Contest entries, profile pictures and covers are not covered. Optional only so older fixtures without
+  // it read as "not sensitive".
+  mediaSensitive?: boolean;
+  clubPageId: string | null;
+  banterRoomId: string | null;
+  likeCount: number;
+  commentCount: number;
+  // Denormalized view-EVENT counter (Post.viewCount) -- real server value,
+  // 0 for a post nobody has opened. Incremented by POST /posts/:id/view.
+  viewCount: number;
+  // Who may add NEW comments. Optional only so older fixtures/payloads
+  // without it read as "everyone".
+  commentPermission?: CommentPermission;
+  // Set when the post IS a Contest entry (backend/w7-contest): the card shows the
+  // "Contest post" label. `pinned` is true while the entry is pinned on its author's
+  // profile (until the end of the contest month); after that it is an ordinary post that
+  // keeps the label. Optional so older fixtures without it read as "not a contest entry".
+  contest?: { entryId: string; kind: "weekly" | "final"; weekNumber: number; pinned: boolean; label: string } | null;
+  createdAt: string;
+  // Per-calling-user viewer state (Decision Log #153). `true` iff the
+  // caller has already liked / saved this post. Returned by GET
+  // /posts/feed and GET /posts/:id only -- POST /posts (createPost) and
+  // GET /users/:id/saved-posts deliberately do NOT carry these yet
+  // (flagged, not fixed, in Decision Log #153).
+  isLiked: boolean;
+  isSaved: boolean;
+}
+
+export interface FeedPage {
+  items: FeedPost[];
+  nextCursor: string | null;
+}
+
+export interface FeedComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  author: FeedPostAuthor;
+  contentText: string;
+  // True when the post's author hid it. The server only sends a hidden
+  // comment to the post's author and the comment's own author.
+  hidden?: boolean;
+  createdAt: string;
+}
+
+// B-289 (Decision Log #483): a comment a moderator removed stays in the thread as exactly this stub: no text,
+// no author, no `hidden` flag. It carries no actions (no hide, no report) and is not counted in commentCount.
+export interface RemovedFeedComment {
+  id: string;
+  createdAt: string;
+  removedByModeration: true;
+}
+
+export type CommentThreadItem = FeedComment | RemovedFeedComment;
+
+export function isRemovedComment(item: CommentThreadItem): item is RemovedFeedComment {
+  return "removedByModeration" in item && item.removedByModeration === true;
+}
+
+export interface CommentPage {
+  items: CommentThreadItem[];
+  nextCursor: string | null;
+}
+
+// B-289: what GET /posts/:id answers to the post's AUTHOR (and only the author) when a moderator removed the
+// post: this stub and nothing else. Everyone else gets the ordinary 404.
+export interface RemovedPostStub {
+  id: string;
+  removedByModeration: true;
+}
+
+export function isRemovedPost(post: FeedPost | RemovedPostStub): post is RemovedPostStub {
+  return "removedByModeration" in post && post.removedByModeration === true;
+}
+
+// POST /posts/:id/like and DELETE /posts/:id/like both return this.
+// `liked` is the resulting state; `likeCount` is the fresh server count.
+export interface LikeState {
+  postId: string;
+  liked: boolean;
+  likeCount: number;
+}
+
+// POST /posts/:id/save and DELETE /posts/:id/save both return this.
+export interface SaveState {
+  postId: string;
+  saved: boolean;
+}
+
+// CreatePostDto's real allowlist (create-post.dto.ts): contentText (1-3000 chars, required), mediaIds
+// (optional, at most 10: the ids of files the caller uploaded through POST /media/uploads, api/postMedia.ts),
+// clubPageId / banterRoomId (optional, mutually exclusive). A post no longer takes a URL: `mediaUrls` is
+// not a field of the DTO and the API answers a request carrying it with a 400 (Decision Log #419).
+export interface CreatePostRequest {
+  contentText: string;
+  mediaIds?: string[];
+  clubPageId?: string;
+  banterRoomId?: string;
+}
+
+// POST /posts returns the created post WITHOUT the per-caller
+// viewer-state fields -- Decision Log #153 deliberately left createPost
+// (and GET /users/:id/saved-posts) unenriched. For a brand-new post
+// isLiked / isSaved / author.isFollowing are all deterministically false
+// anyway (you haven't liked or saved your own new post; you can't follow
+// yourself), so CommunityPage fills them in when it prepends the post to
+// the feed.
+export type CreatedPost = Omit<FeedPost, "isLiked" | "isSaved" | "author"> & {
+  author: Omit<FeedPostAuthor, "isFollowing">;
+};
+
+// GET /users/:id/saved-posts (Build Plan Section 4.3; self-only, Decision Log #22). Each entry is the
+// SavedPost row plus the post in the same enriched shape GET /posts/feed returns: per-caller isLiked,
+// isSaved (true by definition) and author.isFollowing (Decision Log #153).
+export interface SavedPostEntry {
+  postId: string;
+  savedAt: string;
+  post: FeedPost;
+}
+
+export interface SavedPostPage {
+  items: SavedPostEntry[];
+  nextCursor: string | null;
+}
+
+export class FeedApiError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, options?: { status?: number }) {
+    super(message);
+    this.name = "FeedApiError";
+    this.status = options?.status;
+  }
+}
+
+interface AuthedFetchInit {
+  method?: string;
+  body?: string;
+}
+
+async function authedFetch(path: string, accessToken: string, init?: AuthedFetchInit): Promise<Response> {
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      method: init?.method,
+      body: init?.body,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      },
+    });
+  } catch {
+    throw new FeedApiError("Couldn't reach the Soccernity server.");
+  }
+}
+
+async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => null);
+  if (body && typeof body.message === "string") return body.message;
+  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
+  return fallback;
+}
+
+// GET /posts/feed -- the caller's own posts plus posts by users they
+// follow, most-recent-first, keyset-paginated (default 20 / max 50).
+export async function getFeed(accessToken: string, cursor?: string): Promise<FeedPage> {
+  const url = new URL(`${API_BASE_URL}/posts/feed`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't load your feed (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as FeedPage;
+}
+
+// GET /users/:id/saved-posts -- the caller's own saved posts, most recently saved first, keyset-paginated
+// (default 20 / max 50). The server answers 403 for any id but the caller's own, so only the own profile
+// ever calls this. A post removed, hidden or blocked since saving is already absent from the page.
+export async function getSavedPosts(accessToken: string, userId: string, cursor?: string): Promise<SavedPostPage> {
+  const url = new URL(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/saved-posts`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't load your saved posts (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as SavedPostPage;
+}
+
+// POST /posts -- JwtAuthGuard + GuardianConsentGuard. A 403 here means the
+// caller is a restricted-pending minor.
+export async function createPost(accessToken: string, payload: CreatePostRequest): Promise<CreatedPost> {
+  const response = await authedFetch("/posts", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(
+      await errorMessageFrom(response, `Couldn't publish that post (${response.status}).`),
+      { status: response.status },
+    );
+  }
+  return (await response.json()) as CreatedPost;
+}
+
+// POST /posts/:id/like -- idempotent toggle-on (200 even if already liked).
+export async function likePost(accessToken: string, postId: string): Promise<LikeState> {
+  const response = await authedFetch(`/posts/${postId}/like`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't like that post (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as LikeState;
+}
+
+// DELETE /posts/:id/like -- idempotent toggle-off (200 even if not liked).
+export async function unlikePost(accessToken: string, postId: string): Promise<LikeState> {
+  const response = await authedFetch(`/posts/${postId}/like`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't remove that like (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as LikeState;
+}
+
+// POST /posts/:id/save -- idempotent toggle-on.
+export async function savePost(accessToken: string, postId: string): Promise<SaveState> {
+  const response = await authedFetch(`/posts/${postId}/save`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't save that post (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as SaveState;
+}
+
+// DELETE /posts/:id/save -- idempotent toggle-off.
+export async function unsavePost(accessToken: string, postId: string): Promise<SaveState> {
+  const response = await authedFetch(`/posts/${postId}/save`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't unsave that post (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as SaveState;
+}
+
+// GET /posts/:id/comments -- oldest-first, keyset-paginated.
+export async function getComments(accessToken: string, postId: string, cursor?: string): Promise<CommentPage> {
+  const url = new URL(`${API_BASE_URL}/posts/${postId}/comments`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't load comments (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as CommentPage;
+}
+
+// POST /posts/:id/comments -- JwtAuthGuard + GuardianConsentGuard. A 403
+// here means the caller is a restricted-pending minor.
+export async function addComment(accessToken: string, postId: string, contentText: string): Promise<FeedComment> {
+  const response = await authedFetch(`/posts/${postId}/comments`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ contentText }),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(
+      await errorMessageFrom(response, `Couldn't add that comment (${response.status}).`),
+      { status: response.status },
+    );
+  }
+  return (await response.json()) as FeedComment;
+}
+
+// DELETE /posts/:id -- hard delete, author only (204). Removes the post and
+// every comment/like/save on it, other users' included.
+export async function deletePost(accessToken: string, postId: string): Promise<void> {
+  const response = await authedFetch(`/posts/${postId}`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't delete that post (${response.status}).`), {
+      status: response.status,
+    });
+  }
+}
+
+// PATCH /posts/:id/comment-settings -- post author only.
+export async function updateCommentSettings(
+  accessToken: string,
+  postId: string,
+  commentPermission: CommentPermission,
+): Promise<{ id: string; commentPermission: CommentPermission }> {
+  const response = await authedFetch(`/posts/${postId}/comment-settings`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ commentPermission }),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update comment settings (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as { id: string; commentPermission: CommentPermission };
+}
+
+// PATCH /posts/:id/comments/:commentId/hide | /unhide -- post author only.
+export async function setCommentHidden(
+  accessToken: string,
+  postId: string,
+  commentId: string,
+  hidden: boolean,
+): Promise<{ id: string; hidden: boolean }> {
+  const response = await authedFetch(`/posts/${postId}/comments/${commentId}/${hidden ? "hide" : "unhide"}`, accessToken, {
+    method: "PATCH",
+  });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update that comment (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as { id: string; hidden: boolean };
+}
+
+// POST /posts/:id/view -- OptionalJwtAuthGuard on the server (a logged-out
+// caller may also register a view); we always send the caller's token so
+// the server can de-duplicate per logged-in viewer. Returns the fresh
+// server-side count.
+export interface ViewState {
+  postId: string;
+  viewCount: number;
+}
+
+export async function recordPostView(accessToken: string, postId: string): Promise<ViewState> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}/view`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't record that view (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as ViewState;
+}
+
+// GET /posts/:id -- one post with the per-caller viewer state. A post the caller may not see (a
+// hidden final contest entry before the reveal, a blocked author, a missing id) is the same 404.
+export async function getPostById(accessToken: string, postId: string): Promise<FeedPost | RemovedPostStub> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}`, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't load that post (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as FeedPost | RemovedPostStub;
+}
+
+// POST /posts/:id/view-heartbeat -- server-validated view qualification (B-093). The client reports
+// that the post is ACTIVE on screen about every 3 seconds (and, for a video, the playhead); the server
+// keeps the clock and decides what counts. The answer is only `{ done }` -- it never says whether any
+// point was awarded, and the UI never shows one. JwtAuthGuard only (a restricted or unverified account
+// may read; it simply earns nothing).
+export interface ViewHeartbeatBody {
+  sessionId: string;
+  active: boolean;
+  positionSeconds?: number;
+  durationSeconds?: number;
+}
+
+export async function recordViewHeartbeat(
+  accessToken: string,
+  postId: string,
+  body: ViewHeartbeatBody,
+): Promise<{ done: boolean }> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}/view-heartbeat`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't report that view (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { done: boolean };
+}

@@ -1,0 +1,490 @@
+# services/api/test — real-Postgres e2e layer
+
+## Why this exists
+
+Reviewing PR #58 (`sprint-2/club-pages`) surfaced a real, systemic gap:
+`ClubsService.joinClub`'s raw `$executeRaw` `INSERT ... ON CONFLICT DO
+NOTHING` against the real `_ClubMembership` implicit join table had only
+ever been exercised by a mock returning `0` or `1` on command. More
+broadly — confirm this yourself by reading any `*.controller.http.spec.ts`
+or `*.service.spec.ts` file in `src/`: every one of them either mocks
+`PrismaService` (`{ provide: PrismaService, useValue: <mocked object> }`)
+or constructs the service under test with a hand-built mock Prisma object.
+**Nothing in this codebase, before this PR, ever connected to the real
+docker-compose Postgres/Redis containers.** Several PR reports and module
+READMEs this sprint described their own verification as "real HTTP
+verification against Postgres/Redis via docker-compose, not mocked" — that
+description was inaccurate. See the corrected claims in `CLAUDE.md` and
+`src/modules/{feed,users,clubs}/README.md` for exactly what each of those
+claims actually meant (real NestJS DI/guard/routing wiring and service
+logic exercised against a **mocked** Prisma client) versus what this PR's
+new layer, described below, genuinely covers for the first time.
+
+## The two test layers — both stay, this is additive
+
+| | `../jest.config.js` (existing) | `jest-e2e.config.js` (this PR) |
+|---|---|---|
+| File pattern | `*.spec.ts`, anywhere under `src/` | `*.e2e-spec.ts`, only under `test/` |
+| Run with | `npm run test` | `npm run test:e2e` |
+| Prisma | Always mocked | Real `PrismaClient`, real Postgres |
+| Speed | Fast (the primary feedback loop) | Slow — real HTTP + real DB + real argon2id |
+| Purpose | Ordinary logic, guard wiring, DTO validation, controller/service behavior | Raw SQL, transaction/isolation-level reasoning, genuinely novel Prisma relations/constraints |
+
+**`npm run test:e2e` is a deliberately separate script, not folded into
+`npm run test`.** The existing fast mocked-unit-test feedback loop is
+unaffected by this PR — same file count, same pass count as before it (see
+the PR report for the exact before/after numbers). `jest.config.js`'s
+`testRegex` (`*.spec.ts`, `rootDir: 'src'`) and `jest-e2e.config.js`'s
+(`test/*.e2e-spec.ts`, `rootDir: '..'`) are disjoint by both naming
+convention and directory — a file can only ever match one of the two.
+
+## Guiding principle for future PRs: not everything needs an e2e test
+
+Mocked unit tests remain the fast, primary layer for ordinary logic — most
+new code should keep getting `*.spec.ts` coverage exactly as it has been,
+nothing about this PR changes that default. Add a real e2e test (alongside
+the mocked unit tests, not instead of them) specifically when a code path
+involves:
+
+1. **Raw SQL** — anything using `$executeRaw`/`$queryRaw`/`$executeRawUnsafe`,
+   the way `ClubsService.joinClub` does. A mock can't tell you whether the
+   SQL is even syntactically valid against the real schema, let alone
+   whether its `ON CONFLICT` behavior matches what the code assumes.
+2. **Transaction/isolation-level reasoning** — anywhere the correctness
+   argument depends on what two concurrent requests can or can't observe
+   under Postgres's actual isolation level (READ COMMITTED by default).
+   `clubs.service.ts`'s own comment on why a `findFirst`-then-conditionally-
+   update pattern was rejected in favor of the raw-SQL approach is exactly
+   this kind of reasoning — it can only be validated against a real engine.
+3. **A genuinely novel Prisma relation or constraint** — a new
+   `@@unique`, a new implicit many-to-many relation, a new `@relation`
+   name, anything where Prisma's generated behavior isn't yet proven
+   against a live database. `ClubPage.members`/`User.clubAffiliation`'s
+   pre-existing relation-naming bug (schema.prisma's comment on
+   `ClubPage.members`) is exactly the kind of thing a mock would never
+   have caught — it was found by running the real Prisma client, not by a
+   more careful mock.
+
+These three are exactly what PR #58's `joinClub` needed and didn't have.
+If none of the three apply, a mocked unit/HTTP-wiring test is almost
+certainly the right (and much faster) choice.
+
+## What's covered so far — and what isn't yet
+
+The original PR (#59) added two spec files as an initial representative
+slice. `sprint-2/e2e-coverage-expansion` (this PR) adds three more,
+closing the specific backlog items #59 itself flagged (feed like/comment/
+save, follow/notification wiring, and the counter-increment logic behind
+all of them) — **still not retroactive e2e coverage of every endpoint**,
+see the remaining gaps listed below.
+
+- `auth.e2e-spec.ts` — register → login → fetch-own-profile, through a
+  real NestJS app instance, real Postgres, real argon2id hashing, and a
+  real unique-email constraint violation surfacing as a 409, not a 500.
+  **Gap found while building this spec, not silently worked around:** the
+  brief for this asked for a register → login → `GET /auth/me` round
+  trip. `GET /auth/me` (Build Plan Section 4.1) does not exist anywhere in
+  this codebase — confirmed by grep; every reference to it in
+  `auth/README.md`/`users/README.md`/`users.controller.ts` is a note that
+  it's a separate, not-yet-built endpoint. Building it here would be scope
+  creep for an e2e-infrastructure PR, so this spec's third leg uses `GET
+  /users/:id` (self-scoped, Section 4.2, genuinely built) instead — same
+  bearer-token → `JwtAuthGuard` → `TokenService.verifyAccessToken` → fresh
+  Prisma read chain `GET /auth/me` would exercise, just via an existing
+  route. **Building `GET /auth/me` for real is a Decision Log/backlog
+  candidate this PR surfaces, not resolves.**
+- `clubs.e2e-spec.ts` — `POST /clubs/:id/join`, called twice for the same
+  (user, club) pair, against the real `_ClubMembership` table: asserts
+  exactly one row exists and `ClubPage.memberCount` is exactly one higher
+  than its starting value, not two. Also covers two different users
+  joining the same club, the real (unmocked) `JwtAuthGuard` 401 case, and
+  a real 404 for a non-existent club id. The `GET /clubs/:id/feed` block
+  (added by `sprint-2/club-fan-page-backend`) asserts feed ordering;
+  because `Post.createdAt` is `@default(now())` and `Post.id` is a random
+  `uuid()`, its `seedClubPost()` helper assigns an **explicit,
+  strictly-increasing `createdAt`** (10ms apart) so those order
+  assertions never depend on same-millisecond clock resolution falling
+  through to the `createdAt desc, id desc` tiebreaker's random-`id`
+  second key — a CI flake fixed in
+  `sprint-2/fix-flaky-clubs-feed-pagination-test` (Build Plan Decision
+  Log #226). Any new e2e that seeds multiple posts and asserts on their
+  relative order must do the same.
+- `feed-reactions.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion)
+  — `FeedService.likePost`/`unlikePost`/`addComment`/`savePost`/
+  `unsavePost` against real Postgres: the `Like` row + `Post.likeCount`
+  increment landing in the same transaction, double-like idempotency
+  (exactly one `Like` row, `likeCount` +1 not +2), unlike idempotency at
+  the "already unliked" boundary (never negative), two distinct `Comment`
+  rows from the same user producing `commentCount = 2`, and save/unsave
+  idempotency. Also directly queries the real `Notification` table (not
+  the HTTP response) to prove recipient direction — liking/commenting
+  creates a `Notification` addressed to the **post's author**, never the
+  actor — the no-self-notification case for both (author acting on their
+  own post → zero `Notification` rows), and that a double-like produces
+  exactly one `Notification` row, not two.
+- `follow.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion) —
+  `UsersService.followUser`/`unfollowUser`/`getFollowers`/`getFollowing`
+  against real Postgres: self-follow rejected with 400 and no `Follow` row
+  created, follow/unfollow idempotency (exactly one `Follow` row and
+  exactly one `Notification` row on a double-follow, recipient direction
+  verified directly — the followed user's `userId`, `payloadRefId` the
+  follower's own id), and `GET /users/:id/followers`/`/following` checked
+  against `Follow` rows seeded directly via Prisma (not via the follow
+  endpoint's own write path, which is already covered separately).
+- `counters.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion) — the
+  direct, real-Postgres proof of the "denormalized cache must never
+  drift" comment on `Post.likeCount`/`commentCount` in `schema.prisma`:
+  asserts, at every step of a real like → like (idempotent) → unlike →
+  unlike (idempotent) → comment → comment sequence, that the cached
+  counters read back from Postgres equal `Like.count()`/`Comment.count()`
+  for that post, not just once at the end.
+- `feed-reactions.e2e-spec.ts`'s "comment deletion" describe block (added
+  by `sprint-2/comment-delete`) — `FeedService.deleteComment`
+  (`DELETE /posts/:id/comments/:commentId`) against real Postgres: the
+  comment author deleting their own comment and the post author deleting
+  someone else's comment on their own post both genuinely remove the
+  `Comment` row and decrement `Post.commentCount` by exactly 1; a third
+  user (neither role) gets a 403 with the row and counter both
+  provably unchanged; a non-existent `commentId` is a 404; a `commentId`
+  that exists but belongs to a different post than the URL is a 404 (not
+  a 403) even when the requester genuinely authored that comment —
+  confirming the resource-identity-mismatch reasoning, not an
+  authorization shortcut; deleting the same real comment twice is 204
+  then 404, proving this endpoint deliberately does NOT follow the
+  idempotent-200 pattern `like`/`save`/`follow`/`join`/`leave` all use;
+  and a comment/comment/delete/comment sequence lands `commentCount` at
+  exactly 2 and matches `Comment.count()` at every step, the same
+  "no-drift across a real operation sequence" proof `counters.e2e-spec.ts`
+  established for likes, applied here for the first time to comment
+  deletion.
+- `registration-club-join.e2e-spec.ts` (added by
+  sprint-2/auto-join-on-signup) — auto-join on signup
+  (`RegisterDto.clubId`) against real Postgres: registering with a real
+  `clubId` creates exactly one `_ClubMembership` row and increments
+  `ClubPage.memberCount` by exactly 1; registering with no `clubId` at
+  all has zero side effects on any club; and registering with a `clubId`
+  that doesn't reference a real club fails the whole request with 404
+  **and** creates no `User` row for that email — the direct proof that
+  `RegistrationService.register()` validates the club *before* committing
+  the `User` row, not after (see `auth/README.md`'s matching entry for
+  why that ordering matters).
+- `account-lifecycle.e2e-spec.ts` (added by
+  `sprint-1/f5-f6-missing-endpoints`) — the task brief's own required
+  minimum e2e coverage: deactivate → login fails (with a distinct
+  message) → reactivate → login succeeds, against real Postgres, plus a
+  real change-password argon2id round trip and the
+  delete-account/`pending_deletion` self-service-undo exclusion. Two
+  `describe` blocks, **each with its own app instance** (a deliberate
+  departure from most other files in this directory, which share one app
+  per file) — `login`/`reactivate-account` are both `@AuthRateLimit()`-
+  decorated and share one `'auth'` named-throttler bucket (5 requests/60s
+  default), so this file budgets its real HTTP calls to those two routes
+  carefully per block, and giving each block its own app instance gets it
+  its own fresh, independent in-memory `AuthThrottlerGuard` bucket rather
+  than accumulating calls across the whole file. `change-password`/
+  `deactivate-account`/`delete-account` carry no `@AuthRateLimit()` at all
+  (`JwtAuthGuard` only), so calls to those three are unlimited within a
+  test. Where an access token is needed purely to call a
+  `JwtAuthGuard`-protected route (not to prove login itself works), it's
+  minted directly via the app's own real `TokenService`
+  (`app.get(TokenService)`) rather than a real HTTP `/auth/login` call —
+  the same "don't spend real HTTP budget on setup, only on what's
+  actually under test" principle
+  `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`'s own `createUser()`
+  helpers already established for `POST /auth/register`'s rate limit,
+  applied here for `login`'s. `GET /auth/guardian-consent/status`
+  deliberately has **no** e2e coverage — see `auth/README.md`'s matching
+  entry for why (a plain Prisma read, none of the three e2e-worthy
+  categories this file's own guiding principle above lists apply).
+- `admin-auth-isolation.e2e-spec.ts` (added by
+  `sprint-2/admin-console-account-entity`, Decision Log #54) — a fourth
+  reason to add an e2e spec, alongside this file's own three-item guiding
+  principle above: proving a security property that depends on the whole,
+  really-bootstrapped app, not just one class in isolation. Confirms,
+  against a real, single `AppModule` instance and real Postgres/Redis:
+  `AdminAuthFoundationModule`'s and `AuthFoundationModule`'s two
+  independently-configured `JwtService` instances (`ADMIN_JWT_SECRET` vs
+  `JWT_SECRET`) and two disjoint-Redis-namespace refresh-token stores
+  (`admin:refresh:*` vs `auth:refresh:*`) genuinely cannot validate/
+  consume each other's tokens — a real User access token is rejected by
+  every `AdminJwtAuthGuard`-protected route, a real admin access token is
+  rejected by `JwtAuthGuard`-protected User routes, and a real refresh
+  token from either side is rejected by the other side's `/refresh`
+  endpoint. Also covers the full admin login → profile view/edit →
+  change-password → other-sessions-revoked round trip, generic-message
+  login rejection (unknown email / wrong password / deactivated account),
+  and a real unique-email constraint violation on `AdminUser`. Three
+  `describe` blocks, each with its own app instance — the same
+  `account-lifecycle.e2e-spec.ts` precedent (see that file's own
+  bullet above) for budgeting real HTTP calls to the
+  `@AuthRateLimit()`-decorated `/admin/auth/login` route across a shared
+  in-memory `AuthThrottlerGuard` bucket. The cross-authentication block
+  spends **zero** real HTTP calls on any rate-limited route at all —
+  every token it needs is minted directly via `app.get(AdminTokenService)`/
+  `app.get(TokenService)`, since the guard behavior under test there
+  doesn't depend on login/register themselves. See `modules/admin/
+  README.md` for the full architecture writeup this spec proves.
+
+- `banter.e2e-spec.ts` (added by `sprint-3/banter-rooms-backend`,
+  Decision Log #275) — Build Plan Section 4.4 (Banter Rooms half). Hits
+  guiding-principle triggers #2 (transaction reasoning) and #3 (a
+  genuinely new Prisma relation/constraint): the new `BanterRoomMember`
+  model, its `@@unique([userId, banterRoomId])`, and its
+  `onDelete: Cascade` FKs — never run against a real Postgres before this
+  PR. Proves against a live database: `BanterRoom.memberCount`
+  incremented/decremented transactionally alongside the member row and
+  never drifting or going negative across a real
+  `join → join → leave → leave → join` cycle (verified against both the
+  cached counter and `BanterRoomMember.count()`); a genuine concurrent
+  double-join (`Promise.all`) landing exactly one row and `memberCount`
+  incremented exactly once; the real `GuardianConsentGuard` blocking a
+  restricted-pending minor from creating/joining/posting while still
+  letting them browse and read room feeds; `POST /banter-rooms/:id/posts`
+  → `FeedService.createPost` writing a real `Post.banterRoomId` that the
+  room feed (`GET /banter-rooms/:id/posts`) reads (a column
+  `GET /posts/feed` deliberately never touches); the non-member 403 on
+  posting; and a real `User` hard-delete cascading `BanterRoomMember`
+  rows away (the DL #44 operation `AccountDeletionSweepService`
+  performs). Users are seeded directly via Prisma + a real
+  `TokenService`-minted token (`createUser` / `createRestrictedMinor`) —
+  a speed choice, not a rate-limit workaround (no Banter route carries
+  `@AuthRateLimit()`); every request still exercises the real
+  `JwtAuthGuard` → `TokenService.verifyAccessToken` and, for writes, the
+  real `GuardianConsentGuard`. The mocked unit suite
+  (`src/modules/banter/*.spec.ts`) covers the DTO validation, guard
+  wiring, route ordering (`/search`, `/mine` not shadowed by `/:id`), and
+  the P2002/P2025 idempotency branches.
+- `post-view-tracking.e2e-spec.ts` (added by `sprint-4/post-view-tracking`)
+  — `POST /posts/:id/view`. Hits guiding-principle trigger #3 (a genuinely
+  novel Prisma constraint): `PostView.@@unique([viewerId, postId])` is
+  nullable on `viewerId`, and the entire "logged-in is deduplicated,
+  anonymous isn't" design rests on Postgres's real NULL-is-never-equal-to-
+  NULL unique-index semantics — exactly the kind of thing a mock's own
+  bookkeeping can't prove, since a mock would happily "enforce" uniqueness
+  on two `null` values a real unique index never would. Proves against a
+  live database: a logged-in caller's repeated view is genuinely
+  idempotent (exactly one `PostView` row, `Post.viewCount` +1 not +2); two
+  DIFFERENT anonymous calls against the SAME post both succeed as
+  DISTINCT rows and `Post.viewCount` increments on each one (the specific
+  behavior that could only be confirmed against a real unique index, not
+  assumed); a genuine concurrent double-view from the same logged-in user
+  (`Promise.all`) lands exactly one row and increments `viewCount`
+  exactly once; and a real 404 for a non-existent `postId`. The mocked
+  unit suite (`feed.service.spec.ts`'s `recordView` block,
+  `feed.controller.http.spec.ts`'s `POST /posts/:id/view` block, and
+  `optional-jwt-auth.guard.spec.ts`) covers the guard's own
+  anonymous/invalid-token/valid-token branching and the service's
+  P2002-catch/error-rethrow logic.
+
+**A real, discovered gap, not a production bug when found — flagged then,
+now fixed at the source but the test workaround itself deliberately
+left in place:** writing `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/
+`counters.e2e-spec.ts` against real `POST /auth/register` (the same
+`registerAndLogin()` pattern `auth.e2e-spec.ts`/`clubs.e2e-spec.ts` use)
+hit real 429s from `AuthThrottlerGuard` well before those files' own tests
+finished — each of these three files' coverage genuinely needs more than
+5 distinct users across one spec file's real HTTP traffic. Investigating
+found that `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
+(`rate-limit.module.ts`'s env-driven module-level throttler config) were
+**not actually consulted** by any of the four routes that apply
+`@AuthRateLimit()` (`register`, `login`, `forgot-password`,
+`guardian-consent/resend`): every call site invoked the decorator with no
+arguments, so its own hardcoded imported defaults
+(`DEFAULT_AUTH_RATE_LIMIT = 5`, `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS =
+60_000`) won at the route level regardless of what the module-level
+config said — an env var that looked configurable but had zero effect on
+any decorated route.
+
+**RESOLVED (branch `sprint-2/fix-auth-rate-limit-config-wiring`):**
+`AuthRateLimit()` no longer applies those defaults as its own default
+parameters; a bare `@AuthRateLimit()` now applies only the guard, so
+`AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS` genuinely control every
+real call site — proven behaviorally (not just "it compiles") by
+`rate-limit/auth-rate-limit.decorator.spec.ts`, which wires the real
+guard through the real `AuthRateLimitModule` and shows a bare
+`@AuthRateLimit()` route respecting a non-default configured limit, and
+separately falling back to the hardcoded defaults when the env vars are
+unset. **That fix does not, by itself, make switching these three files
+over to real HTTP registration free** — `.env.test` still has no
+`AUTH_RATE_LIMIT_MAX` override, so the effective default stays 5/60s, and
+`feed-reactions.e2e-spec.ts` alone calls its `createUser()` helper 32
+times as of `sprint-2/comment-delete`'s new comment-deletion coverage (up
+from 21 at the time this paragraph was first written — directly
+re-counted via grep, not estimated; `follow.e2e-spec.ts`/
+`counters.e2e-spec.ts` are 12/2 respectively by the same direct count, for
+a genuinely re-measured 46 total across all three files, not the
+previously-stated 37 — see this file's own drift caveat elsewhere in
+`CLAUDE.md`). Doing this properly would mean adding a test-specific
+rate-limit override plus converting every call site to real register/login
+HTTP traffic, each paying real argon2id hashing cost — judged a larger,
+separate change than the rate-limit fix PR's own scope, and deliberately
+left as a documented, tracked follow-up rather than done silently
+alongside the fix. The workaround below remains
+correct and intentional, not a symptom of the (now-fixed) bug: these
+three files seed their `User` rows directly via Prisma (the same "seed
+directly via Prisma" precedent `clubs.e2e-spec.ts` already set for
+`ClubPage`) and mint a real access token via the real, unmocked
+`TokenService` pulled from the test's own NestJS DI container
+(`app.get(TokenService)`) rather than going through `POST /auth/register`
+— every downstream request in these files still exercises the real
+`JwtAuthGuard` → `TokenService.verifyAccessToken` chain end to end; only
+register's own HTTP/rate-limiter/argon2id path is bypassed, and that path
+is already fully covered by `auth.e2e-spec.ts`. See each file's own
+`createUser()` helper comment for the full writeup.
+
+**Everything else remains e2e-uncovered — an intentionally deferred
+backlog item, not a gap this PR claims to close.** In particular:
+pagination/field-shape coverage for `GET /posts/feed`, `GET
+/posts/:id/comments`, and `GET /clubs` remains deliberately out of scope
+here (ordinary list/read logic is the mocked unit suite's job, per the
+guiding principle above); `GET /posts/:id` itself; and every other
+endpoint in `auth/` (refresh, logout, forgot/reset-password,
+guardian-consent — including its new `GET .../status` route, see
+`account-lifecycle.e2e-spec.ts`'s own bullet above for why, verify-email)
+still has mocked-Prisma coverage only. `sprint-1/f5-f6-missing-endpoints`
+added real e2e coverage for `login`/`change-password`/
+`deactivate-account`/`delete-account`/`reactivate-account` specifically
+(`account-lifecycle.e2e-spec.ts`, above) — those five are no longer in
+this "mocked-Prisma coverage only" list.
+Whoever next touches raw SQL, transaction reasoning, or a novel Prisma
+relation/constraint in one of those areas should add a sibling
+`*.e2e-spec.ts` here, per the guiding principle above — not treat this PR
+as having already covered them.
+
+- **`post-media.e2e-spec.ts`** (backend/w14-post-media-pipeline, B-041/B-036) — the user post and
+  contest-entry media pipeline against real Postgres: the one-time upload link, confirm (magic bytes,
+  size, duration, metadata stripping, quarantine original deleted, public prefix written), the three
+  Rekognition outcomes with the adult/minor thresholds, retry/back-off/give-up and "never approved by
+  default", the "visible to the author only until every file is approved" gate across every read
+  path, attaching rules, post deletion and account anonymisation deleting the objects, the 24 h
+  quarantine purge, and the contest final entry taking a video `mediaId`. The three external seams
+  are in-memory doubles in `test/support/post-media-doubles.ts` (an object store, Rekognition and the
+  ffmpeg video tools); images still go through the REAL sharp, so EXIF stripping is proven for real.
+  The fake clock (`APP_CLOCK`) is why the throttle window and the purge are exact: the service writes
+  `PostMedia.createdAt` from the app clock, not the database's `now()`.
+
+- **`rejected-media-deletion.e2e-spec.ts`** (backend/b283-delete-rejected-media, B-283) — a REJECTED
+  post-media file's private object is deleted on every path that removes its row, against real Postgres
+  and the in-memory object store: `DELETE /posts/:id`, `DELETE /media/uploads/:id`, the unattached and
+  quarantine purges, account anonymisation and the account purge. Each path is also proven to KEEP the
+  object (and write a `PostMediaDeferredDeletion` record in the same transaction) when the uploader has an
+  active admin hold or the post has a report not yet closed, and the daily sweep is proven to finish the
+  job once the hold is lifted or the report closes. The stray sweep (objects with no row) is proven to
+  delete only objects older than the minimum age, never one with a row, a deferral record or a held
+  uploader, to report a missing list permission instead of crashing, and to be idempotent over several
+  pages. The store double (`InMemoryStorage`) gained `listObjects`, `modified` and `listNotPermitted`.
+
+## Running locally
+
+1. `docker compose up -d` (repo root) — real local Postgres + Redis.
+2. `cp .env.test.example .env.test` at the **repo root** (sibling of
+   `.env.example`/`.env`), if `.env.test` doesn't already exist.
+   `.env.test.example` now ships both `DATABASE_URL` (pointed at a
+   separate `soccernity_test` database, not your dev `soccernity` one) and
+   `JWT_SECRET` (an obviously-fake test value) — see its own comment for
+   why `JWT_SECRET` is there explicitly rather than assumed. Everything
+   else the app reads (`REDIS_URL`, `EMAIL_PROVIDER_API_KEY`, `SENTRY_DSN`,
+   the various `*_TTL_*` overrides) is genuinely safe to omit and falls
+   back to your existing root `.env` / code-level defaults, same as normal
+   dev. See `test/env.ts`'s comment for exactly how the two files layer
+   together.
+3. `npm run test:e2e` (from `services/api/`, or `npm run test:e2e
+   --workspace=services/api` from the repo root).
+
+### A real bug this layer's own first CI run caught (and fixed)
+
+The paragraph above used to read "only `DATABASE_URL` needs a
+test-specific value — everything else, including `JWT_SECRET`, is safe to
+share with local dev." That was **wrong**, not just imprecise: it was only
+ever true on a machine that already happened to have a real `JWT_SECRET`
+sitting in a long-lived local root `.env`, left over from early dev-server
+setup. `services/api/src/modules/auth/auth-foundation.module.ts`'s
+`JwtModule.registerAsync` reads `JWT_SECRET` via `ConfigService` with no
+fallback; as long as nothing ever called a real `jwtService.sign()`/
+`.verify()` through a genuinely bootstrapped `AppModule`, that gap was
+invisible — every pre-existing test in `src/**/*.spec.ts` mocks
+`PrismaService` and, more importantly, most also mock or never exercise
+`TokenService` end to end. This e2e layer was the first thing in the repo
+to actually do that, and PR #59's own first real GitHub Actions run of
+"Run e2e tests" failed immediately with:
+
+```
+Error: secretOrPrivateKey must have a value
+    at TokenService.signAccessToken (...)
+```
+
+`ci.yml` only ever set `DATABASE_URL`/`REDIS_URL` as job-level env vars,
+no `.env.test` file exists in CI (gitignored, never committed, never
+generated by any CI step), and `.env.test.example` at the time only
+declared `DATABASE_URL` — so `ConfigService.get('JWT_SECRET')` resolved to
+`undefined` the moment CI ran this suite for real, something no local run
+had ever surfaced because of the developer's pre-existing `.env`.
+
+**Fix:** `JWT_SECRET` is now a job-level env var in `ci.yml` (an
+obviously-fake, test-only value — never a real deployment secret) and is
+also in `.env.test.example`, so a fresh clone with no pre-existing local
+`.env` gets a working, genuinely self-contained e2e layer too. Nothing in
+`token.service.ts` or `auth-foundation.module.ts` changed — a real
+deployment missing `JWT_SECRET` still fails loudly exactly as before; the
+fix is entirely test/CI configuration, not a weakening of real signing
+logic. See `.env.test.example`'s and `test/env.ts`'s own comments for the
+corrected, permanent framing of which config keys are genuinely optional
+(code-level default, or an explicit graceful "not configured" no-op — see
+`src/instrument.ts` and the two Postmark email services for that pattern)
+versus required with no fallback (currently just `JWT_SECRET`).
+
+The first run creates the `soccernity_test` database and applies every
+Prisma migration to it automatically (`test/global-setup.ts`) — no manual
+`createdb` or `prisma migrate deploy` step required. This is genuinely
+idempotent: running `npm run test:e2e` again does not error on "database
+already exists," it just reuses it (verified directly — see the PR
+report).
+
+## How this resolves in CI vs. local dev, without any environment-specific
+## branching in test code
+
+`ci.yml`'s Postgres service container is created with `POSTGRES_DB:
+soccernity_test` already, and `DATABASE_URL`/`REDIS_URL`/`JWT_SECRET` are
+already real job-level env vars before `npm run test:e2e` runs (the
+`JWT_SECRET` entry was added by the PR #59 CI-failure fix documented
+above — it was missing here for this PR's own first real CI run) — no
+`.env.test` file exists in CI at all (only the committed
+`.env.test.example`, which now also declares a test-only `JWT_SECRET`).
+`test/global-setup.ts` and `test/load-env.ts` (via `test/env.ts`) run the
+exact same code regardless: they always attempt to load `.env.test` from
+the repo root via `dotenv`. In CI that load is a silent no-op (file
+doesn't exist, and `DATABASE_URL`/`JWT_SECRET` are already set —
+`dotenv.config()` never overrides an existing `process.env` value by
+default); locally it's the thing that actually sets both, once a
+developer has run `cp .env.test.example .env.test`. Same code path, two
+different starting states — see `env.ts`'s own comment for the full
+reasoning. Every other config key the app reads is unaffected by any of
+this: it either has a code-level default or degrades to an explicit
+"not configured" no-op regardless of which environment is running, so it
+never needed to be listed as a job-level env var or a `.env.test.example`
+entry in the first place.
+
+## `test/reset-database.ts`
+
+Called in `beforeEach` of every e2e spec (not `beforeAll`), so each test
+starts from a fully empty, isolated database — not just each spec file.
+Truncates every real table in the `public` schema, discovered by querying
+Postgres's own `pg_catalog` directly rather than trusting Prisma's DMMF or
+a hand-maintained list. This is deliberate, not incidental: DMMF only
+reflects `model`-declared entities in `schema.prisma` — it does **not**
+include implicit many-to-many join tables like `_ClubMembership`, which
+exist only in the real migration history. Since this whole PR exists
+because `_ClubMembership` had never been exercised against a real
+database, a reset helper that silently excluded it from truncation would
+undermine the exact isolation this PR is trying to provide. Querying
+`pg_catalog` stays correct automatically as new models/relations are
+added later, with no update needed here.
+
+## B-305 -- session-revocation marker (`test/session-revocation.e2e-spec.ts`)
+
+Real Postgres and Redis. Covers: suspending a user through the admin route (earlier access token 401 at once,
+reinstate + new login works), changing the password (the access token used for the change is refused, the new
+password logs in), removing an admin (deactivation) refusing that admin's earlier token while other admins are
+untouched, and the marker's real key and TTL in Redis. Because `iat` and the marker are whole seconds and a token issued
+in the same second just before a revocation is not refused (the documented one-second edge), every test that revokes and
+then expects a 401 waits for the next whole second after issuing the token (`nextSecond()`).

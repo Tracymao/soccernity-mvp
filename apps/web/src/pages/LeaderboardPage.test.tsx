@@ -1,0 +1,445 @@
+// Follows ClubsPage.test.tsx / CommunityPage.test.tsx's pattern -- plain
+// DOM assertions, mocks src/api/clubs.ts rather than hitting the network,
+// session seeded directly into the in-memory session store. The Overall board is real
+// (api/leaderboard.ts, mocked here); the Competition board is still local
+// illustrative content (leaderboardData.ts).
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import LeaderboardPage from "./LeaderboardPage";
+import type { ClubSummary } from "../api/clubs";
+
+vi.mock("../api/clubs", async () => {
+  const actual = await vi.importActual<typeof import("../api/clubs")>("../api/clubs");
+  return {
+    ...actual,
+    listClubs: vi.fn(),
+  };
+});
+
+vi.mock("../api/leaderboard", async () => {
+  const actual = await vi.importActual<typeof import("../api/leaderboard")>("../api/leaderboard");
+  return {
+    ...actual,
+    getLeaderboard: vi.fn(),
+  };
+});
+
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return {
+    ...actual,
+    getUser: vi.fn(),
+  };
+});
+
+import { getUser } from "../api/users";
+import type { UserProfile } from "../api/users";
+
+function profileWithRepresented(club: { id: string; name: string } | null): UserProfile {
+  return {
+    id: "user-1",
+    email: "fan@example.com",
+    phone: null,
+    displayName: "Fan",
+    username: null,
+    publicName: "Fan",
+    dateOfBirth: "1998-07-04",
+    isMinor: false,
+    role: "fan",
+    verificationStatus: "unverified",
+    profileComplete: true,
+    guardianConsentStatus: "not_applicable",
+    nextStep: "none",
+    createdAt: new Date().toISOString(),
+    clubAffiliationId: null,
+    isTeamOrganiser: false,
+    representedClub: club,
+    bio: null,
+    preferredClub: null,
+    profileCountry: null,
+    avatar: null,
+    cover: null,
+  };
+}
+
+vi.mock("../api/contest", async () => {
+  const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
+  return {
+    ...actual,
+    getCurrentContest: vi.fn(),
+  };
+});
+
+import { listClubs } from "../api/clubs";
+import { getCurrentContest } from "../api/contest";
+import { getLeaderboard } from "../api/leaderboard";
+import type { LeaderboardPage as LeaderboardPageData } from "../api/leaderboard";
+import type { CurrentContestResponse } from "../api/contest";
+import { openContest } from "./contest/contestFixtures";
+import { seedSession, clearSession } from "../test/session";
+
+function contestResponse(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
+  return openContest({
+    weeklyWinners: [
+      { weekNumber: 1, position: 1, userId: "u1", publicName: "Emeka John", entryId: "e1", postId: "p1" },
+      { weekNumber: 1, position: 2, userId: "u2", publicName: "Chukwu James", entryId: "e2", postId: "p2" },
+    ],
+    ...overrides,
+  });
+}
+
+const LB_PAGE: LeaderboardPageData = {
+  items: [
+    { userId: "u1", publicName: "Emeka John", points: 4860, rank: 1 },
+    { userId: "u2", publicName: "Chukwu James", points: 4512, rank: 2 },
+    { userId: "user-1", publicName: "Adeniyi Christiana", points: 3102, rank: 3 },
+  ],
+  nextCursor: null,
+};
+
+function base64UrlEncode(value: object): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function fakeAccessToken(sub = "user-1"): string {
+  return `${base64UrlEncode({ alg: "none" })}.${base64UrlEncode({ sub, role: "fan" })}.sig`;
+}
+
+const IKOYI: ClubSummary = {
+  id: "club-ikoyi",
+  name: "Ikoyi Rovers FC",
+  league: "Lagos Sunday League",
+  country: "Nigeria",
+  logoUrl: null,
+  memberCount: 40,
+  joined: true,
+};
+
+const PORT_HARCOURT: ClubSummary = {
+  id: "club-ph",
+  name: "Port Harcourt Blues",
+  league: null,
+  country: null,
+  logoUrl: null,
+  memberCount: 12,
+  joined: true,
+};
+
+const NOT_JOINED: ClubSummary = {
+  id: "club-other",
+  name: "Yaba Athletic",
+  league: null,
+  country: null,
+  logoUrl: null,
+  memberCount: 5,
+  joined: false,
+};
+
+afterEach(cleanup);
+beforeEach(() => {
+  clearSession();
+  vi.mocked(listClubs).mockReset();
+  vi.mocked(getCurrentContest).mockReset();
+  vi.mocked(getCurrentContest).mockResolvedValue(contestResponse());
+  vi.mocked(getLeaderboard).mockReset();
+  vi.mocked(getLeaderboard).mockResolvedValue(LB_PAGE);
+  vi.mocked(getUser).mockReset();
+  vi.mocked(getUser).mockResolvedValue(profileWithRepresented(null));
+});
+
+function renderPage(path = "/leaderboard") {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <LeaderboardPage />
+    </MemoryRouter>,
+  );
+}
+
+describe("LeaderboardPage", () => {
+  it("shows a log-in prompt and never calls GET /clubs with no session", () => {
+    renderPage();
+    expect(screen.getByText(/log in to see the leaderboard/i)).not.toBeNull();
+    expect(listClubs).not.toHaveBeenCalled();
+  });
+
+  it("shows points as whole numbers, equal for two ranks that differ on the exact total, with the note that says so (#383)", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockResolvedValue({
+      items: [
+        { userId: "u1", publicName: "Ada Eze", points: 3318, rank: 5 },
+        { userId: "u2", publicName: "Ben Okoro", points: 3318, rank: 6 },
+        // A fraction would be a server bug, but the screen must still never print one.
+        { userId: "u3", publicName: "Cid Musa", points: 1204.25, rank: 7 },
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    await screen.findByText("Ada Eze");
+    expect(screen.getAllByText("3,318")).toHaveLength(2);
+    expect(screen.getByText("1,204")).not.toBeNull();
+    expect(screen.queryByText(/\.\d/)).toBeNull();
+    // Both rows keep their own rank: the display rounds, the ranking does not.
+    const rows = screen.getAllByRole("row");
+    expect(within(rows[1]).getByText("5")).not.toBeNull();
+    expect(within(rows[2]).getByText("6")).not.toBeNull();
+    expect(screen.getByTestId("rounded-points-note").textContent).toMatch(
+      /rounded to the nearest whole number.*Ranking uses the exact total/,
+    );
+  });
+
+  it("renders the Overall board from GET /leaderboard once a session exists", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
+
+    renderPage();
+
+    expect(await screen.findByText("Emeka John")).not.toBeNull();
+    expect(screen.getByText("Adeniyi Christiana")).not.toBeNull();
+    expect(screen.getByText("4,860")).not.toBeNull();
+    expect(screen.getByText("You")).not.toBeNull(); // the caller's own row (sub === userId)
+    expect(listClubs).toHaveBeenCalledWith(expect.any(String));
+    expect(getLeaderboard).toHaveBeenCalled();
+    // B-053: the endpoint now carries a club and a 7-day change per row, so both columns are drawn (desktop).
+    expect(screen.getByRole("columnheader", { name: "Club" })).not.toBeNull();
+    expect(screen.getByRole("columnheader", { name: "7-day change" })).not.toBeNull();
+  });
+
+  it("shows an empty state when the current week has no ranked players", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockResolvedValue({ items: [], nextCursor: null });
+
+    renderPage();
+
+    // Figma 5542:7344 empty-state card ("No ranked players here yet").
+    expect(await screen.findByText(/no ranked players here yet/i)).not.toBeNull();
+  });
+
+  it("degrades to an inline message (page still renders) if GET /leaderboard fails", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockRejectedValue(new Error("boom"));
+
+    renderPage();
+
+    expect(await screen.findByText(/couldn.t load the leaderboard right now/i)).not.toBeNull();
+    // The other boards are unaffected.
+    fireEvent.click(screen.getByRole("tab", { name: "Contest" }));
+    expect(await screen.findByText("Chukwu James")).not.toBeNull();
+  });
+
+  it("appends the next page on Load more, using the cursor", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard)
+      .mockResolvedValueOnce({ items: LB_PAGE.items, nextCursor: "cur-2" })
+      .mockResolvedValueOnce({ items: [{ userId: "u9", publicName: "Musa Ibrahim", points: 900, rank: 4 }], nextCursor: null });
+
+    renderPage();
+    await screen.findByText("Emeka John");
+    expect(screen.queryByText("Musa Ibrahim")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Musa Ibrahim")).not.toBeNull();
+    expect(screen.getByText("Emeka John")).not.toBeNull(); // first page kept
+    expect(getLeaderboard).toHaveBeenLastCalledWith(expect.any(String), { cursor: "cur-2" });
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // no more pages
+  });
+
+  it("disables By club on the Overall board, with a reason, when the caller represents no club", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
+
+    renderPage();
+    await screen.findByText("Emeka John");
+
+    const byClub = screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement;
+    expect(byClub.disabled).toBe(true);
+    expect(byClub.title).toMatch(/choose a club to represent/i);
+    // B-053: All-time is available on the Overall board now.
+    expect((screen.getByRole("radio", { name: "All-time" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/you don.t represent a club yet/i)).not.toBeNull();
+    expect((screen.getByLabelText("Club") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("enables By club on the Overall board for the represented club and requests that club's board", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: IKOYI.id, name: IKOYI.name }));
+
+    renderPage();
+    await screen.findByText("Emeka John");
+
+    expect((screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("radio", { name: "By club" }));
+
+    await waitFor(() =>
+      expect(getLeaderboard).toHaveBeenLastCalledWith(expect.any(String), { clubId: IKOYI.id }),
+    );
+    expect(screen.queryByText(/you don.t represent a club yet/i)).toBeNull();
+  });
+
+  it("switches to the Contest tab and shows the real weekly winners from GET /contest/current", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage();
+    await screen.findByText("Adeniyi Christiana"); // an Overall-only row
+
+    fireEvent.click(screen.getByRole("tab", { name: "Contest" }));
+
+    // Overall-only rows gone; real weekly winners shown.
+    expect(screen.queryByText("Adeniyi Christiana")).toBeNull();
+    expect(screen.getByText("Chukwu James")).not.toBeNull();
+    expect(screen.getAllByText(/Week 1/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/view this week.s contest/i).length).toBeGreaterThan(0);
+  });
+
+  it("deep-links straight to the Contest tab with ?tab=contest", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText("Chukwu James")).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Contest" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("shows the crowned monthly standings when the contest is completed", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      contestResponse({
+        phase: "crowned",
+        calendarState: { kind: "completed", endedAt: "2026-10-01T00:00:00.000Z" },
+        finalOutcome: "winners",
+        isAcceptingEntries: false,
+        monthlyStandings: [
+          { position: 1, userId: "u1", publicName: "Emeka John" },
+          { position: 2, userId: "u2", publicName: "Chukwu James" },
+        ],
+      }),
+    );
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText(/monthly winners decided/i)).not.toBeNull();
+    expect(screen.getByText(/1st.*Monthly winner/)).not.toBeNull();
+  });
+
+  it("shows a vacant state when a contest is running but no round has been judged yet", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      contestResponse({ phase: "vacant", weeklyWinners: [], rounds: [] }),
+    );
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText(/first weekly round is running now/i)).not.toBeNull();
+  });
+
+  it("switches to the Competition tab and toggles between Prediction and Commentary", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage();
+    await screen.findByText("Emeka John");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Competition" }));
+
+    expect(await screen.findByText("Abdul Yusuf")).not.toBeNull();
+    expect(screen.getByText("94% accuracy")).not.toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Accuracy" })).not.toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/competition type/i), { target: { value: "commentary" } });
+
+    expect(await screen.findByText("Blessing Ade")).not.toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Votes" })).not.toBeNull();
+  });
+
+  it("populates the CLUB filter from real GET /clubs joined memberships (usable on the Contest tab)", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    // Only the two `joined: true` clubs are real options -- NOT_JOINED is excluded.
+    // The "No represented club" placeholder appears too, since this caller has none.
+    const optionLabels = within(clubSelect)
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    expect(optionLabels).toEqual(["No represented club", "Ikoyi Rovers FC", "Port Harcourt Blues"]);
+
+    fireEvent.click(screen.getByRole("radio", { name: "By club" }));
+    expect(clubSelect.disabled).toBe(false);
+  });
+
+  it("pre-selects the caller's real represented club from GET /users/:id, not the first joined club", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: PORT_HARCOURT.id, name: PORT_HARCOURT.name }));
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(clubSelect.value).toBe(PORT_HARCOURT.id);
+    expect(within(clubSelect).queryByRole("option", { name: "No represented club" })).toBeNull();
+  });
+
+  it("shows a 'No represented club' placeholder when the caller has none, rather than silently selecting a joined club", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(clubSelect.value).toBe("");
+    expect(within(clubSelect).getByRole("option", { name: "No represented club" })).not.toBeNull();
+  });
+
+  it("shows a 'no clubs joined' message when By club is selected with zero real memberships (Contest tab)", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [NOT_JOINED], nextCursor: null });
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    fireEvent.click(screen.getByRole("radio", { name: "By club" }));
+
+    expect(await screen.findByText(/haven.t joined a club yet/i)).not.toBeNull();
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(clubSelect.disabled).toBe(true);
+  });
+
+  it("still renders the board (Global scope) if GET /clubs fails", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockRejectedValueOnce(new Error("network down"));
+
+    renderPage();
+
+    expect(await screen.findByText("Emeka John")).not.toBeNull();
+  });
+
+  it("switches time period without crashing (Contest tab, where it is enabled)", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Weekly" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true"));
+  });
+});

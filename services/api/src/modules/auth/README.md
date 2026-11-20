@@ -2,4 +2,1757 @@
 
 Build target: Sprint 1 — Section 4.1 of the MVP Build Plan.
 Endpoints for this module: see the matching subsection of Build Plan Section 4.
-Not yet implemented — this is a placeholder so the sprint owner is visible in the file tree.
+
+## Status
+
+**PR B1 (infrastructure) — done.** This module exports the pieces the
+register/login/refresh/logout endpoints consume, per Section 5.7's
+concrete auth spec:
+
+- `password/password.service.ts` — argon2id hash/verify (via the `argon2`
+  package).
+- `token/token.service.ts` — short-lived access JWT (15 min, `{ sub, role
+  }` payload only — see the non-negotiable note in `token/token.types.ts`)
+  + rotating, revocable refresh token.
+- `token/refresh-token.store.ts` — Redis-backed refresh-token persistence.
+  **No `RefreshToken` (or equivalent) Prisma model exists in
+  `prisma/schema.prisma`.** Section 5.7 allows either "a RefreshToken
+  table or Redis set" — this PR used Redis rather than adding a migration
+  unilaterally in an infra PR. If a durable table is later decided (e.g.
+  for audit/appeals-workflow querying per Section 8.4), that's a Decision
+  Log / schema-change candidate, and `refresh-token.store.ts` is the one
+  place the swap needs to happen.
+- `rate-limit/` — `AuthThrottlerGuard` + `@AuthRateLimit()` decorator
+  (via `@nestjs/throttler`), ready to attach to the `/auth/login` and
+  `/auth/register` handlers once they exist:
+
+  ```ts
+  @AuthRateLimit()
+  @Post('login')
+  login(@Body() dto: LoginDto) { ... }
+  ```
+
+- `auth-foundation.module.ts` — the module B2-B4's real `AuthModule`(s)
+  should import to get all of the above via DI.
+
+No controllers, no DTOs, no wiring into `app.module.ts` yet — that's what
+makes this infra-only.
+
+## Update — Sprint 1 / PR B6 (users/profile) added the shared route guard
+
+`guards/jwt-auth.guard.ts` — `JwtAuthGuard`, the reusable "must have a
+valid access token" guard for every protected route in the app. Built in
+B6 because that's the first PR needing to protect a route (B2-B4 are all
+public/unauthenticated: register, login, forgot/reset-password). Later
+PRs (B5's guardian-consent endpoints, B7's enforcement pass, and every
+Sprint 2+ endpoint) should reuse this rather than re-implementing
+bearer-token parsing — see `guards/jwt-auth.guard.ts`'s doc comment and
+`services/api/src/modules/users/README.md` for the exact usage pattern.
+
+Registered as a provider + export on `AuthFoundationModule` alongside
+`PasswordService`/`TokenService`/`RefreshTokenStore` — any module that
+needs it imports `AuthFoundationModule`, the same way `UsersModule` does.
+Also added: `guards/current-user.decorator.ts` (`@CurrentUser()`, pulls
+the guard-verified `{ sub, role }` off the request) and
+`guards/authenticated-request.ts` (the `Request & { user: ... }` type).
+
+**PR B2 — `POST /auth/register`, `POST /auth/verify-email` — done.** See
+`registration/`. Deliberately its own module
+(`registration/registration.module.ts`, exported as
+`AuthRegistrationModule`) rather than a single shared `AuthModule`, so
+this PR didn't collide with B3/B4/B6 building the rest of Section 4.1's
+endpoints in parallel — see `registration/registration.module.ts`'s
+comment. `POST /auth/login`, `POST /auth/forgot-password`,
+`POST /auth/reset-password`, `POST /auth/guardian-consent`, `GET /auth/me`
+(also Section 4.1) are separate PRs, not covered here.
+
+Notable implementation notes for whoever builds those:
+
+- `registration/age.util.ts` computes `isMinor` as "not yet 18," per
+  Decision Log #8/#10 (the resolved under-18 threshold, not UK GDPR's
+  bare 13). Reuse this rather than reimplementing age math elsewhere.
+- `registration/email-verification/email-verification-token.store.ts` is
+  Redis-backed, following B1's `RefreshTokenStore` precedent, because no
+  email-verification-token field/model exists on `User` in
+  `prisma/schema.prisma` (Section 3 only lists `verification_status`).
+  Flagged as a Decision Log candidate in PR B2's report — durable/
+  audit-queryable storage would need a schema change.
+- `registration/email/registration-email.service.ts` is "wired, not
+  live" for both the verify-email and guardian-consent emails — same
+  honest pattern as Sentry's `src/instrument.ts`. `EMAIL_PROVIDER_API_KEY`
+  is still the `.env.example` placeholder, so sends are logged (with the
+  token, for dev/manual verification) rather than actually delivered.
+  Which real provider to wire is also a Decision Log candidate — none is
+  chosen anywhere in Sections 3/4/5/9.
+
+## Status update — PR B4 (`password-reset/`)
+
+Implements `POST /auth/forgot-password` and `POST /auth/reset-password`
+(Section 4.1), built on top of B1's foundation above. Concurrent with
+B2/B3/B6 in the same Sprint 1 parallel wave — see
+`password-reset.module.ts`'s doc comment for how `app.module.ts`'s single
+`// AuthModule` placeholder is being handled across all four PRs (each
+wires itself in directly; a normal merge-order conflict is expected and
+deliberately not architected around).
+
+- `reset-token.store.ts` — Redis-backed, single-use, time-limited
+  password-reset tokens. Same precedent as B1's `refresh-token.store.ts`:
+  **no `PasswordResetToken` (or equivalent) Prisma model exists**, and
+  Section 5.7 doesn't even mention a durable-table option for this token
+  type the way it does for refresh tokens. Rather than add a migration
+  unilaterally in this PR, this follows B1's Redis precedent.
+  **Decision Log candidate**: if an audit/appeals-workflow trail of
+  password-reset requests is ever needed (Section 8.4), a durable table
+  is the swap point — same flag B1 raised for refresh tokens.
+- `password-reset.service.ts` — anti-enumeration is enforced at the
+  service boundary (`forgotPassword()` never throws or otherwise signals
+  "not found"; the controller returns one fixed message regardless).
+  Revokes all of a user's refresh-token sessions on successful reset via
+  `TokenService.revokeAllSessionsForUser` (B1 already exposed this — no
+  parallel revocation mechanism was built).
+- `email/password-reset-email.service.ts` — "wired, not live," same
+  honest pattern as `src/instrument.ts` (Sentry, PR #8):
+  `EMAIL_PROVIDER_API_KEY` is still the `.env.example` placeholder, so
+  sending is logged/simulated, not delivered. The real provider call is a
+  single, clearly marked call site for whoever wires up the eventual
+  live integration.
+- **Decision Log candidate**: no password policy is specified anywhere in
+  Section 5.7 or Section 3. This PR applies a conservative 8-character
+  minimum to `/auth/reset-password` so the endpoint can't be used to set a
+  trivially weak password. If B2's `/auth/register` lands with a
+  different minimum, that mismatch needs reconciling at merge time — this
+  PR can't see B2's code yet.
+- **Small addition beyond spec**: `.env.example` gained `WEB_APP_BASE_URL`
+  (needed to build a real reset link inside the emailed URL) and
+  `RESET_TOKEN_TTL_MINUTES` is read with a 60-minute default — neither is
+  named in Section 3/4/5.7, which only pins TTLs for the access/refresh
+  token pair. Flagging both as Decision Log candidates rather than
+  treating them as self-evidently correct defaults.
+- No `class-validator`/`class-transformer` dependency was added, and no
+  global `ValidationPipe` exists in `main.ts` yet — this PR's DTOs
+  (`dto/forgot-password.dto.ts`, `dto/reset-password.dto.ts`) are plain
+  interfaces with hand-rolled shape checks in the controller, matching
+  B1's own preference for explicit code over a new dependency
+  mid-infra-PR. Adding real validation-decorator DTOs is a reasonable
+  follow-up, but `main.ts` is shared territory across B2/B3/B6 too.
+
+## Update — DTO validation cleanup
+
+The "reasonable follow-up" flagged above (and the equivalent note on
+`dto/login.dto.ts`/`dto/logout.dto.ts`/`dto/refresh.dto.ts`) is done: all
+five of `AuthController`'s and `PasswordResetController`'s DTOs
+(`login`, `logout`, `refresh`, `forgot-password`, `reset-password`) are
+now `class-validator` classes, matching `registration/dto/*`'s pattern,
+and are validated by `main.ts`'s global `ValidationPipe` (added in B6)
+like every other auth DTO. The hand-rolled `parseLoginDto`/
+`parseLogoutDto`/`parseRefreshDto` functions and each controller's
+manual `typeof`/regex checks are gone — the pipe is now the only
+validation layer. `PasswordResetService.resetPassword`'s own
+`MIN_PASSWORD_LENGTH` check was removed too, since `ResetPasswordDto`'s
+`@MinLength(8)` now enforces it before the service is ever called.
+
+One intentional behavior change: `LoginDto.email` is no longer
+trimmed/lowercased before reaching `AuthService.login` (the old
+`parseLoginDto` did this; plain `@IsEmail()` doesn't). This actually
+makes `/auth/login` *consistent* with `/auth/register`, which never
+normalized email case either (`RegistrationService.register` stores
+`dto.email` as-is) — so this closes a pre-existing register/login
+case-sensitivity mismatch rather than introducing a new one, but it's
+worth knowing about if a case-insensitive-email decision is made later
+(Decision Log candidate).
+
+## Status update — PR B5 (`guardian-consent/`)
+
+Implements `POST /auth/guardian-consent` (Section 4.1), the guardian-
+facing confirmation step B2's `RegistrationService.register()` and
+`registration/registration.controller.ts` both flagged as out of their
+own scope. Self-contained module (`guardian-consent/`, exported as
+`GuardianConsentModule`), following the same per-PR module boundary
+B2/B3/B4 established — no `AuthFoundationModule` import needed since
+this endpoint issues no tokens, just updates the `Guardian` row.
+
+- No `JwtAuthGuard` on this route — the guardian confirming consent is
+  not a Soccernity account holder; `Guardian.consentToken` (a
+  server-issued, unguessable UUID, created by `RegistrationService`) is
+  itself the credential, same trust model as `/auth/reset-password`'s
+  token.
+- Unlike `email-verification-token.store.ts`'s Redis-backed,
+  delete-on-consume token, `Guardian.consentToken` is a persistent
+  Prisma column (Section 3) — a guardian may legitimately click the
+  same email link twice. `GuardianConsentService.confirmConsent()`
+  mirrors the *single-use state transition* (pending → confirmed) but
+  not the delete-the-token part: an already-confirmed token still
+  resolves and returns 200 idempotently, without re-setting
+  `consentTimestamp` or erroring.
+- Invalid/unknown token → generic 400, matching
+  `RegistrationService`'s own non-enumeration posture (doesn't
+  distinguish "never existed" from "already used and since rotated").
+- The confirm write uses `prisma.guardian.updateMany()` with a
+  `consentStatus: { not: 'confirmed' }` guard in the `where` clause,
+  not a plain `update()` — closes the read-then-write race between the
+  existence check and the write, so two concurrent submissions of the
+  same token can't both flip `consentTimestamp`.
+- **Out of scope, same as B2 flagged this endpoint**: the guardian-
+  facing web page (Section 8.3 step 4's plain-language explanation +
+  "I consent" action) that would call this endpoint. That's a frontend
+  concern for a separate PR — this is only the API contract it calls.
+- Section 8.3 steps 5-6 (restricted-pending enforcement on other
+  endpoints while consent is outstanding, and account activation) are
+  B7, not this PR — `confirmConsent()` only flips `Guardian.consentStatus`;
+  it doesn't touch the minor `User` row at all.
+
+## Status update — PR B7 (`guards/guardian-consent.guard.ts`)
+
+Section 8.3 step 5, verbatim from the Build Plan: "Until consent is
+recorded, the minor's account exists but is restricted: no public
+profile visibility, no DMs from unverified accounts, no participation
+in Banter Rooms beyond read-only." `GuardianConsentGuard` is the
+enforcement mechanism — composable alongside `JwtAuthGuard`, not a
+replacement for it (always list `JwtAuthGuard` first in `@UseGuards()`
+so `request.user` exists first). Registered as a provider/export on
+`AuthFoundationModule`, same precedent as `JwtAuthGuard` itself (whose
+own header comment already named "B7's enforcement pass" as an
+intended consumer) — any future module protecting a route imports
+`AuthFoundationModule` to get both guards via DI. Added `PrismaService`
+to that module's providers too, since no other provider there needed
+Prisma before now.
+
+**On every request it protects**: re-reads `User.isMinor` fresh from
+Postgres (never trusts the access token, which structurally can't
+carry it — Section 5.7's non-negotiable). Non-minors pass through
+untouched, without even querying `Guardian`. For a minor, reads
+`Guardian.consentStatus` fresh (via `minorUserId`, `@unique`) and
+blocks with **403** unless it's exactly `"confirmed"` — a minor with no
+`Guardian` row at all (shouldn't happen given `RegistrationService`
+always creates one, but not guaranteed by a DB constraint) fails
+closed, not open. The 403 body carries a distinct `code:
+"guardian_consent_pending"` field, not just a generic message, so the
+frontend can render a "waiting on your guardian" state instead of
+treating this as an auth failure.
+
+**Explicitly NOT applied to `GET`/`PATCH /users/:id`** (B6) — Section
+8.3's restriction is about *other* users seeing/contacting the minor,
+not the minor managing their own account. A minor awaiting consent must
+still be able to view/edit their own profile. See
+`users/users.controller.http.spec.ts` for a dedicated regression test:
+it deliberately never provides `GuardianConsentGuard` (or its
+`PrismaService` dependency) to that controller's testing module at
+all, so if the guard were ever added to `UsersController` without also
+updating that test, module compilation itself fails, not just the
+assertion.
+
+**The central finding of this PR**: as of Sprint 1, none of Section
+8.3 step 5's three restricted behaviors have a real route to attach
+this guard to yet, so it isn't wired into `app.module.ts` or any
+controller anywhere:
+
+- **Public profile visibility** — `GET /users/:id/profile` (Section
+  4.2, the public-facing view of *another* user) is explicitly flagged
+  as out of scope in `users/users.controller.ts`'s own header comment;
+  only self-view/self-edit (`GET`/`PATCH /users/:id`) exist today, and
+  those are deliberately excluded above. Sprint 2's Follow work (Build
+  Plan Section 6) is the more likely place a real "view someone else's
+  profile" route lands.
+- **DMs from unverified accounts** — `src/modules/messaging/` is a
+  placeholder (`README.md` only, "Not yet implemented"), Sprint 3 per
+  Build Plan Section 6. **Flagging the wording itself as ambiguous**,
+  not just the missing implementation: Section 8.3 step 5 says "no DMs
+  *from* unverified accounts" (restricting who can message an
+  unverified/restricted-pending account), not "no DMs *sent by*" the
+  minor — it's not fully clear from this sentence alone whether a
+  pending minor should be blocked from *sending* DMs, *receiving* them,
+  or both, and whether "unverified" here means email-unverified
+  (`User.verificationStatus`) or restricted-pending specifically.
+  Whoever builds messaging in Sprint 3 should re-read this line in
+  context (and probably Log Book Section 10's fuller safeguarding
+  language) before wiring this guard in, rather than assume the
+  interpretation above.
+- **Banter Rooms beyond read-only** — `src/modules/banter/` is also
+  just a placeholder, Sprint 3.
+
+Per this PR's brief: none of these three endpoints are built as part
+of B7 — that would be scope creep into Sprint 2/3 work. The guard
+itself is fully built and tested in isolation
+(`guards/guardian-consent.guard.spec.ts`) so it's ready to attach the
+moment any of these routes exist; whoever builds them should import
+`AuthFoundationModule` and add `@UseGuards(JwtAuthGuard,
+GuardianConsentGuard)`.
+
+## Status update — Decision Log #16 (email case normalization)
+
+`registration.service.ts`'s `register()` and `auth.service.ts`'s
+`login()` both now normalize email to lowercase before touching
+Postgres — `register()` once, at the top (`const email =
+dto.email.toLowerCase()`), reused for both the duplicate-email check
+and the `User` row it creates; `login()` lowercases its `email`
+parameter before the `findUnique` call. Deliberately done at the
+service layer, not the DTO layer — `LoginDto`/`RegisterDto` stay plain
+`@IsEmail()` classes, so normalization applies the same way regardless
+of which controller path builds the DTO, rather than being tied to one
+call site's validation step. `Guardian.email` (the guardian's own
+address, a separate entity/field) is untouched — this decision item is
+about `User.email` matching, not guardian contact details.
+
+**Pre-existing rows caveat, not silently assumed away**: this is a
+write-time normalization, not a migration. Any `User` row created
+*before* this change that has a mixed-case email stays exactly as
+stored — Postgres's default `citext`-less text comparison is
+case-sensitive, so a pre-existing `"Temi@x.com"` row will not match a
+post-fix, lowercased `login()` lookup for `"temi@x.com"` unless that
+row is separately backfilled. This only matters if such rows actually
+exist in a real database; nothing in this codebase confirms or rules
+that out one way or the other. **Whether a backfill migration
+(`UPDATE "User" SET email = LOWER(email)`, plus checking for
+resulting duplicate-key collisions first) is worth a follow-up is
+flagged here, not built** — out of scope for this ticket per its own
+brief.
+
+## Status update — Decision Log #17 (Postmark wired, still not live)
+
+`registration/email/registration-email.service.ts` and
+`password-reset/email/password-reset-email.service.ts`'s live-send
+branches (previously `throw new Error('...no email provider
+integration exists yet...')`) now call Postmark's real Node client
+(`new ServerClient(apiKey)`, `.sendEmail(...)`) instead. The existing
+`isConfigured`/`isLive` gate — both booleans, checked against
+`EMAIL_PROVIDER_API_KEY` being unset or the literal `"replace-me"`
+placeholder — is untouched; this PR only replaces what happens once
+that gate is already true.
+
+- **Still not live as of this PR** — same as `src/instrument.ts`'s
+  Sentry DSN: `EMAIL_PROVIDER_API_KEY` is still the `.env.example`
+  placeholder, so `isConfigured`/`isLive` are still `false` in every
+  dev/test run and the code path that actually calls Postmark has
+  never executed against a real account. Creating the Postmark account
+  and swapping in a real server token is a human action (billing,
+  domain/DKIM verification) — this PR makes that swap the *only*
+  remaining step, it doesn't perform it.
+- Added `POSTMARK_FROM_EMAIL` to `.env.example` — Postmark requires the
+  sending address to belong to a domain verified (SPF/DKIM) in the
+  account, so this can't reuse an arbitrary address; it's a second
+  placeholder that needs a real, verified value alongside the API key.
+- No Postmark message templates exist yet (also account-side setup),
+  so both services build minimal inline HTML/text bodies rather than
+  calling `sendEmailWithTemplate`. The copy itself is functional, not
+  final consent-flow language — Section 8.3 step 4's actual
+  guardian-facing wording is safeguarding-drafter / legal-review
+  territory (CLAUDE.md non-negotiable #2), same as the DPIA.
+- A thrown/rejected Postmark call is caught and logged at the call
+  site itself, never propagated — both `RegistrationService` and
+  `PasswordResetService` already treat email sending as
+  fire-and-forget-with-logging (see their own `.catch()` sites), so a
+  Postmark outage must not fail registration or a password reset.
+- The live branch logs only send success/failure and Postmark's
+  `MessageID` — never the token, reset link, or other email content.
+  (The not-live branch keeps logging the raw token/link, unchanged —
+  that's deliberate dev/test-only behavior, not something this PR
+  weakens.)
+- `verify-email` and `guardian-consent` emails mention their token as
+  plain text, not a clickable link — unlike password-reset's real,
+  built `ResetPasswordPage` (`apps/web`), there is no real frontend
+  page yet for either (email verification has none at all;
+  `GuardianConsentPage.tsx` is an explicit route stub, "PR F5 replaces
+  this file's contents with the real, Figma-derived screen(s)"), so
+  this PR doesn't fabricate links to pages that don't exist.
+
+## Status update — DPIA finding R5 (consent token expiry + resend)
+
+`docs/sprint-1-dpia-outline-draft.md`'s R5 finding: `Guardian.consentToken`
+had no expiry and no single-use marker — a permanent credential granting
+the power to activate a child's account, sitting in an email inbox
+indefinitely. R5's own proposal (explicitly "not a decision," "no
+security analysis behind it") is a 72-hour token lifetime, invalidated
+on use where "use" means the window closing, with a resend path.
+Implemented as proposed, not re-litigated.
+
+- `Guardian.consentTokenExpiresAt` (new, `DateTime`, non-nullable) —
+  set at issuance (`RegistrationService.register()`) and re-issuance
+  (`resendConsent()` below) to now + 72 hours via
+  `guardian-consent/consent-token.constants.ts`'s
+  `computeConsentTokenExpiresAt()`. No separate `used`/`consumed`
+  boolean — `consentStatus` already distinguishes pending/confirmed,
+  and expiry is a distinct concern that applies *regardless* of
+  confirmation state (a confirmed guardian's token becomes unfindable
+  after the window too, since it's never needed again once confirmed).
+- `confirmConsent()`: expiry is checked **before** the
+  already-confirmed check, deliberately — the existing "a guardian may
+  legitimately click the same link twice" idempotency (unchanged, still
+  correct) only applies to a still-valid token being re-clicked, not an
+  aged-out one. An expired token gets the same generic `BadRequestException`
+  as a nonexistent one, whether or not it was ever confirmed.
+- `resendConsent(email)`: takes the **minor's** registered email, not
+  the guardian's — avoids a second lookup-by-guardian-email surface,
+  and the minor is who'd know to ask "did my guardian get the email."
+  Issues a genuinely **new** `consentToken` (not an extension of the
+  old one's expiry) — `consentToken` is `@unique`, so this overwrites
+  the only copy and the old token stops resolving entirely. No-ops
+  silently (same generic response either way, at the controller) for:
+  unknown email, a non-minor account, a minor with no `Guardian` row,
+  or a `Guardian` whose `consentStatus` is already `"confirmed"` — none
+  of these are distinguishable from the caller's side. Reuses
+  `RegistrationEmailService.sendGuardianConsentEmail` (PR #33's Postmark
+  wiring) rather than duplicating email-sending logic.
+- `POST /auth/guardian-consent/resend` carries `@AuthRateLimit()`
+  (same guard/decorator as `/auth/forgot-password`) — an unrated resend
+  endpoint targeting an arbitrary email is a spam vector against a
+  guardian's inbox. `GuardianConsentModule` now imports
+  `AuthFoundationModule` for that guard's DI graph, and declares its
+  own local `RegistrationEmailService` provider (not exported from
+  `AuthRegistrationModule`) — matching this codebase's existing
+  convention of each module declaring its own local `PrismaService`
+  rather than importing one via cross-module export.
+- `GUARDIAN_CONSENT_TOKEN_TTL_HOURS` (`.env.example`, default `72`) —
+  made configurable via env rather than a hardcoded constant, same
+  pattern as `RESET_TOKEN_TTL_MINUTES`. This wasn't explicitly asked
+  for; flagged as a deliberate call in this PR's report rather than
+  silently deviating from "implement 72 hours as specified."
+- **A Prisma migration was required and applied for real** —
+  `consentTokenExpiresAt` is `NOT NULL`, and the local dev database
+  (Decision Log #18: no production data, but this dev DB did have one
+  manual/test `Guardian` row) can't take a `NOT NULL` column with no
+  default in one step. Split into three statements: add nullable,
+  backfill existing rows to now + 72h (treated as freshly issued, not
+  deleted), then enforce `NOT NULL` — see
+  `prisma/migrations/20260818235411_add_guardian_consent_token_expiry/migration.sql`.
+- **This PR does not close R5 in the DPIA.** It gives counsel something
+  concrete to review — a real 72-hour window and a real resend path —
+  instead of an unmitigated gap. The 72-hour number itself, and
+  whether "single-use, invalidated on use" as implemented here actually
+  satisfies whatever counsel decides is needed, are still open per the
+  DPIA's own disclaimer on R5 and its Section 5 open-questions table
+  (item 9: "Consent token expiry and single-use (R5) — 72h proposed as
+  a starting number only — Counsel + backend-api").
+
+## Status update — response shape reconciliation (`POST /auth/register` vs `POST /auth/login`)
+
+PR #59's real-Postgres e2e layer (`test/auth.e2e-spec.ts`,
+`test/clubs.e2e-spec.ts`) surfaced and flagged, rather than silently
+fixed, a genuine API-contract inconsistency between the two endpoints:
+`POST /auth/register` nested its token pair as
+`accessToken: { token, expiresIn }` while `POST /auth/login` returned a
+flat `accessToken: string` + `accessTokenExpiresIn: number` (via
+`auth-response.mapper.ts`'s `toTokenPairResponse`), and only
+`/auth/register` returned a `user` object at all. Resolved on branch
+`sprint-2/auth-response-shape-reconciliation`:
+
+- **Both endpoints now return the identical, flat shape.** `AuthResponse`
+  (`auth-response.mapper.ts`) is `TokenPairResponse`'s four token fields
+  (`accessToken`, `accessTokenExpiresIn`, `refreshToken`,
+  `refreshTokenExpiresAt`) plus `user: AuthUserSummary`. Register's old
+  nested `accessToken: { token, expiresIn }` is gone — it now calls the
+  same `toTokenPairResponse()` login uses.
+- **`POST /auth/login` now returns a `user` object too** — no new query;
+  `AuthService.login` already loads the full `User` row for password
+  verification, this is response-shaping only.
+- **`AuthUserSummary`** (also new, in `auth-response.mapper.ts`) is the
+  single shared shape for `user` on both endpoints: `id, email, phone,
+  displayName, dateOfBirth, isMinor, role, verificationStatus,
+  createdAt`. It replaces what used to be an inline object literal
+  duplicated only in `registration.controller.ts`'s own
+  `toRegisterResponse` — both endpoints now call the same
+  `toAuthUserSummary(user)` function, so they can't drift again by one
+  of them being edited and the other forgotten.
+- **`isMinor`/`verificationStatus` are deliberately present in `user`,
+  on both endpoints.** This does not weaken the non-negotiable in
+  `TokenPairResponse`'s own doc comment (Build Plan Section 5.7): that
+  rule is specifically about what `TokenService` puts *inside the JWT
+  access token payload* (`{ sub, role }` only, still enforced,
+  untouched by this change, still tested by
+  `token/token.service.spec.ts` and a dedicated `auth.service.spec.ts`
+  case that decodes the token and asserts on its payload directly) —
+  not about a fresh, one-time HTTP response body reading a user's own
+  current state back to them. `Guardian.consentStatus` is a separate
+  entity's field and never appears in `AuthUserSummary` at all, on
+  either endpoint.
+- **`TokenPairResponse` itself stays narrow, unchanged, and `user`-free.**
+  `POST /auth/refresh` still returns bare `TokenPairResponse` — a
+  background token-renewal call has no re-verified `User` row to attach
+  a `user` snapshot to (only a refresh token). `AuthResponse` is a
+  separate, wider type used only by `/auth/login` and `/auth/register`.
+- Downstream call sites fixed in the same PR: `test/auth.e2e-spec.ts`,
+  `test/clubs.e2e-spec.ts`, `registration/registration.controller.spec.ts`,
+  `auth.controller.http.spec.ts`, `auth.service.spec.ts`, and
+  `apps/web/src/api/auth.ts`'s `LoginResponse`/`RegisterResponse`
+  interfaces (previously explicitly marked as pre-B2/B3 speculative
+  scaffolding — now reconciled against the real DTOs for real).
+  `LoginPage.tsx`/`RegisterStep.tsx` needed no changes — both already
+  only read the flat `result.accessToken`/`result.refreshToken` strings.
+
+## Status update — `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS` config-wiring fix (`sprint-2/fix-auth-rate-limit-config-wiring`)
+
+`sprint-2/e2e-coverage-expansion` (PR #63) surfaced a real, confirmed
+config-wiring bug: `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
+(`rate-limit.module.ts`'s env-driven module-level throttler config) had
+zero real effect on any of the four routes decorated with
+`@AuthRateLimit()` (`register`, `login`, `forgot-password`,
+`guardian-consent/resend`).
+
+- **Root cause:** `AuthRateLimit(limit = DEFAULT_AUTH_RATE_LIMIT, windowMs
+  = DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS)` applied those default parameters
+  as a per-route `Throttle({ auth: { limit, ttl: windowMs } })` override
+  on every call, unconditionally — including on bare `@AuthRateLimit()`,
+  which every real call site used. NestJS's Throttler gives a route-level
+  `@Throttle()` override priority over the module-level named-throttler
+  config `AuthRateLimitModule` builds from `AUTH_RATE_LIMIT_MAX`/
+  `AUTH_RATE_LIMIT_WINDOW_MS`, so the env-driven config was being read
+  correctly but never actually reached any route — it was always silently
+  overridden by the same hardcoded numbers (5 requests / 60s) regardless
+  of what was configured.
+- **Fix:** `AuthRateLimit()` now takes an optional `{ limit, windowMs }`
+  override. Bare `@AuthRateLimit()` (every current call site) applies
+  *only* `UseGuards(AuthThrottlerGuard)`, with no `@Throttle()` metadata
+  at all — the route now genuinely falls through to
+  `AuthRateLimitModule`'s module-level, env-driven config. An explicit
+  override is opt-in, for a future route that specifically needs a
+  different limit than the shared auth default; none currently do.
+  `DEFAULT_AUTH_RATE_LIMIT`/`DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS`
+  (`rate-limit.constants.ts`) are untouched — `rate-limit.module.ts`'s own
+  `|| DEFAULT_...` fallback still needs them for when the env vars
+  themselves aren't set.
+- **Proven behaviorally, not just compiled:**
+  `rate-limit/auth-rate-limit.decorator.spec.ts` wires the *real*
+  `AuthThrottlerGuard` through the *real* `AuthRateLimitModule` (same
+  pattern this file's own guardian-consent "real rate limiting" spec
+  already used for one route) against a throwaway controller carrying a
+  bare `@AuthRateLimit()`. One case sets `AUTH_RATE_LIMIT_MAX=2` (a value
+  deliberately different from the hardcoded default of 5) and confirms
+  the third request in a window now genuinely gets `429`, not `200` —
+  confirmed directly against the pre-fix decorator that this exact
+  assertion fails there (`expected 429, got 200`), so this is a real
+  regression-proof, not a test that would pass either way. A second case
+  confirms the fallback to `DEFAULT_AUTH_RATE_LIMIT` (5) still works when
+  the env vars are unset.
+- **The three e2e spec files PR #63 added
+  (`feed-reactions.e2e-spec.ts`, `follow.e2e-spec.ts`,
+  `counters.e2e-spec.ts`) were deliberately left on their existing
+  Prisma-seeding/`TokenService`-minting workaround, not switched to real
+  HTTP registration.** The fix alone doesn't make that switch free —
+  `.env.test` still has no `AUTH_RATE_LIMIT_MAX` override, so the
+  effective default stays 5/60s, and these three files' `createUser()`
+  helpers are called 37 times total (21 + 13 + 3) across real HTTP
+  traffic within each file's own throttler window. Doing this properly
+  would mean adding a test-specific rate-limit override plus converting
+  all 37 call sites to real register/login HTTP calls, each paying real
+  argon2id hashing cost — judged out of scope for this fix PR; each
+  file's own `createUser()` comment (and `test/README.md`) is updated to
+  say so explicitly rather than leave a stale "the bug is why we do this"
+  explanation standing after the bug itself is fixed.
+
+## Status update — auto-join on signup (`sprint-2/auto-join-on-signup`)
+
+Closes the specific gap `clubs/README.md` flagged when club pages
+themselves shipped (PR #58): "auto-join on signup" (Build Plan Section
+6's Sprint 2 line) was left unbuilt because `RegisterDto` had no
+club-selection field at all.
+
+- `RegisterDto.clubId?: string` — new, `@IsOptional() @IsUUID()`,
+  matching `ClubPage.id`'s real UUID type (`schema.prisma`). Omitting
+  the field entirely is the "no club for now" path — not a special
+  sentinel value, just the natural absence of the field. No other
+  `RegisterDto` field changed.
+- `AuthRegistrationModule` now imports `ClubsModule` (which now exports
+  `ClubsService` for the first time — previously providers-only, no
+  `exports` array) so `RegistrationService` can inject `ClubsService`
+  via DI. No circular-dependency risk: `ClubsModule` imports
+  `AuthFoundationModule`, not `AuthRegistrationModule`.
+- `RegistrationService.register()`: when `dto.clubId` is provided, calls
+  `this.clubsService.joinClub(user.id, dto.clubId)` after user (and, for
+  a minor, guardian) creation — following the method's existing
+  sequential-steps pattern, not forced into the same `$transaction` as
+  user creation (`joinClub` is already internally transactional for its
+  own membership-row + `memberCount` pairing, per `clubs.service.ts`).
+- **Critical ordering fix, found and handled directly, not assumed
+  correct**: tracing `register()`'s actual step order confirmed that a
+  club-existence check that only happened as part of `joinClub` itself
+  (which, by construction, could only run after user/guardian creation)
+  would let a bad `clubId` 404 while leaving an already-committed,
+  orphaned `User` row behind (the pre-existing duplicate-email check
+  would then permanently block that address from registering again).
+  Fixed by calling `ClubsService.assertClubExists(dto.clubId)` (made
+  public — previously private, internal to `ClubsService` only)
+  *before* `prisma.user.create()` runs, not after. See
+  `test/registration-club-join.e2e-spec.ts` for the real-Postgres
+  regression proof: a nonexistent `clubId` produces a 404 and zero
+  `User` rows for that email (confirmed by querying directly), and the
+  same email can genuinely register afterward.
+- No `Notification` wiring — joining a club was never on Section 6's
+  notification-trigger list (follow/comment/like only) and that doesn't
+  change because the join now also happens during registration.
+- `AuthResponse`/`RegisterResponse` (`auth-response.mapper.ts`) gained no
+  new field for this — a successful club join is implied by a 201 with
+  no error; a caller wanting to confirm membership can already call
+  `GET /clubs/:id`.
+- **This gap is now closed by `sprint-2/club-picker-ui`** — not by
+  wiring `RegisterDto.clubId` into `apps/web` as this bullet originally
+  implied would happen, but by a deliberate direction change: `GET
+  /clubs` (`clubs.controller.ts`) is `JwtAuthGuard`-only, and
+  `SignupFlow.tsx`'s age-gate → guardian-details → register step
+  machine runs entirely before any account (and therefore any JWT)
+  exists — there is no point in that pre-account flow where a
+  club-picker step could actually call `GET /clubs`. Rather than
+  loosening that guard (a real, undesirable security/product change to
+  an endpoint whose `JwtAuthGuard`-only reasoning was deliberate — see
+  `clubs.controller.ts`'s own comment), the club-picker step was built
+  *after* account creation instead: `ClubPickerStep.tsx`, rendered from
+  `RegisterStep.tsx`'s existing success view, using the `accessToken`
+  `RegisterResponse` already returns to call `GET /clubs` and `POST
+  /clubs/:id/join` directly. **This means `RegisterDto.clubId`'s
+  auto-join-on-signup capability remains unused by the web client** —
+  it's still real, tested backend capability usable by mobile or a
+  future direct-API caller, just not exercised by this path. See
+  `clubs/README.md`'s matching update and CLAUDE.md's Sprint 2 status
+  section for the full reasoning.
+- Verification: `registration.service.spec.ts` gained four new cases
+  (join called with a real clubId, no ClubsService calls at all when
+  clubId is omitted, `NotFoundException` propagates for a bad clubId
+  with `prisma.user.create` never called, and an explicit call-order
+  assertion proving `assertClubExists` runs before `user.create`).
+  `test/registration-club-join.e2e-spec.ts` (new) covers the same three
+  scenarios against real Postgres. Full mocked suite after this branch:
+  34 suites / 338 tests, 0 failures (up from 34 suites / 334 tests
+  immediately before it, verified directly by stashing this branch's
+  changes and re-running — no new suite, four new tests in the existing
+  `registration.service.spec.ts`; one pre-existing, timing-sensitive
+  test, `auth-rate-limit.decorator.spec.ts`'s "respects
+  AUTH_RATE_LIMIT_MAX/..." case, flaked once under full-suite load and
+  passed cleanly on an isolated re-run, unrelated to this change and not
+  fixed here). e2e suite: 6 suites / 25 tests, 0 failures (up from 5
+  suites / 22 tests — one new spec file, three new tests).
+
+## Status update — guardian-consent-status, change-password, deactivate/delete/reactivate-account (`sprint-1/f5-f6-missing-endpoints`)
+
+Closes two confirmed gaps (re-verified directly by `grep -r
+"change-password\|deactivate\|delete-account\|accountStatus"
+services/api/src` before writing any code — zero matches for either, same
+as the task brief's own claim): no endpoint exposed a minor's own
+guardian-consent status, and there was no change-password/deactivate/
+delete-account capability anywhere in this codebase.
+
+### Part 1 — `GET /auth/guardian-consent/status`
+
+Two real shape choices existed, per this PR's own brief: extend `GET
+/users/:id`'s response to nest a `guardian` object for a minor viewing
+their own profile, or build a dedicated `GET /auth/guardian-consent/status`
+endpoint. **Chose the dedicated endpoint**, confirming (not just assuming)
+the brief's own recommendation was right after reading `users/README.md`
+and `users.service.ts` directly: `GET /users/:id` is a general-purpose
+profile endpoint already used by every caller regardless of `isMinor`, and
+bolting safeguarding-specific nested data onto it would mix concerns and
+bloat the response shape for the vast majority of non-minor callers who'd
+always get `guardian: null`. A dedicated endpoint keeps single
+responsibility, groups naturally with the two existing
+`POST /auth/guardian-consent*` routes (same controller,
+`guardian-consent.controller.ts`, same safeguarding domain), and its guard
+requirement is cleaner to state and enforce in isolation from whatever
+`GET /users/:id` might ever need to do.
+
+- **Guard: `JwtAuthGuard` ONLY, deliberately NOT `GuardianConsentGuard`.**
+  This is a hard requirement, not a style choice, restated from the task
+  brief: a restricted-pending minor must be able to check their own
+  restricted status by definition — gating this behind the same guard
+  that enforces the restriction would make it impossible for a restricted
+  user to ever see why they're restricted. `GuardianConsentModule` already
+  imported `AuthFoundationModule` (for `AuthThrottlerGuard`'s DI graph on
+  the existing `resend` route) — no new module import was needed for
+  `JwtAuthGuard`'s own DI graph.
+- **Response shape** (`GuardianConsentStatusResponse`,
+  `guardian-consent.service.ts`): `consentStatus` (`"pending" |
+  "confirmed"`, straight off the `Guardian` row), `guardianEmail` (for a
+  future "change guardian email" UI action this PR doesn't build),
+  `canResend` (a `boolean`, computed with the exact same condition
+  `resendConsent()` already gates a real resend on —
+  `consentStatus === 'pending'` — so the frontend never has to re-derive
+  that business rule), and `consentTimestamp` (`null` until confirmed).
+- **"Caller has no `Guardian` row" → a real 404**, never a silent null
+  200 — matches this codebase's own established convention
+  (`ClubsService.assertClubExists`, `UsersService.assertUserExists`).
+  This one query (`prisma.guardian.findUnique({ where: { minorUserId } })`
+  returning `null`) covers two cases the caller's side genuinely cannot
+  distinguish and doesn't need to: the caller isn't a minor at all, or a
+  data-invariant violation (a minor with no `Guardian` row, which
+  `RegistrationService` should never produce but isn't guaranteed by a DB
+  constraint).
+- **Reads fresh from Postgres on every call** — `GuardianConsentService.getConsentStatus`
+  does a plain `findUnique`, never caches or trusts anything off the JWT
+  (which structurally can't carry `consentStatus` anyway — `token.types.ts`).
+  Proven directly by a dedicated unit test that mutates the underlying row
+  between two calls and confirms the second call reflects the change.
+- `:sub` (the caller's own id, off the verified JWT via `@CurrentUser()`)
+  is always what's looked up — there is no path param on this route at
+  all, so it can never be used to read another user's guardian-consent
+  state, unlike `GET /users/:id`'s ownership-check pattern.
+
+### Part 2 — change-password, deactivate/delete/reactivate-account
+
+All four new routes live on the existing `AuthController`/`AuthService`
+(`auth.controller.ts`/`auth.service.ts`) rather than a new module — they're
+account-lifecycle actions on the same `User` row `login`/`refresh`/`logout`
+already operate on, and `AuthModule` already imports `AuthFoundationModule`
+(so `JwtAuthGuard` was already available via DI with no new import).
+
+- **`POST /auth/change-password`** — `JwtAuthGuard`. `userId` comes from
+  the verified JWT (`@CurrentUser()`), never a request-body field — a
+  caller can only ever change their own password via this endpoint.
+  Fetches the real, current `passwordHash` fresh from Postgres and reuses
+  `PasswordService.verify` (the exact call `login()` uses), never
+  reimplementing argon2 logic. `newPassword` validation is exactly
+  `@IsString() @MinLength(8)` — the identical rule `RegisterDto.password`
+  uses, deliberately not stricter or looser, per the brief. Error posture
+  is deliberately distinct from `login()`'s generic message: this is an
+  authenticated user who already proved identity via a valid JWT, so
+  there's no enumeration concern the way login's generic error protects
+  against (there's nothing to enumerate — the caller already knows their
+  own account exists); "Current password is incorrect" is fine here and
+  still never leaks hash internals. **Revokes every other active session
+  on success** (`tokenService.revokeAllSessionsForUser`) — a considered
+  decision, not skipped: this is a one-line reuse of the exact mechanism
+  `logout(allSessions=true)` and `PasswordResetService.resetPassword`
+  already use for the identical "credential changed, kill other sessions"
+  scenario, and a changed password that leaves old sessions valid defeats
+  much of the point of changing it.
+- **`POST /auth/deactivate-account`** — `JwtAuthGuard`. Requires `password`
+  re-entry as a confirmation step (a hard requirement from the brief, not
+  optional scope: a bare POST with no re-auth must never be able to
+  deactivate an account), verified fresh against Postgres via
+  `PasswordService.verify`. On success: `accountStatus` →
+  `"deactivated"`, and **revokes every existing session** — deactivation
+  blocking *future* logins is meaningless if the caller's current
+  still-valid access/refresh tokens keep working, so this is a required
+  consequence, not scope creep (proven by a dedicated e2e assertion: the
+  refresh token minted just before deactivation is confirmed unusable
+  immediately after).
+- **`POST /auth/delete-account`** — same shape/guard/re-auth requirement
+  as deactivate. Sets `accountStatus` → `"pending_deletion"` —
+  **deliberately does NOT hard-delete the `User` row** (a hard requirement
+  from the brief), proven directly by an e2e assertion that the row still
+  exists and is still findable by email immediately after. This is a
+  minors' data platform with real GDPR/NDPA implications (CLAUDE.md's
+  safeguarding non-negotiables, this project's DPIA history) and
+  retention/erasure policy is **explicitly not decided here** — see the
+  Decision Log candidate below. Revokes every session, same reasoning as
+  deactivation.
+- **`POST /auth/reactivate-account`** — deliberately **unauthenticated**
+  (`{ email, password }` body, no `JwtAuthGuard`): a deactivated account's
+  existing tokens are already revoked by `deactivateAccount()`, so there
+  is no JWT to gate this behind. Same credential-verification trust level
+  and timing-safety posture as `login()` itself, including the identical
+  fixed dummy-hash comparison so an unknown email takes the same real
+  argon2id work as a known one. Carries `@AuthRateLimit()` — same
+  brute-force-protection reasoning as `login`/`register`, on the same
+  shared `'auth'` named-throttler bucket (see the config-wiring-fix entry
+  above). **Only a genuinely `"deactivated"` account is flipped back to
+  `"active"`** and issued a fresh token pair — "log in, but first
+  un-deactivate." An already-`"active"` account with correct credentials
+  is treated as a plain, no-state-change login (this endpoint is a strict
+  superset of `login()` for that case) rather than rejected — there's no
+  reason to punish a caller who didn't realize reactivation wasn't
+  necessary. **A `"pending_deletion"` account is explicitly NOT
+  reactivated** — rejected with the same generic `"Invalid credentials"`
+  an unknown email/wrong password gets, deliberately not a distinct
+  message, since this PR builds no self-service undo path for a deletion
+  request and doesn't want to even confirm to an unauthenticated caller
+  that the account exists in that state.
+- **`AuthService.login()`** now rejects a non-`"active"` account —
+  checked **after** password verification succeeds, deliberately: this
+  distinct message is only ever revealed to someone who already proved
+  they know the correct password, so it doesn't weaken the existing
+  non-enumeration posture (an attacker without the real password still
+  only ever sees the generic `"Invalid credentials"`). A `"deactivated"`
+  account gets a specific, actionable message pointing at
+  `reactivate-account`; `"pending_deletion"` (and any future non-`"active"`
+  state) deliberately gets the same generic message a wrong password
+  would, for the same "don't confirm this state to anyone" reasoning as
+  `reactivateAccount()` above.
+
+### `User.accountStatus` — a genuine schema addition, Decision Log candidate
+
+`accountStatus String @default("active")` (`prisma/schema.prisma`,
+migration `20260823011617_add_user_account_status`) is a real addition
+beyond Section 3's literal `User` field list — flagged here, not added
+silently, per CLAUDE.md's "the data model is a fixed spec" rule. Mirrors
+the existing `consentStatus`/`verificationStatus` string-enum convention
+already used twice in this same schema (rather than a `Boolean` plus a
+separate deletion flag): `"active"` (default) | `"deactivated"`
+(self-service reversible, via `reactivate-account`) | `"pending_deletion"`
+(self-service, **not** reversible via any endpoint in this PR).
+
+**RESOLVED (Decision Log #42, Build Plan Section 9) and implemented
+(`sprint-2/account-deletion-sweep`) — see
+`modules/account-deletion/README.md` for the full architecture.** Short
+version: a 30-day grace period from a new `User.pendingDeletionAt`
+timestamp, then a real hard `DELETE` of the `User` row (not
+anonymization) via a scheduled `AccountDeletionSweepService`, with a
+decoupled `ConsentAuditRecord` snapshotting the minimum needed to prove
+guardian consent occurred before the `Guardian` row (which would
+otherwise block the hard-delete outright — `Guardian.minorUserId` is a
+real `ON DELETE RESTRICT` foreign key, confirmed against the live
+migration SQL) is itself deleted; that record gets its own independent
+6-month purge timer. What was still genuinely undecided at the time this
+paragraph was originally written, resolved as of Decision Log #42:
+
+**This PR deliberately does not decide retention/erasure policy — that's
+an open Decision Log candidate for real founder/legal input**, not
+resolved unilaterally here, per the brief's own explicit instruction:
+
+- What the actual retention window for a `"pending_deletion"` account
+  should be before any further action (if any) is taken.
+- Whether erasure ever becomes a true hard delete of the `User` row (and,
+  if so, what happens to rows that reference it — `Post`, `Comment`,
+  `Like`, `Follow`, etc. — none of which `ON DELETE CASCADE` today).
+  **RESOLVED on direction (Decision Log #42): yes, a real hard `DELETE`,
+  not anonymization. The parenthetical's own question — what happens to
+  referencing `Post`/`Comment`/`Like`/`Follow`/etc. rows — is still open**,
+  now tracked as its own Decision Log #44 candidate (see
+  `modules/account-deletion/README.md`): every one of those foreign keys
+  is `ON DELETE RESTRICT`, confirmed directly against the real migration
+  SQL, so a hard-delete attempt on any account with real activity fails
+  outright rather than cascading or silently orphaning. Left genuinely
+  unresolved, not guessed at, by `sprint-2/account-deletion-sweep` —
+  such an account is simply left in `pending_deletion`, reported as
+  blocked, and re-attempted on every future sweep run.
+- Whether a minor's `Guardian` row needs its own, separate erasure
+  handling distinct from the minor's own `User` row. **RESOLVED
+  (Decision Log #42) and implemented**: yes — see
+  `modules/account-deletion/README.md`'s `ConsentAuditRecord` design.
+- Whether `"pending_deletion"` should ever have a self-service undo
+  window at all — this PR's `reactivateAccount()` explicitly refuses to
+  provide one, but that's an implementation choice pending the real
+  policy decision, not the policy decision itself. **Still open** —
+  Decision Log #42 resolved the grace-period *duration* (30 days) and
+  what happens at the end of it, not whether that window is ever
+  self-service-undoable; `sprint-2/account-deletion-sweep` does not
+  change `reactivateAccount()`'s existing refusal.
+- Whether `AuthUserSummary`/`AuthResponse` (`auth-response.mapper.ts`)
+  should ever expose `accountStatus` to the caller directly, the way
+  `isMinor`/`verificationStatus` already are — this PR deliberately did
+  **not** add it there (out of scope; the existing four endpoints
+  communicate account state via HTTP status/response body shape, not a
+  new field on every login/register response), but a future
+  account-settings UI may want it.
+
+### Verification
+
+**Real, directly measured — not estimated**, per this PR's own brief and
+this file's own established standard for that:
+
+- Mocked unit suite (`npx jest`, `services/api`) — confirmed baseline by
+  stashing this branch's own changes and re-running against a clean
+  checkout: **34 suites / 356 tests, 0 failures**. After this branch:
+  **34 suites / 386 tests, 0 failures** (30 new tests, no new suite — new
+  `describe` blocks added to `auth.service.spec.ts`,
+  `auth.controller.http.spec.ts`,
+  `guardian-consent/guardian-consent.service.spec.ts`, and
+  `guardian-consent/guardian-consent.controller.spec.ts`).
+  `auth.controller.http.spec.ts` and `guardian-consent.controller.spec.ts`
+  both needed a new `.overrideGuard(JwtAuthGuard)` in their
+  `TestingModule` setup (same pattern
+  `users/users.controller.http.spec.ts` already established) — both
+  controllers now have at least one real `JwtAuthGuard`-protected route,
+  and neither test file's `TestingModule` provides a real
+  `TokenService`/`PrismaService` for the real guard to depend on.
+- e2e suite (`npm run test:e2e`, real Postgres/Redis via `docker compose
+  up -d`) — before this branch: **6 suites / 37 tests, 0 failures**. After:
+  **7 suites / 39 tests, 0 failures** — one new file,
+  `test/account-lifecycle.e2e-spec.ts`, two new `describe` blocks (each
+  with its own app instance/own in-memory `AuthThrottlerGuard` bucket,
+  deliberately, so the file's real HTTP calls to `login`/
+  `reactivate-account` — both `@AuthRateLimit()`-decorated, sharing one
+  `'auth'` named-throttler bucket — stay under the default 5-requests/60s
+  limit per block; full reasoning in the file's own header comment,
+  following the same already-documented constraint
+  `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/`clubs.e2e-spec.ts`
+  hit for `POST /auth/register`). Covers, against real Postgres: the
+  brief's required minimum (deactivate → login fails with a distinct
+  message → reactivate → login succeeds), a real session-revocation proof
+  (the refresh token minted just before deactivation is confirmed
+  unusable immediately after), a real change-password argon2id round trip
+  (old password stops working, new one — freshly hashed and stored in
+  Postgres, confirmed via a direct row read — works), and the
+  delete-account/`pending_deletion` exclusion (row provably still exists
+  post-delete, `reactivate-account` provably refuses to undo it, a normal
+  login stays rejected). `GET /auth/guardian-consent/status` was
+  deliberately **not** given its own e2e file — per `test/README.md`'s own
+  guiding principle, it's a plain Prisma read with no raw SQL, no
+  transaction/isolation-level reasoning, and no novel relation/constraint,
+  so the mocked unit coverage in
+  `guardian-consent.service.spec.ts`/`guardian-consent.controller.spec.ts`
+  is the right (and much faster) layer for it, matching how this codebase
+  has treated comparable plain-read endpoints elsewhere.
+- Migration: `prisma/migrations/20260823011617_add_user_account_status/migration.sql`
+  — a single `ALTER TABLE "User" ADD COLUMN "accountStatus" TEXT NOT NULL
+  DEFAULT 'active'`, applied and verified against both the local dev
+  database and (via `test/global-setup.ts`, automatically) the
+  `soccernity_test` e2e database.
+
+## Status update — `guardianConsentStatus` on `POST /auth/verify-email` (`sprint-2/verify-email-consent-status-field`, Decision Log #38)
+
+`POST /auth/verify-email`'s response gained a third field,
+`guardianConsentStatus`, alongside the pre-existing `verified`/`userId` —
+additive, neither existing field renamed or removed. This closes the
+specific gap `sprint-1/f7-club-picker-code`'s report flagged and left open:
+`{ verified, userId }` carried no way for `apps/web`'s `VerifyEmailPage.tsx`
+to tell a fully-verified user apart from a verified-but-still-restricted-
+pending minor, so every verified user landed on the same generic "Verified"
+state regardless of guardian-consent status.
+
+**Values**: `'not_applicable'` (non-minor, or — treated identically, since
+this is a data-invariant question unrelated to the token being verified —
+a minor with no `Guardian` row at all) | `'pending'` | `'confirmed'`, the
+latter two being `Guardian.consentStatus`'s own real, current value,
+untouched. Typed as a plain `string` on `RegistrationService.VerifyEmailResult`
+(not a narrower union), deliberately mirroring
+`GuardianConsentStatusResponse.consentStatus`'s own established convention
+in `guardian-consent.service.ts` — see that type's comment for why (a
+future value, e.g. Decision Log #34's still-unbuilt guardian-decline flow
+adding `'declined'`, shouldn't require a type change here to pass through).
+
+**Reused, not reinvented**: `GuardianConsentService.getConsentStatusForUser`
+(`guardian-consent/guardian-consent.service.ts`) — previously `private`,
+already the method `getConsentStatus()` (the `GET
+/auth/guardian-consent/status` handler) itself calls — was made `public`
+and is now injected directly into `RegistrationService` via
+`GuardianConsentModule`'s new `exports: [GuardianConsentService]`. There is
+exactly one place in this codebase that queries `Guardian` by
+`minorUserId` and shapes the result; `RegistrationService.verifyEmail`
+calls it and maps its `null` return (no `Guardian` row) to the
+`'not_applicable'` sentinel — it does not re-query `Guardian` itself, and a
+test in `registration.service.spec.ts` proves this directly (the mocked
+`PrismaService` fake has no `guardian.findUnique` wired up at all; a direct
+query would throw rather than silently pass).
+
+**No circularity**: `GuardianConsentModule` importing into
+`AuthRegistrationModule` (`registration.module.ts`) follows the exact same
+shape as the pre-existing `ClubsModule` import for `sprint-2/auto-join-on-signup`
+— neither module imports anything that imports `AuthRegistrationModule`
+back.
+
+**Verification**: mocked suite before this change (measured directly, by
+stashing this branch's changes and re-running against a clean checkout of
+`sprint-2/verify-email-consent-status-field`'s base) — **42 suites / 481
+tests, 0 failures**; after — **42 suites / 489 tests, 0 failures** (8 new:
+2 in `guardian-consent.service.spec.ts`, 4 in `registration.service.spec.ts`,
+2 net-new in `registration.controller.spec.ts`, whose existing
+`verify-email` success test was also extended in place to assert the new
+field rather than only adding new cases). `npm run test:e2e` was not
+re-run — this change is a plain `findUnique`-backed enrichment with no raw
+SQL, no transaction/isolation-level reasoning, and no novel Prisma relation
+or constraint (`test/README.md`'s own three e2e triggers), matching the
+precedent already established for `GET /auth/guardian-consent/status`
+itself, which has no e2e coverage for the identical reason (see this
+file's own "Status update" note on `test/account-lifecycle.e2e-spec.ts`
+above). `nest build` and `npm run lint` both clean.
+
+**Safeguarding fields untouched**: `User.isMinor`, `User.guardianId`
+(n/a — this schema links `Guardian.minorUserId` → `User`, not the reverse;
+no `User.guardianId` column exists to touch),
+`Guardian.consentStatus`/`consentToken`/`consentTimestamp` are read-only in
+every line this change touches — nothing here writes to any of them.
+
+**Decision Log candidate, not resolved here**: `Guardian.consentStatus`'s
+only two real values today are `'pending'`/`'confirmed'` — if Decision Log
+#34's guardian-decline endpoint ever ships and adds a `'declined'` value,
+someone needs to decide what `guardianConsentStatus` on this endpoint
+should show for that case (pass it through as-is, matching this field's
+current "mirror the raw column" design, or collapse it into `'pending'`
+for the frontend's purposes). Not decided or guessed at in this PR.
+
+## Status update — account deactivation: delete-from-inactive + read-visibility (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+Backend half of the account-deactivation feature (the Figma half is
+Decision Log #220, `sprint-2/account-deactivation-design`). Founder
+explicitly authorised resuming backend work for this task.
+
+**Schema — confirmed live, NOT changed.** `User.accountStatus`
+(`"active"` | `"deactivated"` | `"pending_deletion"`, default `"active"`,
+migration `20260823011617`) and `User.pendingDeletionAt` already exist
+(`sprint-1/f5-f6-missing-endpoints` + `sprint-2/account-deletion-sweep`).
+No new field, no migration. `"deactivated"` **is** the "inactive" state
+the design flow needs; renaming it to `"inactive"` was rejected —
+it is already shipped and referenced by `auth.service.spec.ts`,
+`account-lifecycle.e2e-spec.ts`, and `AccountDeletionSweepService`'s own
+`WHERE accountStatus = 'pending_deletion'` query. `deactivateAccount` /
+`reactivateAccount` are unchanged.
+
+**New endpoint — `POST /auth/delete-inactive-account`.** A deactivated
+account has every session revoked (`deactivateAccount` →
+`tokenService.revokeAllSessionsForUser`), so it has no JWT to reach the
+`JwtAuthGuard`-protected `POST /auth/delete-account`. This is the
+unauthenticated counterpart, reached from the "Inactive Account" screen's
+Delete path:
+
+- Body `{ email, password }` (`DeleteInactiveAccountDto`), `@AuthRateLimit()`,
+  `204 No Content` — same posture as `POST /auth/reactivate-account`.
+- Same fixed-dummy-hash timing safety as `login()` / `reactivateAccount()`.
+- **Only a genuinely `"deactivated"` account is accepted.** `"active"`
+  (must use the authenticated route — it has a session), `"pending_deletion"`
+  (clock already running; this endpoint never re-starts it), unknown
+  email, wrong password → all get the generic `"Invalid credentials"`.
+- **No duplicated deletion logic.** `deleteAccount()` (authenticated) and
+  `deleteInactiveAccount()` (unauthenticated) both call the same new
+  private `AuthService.startPendingDeletion(userId)` — the single place
+  `accountStatus` flips to `"pending_deletion"`: sets `pendingDeletionAt =
+  now()`, revokes every session. `AccountDeletionSweepService`'s 30-day
+  grace → hard-delete → cascade → `ConsentAuditRecord` retention
+  (Decision Log #42/#44) then applies byte-identically. **The deletion
+  flow itself is untouched.**
+
+**Read-visibility — "an inactive account should not appear."** Every
+existing read surface that could surface a deactivated (or
+`pending_deletion`) user's content/identity to someone else now filters
+on `accountStatus = 'active'`. `'active'` — not `NOT 'deactivated'` — is
+deliberate, so `pending_deletion` content is equally hidden; this is
+visibility-only and does not modify the deletion flow. All filters
+**reverse automatically on reactivation** (a plain `accountStatus` flip
+back to `'active'`) with no per-row backfill.
+
+| Surface | Change |
+| --- | --- |
+| `GET /posts/feed`, `GET /clubs/:id/feed` | `ACTIVE_AUTHOR_POST_FILTER` (`feed.service.ts`) AND-ed into the scope `where`. |
+| `GET /posts/:id` | `findUnique` → `findFirst` with the same filter; a deactivated-author post is a 404 ("hide via 404" convention). |
+| `GET /clubs/:id/members` | `VISIBLE_CLUB_MEMBER_FILTER` (`clubs.service.ts`) gains `accountStatus: 'active'` alongside the existing restricted-pending-minor `OR` clause. |
+| `GET /users/:id/followers`, `/following` | Target: `assertFollowGraphVisible` 404s a deactivated `:id` (same as a restricted-pending minor). Entries: `follower`/`followee` filtered to `accountStatus: 'active'`. |
+
+**Flagged, not built:**
+- **Search** — no people-search endpoint exists anywhere. Whoever builds
+  it must filter non-active accounts.
+- **Leaderboard** — `GET /leaderboard` is unbuilt (Sprint 6). Note added
+  to `leaderboard/README.md`: the future `SUM(PointsLedgerEntry.points)`
+  aggregation must exclude non-active users. Ledger rows keep accruing
+  for a deactivated user and are correct on reactivation — the filter is
+  on the rollup, not the write.
+- **Deliberate non-changes:** `GET /posts/:id/comments` (a comment
+  mid-thread on someone else's still-visible post; filtering it drifts
+  `Post.commentCount` and Section 4.3 has no comment-visibility model)
+  and `GET /users/:id/saved-posts` (the caller's own private bookmark
+  list, Decision Log #22).
+
+**Safeguarding fields untouched** — zero `schema.prisma` diff;
+`User.isMinor` / `Guardian.consentStatus` / `consentToken` /
+`consentTimestamp` are read-only in every line touched.
+
+**Verification** — mocked suite **46 suites / 584 tests, 0 failures**
+(+15: `auth.service.spec.ts` +9 for `deleteInactiveAccount`,
+`auth.controller.http.spec.ts` +3, `users.service.spec.ts` +3, plus
+updated `feed.service.spec.ts` / `clubs.service.spec.ts` `where`-shape
+assertions and a new `getPostById` deactivated-author case). e2e **11
+suites / 81 tests, 0 failures** — new `test/account-deactivation.e2e-spec.ts`:
+the full `deactivate → reactivate → deactivate → delete-from-inactive →
++31-day sweep → real hard-delete` sequence against real Postgres, plus a
+feed / single-post / follower-list visibility-and-reversal check.
+`nest build` and `npm run lint` clean.
+
+## Status update — a new, ADMIN-only `accountStatus` value, `"suspended"` (`sprint-5/admin-users-dashboard-backend`)
+
+`modules/admin-users/` (built by the same PR) needed a way for an admin
+to block a user that is genuinely **not** user-reversible — unlike
+`"deactivated"`, which `POST /auth/reactivate-account` exists
+specifically to undo. See `admin-users/README.md`'s "Decision Log
+candidate #1" for the full reasoning on why `"suspended"` is a new value
+rather than a reuse of `"deactivated"`.
+
+**Two real gaps in this file, found and closed, not assumed safe by
+default** — found by tracing every `accountStatus` branch in this
+service against the new value before shipping it:
+
+1. `reactivateAccount()` only ever excluded `"pending_deletion"` up
+   front; a `"suspended"` user would have fallen through unchanged and
+   still been issued a working token pair, silently undoing an
+   admin-imposed suspension. **Fixed** — `"suspended"` now gets the same
+   exclusion, same generic `"Invalid credentials"` message.
+2. `deactivateAccount()`/`deleteAccount()` had no `accountStatus` check
+   on the caller at all. A suspended user with a still-live access token
+   (the brief window before `PATCH /admin/users/:id`'s own session
+   revocation naturally expires it) could self-deactivate, then later
+   self-reactivate via the now-fixed `reactivateAccount()` — a two-step
+   escape from suspension. **Fixed** — both methods now reject a
+   suspended caller outright, checked after password verification (same
+   ordering as `login()`'s own checks).
+
+`login()` needed no code change — its existing `accountStatus !==
+'active'` generic-message branch already covered any future non-`active`
+value; only its comment was extended to say so explicitly.
+
+**Zero schema migration** — `accountStatus` is a plain `String`
+(`@default("active")`), so adding a fourth value is a `schema.prisma`
+comment update only.
+
+**Verification** — see `admin-users/README.md`'s own Testing section for
+the full before/after counts (this file's changes are covered by a new
+describe block in `auth.service.spec.ts`, counted in that same PR-wide
+total, not measured separately).
+
+## Status update — guardian decline, withdrawal, and consent-expiry resolution (`sprint-1/guardian-consent-decline-withdraw-expiry`, Decision Log #34)
+
+Closes a real, long-standing gap in the Section 8.3 flow. Before this branch
+`Guardian.consentStatus` only ever moved `pending -> confirmed`: there was no
+way for a guardian to say no, no way to take back a yes, and — despite DPIA
+finding R5 adding `Guardian.consentTokenExpiresAt` and a manual resend
+endpoint — **nothing anywhere ever read that expiry**. Confirmed by grep
+before any code was written: the only readers of `consentTokenExpiresAt` were
+the writers that set it, plus `confirmConsent`'s own rejection check. A
+guardian who simply never answered therefore left a minor's account
+restricted-pending indefinitely, holding a child's personal data with no
+resolution path and no further contact from the platform.
+
+### What was built
+
+Three new endpoints, all following `confirmConsent`'s existing
+token-is-the-credential trust model (no guard — the guardian is not a
+Soccernity account holder), all `@AuthRateLimit()`:
+
+- **`POST /auth/guardian-consent/decline`** `{ consentToken }` — the guardian
+  says no. Only a **pending** request can be declined.
+- **`POST /auth/guardian-consent/withdraw/request`** `{ email }` — step 1 of
+  taking back consent already given. Issues a fresh, single-use
+  `Guardian.withdrawalToken` and emails it **to the guardian**.
+- **`POST /auth/guardian-consent/withdraw`** `{ withdrawalToken }` — step 2.
+
+Plus **`GuardianConsentExpirySweepService`** (`@Cron(EVERY_HOUR)`), the job
+that finally acts on `consentTokenExpiresAt`.
+
+All three routes and the sweep's terminal branch converge on one primitive,
+`GuardianConsentService.refuseConsentAndScheduleDeletion()`, so the resulting
+account state cannot differ between them.
+
+**Decision Log #338 (resolved, `sprint-1/guardian-consent-decline-source`).**
+That same primitive now records *why* consent was refused in
+`Guardian.consentDeclineSource` — `guardian_explicit` (decline),
+`guardian_withdrawal` (withdraw) or `expiry_timeout` (the sweep's implicit
+decline) — so an active decline is distinguishable from a silent timeout. All
+three still land as `consentStatus: 'declined'`. Two Postgres CHECK
+constraints (migration `20260919160000_guardian_consent_status_check_and_decline_source`,
+purely additive) restrict `consentStatus` to `pending|confirmed|declined` and
+`consentDeclineSource` to those three values or NULL; a String, not a Prisma
+enum, on purpose. Rows declined before the migration keep NULL (not
+recoverable). `ConsentAuditRecord` is unchanged and does **not** snapshot the
+source — so it is lost when the Guardian row is deleted by the 30-day sweep;
+whether to add it to the audit snapshot is left open.
+
+### Why the withdrawal request takes the MINOR's email, not the guardian's
+
+It mirrors `resendConsent()` exactly, and it is the safer of the two options,
+not merely the more consistent one. `User.email` is `@unique` and
+`Guardian.minorUserId` is `@unique`, so a minor's address resolves to exactly
+one Guardian row — whereas **`Guardian.email` carries no uniqueness
+constraint at all**, so a guardian of two children could not be resolved from
+their own address, and accepting it would open a brand-new enumeration
+surface against guardian addresses. It costs nothing in safety: the withdrawal
+link is only ever emailed to `Guardian.email`, so a stranger who guessed a
+real minor's address still cannot withdraw anything — they can only cause an
+email to land in the genuine guardian's inbox, the same bounded exposure
+`POST /auth/guardian-consent/resend` already carries and is rate-limited for.
+
+The UX consequence is flagged for the frontend ticket: a guardian who wants to
+withdraw must enter the child's registered email, not their own.
+
+### Distinguishing a first expiry from a second: `Guardian.consentAutoResentAt`
+
+The brief asked whether existing fields could already tell these apart. They
+almost can — `consentTokenExpiresAt` minus the configured TTL approximates
+the issue time, so comparing it against `User.createdAt` would reveal whether
+the token had ever been rotated. That was **investigated and rejected as
+genuinely unsafe**, not merely inelegant:
+
+1. it breaks silently if `GUARDIAN_CONSENT_TOKEN_TTL_HOURS` is ever changed
+   between issuance and the sweep; and
+2. more seriously, it cannot distinguish the platform's *automatic* re-send
+   from a *manual* one the minor triggered via
+   `POST /auth/guardian-consent/resend`. A minor who had manually re-sent even
+   once would look "already chased", so the very next lapse would schedule
+   their account for deletion **having never sent the automated warning at
+   all** — a real safeguarding misfire, not a cosmetic one.
+
+So: one new nullable timestamp. Deliberately **not** an `Int` counter — the
+system sends exactly one automated chase, and a counter would imply a
+configurable N-reminders policy that does not exist; the timestamp is also
+independently useful for audit. It defaults to `NULL`, so every Guardian row
+already in flight when this ships gets its one automatic re-send on the first
+sweep after deploy — **no existing pending account is fast-tracked to
+deletion**.
+
+### The two-stage escalation
+
+- **First expiry** (`consentAutoResentAt IS NULL`) — one automatic re-send,
+  through `GuardianConsentService.reissueConsentToken()`, which is the exact
+  method the manual resend endpoint uses (extracted out of `resendConsent()`
+  for this, not copied). Plus an email to the **minor** saying the request
+  lapsed, a new one has gone out, and a second silent lapse will close their
+  account. That warning is the point of staging it: nobody's account closes
+  without having been told it was about to.
+  `markAutoResent` is passed **explicitly** by both callers (`false` for a
+  manual resend, `true` for the sweep) so neither can silently acquire the
+  other's behaviour.
+- **Second expiry** (`consentAutoResentAt IS NOT NULL`) — implicit decline via
+  the same shared refusal primitive.
+
+With the default 72h TTL that is roughly six days from registration to
+closure, with one automatic chase and one explicit warning in between.
+**Hourly, not daily** (unlike `AccountDeletionSweepService`): the two stages
+chain, so any interval is added to *both* windows — a daily tick would stretch
+a 72h+72h policy to as much as eight days and make the real deadline depend on
+what time of day someone happened to register.
+
+### Reusing the deletion machinery rather than inventing state
+
+A refusal calls `AuthService.startPendingDeletion()` — **made public for this
+third caller**, the same precedent and reasoning as
+`AccountDeletionSweepService.hardDeleteUser` being made public for
+`AdminUsersService`. That method's own doc comment asserts it is "the single
+place `accountStatus` flips to `pending_deletion`"; writing a parallel
+`user.update` here would have broken that documented invariant. From that
+point the account is on the ordinary Decision Log #42/#44 path — 30-day grace,
+hard delete, cascade, `ConsentAuditRecord` retention — with **no new account
+state introduced by this PR**.
+
+Two ordering details that are load-bearing rather than incidental:
+
+- The refusal is **deliberately not a transaction**. The writes span Postgres
+  (Guardian/User) and Redis (session revocation inside
+  `startPendingDeletion`), so no single transaction could cover both. The
+  *order* is what makes a partial failure safe: the Guardian row is refused
+  first, and since every consent-enforcement site in this codebase is an
+  allowlist, a refused row is locked down platform-wide even if later steps
+  fail.
+- The refusal **skips `startPendingDeletion` if the account is already
+  `pending_deletion`** (typically because the minor requested deletion
+  themselves while consent was outstanding). Re-running it would reset
+  `pendingDeletionAt` to now and push their existing, earlier deadline out —
+  a guardian refusing consent must never have the side effect of *extending*
+  how long the platform holds a minor's data. Same reason the decline endpoint
+  is idempotent.
+
+### One necessary change to `confirmConsent`, flagged rather than slipped in
+
+The brief said not to touch confirm's own logic. Introducing `declined`
+without touching it would have left a real hole: `Guardian.consentToken` is
+`NOT NULL` and `@unique`, so it keeps resolving after a decline, and confirm's
+old `consentStatus: { not: 'confirmed' }` write-guard would have happily
+flipped a **declined** row to confirmed — silently reversing a refusal, on an
+account already scheduled for deletion, using a link emailed before the
+refusal was made. Two minimal changes: an explicit `declined` branch throwing
+a clear (non-generic — the caller already holds the real token, so there is
+nothing left to enumerate) error, and the write-guard tightened from the
+negative `{ not: 'confirmed' }` to the positive `'pending'` as the race-safe
+backstop. Both are exactly equivalent for every pre-existing case.
+
+### Safeguarding audit: every enforcement site was checked, not assumed
+
+`declined` fails safe everywhere **by construction**, verified by grepping
+every reader of `consentStatus` across `services/api/src` rather than
+reasoning about it. All five enforcement sites are **allowlists**
+(`=== 'confirmed'` / `{ consentStatus: 'confirmed' }`), never denylists
+(`=== 'pending'`): `guards/guardian-consent.guard.ts`, `clubs.service.ts`,
+`community-groups.service.ts`, `messaging.service.ts`,
+`users.service.ts`. A declined minor is therefore blocked everywhere a pending
+one is, with no changes to any of those files.
+
+That same audit found **two comments this PR makes factually wrong**, both
+corrected in place rather than left to rot:
+
+- `contest.service.ts` asserted "`Guardian.consentStatus` only ever moves
+  pending -> confirmed (no reversal path anywhere in the codebase)" as the
+  reason its admin read surface needs no minor filter. That premise is now
+  false, and the consequence is real (see the Decision Log candidate below).
+- `messaging.service.ts` asserted its `GuardianConsentGuard` "can never
+  actually block anyone here in practice". It now can — and blocking them is
+  the correct behaviour, needing no code change, precisely because the guard
+  was already written as an allowlist.
+
+`registration.service.ts`'s `VerifyEmailResult` comment had already
+anticipated this exact change ("Decision Log #34's still-unbuilt
+guardian-decline flow, which would add a 'declined' state") and typed the
+field as a plain `string` for it — so `POST /auth/verify-email` now returns
+`'declined'` correctly with **no type change needed**. Comment updated to
+record that the anticipated value now exists.
+
+### Decision Log candidates raised, not silently resolved
+
+1. **`consentStatus` has no CHECK constraint.** Adding `declined` needed no
+   column migration (it is already free-form `String`, matching the
+   string-enum convention six sibling columns use). But this is a
+   safeguarding field, and a typo'd write would land a value no reader
+   recognises — failing safe (the minor stays restricted) but silently never
+   firing the decline/deletion path. A CHECK constraint on this one column
+   (**not** a Prisma enum, which would change the generated TS type at every
+   read site) is the recommendation; not introduced here because it is a
+   cross-cutting convention change.
+2. **Granularity.** All three refusal routes store `declined`, per the brief.
+   A withdrawal *is* still distinguishable in `ConsentAuditRecord`
+   (`declined` + a non-null `consentTimestamp` from the original
+   confirmation), but an **active decline is not distinguishable from a silent
+   timeout** — both leave it null. Distinct `withdrawn` / `expired` values
+   would carry real GDPR/NDPA meaning, since this is the value preserved as
+   consent proof after the minor's hard delete.
+3. **Contest admin exposure.** A withdrawn minor's `ContestEntry` (display
+   name + post text) stays visible on the admin read surface for up to the
+   30-day grace period. Admin-only, time-bounded, and filtering has its own
+   cost (a finalist vanishing mid-judging) — so it is left as a flagged
+   judgment call, with `contest.service.ts`'s comment corrected to describe
+   the real situation.
+4. **No self-service reversal.** A guardian who declines by mistake cannot
+   un-decline; the account is already in `pending_deletion`. Whether that
+   should have an undo window is the same open question Decision Log #42
+   already raises for self-requested deletion.
+
+### Deliberately not built
+
+No guardian-facing web page for any of this — same API-contract-only scoping
+the original guardian-consent PR used. Worth noting for the frontend ticket:
+`apps/web`'s `GuardianConsentConfirmPage.tsx` currently models the Figma
+frame's "I do not consent" button as *"take no action, with an
+acknowledgement message"* **precisely because no decline endpoint existed**.
+It can now be wired to a real action. No guardian-facing withdrawal
+confirmation email either (the guardian gets the request email; only the minor
+is notified of the outcome).
+
+### Verification
+
+Real before/after, measured by stashing this branch and re-running against a
+clean checkout — not estimated:
+
+- **Mocked suite: 83 suites / 1099 tests, 0 failures -> 85 suites / 1139
+  tests, 0 failures.** Two new spec files
+  (`guardian-consent-refusal.service.spec.ts` 19,
+  `guardian-consent-expiry-sweep.service.spec.ts` 11) plus 10 new cases on the
+  existing controller spec. *Honest note on the baseline:* the first clean-
+  checkout run reported 2 failures, both in real-HTTP/real-app-bootstrap specs
+  and both under heavy contention (387s wall clock vs 47s on a quiet re-run);
+  a clean re-run was 83/1099 green. That is the documented contention-flake
+  class this repo already raised `testTimeout` to 30000ms for, not a real
+  baseline failure.
+- **e2e suite (real Postgres via docker-compose): 19 suites / 185 tests ->
+  20 suites / 193 tests, 0 failures.** Exactly one spec file added and **no
+  existing e2e file modified** (confirmed via `git status`), so the before
+  figure is exact — and it matches the last figure recorded on `main`.
+- `npx tsc --noEmit`, `npm run lint`, `npx nest build` all clean.
+- Migration `20260919132732_add_guardian_decline_withdrawal_expiry_fields`
+  applied cleanly to the dev database and (by `global-setup`) to
+  `soccernity_test`; the generated SQL is purely additive — three nullable
+  columns and two indexes, zero `ALTER`/`DROP` against anything existing.
+  Column presence re-verified directly with `psql \d "Guardian"`.
+- **`User`/`Guardian` safeguarding fields are untouched** —
+  `is_minor`/`guardian_id`/`consentStatus`/`consentToken`/`consentTimestamp`
+  all unchanged; the schema diff adds fields and a comment, removes nothing.
+
+The three paths the brief asked to be traced end to end — decline, withdrawal,
+and double-expiry — each have a real-Postgres e2e test proving the account
+lands in `pending_deletion` **and** that the pre-existing
+`AccountDeletionSweepService` then picks it up on its normal 30-day terms and
+hard-deletes it, with the `ConsentAuditRecord` snapshot written on the way
+out. The e2e also proves the 29-day/31-day grace boundary, that a withdrawal
+link is genuinely single-use (which depends on real Postgres NULL semantics, so
+a mock could not have shown it), and that a third sweep tick never restarts an
+already-running deletion clock.
+
+
+## Status update -- sprint-1/coppa-card-verification (2026-09-21)
+
+A technical control, not a legal conclusion (Decision Log #4 stays open).
+For a guardian whose row was flagged `cardVerificationRequired` at
+registration (child under 13 AND self-declared US, or country omitted),
+`POST /auth/guardian-consent` additionally requires a completed, refunded
+Stripe PaymentIntent charge. Routes: `POST /auth/guardian-consent/verification`,
+`/card/intent`, `/card/complete` (token-credentialed, rate-limited, body is
+only `consentToken`). Every other guardian keeps the email-link-only flow.
+`consentVerificationMethod` / `consentVerificationAt` are recorded with
+`consentTimestamp` and snapshotted into `ConsentAuditRecord`. Config:
+`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `COPPA_VERIFICATION_AMOUNT_CENTS`
+(placeholders => 503, fail closed). Full detail in CLAUDE.md's matching bullet.
+
+## Status update -- safeguarding/guardian-email-change-endpoint (Decision Log #60 / #365)
+
+`POST /auth/guardian-consent/change-guardian-email` `{ email }` lets a minor
+correct the guardian's email **while consent is still pending**. Submitting a
+new address restarts the guardian-consent flow from scratch, as Decision Log
+#60 decided on the design side. `JwtAuthGuard` only (NOT `GuardianConsentGuard`
+-- a restricted-pending minor is exactly who this is for), `@AuthRateLimit()`
+(the platform emails an address the caller chooses, the same spam-vector class
+`/resend` carries). The minor is the JWT `sub`; there is no id in the body and
+`forbidNonWhitelisted` rejects one.
+
+What "restart" does, all on the SAME `Guardian` row (`GuardianConsentService.changeGuardianEmail`):
+
+- `email` replaced (trimmed, lowercased); a fresh `consentToken` overwrites the
+  `@unique` column, so the **old emailed link stops resolving**; a fresh
+  `consentTokenExpiresAt` window starts.
+- `consentAutoResentAt` cleared, so the new guardian gets the full
+  expiry-sweep treatment (one automatic chase, then implicit decline) rather
+  than inheriting the old guardian's spent budget.
+- Card verification progress wiped (`stripePaymentIntentId`, `cardVerifiedAt`,
+  `cardRefundedAt` -> null); a different person must complete their own charge.
+  `cardVerificationRequired` stays frozen (age/country have not changed).
+- The consent request is sent through the existing
+  `RegistrationEmailService.sendGuardianConsentEmail`, to the new address with
+  the new token. Best-effort: a send failure is logged, not thrown, because the
+  state change has committed and `/resend` exists.
+
+What it refuses (and why):
+
+- **Confirmed consent -> 409, nothing written.** A live approval is relied on;
+  letting a minor swap the approving parent for an address of their choosing and
+  keep the approval would defeat it. Withdrawal is the existing path for that.
+- **Declined -> 409** (already on the deletion path).
+- No Guardian row, not a minor, or reclassified as an adult (Decision Log #349)
+  -> 404, same as `GET /status`.
+- Same email as on file -> 400. **The minor's own email -> 400** (a minor must not
+  be able to approve their own request). The same rule now also applies at
+  **registration** (`RegistrationService.register`, before anything is written),
+  where the guardian email is first captured.
+- A card charge for the current guardian that is verified but not yet refunded
+  -> 409 "try again in a little while". Clearing it would orphan the charge
+  (`CardRefundRetrySweepService` finds it by `cardVerifiedAt` +
+  `stripePaymentIntentId`), so the hourly sweep settles it first.
+- Concurrent changes/confirm/resend: the write is an `updateMany` whose where
+  clause carries the row's current token and card state (optimistic lock); a
+  lost race is a 409 and sends nothing.
+
+Follow-up pass, same PR (everything the first cut flagged as unbuilt):
+
+- **Previous guardian address is notified.** After the new request is sent, the
+  OLD address gets a `guardian-email-replaced` email (new template,
+  `RegistrationEmailService.sendGuardianEmailReplacedEmail`): the request it
+  received was withdrawn, no further action needed, contact support if
+  unexpected. It carries no token and does **not** name the new address. Own
+  try/catch, so a failure can never fail a committed change. Plain functional
+  copy, **not counsel-reviewed**.
+- **Name and relationship are re-captured.** `ChangeGuardianEmailDto` now
+  requires `name` and `relationship` (same rules as registration's
+  `GuardianDetailsDto`) and writes both onto the row with the new email, so the
+  previous guardian's details never stay attached to a different person.
+- **Per-minor cap.** `GuardianEmailChangeLimiter` (Redis,
+  `guardian-email-change:<minorId>`): at most **5 successful changes per 24h**
+  (fixed window from the first counted change), on top of the per-IP
+  `@AuthRateLimit()`. INCR up front (concurrent requests can't both slip under),
+  DECR when the change is refused, so validation/state refusals never burn
+  budget; an over-limit attempt neither inflates the counter nor extends the
+  lockout. Enforced in the controller so `GuardianConsentService`'s constructor
+  is unchanged. A 429 carries a plain message.
+- **Frontend.** `apps/web` `/guardian-consent/change-email`
+  (`ChangeGuardianEmailPage`, Figma 5498:7164), linked from the pending state of
+  `/guardian-consent` (previously a disabled "Coming soon" button). Name and
+  relationship fields are **not in the Figma frame** (it has an email field
+  only) and were added plainly; the frame needs updating to match. Mobile frame
+  5501:8536 not separately inspected -- layout stacks at <=560px.
+
+Still open: `CONSENT_SCREEN_VERSION` deliberately not bumped (guardian-visible
+consent wording unchanged); the per-minor cap's numbers (5 / 24h) are a judgment
+call, not from a spec.
+
+Tests: `guardian-email-change.service.spec.ts` (11, unit, stateful fake honouring
+the optimistic-lock where clause), 4 new cases in
+`guardian-consent.controller.spec.ts`, and `test/guardian-email-change.e2e-spec.ts`
+(5, real Postgres: restart on the same row, old link dead / new link confirms,
+confirmed consent byte-identical, refusals, concurrent changes).
+
+
+## Status update -- W3 gates: write block, profile gate, onboarding state, approval email, incorrect-details flag (build register B-026/B-027/B-028/B-029/B-030/B-118, 2026-10-17)
+
+Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of what changed in `auth`:
+
+- **`nextStep` / onboarding state (B-030).** `AuthUserSummary` (login, register,
+  reactivate) and the own-profile response gain `profileComplete`,
+  `guardianConsentStatus` (`not_applicable | pending | confirmed | declined`;
+  `declined` is never folded into `pending`) and `nextStep`
+  (`restricted_pending | verify_email | create_profile | none`), computed by
+  `onboarding-state.util.ts` from a fresh read (a minor's Guardian row is looked
+  up at login; adults skip the query). A routing hint only: the guards enforce.
+  Still never in the JWT (`{ sub, role }` only).
+- **`ProfileCompleteGuard` (B-027)** -- `403 profile_incomplete` until a username
+  is set; fresh read, fails closed. Applied to content-publishing routes only
+  (see the report's table and `src/write-route-guards.spec.ts`).
+- **Approval email (B-028).** `confirmConsent` sends `guardian-approved-minor`
+  to the minor only when *that* request made the `pending -> confirmed`
+  transition (the idempotent re-click and a lost race send nothing).
+  Fire-and-forget; link is `${WEB_APP_BASE_URL}/login`; nothing is sent if the base
+  URL is unusable. Copy is functional and not counsel-reviewed.
+- **Incorrect-details flag (B-029, Decision Log #372).**
+  `POST /auth/guardian-consent/report-incorrect-details { consentToken }`
+  sets `Guardian.incorrectDetailsReportedAt` (migration
+  `20261017120000_add_guardian_incorrect_details_report`, additive). While open:
+  `confirmConsent` and card `createIntent` refuse; decline and withdraw do not;
+  `complete()` still records/refunds a charge already made. Survives a
+  guardian-email change on purpose. Collects no note and no DOB. The adopted
+  default for #372's open point ("what the flag does to the consent flow") is
+  *blocks approval only* -- veto-able.
+- **Write-route guards (B-026/B-118).** `GuardianConsentGuard` and
+  `EmailVerifiedGuard` extended across the social/profile write routes; see the
+  report. `auth` routes themselves stay open by design.
+- **Guardian decline cap (B-110 + B-102, Decision Log #389, #395 B2, #402, #403
+  items 2 and 15; `backend/w3b-decline-cap-dob-correction`).** `Guardian.declineCount`
+  (migration `20261017140000_add_guardian_decline_count`, additive, CHECK >= 0;
+  pre-existing explicit declines are backfilled to 1) is an INTERNAL counter:
+  no API returns it and the status response gained no field.
+  - **Declines 1 and 2** (`GuardianConsentService.recordNonFinalDecline`): the row
+    becomes `declined` (`consentDeclineSource = guardian_explicit`) and the counter
+    moves up by one. The account is NOT touched: still `active`, sessions valid,
+    login works, no deletion clock, and no email (the minor sees the decline page
+    inside the account). Every consent enforcement site is an allowlist, so a
+    `declined` minor stays restricted. The write pins the counter value it read,
+    so two concurrent clicks count once; re-clicking the same link is idempotent.
+  - **Reopening.** `POST /auth/guardian-consent/resend` (still keyed on the minor's
+    email, not JWT) and `POST /auth/guardian-consent/change-guardian-email` accept a
+    `declined` row only when it is an EXPLICIT decline with fewer than three on
+    record (`isReopenableDecline`) AND the account is an `active` minor's. They
+    reopen it as `pending` with a fresh token and expiry and clear
+    `consentDeclineSource`. Withdrawal rows, expiry rows and the third decline are
+    never reopenable. Changing the guardian email does NOT reset the counter.
+  - **Decline 3** (any time, three in one day included) goes through
+    `refuseConsentAndScheduleDeletion` unchanged: login blocked at once, sessions
+    revoked, `pending_deletion` with the existing 30-day grace, and the existing
+    `sendConsentDeclinedEmail` (wording rewritten for the cap,
+    **[COPY PENDING LEGAL REVIEW]**) is the only message. Expiry, the second lapse
+    and post-approval withdrawal go through the same primitive but never increment.
+  - **Open:** a row declined at 1 or 2 that the minor never resends has no expiry;
+    nothing sends a reminder. Frontend (GuardianConsentPage rendering, frames
+    5491:8241 / 5501:8453) not built.
+
+- **Stale-decline lapse, status fields, resend-verification (B-126, B-131, B-128;
+  Decision Log #406 items 1, 11, 3; `backend/w3d-decline-lapse-resend-summary`).**
+  - **`Guardian.consentDeclinedAt`** (migration
+    `20261018120000_add_guardian_consent_declined_at`, additive: one nullable column,
+    one index; rows that are still reopenable are stamped with the migration time) =
+    when a row last became `declined`, for ANY reason. Stamped in
+    `recordNonFinalDecline` and `refuseConsentAndScheduleDeletion`; kept when a row is
+    reopened; cleared by a DOB-correction restart.
+  - **`GuardianStaleDeclineSweepService`** (hourly). A row declined at decline 1 or 2
+    (explicit source, fewer than three recorded, active minor) and not reopened within
+    `GUARDIAN_DECLINE_LAPSE_DAYS` (default 14) of `consentDeclinedAt` is reopened as
+    `pending` through `reissueConsentToken({ reopenDeclined, markAutoResent })`
+    (fresh token and expiry, `consentAutoResentAt` stamped) and the minor gets a
+    warning email (`guardian-consent-decline-lapse-reminder`,
+    **[COPY PENDING LEGAL REVIEW]**). That is stage 1 of the unanswered-request path:
+    when the new request lapses the existing `GuardianConsentExpirySweepService`
+    sees `consentAutoResentAt` set and closes the account (`pending_deletion`,
+    30-day grace). `declineCount` is never touched: an expiry is not a decline.
+    `reissueConsentToken` now returns `boolean` (false = a reopen lost a race, nothing
+    was sent) so the sweep never warns about an email that did not go.
+  - **`GET /auth/guardian-consent/status`** adds `guardianFirstName` (first
+    whitespace-separated word of `Guardian.name`, an approximation) and
+    `lastDecisionAt` (the later of `consentTimestamp` and `consentDeclinedAt`, so
+    approval, decline and withdrawal are covered). The decline count is still never
+    returned.
+  - **`POST /auth/resend-verification-email`** `{ email }`: unauthenticated,
+    `@AuthRateLimit()` per IP plus a per-account cap (3 per hour, Redis, silent over
+    the cap). ONE 200 response for every outcome. Sends only for an `active`,
+    unverified account. Earlier links are not revoked (the token store has no
+    per-user index); the cap bounds how many are live.
+
+## Status update -- cookie session mode (`security/api-cookie-session-mode`, B-245, Decision Log "Token storage" / #422, #407 item 1) -- opt-in when built; the browser DEFAULT since B-248 (see the next status update)
+
+Build Plan 5.7 says the web refresh token lives in an httpOnly, Secure, SameSite cookie; until
+this PR the API only ever returned it in the response body. This adds the API half as an
+**opt-in** mode. `apps/web` and `apps/admin` were NOT changed there (B-246, B-247) and the body
+tokens were NOT removed for browsers. *[Dated note 2026-10-29: B-248 (`security/browser-default-cookie-session`)
+flipped the default; "opt-in" below is the history of this PR. The current rule is the next status update.]*
+
+**How a caller opted in (B-245 as built):** send the request header `X-Auth-Mode: cookie`. Without it every route
+behaved exactly as before (tokens in the body, no `Set-Cookie`).
+
+**With the header**, on every route that returns a token pair (`POST /auth/login`, `/auth/register`,
+`/auth/refresh`, `/auth/reactivate-account`, and `POST /admin/auth/login`, `/admin/auth/refresh`) and on logout:
+
+- the refresh token is set as a cookie: `HttpOnly; Secure; SameSite=Strict`, **host-only** (no
+  `Domain`). User API: name `sn_rt`, `Path=/auth`. Admin API: name `sn_admin_rt`, `Path=/admin/auth`.
+  `Secure` is always on in production; outside production it is dropped **only** when the request
+  `Origin` is `http://localhost` / `127.0.0.1` / `[::1]` (local development).
+- the refresh token is **omitted from the response body** (`refreshTokenExpiresAt` stays); the
+  access token is still returned in the body.
+- **"Stay signed in"**: new optional boolean `staySignedIn` on the login DTO (user and admin; declared
+  because `forbidNonWhitelisted` is on, and a non-boolean is a 400). `true` -> a persistent cookie with
+  `Max-Age` = the remaining refresh TTL; `false`/absent -> a session cookie (no `Max-Age`/`Expires`).
+  Register and reactivate-account have no such choice and always issue a session cookie. The choice is
+  stored on the refresh-token record (`persistent`, user and admin stores) so a **rotated** cookie keeps
+  its lifetime kind; `TokenPair.persistent` carries it to the controller and it never appears in a body.
+- `POST /auth/refresh` (and `/admin/auth/refresh`) read the cookie, **never the body** (a body
+  `refreshToken` is ignored), rotate, set the new cookie, and never return the token in the body. No
+  cookie -> 401. A 401 from the store (invalid or reuse detected) also clears the dead cookie.
+- `POST /auth/logout` (and `/admin/auth/logout`) clear the cookie (same attributes, `Max-Age=0`) and
+  revoke as before, including `allSessions` (needs a bearer access token, otherwise 401 -- the cookie is
+  still cleared). With no cookie the call still clears and returns 204.
+- **Origin check:** in cookie mode on refresh and logout a missing `Origin`, or one outside the CORS
+  allowlist (`WEB_APP_BASE_URL`, `ADMIN_APP_BASE_URL`, plus localhost outside production), is a **403**
+  before anything is read or revoked -- the browser attaches the cookie on its own, so this is the CSRF
+  control on top of `SameSite=Strict`. Login/register/reactivate carry no Origin requirement.
+- **Without the header** `refreshToken` is still required on refresh/logout (400 if missing); the DTO
+  field became optional only so cookie mode can omit it, and the controllers re-impose the old check.
+
+**CORS** (`src/cors-options.ts`): `credentials: true` with the same exact-origin allowlist (still no
+wildcard; a disallowed origin gets no `Access-Control-Allow-Origin`). `allowedHeaders` is left unset on
+purpose so the `cors` package reflects the pre-flight's requested headers: `X-Auth-Mode` (and
+`X-Consent-Token`, `Authorization`) work without a hand-kept list; `cors-options.spec.ts` pins it.
+
+**User and admin never cross:** different cookie names, different paths, different Redis key
+namespaces and signing secrets, and each controller reads only its own cookie. Proven in
+`test/cookie-session.e2e-spec.ts` (a user cookie/token is rejected by the admin endpoints under both
+cookie names, and the mirror image) alongside the pre-existing `admin-auth-isolation.e2e-spec.ts`.
+
+**Reuse detection is unchanged and still family-wide in cookie mode:** replaying a consumed cookie is a
+401, revokes the whole family (the legitimate successor dies too) and clears the cookie.
+
+**Dependency:** `cookie@^0.7.2` is now a direct dependency of `services/api` (it was already in the
+lockfile as an Express dependency, so the lockfile gains one line). No `cookie-parser`. It ships no
+types, so `src/session-cookie/cookie-lib.ts` types the two calls used.
+
+**Staging caveat (B-249):** `SameSite=Strict` host-only cookies need the web app and the API to be
+same-site. Staging on default `onrender.com` addresses is cross-site, so cookie mode cannot work there
+until same-site custom domains exist; the opt-in design is what keeps staging working in the meantime.
+
+Code: `src/session-cookie/` (helper + spec), the four controllers, `token.service.ts`/`admin-token.service.ts`
+and both refresh-token stores (`persistent`). Tests: `src/session-cookie/session-cookie.spec.ts`
+(attributes, Secure rule, Origin check, body omission), `src/cors-options.spec.ts`,
+`test/cookie-session.e2e-spec.ts` (real Postgres + Redis).
+
+## Status update -- cookie session mode is the browser DEFAULT (`security/browser-default-cookie-session`, B-248, Decision Log #422 item 3; order amended by #435 and #437)
+
+B-245 made the cookie session an opt-in (header `X-Auth-Mode: cookie`). apps/web (B-246) and apps/admin
+(B-247) now send the header and hold no token in browser storage. B-248 flips the DEFAULT so that a browser
+is never handed a refresh token in a response body, even if its code forgets the header. No dual-mode
+switch (Decision Log #435); cookie names, paths, lifetimes, the Origin allowlist, CORS, rate limits and
+the user/admin separation are unchanged. The platform is not live, so no session in browser storage is
+migrated: a forced re-login is the decided behaviour.
+
+**The rule (one function, `isCookieMode(req, env?)` in `src/session-cookie/session-cookie.ts`)** -- a request
+is in cookie mode when EITHER (a) it carries `X-Auth-Mode: cookie`, OR (b) it carries an `Origin` header
+that is on the exact-origin allowlist CORS uses (`isOriginAllowed(origin, buildCorsConfig(env))`:
+`WEB_APP_BASE_URL`, `ADMIN_APP_BASE_URL`, plus localhost outside production). An absent Origin is never
+cookie mode on its own (`isOriginAllowed(undefined)` is true -- a non-CORS request -- so the check is
+explicit). `auth.controller`, the registration/reactivate paths (through `applyCookieSession`),
+`admin-auth.controller` and `rate-limit/global-rate-limit.config.ts` (the refresh-token tracker reads the
+cookie or the body by the same test) all call it, so one edit moved all of them.
+
+**Contract for native clients (apps/mobile, scripts, API-level e2e helpers):** send **no `Origin` header**
+(or one that is not an allowed web/admin origin) and you receive body tokens exactly as before --
+`refreshToken` in the body, no `Set-Cookie`, and `refreshToken` in the body is what refresh/logout read.
+React Native's `fetch` and server-side HTTP clients do not set `Origin`. A foreign browser origin gets body
+mode, never a cookie (and cannot read the response anyway: CORS).
+
+**Why the web and admin apps still send the header:** with it, an Origin that is missing from
+`WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` (a deployment mistake) makes refresh/logout fail loudly with a
+403 (`assertAllowedCookieOrigin`) instead of silently falling back to body tokens.
+
+**Consequences worth knowing:** (1) cookie-mode refresh/logout need an allowed Origin and read the cookie,
+never the body -- so a browser-origin request that presents a body `refreshToken` and no cookie now gets
+401 (before: it worked); (2) login/register/reactivate still carry no Origin requirement (a request with
+the header but no Origin is cookie mode and gets a cookie it may not be able to store -- unchanged from
+B-245); (3) the legacy `sn_access_token` / `sn_refresh_token` (web) and `sn_admin_*` (admin) storage purges
+in the apps were deleted in the same PR.
+
+Tests: `src/session-cookie/session-cookie.spec.ts` (every Origin/header combination),
+`test/cookie-session.e2e-spec.ts` (real Postgres + Redis, user AND admin audiences: allowlisted Origin and
+no header -> cookie, no Origin -> body, refresh with an allowlisted Origin ignores a body token, logout
+clears), Playwright spec 06 (header-less browser login).
+
+## Status update -- login lockout per account AND IP, lockout notice, Redis outage fallback (`security/login-lockout-redesign`, Decision Log #429, B-256, B-263)
+
+Reworks the login limit built by `security/auth-limits-shared-networks` (B-256). Signup, forgot-password,
+the admin login (5 per 15 minutes per IP), the other `@AuthRateLimit()` routes and `TRUST_PROXY_HOPS`
+handling are unchanged. Code: `rate-limit/auth-limits/`.
+
+**The problem.** The failed-login budget (5 per 15 minutes) was counted per ACCOUNT alone, so anyone could
+lock a victim out by guessing from any address.
+
+**Now, three counters on `POST /auth/login`** (all keyed by SHA-256 digests, never a raw email or IP;
+successes are not counted; the slots are reserved up front and given back unless the attempt really was a
+failed credential check, so 20 parallel guesses yield exactly 5 attempts per pair):
+
+| Counter | Key | Default | Env |
+|---|---|---|---|
+| per-IP ceiling (every attempt) | IP | 60 / 10 min | `AUTH_IP_CEILING_*` |
+| failed attempts per pair | normalised email + IP | 5 / 15 min | `AUTH_LOGIN_FAILED_ATTEMPTS_*` |
+| failed attempts per account, all IPs | normalised email | 20 / 24 h | `AUTH_LOGIN_ACCOUNT_CEILING_*` |
+
+A guesser therefore blocks only their own address; the owner on another address still signs in. When the
+account ceiling is spent, every address is refused (429 with `Retry-After` from the key's TTL) until it
+expires or the owner completes a password reset. The pair is checked before the account ceiling, so an
+attempt already refused for its own address never spends the account ceiling; a refused attempt gives back
+the slot it took. A real and an unknown address get the same statuses, bodies and counters (every key derives
+from the request alone). `PasswordResetService.resetPassword` calls `AuthLimitsService.clearAccountCeiling`
+(best effort, after the reset succeeded); the per-pair counters expire on their own.
+
+**Lockout notice email** (`login-lockout.notifier.ts`, template `login-lockout-notice` on
+`RegistrationEmailService`). The failed attempt that spends a pair's budget (the 5th) sends the account's
+registered address one plain notice: someone entered the wrong password several times; nothing to do if it
+was you; otherwise reset your password (link to `/forgot-password` via `buildWebAppLink`). Rules: only if an
+account exists (unknown addresses create no claim and send nothing); fire-and-forget in the background, so
+the response and its timing never depend on it; at most ONE per account per 24 hours, an atomic Redis
+`SET NX EX` (`AuthLimitsStore.claim`), given back if nothing could be sent (unusable `WEB_APP_BASE_URL`); it
+carries no IP, times or counts. **No string is tagged `[COPY PENDING LEGAL REVIEW]`**: it makes no legal or
+safety promise (Decision Log #412 item 5). **Open question for the founder:** for a minor's account the
+notice goes to the account's own email only; guardian notification is NOT built.
+
+**Redis outage fallback** (`auth-limits.store.ts`, `auth-limits.fallback.ts`). Previously every method failed
+open when Redis was unreachable (all limits vanished). Now each method falls back to a per-process in-memory
+counter with the same semantics (hit, release, ttl, retry-after, the `SET NX` claim, clear) so the brute-force
+limits still hold PER API INSTANCE during an outage; counters restart empty when Redis returns. The map is
+bounded (10,000 entries; expired entries go first, then the oldest). The outage is logged and reported to
+Sentry (tagged `rate_limiter=auth`) at most once a minute. If the fallback itself throws, the method fails
+open as before. **This is still not fail-closed and not shared:** with N instances the effective limit is up
+to N times looser until Redis is back, and a flood of distinct keys during an outage can evict an old counter.
+
+**Tests.** `auth-limits.http.spec.ts` (HTTP, in-memory Redis stand-in, fake Prisma and email),
+`auth-limits.store.spec.ts` (fallback semantics, bounded map, single report, fail-open),
+`test/auth-limits.e2e-spec.ts` (real Postgres and Redis, real production numbers),
+`password-reset.service.spec.ts`, `registration-email.service.spec.ts`, `env-completeness.spec.ts` (the two
+new variables: read in code, declared in both `render.yaml` services, documented, numbers equal the code
+defaults). Both e2e layers relax the new variables like the other `AUTH_*` limits (`test/env.ts`,
+`e2e/support/api-process.ts`).
+
+## Status update -- session-revocation marker: revoking sessions also stops access tokens already issued (`backend/b305-session-revocation-marker`, B-305, Decision Log #500)
+
+Until now `TokenService.revokeAllSessionsForUser` deleted the user's refresh tokens only. An access token already
+issued kept working for its whole lifetime (`JWT_ACCESS_TTL_SECONDS`, 900 s by default), so a suspended user, or the
+device that had just changed its password, could keep calling the API for up to 15 minutes. (The full list of
+callers is in `docs/backend-b305-session-revocation-report.md`.)
+
+**How it works.**
+
+- `revokeAllSessionsForUser(userId)` deletes the refresh tokens as before and THEN writes a marker in Redis:
+  key `auth:revoked-at:user:<userId>`, value = the revocation time in whole seconds, TTL = the configured access-token
+  lifetime plus 60 seconds (`SESSION_REVOCATION_MARKER_MARGIN_SECONDS`). Nothing is hard-coded: the TTL is read from
+  `JWT_ACCESS_TTL_SECONDS` (default 900) by `TokenService`. Once the marker has expired no token it could refuse is
+  still alive, so it deletes itself. If writing the marker fails the error propagates, like a failed revocation would.
+- `TokenService.verifyActiveAccessToken(token)` (new) verifies the token exactly as `verifyAccessToken` does, then reads
+  the marker and refuses the token (the same `401 Invalid or expired access token`) when the token's standard `iat` is
+  strictly less than the marker. `JwtAuthGuard` and `OptionalJwtAuthGuard` call it, and their `canActivate` is now
+  async. `OptionalJwtAuthGuard` treats a revoked token exactly like an invalid one (anonymous, never a 401).
+  `verifyAccessToken` itself is unchanged (logout, the rate-limit identity resolver and the other plain checks still
+  use it). **No claim was added to the token** -- it is still exactly `sub`, `role`, `iat`, `exp`.
+- **Redis unreadable: fail open.** The guard accepts the token, logs one warning and reports to Sentry with the tag
+  `session_revocation=user` (at most once a minute, like the rate limiters' `rate_limiter` tag), and never throws.
+  Trade-off, stated plainly: while Redis is down a revoked-but-unexpired access token works again until Redis returns
+  or the token expires; failing closed would sign everyone out whenever Redis blips.
+
+**The one-second edge (accepted, Decision Log #500).** `iat` and the marker are whole seconds. A token issued in the
+SAME second as a revocation, but just before it, has `iat === marker` and is NOT refused; a token issued at or after the
+revocation second is accepted; only a token from an EARLIER second is refused. In practice this means a revocation is
+effective for every token that is at least one second old. Tests that revoke and then expect a 401 therefore wait until
+the next whole second after issuing the token (`nextSecond()` in `test/session-revocation.e2e-spec.ts`).
+
+**Behaviour change worth knowing.** `POST /auth/change-password` used to answer `204` with no new token pair, so the access
+token the client used for the change was refused straight away. **[Superseded by B-310 (2026-11-13), see the next
+section: it now answers `200` with a fresh session for the caller.]** Every other caller of the
+revoke method (suspension, deactivate, delete, password reset, email change, two-factor recovery, admin Block, admin
+delete) likewise ends the person's access tokens at once.
+
+Tests: `src/session-revocation/session-revocation.spec.ts` (marker, TTL from config, the edge, Redis failure and
+once-a-minute reporting, the three guards on real routes with real token services), the rewritten guard specs, and
+`test/session-revocation.e2e-spec.ts` (real Postgres and Redis: suspend, password change, admin removal, key and TTL).
+
+## Status update -- change-password keeps the caller signed in (B-310, 2026-11-13)
+
+Since B-305 a password change revokes EVERY session of the account, the caller's own included. The web page promises
+"You stay logged in on this device.", so the change now hands the caller a fresh session.
+
+- `POST /auth/change-password` answers **`200` with the `TokenPairResponse` shape** (`accessToken`, `accessTokenExpiresIn`,
+  `refreshToken`, `refreshTokenExpiresAt`; no user summary). Order inside `AuthService.changePassword`: verify the current
+  password, read whether the caller's refresh token is persistent, hash and save the new password, **await the revoke**, then
+  `issueTokenPair`. Awaiting the revoke first means the new token's `iat` is at or after the marker second, and "iat equals
+  the marker is accepted" (B-305) is unchanged, so the fresh access token passes at once.
+- "Stay signed in" is kept: `RefreshTokenStore.peekPersistent(rawToken, userId)` reads the caller's current refresh record
+  WITHOUT consuming or rewriting it (it is deleted by the revoke, so this must happen before it) and the new pair is issued
+  with the same `persistent` value. The record must belong to the same user (another account's cookie is ignored). Cookie
+  mode reads `sn_rt` (`readRefreshCookie`); with no cookie, or in body mode (the DTO carries no refresh token), the new
+  session is not persistent.
+- Cookie mode: the controller calls `assertAllowedCookieOrigin` and `applyCookieSession`, so a fresh `sn_rt` replaces the
+  revoked one (same persistent/session lifetime).
+- The guardian notice and the "password changed" email stay non-blocking background work.

@@ -1,64 +1,88 @@
 name: Deploy
 
-# Deploys staging on every push to `staging`, and production on every push
-# to `main` (i.e. after a PR merges). The actual deploy step is a
-# placeholder — see the TODO below. Do not fill it in by guessing a
-# provider; MVP Build Plan Section 9, Decision Log item #9 (hosting
-# platform) must be resolved first, and this file should be updated
-# alongside that decision, not ahead of it.
+# Decision Log #9 (Build Plan Section 9 / CLAUDE.md) is resolved as
+# Decision Log #26: Render (API) + Neon (Postgres) + Upstash (Redis),
+# unbundled. Render deploys via its own GitHub App integration, reading
+# render.yaml (repo root) directly on every push to `staging`/`main` — it
+# does NOT need this workflow to invoke a deploy step itself, unlike the
+# placeholder this file used to contain.
 #
-# Section 5 recommends a managed container platform over self-managed
-# servers (AWS ECS/Fargate, or a PaaS such as Render/Railway) to minimise
-# DevOps overhead for a two-developer team — but which one is still open.
+# What this workflow does instead: a post-deploy smoke test against the
+# real, already-deployed GET /health endpoint, confirming the deploy Render
+# just ran is actually serving traffic and can reach its real database —
+# not just that Render's own build succeeded.
+#
+# DEPLOY-TIMING TRADE-OFF (flagged explicitly, not silently picked): reliably
+# waiting for "Render's deploy has actually finished" would need Render's
+# own deploy-status API plus an API-key secret — a bigger dependency than a
+# simple curl, and out of scope for this PR. Two simpler alternatives were
+# considered instead:
+#   (a) a fixed short wait before curling `GET /health`, accepting some risk
+#       of a false failure if Render's deploy is unusually slow that run;
+#   (b) a manually-triggered `workflow_dispatch` job that Temi runs herself
+#       once she's confirmed in Render's own dashboard that a deploy has
+#       finished.
+# This file uses (b), the more conservative of the two, since Render's own
+# deploy time is not something this repo controls or can safely assume a
+# fixed wait for. If the automatic-on-push version (a) is later wanted
+# instead, that's a follow-up, not something this PR silently builds in
+# addition.
+#
+# RENDER_STAGING_URL and RENDER_PRODUCTION_URL are repo/environment secrets
+# Temi (the founder) sets manually once the two Render services in
+# render.yaml exist and have real URLs — this workflow cannot supply real
+# values for either.
 
 on:
-  push:
-    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which deployed environment to smoke-test (run this only after confirming in Render's dashboard that the corresponding deploy has actually finished)"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
 
 jobs:
-  build:
+  smoke-test:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Generate Prisma client
-        run: npm run prisma:generate
-
-      - name: Build
-        run: npm run build
-
-      # TODO once Decision Log item #9 (hosting platform) is resolved:
-      # upload the build output as an artifact here for the deploy jobs
-      # below to consume, e.g. actions/upload-artifact.
-
-  deploy-staging:
-    if: github.ref == 'refs/heads/staging'
-    needs: build
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - name: Deploy to staging
+      - name: Resolve target URL
+        id: target
         run: |
-          echo "TODO: hosting platform not yet decided (MVP Build Plan Section 9, Decision Log #9)."
-          echo "Do not add real deploy commands here until that decision is made and documented."
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "url=${{ secrets.RENDER_PRODUCTION_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ secrets.RENDER_STAGING_URL }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail loudly if the target URL secret isn't set
+        if: steps.target.outputs.url == ''
+        run: |
+          echo "RENDER_${{ github.event.inputs.environment == 'production' && 'PRODUCTION' || 'STAGING' }}_URL is not set as a secret for this environment."
+          echo "Set it manually once the corresponding Render service in render.yaml has a real URL — see docs/deployment.md."
           exit 1
 
-  deploy-production:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Deploy to production
+      - name: Curl GET /health and verify a healthy, connected response
         run: |
-          echo "TODO: hosting platform not yet decided (MVP Build Plan Section 9, Decision Log #9)."
-          echo "Do not add real deploy commands here until that decision is made and documented."
-          exit 1
+          response=$(curl -sS -w "\n%{http_code}" "${{ steps.target.outputs.url }}/health")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "HTTP $http_code: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Expected HTTP 200, got $http_code"
+            exit 1
+          fi
+
+          status=$(echo "$body" | grep -o '"status":"[^"]*"' || true)
+          database=$(echo "$body" | grep -o '"database":"[^"]*"' || true)
+
+          if [ "$status" != '"status":"ok"' ] || [ "$database" != '"database":"connected"' ]; then
+            echo "Expected {\"status\":\"ok\",\"database\":\"connected\"}, got: $body"
+            exit 1
+          fi
+
+          echo "Smoke test passed: $body"

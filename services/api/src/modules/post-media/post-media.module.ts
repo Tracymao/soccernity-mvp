@@ -1,0 +1,55 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { StorageModule } from '../../storage/storage.module';
+import { MediaUploadsModule } from '../../media-uploads/media-uploads.module';
+import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
+import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { FfmpegMediaProcessor } from './ffmpeg-media-processor';
+import { MediaModerationClient, RekognitionMediaModerationClient } from './media-moderation-client';
+import { MediaProcessor } from './media-processor';
+import { MediaCheckService, PostMediaSweepService } from './media-check.service';
+import { PostMediaConfig } from './post-media.config';
+import { PostMediaController } from './post-media.controller';
+import { PostMediaDecisionService } from './post-media-decision.service';
+import { PostMediaObjectsService } from './post-media-objects.service';
+import { PostMediaReportController } from './post-media-report.controller';
+import { PostMediaReportService } from './post-media-report.service';
+import { PostMediaService } from './post-media.service';
+
+// backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419). User post and contest-entry media:
+// direct-to-storage upload, server-side verification and metadata stripping, the automatic Rekognition
+// check, and the background sweeps. See README.md. The real file processor (sharp + ffmpeg) and the real
+// Rekognition client are bound here; the e2e specs override MediaProcessor, MediaModerationClient and
+// StorageService with in-memory doubles.
+//
+// PostMediaConfig is exported so FeedModule can read the per-post file limit. Attaching media to a post
+// is NOT a provider here: it is the pure helpers in post-media-attach.util.ts, called by FeedService (the
+// single post-creation path), so FeedModule does not need to import this module's services.
+@Module({
+  imports: [PrismaModule, ConfigModule, StorageModule, AuthFoundationModule, GuardianSecurityNoticeModule, MediaUploadsModule],
+  controllers: [PostMediaController, PostMediaReportController],
+  providers: [
+    PostMediaConfig,
+    { provide: MediaProcessor, useClass: FfmpegMediaProcessor },
+    { provide: MediaModerationClient, useClass: RekognitionMediaModerationClient },
+    PostMediaService,
+    MediaCheckService,
+    PostMediaSweepService,
+    PostMediaReportService,
+    PostMediaDecisionService,
+    PostMediaObjectsService,
+  ],
+  // PostMediaDecisionService + DirectUploadStorageService reach AdminMediaReviewModule (B-037).
+  // MediaProcessor reaches UsersModule: avatar and cover re-encode (B-205). MediaCheckService and
+  // MediaModerationClient reach UsersModule too: the avatar and cover check reuses the post-media check (B-036).
+  exports: [
+    PostMediaConfig,
+    PostMediaDecisionService,
+    PostMediaObjectsService,
+    MediaProcessor,
+    MediaCheckService,
+    MediaModerationClient,
+  ],
+})
+export class PostMediaModule {}

@@ -1,0 +1,1082 @@
+# moderation module
+
+Build target: **Sprint 5** — Section 4.8 (Admin Service) + Section 8.4
+(Moderation & appeals workflow) of the MVP Build Plan. Built by
+`sprint-5/admin-moderation-queue-backend` (backend-api, 2026-09-15),
+Sprint 5's real blocker per the task brief that dispatched this work.
+
+Backs `apps/admin/src/pages/moderation/ModerationQueuePage.tsx` and
+`AppealReviewPage.tsx` — both real, Figma-derived UI shipped as
+self-documented STUBS ("no moderation-queue backend exists," Decision Log
+#135/#189). This PR builds that backend; converting those two screens
+from stubs to real data is a separate `figma-to-code` follow-up, **not**
+done here (out of scope per the task brief — "don't touch apps/admin's
+stub pages").
+
+`Report` (Section 3) gained reviewer/action/appeal-trail columns —
+migration `20260915003318_add_report_moderation_fields`. `AdminUser`
+gained two mechanical reverse-relation array fields for the same reason
+`User` has gained several across this codebase's history — no new
+business data of their own. **A real, hand-run `prisma migrate dev`
+confirmed this migration applies cleanly**, both against the live dev
+database and (via the e2e layer's own `global-setup.ts`) against
+`soccernity_test` — this sandbox reached `binaries.prisma.sh` fine, so
+this is not a "flagged, unverified" migration.
+
+`User` / `Guardian` safeguarding fields are untouched — only `Report` and
+`AdminUser` change (confirmed by schema diff).
+
+**schema/report-severity-escalation-admin-vetting-application
+(backend-api, 2026-09-27)** is the application half of a later schema PR
+(`schema/report-severity-escalation-admin-vetting`) that had added
+`Report.severity`/`escalatedAt`/`escalatedByAdminId`/`escalationNotes`/
+`escalatedToAuthority` and `AdminUser.childSafetyVetted`/`vettedAt`/
+`vettedByAdminId` — again flagged "no application code... yet." This PR
+is that application code: `severity` on submission, the child-safety-
+vetting gate on the admin routes, and the new `.../escalate` route. **Zero
+new schema/migration** — every field was already there. See "`severity`
+on submission" and "The child-safety-vetting gate" sections below.
+
+---
+
+## Endpoints
+
+| Method & path | Guards | Purpose |
+|---|---|---|
+| `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. Requires a `reasonCategory` (the description is optional except for `other`); accepts an optional `severity`. **Genuine spec-gap addition** — see below. |
+| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. Requires a `reasonCategory`; accepts an optional `severity`. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
+| `POST /reports/:id/appeal` | `JwtAuthGuard` | The reported user appeals an actioned report. **Genuine spec-gap addition** — see below. |
+| `GET /admin/moderation/reports` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | The moderation queue, keyset-paginated, optional `?status=` filter. Section 4.8's literal line. |
+| `PATCH /admin/moderation/reports/:id` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | Action a report: content removal, warning, suspension, or dismissed. Section 4.8's literal line. |
+| `PATCH /admin/moderation/reports/:id/appeal` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | The second-reviewer decision — upheld or overturned. **Genuine spec-gap addition** — see below. |
+| `PATCH /admin/moderation/reports/:id/escalate` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | Records that a vetted admin has escalated the report (internally and/or to an external authority). **Genuine spec-gap addition, schema/report-severity-escalation-admin-vetting-application** — see below. |
+
+All four admin routes are the first role-gated admin surface in this
+codebase — see "The role-gating guard" below. Three of them are ALSO the
+first surface gated on `AdminUser.childSafetyVetted` — see "The
+child-safety-vetting gate" below. Setting that flag on another admin is a
+SEPARATE endpoint, `PATCH /admin/users/:id/child-safety-vetting`
+(superadmin-only) — see `modules/admin-staff-vetting/README.md`.
+
+---
+
+## `POST /reports/public` (feat/public-report-submission)
+
+`schema/report-severity-escalation-admin-vetting` made `Report.reporterId`/
+`.reporter` optional and added `reporterContactEmail`/`reporterContactName`/
+`concernsMinor`, explicitly flagged as "schema groundwork only... no
+application code wiring such a route." This is that route.
+
+- **A separate controller (`PublicReportsController`), not a third method
+  on `ReportsController`** — `ReportsController` applies `JwtAuthGuard` at
+  the class level, and this route serves a caller who has no Soccernity
+  account for the purposes of this one report (a parent, a school, a
+  member of the public) — same "the credential is per-route, not a
+  session" reasoning `GuardianConsentController` already established for
+  its own unguarded, token-credentialed routes.
+- **`@AuthRateLimit()` (the shared, env-driven `'auth'` throttler) is the
+  only anti-abuse control** — there is no CAPTCHA infrastructure anywhere
+  in this repo, and none is invented here. Same reuse pattern
+  `admin.module.ts` already documents for importing `AuthRateLimitModule`
+  a second/third time.
+- **`CreatePublicReportDto` requires `reporterContactEmail`** (unlike the
+  schema column, which stays nullable for a hypothetical future
+  genuinely-anonymous route) — this endpoint's whole point is to let
+  Soccernity follow up and to send the acknowledgment email below, so a
+  submission with no way to reach the reporter back would defeat it.
+  `reporterContactName` is deliberately not collected by this route.
+- **On success, `ModerationService.createPublicReport` fires a plain
+  acknowledgment email** to `reporterContactEmail`, reusing
+  `RegistrationEmailService` (this codebase's one existing
+  "queue a transactional email" abstraction — see
+  `age-reclassification-sweep.service.ts` for the same "outside
+  auth/registration, still reuse this service directly rather than
+  build a second one" pattern) via a new `'public-report-acknowledgement'`
+  template. The copy makes **no promise about outcome or timeline**
+  beyond "a moderator will review this" — Report's own severity/
+  escalation trail (from `schema/report-severity-escalation-admin-vetting`)
+  means the real handling time is genuinely unknown at submission time.
+  Fire-and-forget with a logged warning on failure, the same
+  "must never block on / fail because of email delivery" discipline
+  `RegistrationService` already applies to its own sends — a failed send
+  must not fail report submission, and this caller has no session to
+  retry against anyway.
+- **Reuses the existing `Report` table and moderation queue** — no
+  parallel model. A publicly-submitted report shows up in
+  `GET /admin/moderation/reports` and can be actioned exactly like any
+  other, with `reporterId: null` and `reporterContactEmail` set instead.
+  `actionReport()`'s own notification step already treats a `null`
+  `reporterId` as "no `User` row to notify" (see that method's own
+  comment) — no change needed there.
+- **New Decision Log candidate, not yet transcribed into the Build Plan
+  docx**: whether `POST /reports/public` (and its exact shape — no guard,
+  required contact email, no `reporterContactName`) should be formally
+  written into Section 4, the same open question
+  `sprint-5/admin-moderation-queue-backend`'s own README section already
+  raised for `POST /reports`/`POST /reports/:id/appeal`.
+
+---
+
+## Two Decision Log candidates: the spec-gap endpoints (flagged, built anyway)
+
+Section 4's API Contract Sketch never defines a report-**submission**
+route, and never defines an appeal-**review** route either — only the two
+admin-side lines quoted in the table above (`GET`/`PATCH
+/admin/moderation/reports`) exist in Section 4.8 literally. Both gaps are
+real, not an oversight on this PR's part:
+
+1. **`POST /reports`** — Section 2's Community feature list names
+   "report/block" as in-scope, and Section 8.4's own workflow text ("a
+   report is submitted... creating a `Report` record") assumes a
+   submission path exists. Without it, nothing could ever create a
+   `Report` row at all, making the rest of Section 4.8/8.4 unreachable.
+   Built because the alternative — leaving the entire moderation-queue
+   feature unreachable — is a bigger gap than one undefined route.
+2. **`POST /reports/:id/appeal`** — same shape of gap. Section 8.4's own
+   text describes "the reported user may appeal... a second
+   admin/moderator reviews it" without ever defining either the
+   submission or the review route. `PATCH
+   /admin/moderation/reports/:id/appeal` (the review side) is *also* not
+   a literal Section 4.8 line — it was built alongside the submission
+   route since the workflow makes no sense with only one half.
+
+Neither is treated as self-evidently correct — flagging both here per
+the task brief's own explicit instruction, for a founder/Decision Log
+call on whether the exact shape (route names, guard choices) should be
+formally written into Section 4.
+
+## A third Decision Log candidate: the `Report` schema addition
+
+`reviewedByAdminId` / `reviewedByAdmin` / `reviewedAt` / `actionTaken` /
+`appealStatus` / `appealReason` / `appealedAt` /
+`appealReviewedByAdminId` / `appealReviewedByAdmin` / `appealReviewedAt`
+are a genuine addition beyond Section 3's original six-field `Report`
+list (`id`, `reporterId`, `targetType`, `targetId`, `reason`, `status`,
+`createdAt`), flagged per `CLAUDE.md`'s "the data model is a fixed spec"
+rule rather than added silently. Without these, there is no way to record
+who reviewed a report, what action was taken, or the appeal trail Section
+8.4's own workflow text assumes exists — see the schema's own comment on
+`Report` for the full reasoning.
+
+---
+
+## Reason category (backend/b284-report-reason-categories, B-284, Decision Log #465)
+
+Founder decision 2026-11-03: a report carries a **reason category**, so an admin can read and search "why" without parsing free text. Every figure and rule below is an **adopted default, veto-able**; the founder did not state the list or the labels.
+
+**The list** (`REPORT_REASON_CATEGORIES`, `moderation.constants.ts`; the labels an admin reads are `REPORT_REASON_CATEGORY_LABELS`): `harassment_or_bullying`, `hate_or_abusive_language`, `threats_or_violence`, `child_safety_concern`, `sexual_or_inappropriate_content`, `impersonation_or_fake_account`, `spam_or_scam`, `privacy_or_image_misuse`, `other`.
+
+**Storage:** `Report.reasonCategory String?`, a plain string like `status` and `severity` (not a Prisma enum), additive migration `20261109090000_add_report_reason_category`, **no backfill**. `NULL` means "not categorised": every report made before the column, a Grassroots sensitive-content report (`GrassrootsService.logSensitiveContentReport`) and a report raised by escalating a Contact Us enquiry (`ContactEnquiryAdminService.escalate`). Those creators were not changed. A genuine addition beyond Section 3's `Report` field list, flagged in the schema comment per the fixed-spec rule.
+
+**Both submission routes** (`POST /reports`, `POST /reports/public`):
+
+* `reasonCategory` is **required** and must be one of the nine keys. A missing or unknown value is the DTO's `400` (the global `ValidationPipe`, a code-less message, like every other DTO field in this module).
+* `reason` (the free-text description) is **optional**, except for category `other`, where it is required and must not be only spaces: otherwise the coded `400 report_reason_required` (`REPORT_REASON_REQUIRED_CODE`), raised before any database read. When omitted it is stored as the **empty string**, never `NULL` and never missing, so no reader of `Report.reason` breaks. A provided value is still 1 to 500 characters, so an explicit `""` stays a `400` (the existing behaviour; only an absent or `null` value counts as omitted).
+* The category sets **no `severity`**. It sets **`concernsMinor` for exactly one category**: `child_safety_concern` (see "Child safety category sets the minor flag" below, Decision Log #466). Every other category leaves `concernsMinor` as the reporter sent it (`false` on `POST /reports`, which has no such field; the reporter's own value on the public route).
+* `PostMediaReport` (the media report) is untouched.
+
+**Readers of `Report.reason` checked (all keep receiving a string):** the admin list, detail, action and appeal responses return whole `Report` rows, so `reasonCategory` appears next to `reason` with no mapper change (`null` when not categorised); the appeal routes and the hold, vetting and retention queries read other columns; the admin search never reads `reason` (it returns `reasonCategory`, see `admin-search/README.md`); `PostMediaReport.reason` is a different column. Nothing in `account-deletion` or the 12-month contact retention copies or blanks `Report` columns by list (they read `id`, `targetId`, `reporterId`, `concernsMinor`, `status` and dates only).
+
+**A category is not personal data** (it is one of nine fixed labels, not a description of a person), so the anonymisation sweep, the held-account minimisation and the purge job are unchanged.
+
+**`apps/web` and `apps/admin` need a follow-up:** the web report form (`ReportAction`, `ReportPage`) sends no `reasonCategory` yet, so until the frontend leg ships those submissions are a `400`. The Figma frames and the admin screens that show the category are the next legs.
+
+---
+
+## Child safety category sets the minor flag (backend/b284-child-safety-category-flag, Decision Log #466)
+
+Founder decision 2026-11-03. **A report whose `reasonCategory` is `child_safety_concern` is ALWAYS stored with `concernsMinor = true`**, on `POST /reports` and `POST /reports/public`, whatever else the reporter sent. This REPLACES default (5) of #465 (a category sets neither flag), which was an adopted default and is now a founder decision.
+
+* **One rule, one function:** `resolveConcernsMinor(reasonCategory, reporterConcernsMinor)` in `report-concerns-minor.util.ts` (category constant `CHILD_SAFETY_REASON_CATEGORY` in `moderation.constants.ts`). Both create paths call it. It returns `category === 'child_safety_concern' || reporterConcernsMinor`, so the category can only **raise** the flag, never lower it: the public route's own `concernsMinor: true` stays true under any category, and `concernsMinor: false` with `child_safety_concern` is stored `true`.
+* **`POST /reports`** has no `concernsMinor` field (the DTO does not declare it, and the global pipe rejects an unknown property with a `400`), so on this route the flag can only come from the category. **`POST /reports/public`** requires `concernsMinor` (`@IsBoolean()`); an omitted value is a `400` as before, so "omitted" is not a reachable case there.
+* **Severity is not changed** by the category (still `medium` unless the reporter sent one).
+* **Reports already filed are not changed:** none carries a category, and nothing backfills.
+* **Consequence (read from the code, pinned by tests):** such a report is listed, opened, actioned, appealed, held and escalated only by a child-safety-vetted admin (the existing `concernsMinor` gate, unchanged), carries the minor flag in the moderation queue, and is left out of admin search and the audit-log reader for an unvetted admin (both already apply the `concernsMinor` rule). Nothing the **reporter** is told changes: the signed-in reporter's `moderation_decision` notification and outcome email, and the public reporter's acknowledgement and outcome email, do not read `concernsMinor`.
+* **Open, not decided here (Decision Log #466):** with no child-safety-vetted admin in the system, nobody can see these reports; and `POST /reports` has no way for the reporter to say "this concerns a minor" except by choosing this category.
+
+---
+
+## The role-gating guard (`AdminRolesGuard` / `@AdminRoles(...)`)
+
+The first role-gated admin route in this codebase. Every admin route
+built before this PR checked only `AdminJwtAuthGuard` (a valid
+admin-console token exists at all) — nothing distinguished `editor` |
+`moderator` | `superadmin`. `AdminUser`'s own schema comment already
+describes two different jobs ("authors Articles; actions Reports"), and
+the task brief was explicit: **an editor should not have queue access.**
+
+Built as reusable infrastructure, not a one-off inline check:
+`admin/guards/admin-roles.decorator.ts` (`@AdminRoles(...roles)`,
+`SetMetadata`-backed) + `admin/guards/admin-roles.guard.ts`
+(`AdminRolesGuard`, a `Reflector`-based `CanActivate`). Both live in
+`modules/admin/guards/` (not `modules/moderation/`) since this is
+generic admin infra, not moderation-specific — any future admin route
+needing role-gating (e.g. a superadmin-only admin-management endpoint,
+Decision Log #191's still-open self-service-registration question) can
+reuse it directly. `AdminRolesGuard` is now provided **and exported**
+from `AdminAuthFoundationModule` alongside `AdminJwtAuthGuard`, so any
+module that already imports that foundation module for admin auth gets
+role-gating available for free — no new DI wiring needed (it depends
+only on the globally-available `Reflector`).
+
+**Trust model, a deliberate judgment call, documented in the guard's own
+header comment**: `AdminRolesGuard` reads `request.admin.role` — the
+`role` claim already baked into the verified access-token payload — and
+does **not** re-read `AdminUser` from Postgres per request. This mirrors
+the exact trust boundary `AdminJwtAuthGuard`'s own header comment already
+draws for `sub`: a short-lived access token's claims are trusted for the
+life of that token. Section 5.7's fresh-read-from-Postgres discipline
+(re-check `isMinor`/`consentStatus` on every safety-sensitive User
+action) is about safety-sensitive **User** state, not admin role
+assignment — nothing in Section 5.7/8.3/8.4 extends that discipline to
+admin roles, so a role change taking effect only on the admin's next
+login (not retroactively mid-session) was judged an acceptable trade-off
+for this PR. Flagged as a judgment call, not silently assumed to be
+"obviously fine."
+
+---
+
+## `severity` on submission (schema/report-severity-escalation-admin-vetting-application)
+
+`Report.severity` (`low | medium | high | critical`, schema default
+`'medium'`) was laid down as schema groundwork with "no application code
+reads or writes this yet." Both `POST /reports` and `POST /reports/public`
+now accept an optional `severity` field; an omitted value is matched
+explicitly at the service layer to `DEFAULT_REPORT_SEVERITY` ('medium',
+`moderation.constants.ts`) rather than left to Prisma's own DB-level
+default, so the documented API behaviour doesn't depend on a Prisma
+undefined-vs-omitted nuance.
+
+Deliberately **optional on both routes, not required** — a reporter
+(authenticated or not) rarely has the context to assess severity
+reliably; that's precisely what the moderation queue a vetted/unvetted
+admin reviews exists to determine. This is a different judgment call from
+`concernsMinor` on the public route, which **is** required there: a
+non-authenticated reporter flagging content that depicts them or their
+child is exactly the caller who can state *that* reliably.
+
+---
+
+## The child-safety-vetting gate (`ModerationService.assertChildSafetyVetted`)
+
+`AdminUser.childSafetyVetted`/`vettedAt`/`vettedByAdminId` were laid down
+as schema groundwork with "no application code reads or writes any of
+these three fields yet — no vetting endpoint, no gate on Report review
+keyed to this flag." This PR is that gate (the vetting endpoint itself —
+`PATCH /admin/users/:id/child-safety-vetting` — lives in a separate
+module, `modules/admin-staff-vetting/`).
+
+**Fresh-read from Postgres on every call, never trusted from the JWT —
+the same Section 5.7 discipline `GuardianConsentGuard` already applies
+for the User side.** `AdminAccessTokenPayload` structurally carries only
+`{ sub, role, aud }` (`admin-token.types.ts`) — no safety-sensitive state.
+`childSafetyVetted` is exactly that kind of state, so
+`ModerationService.isChildSafetyVetted`/`assertChildSafetyVetted` always
+read `AdminUser.childSafetyVetted` fresh, per request, rather than
+caching or trusting anything from a prior request or the token itself.
+This is a **deliberate divergence from `AdminRolesGuard`'s own trust
+model** (which reads `role` off the already-verified token and does NOT
+re-read Postgres — see that guard's own header comment) — role
+assignment and child-safety vetting are treated differently on purpose:
+Section 5.7's fresh-read discipline is about safety-sensitive state, and
+a report concerning a minor being reviewable only by someone whose
+real-world vetting status is current is squarely that, in a way an
+admin's role label is not.
+
+**Applies REGARDLESS of role — a non-vetted superadmin is blocked exactly
+the same as a non-vetted moderator.** Vetting is an orthogonal axis to
+role, not a stronger role. Proven directly, not just asserted: both the
+mocked and e2e suites include a case where an **unvetted superadmin**
+still gets a `concernsMinor` report filtered out of the list / 403'd on
+direct access.
+
+**Two enforcement shapes, covering both ways an admin can reach a
+report:**
+1. **`GET /admin/moderation/reports` — filtering.** A non-vetted admin
+   never sees a `Report` row where `concernsMinor` is `true` at all; it
+   is excluded from the query (`conditions.push({ concernsMinor: false
+   })`) rather than returned and then redacted, so no partial/masked row
+   shape is ever needed. A `?status=` filter still ANDs alongside it
+   normally.
+2. **`PATCH /admin/moderation/reports/:id` and
+   `.../:id/appeal` — "403 on direct access."** Existence (404) is always
+   settled first (`assertReportExists`), matching this codebase's
+   established "404 before 403" convention (see
+   `FeedService.deleteComment`/`GrassrootsService`'s own precedent). Then,
+   if — and only if — `report.concernsMinor` is `true`, the caller's own
+   vetting status is checked; a non-vetted admin is rejected with a `403`
+   carrying a distinct, machine-readable `code`
+   (`CHILD_SAFETY_VETTING_REQUIRED_CODE`, same pattern
+   `GUARDIAN_CONSENT_PENDING_CODE` already established), **before** any
+   further business-state check (`actionReport`'s `status !== 'open'` 409,
+   `decideAppeal`'s Decision Log #138 same-admin check) — so an
+   unauthorized admin never learns the report's own state either. A
+   report where `concernsMinor` is `false` (the common case) never
+   triggers an `AdminUser` lookup at all — proven directly in the mocked
+   suite.
+
+**`PATCH /admin/moderation/reports/:id/escalate` is gated differently —
+it ALWAYS requires vetting, regardless of the target report's own
+`concernsMinor` value.** A report may need escalating *precisely because*
+it wasn't flagged as concerning a minor at submission time but turns out,
+on review, to be one — gating escalate on the (possibly wrong)
+`concernsMinor` flag would defeat the point. Sets
+`escalatedAt`/`escalatedByAdminId`/`escalationNotes`/`escalatedToAuthority`
+(`Report`'s own schema comment on the escalation trail) — this endpoint
+**records** that a human has escalated something outside (or within)
+Soccernity; it does not itself contact anyone. Deliberately independent
+of `Report.status`/`reviewedByAdminId`/`appealReviewedByAdminId` —
+escalating is not the same act as actioning or appeal-reviewing, and may
+be called on a report in any status (open, reviewed, or actioned).
+**Deliberately re-callable, not one-shot**: `escalatedToAuthority` is
+admin-supplied on every call (never defaulted), so a vetted admin can
+escalate internally first (`escalatedToAuthority: false`) and, once they
+have actually contacted an external authority, call the same endpoint
+again to flip it `true` — each call overwrites the trail to reflect the
+MOST RECENT escalation action, the same "no append-only audit trail
+across multiple cycles" disclosed limitation this module's README already
+states for the review/appeal trail (see that section below).
+
+---
+
+## Guard reasoning for the two user-facing routes
+
+**`POST /reports` and `POST /reports/:id/appeal` are `JwtAuthGuard`
+ONLY — deliberately NOT `GuardianConsentGuard`-gated.** This is a real
+divergence from Decision Log #21's broad "posting"-class reading (which
+gates `POST /posts`, banter-room posting, community-group creation,
+etc.) — a restricted-pending minor must still be able to report abuse
+directed at them, and symmetrically must still be able to appeal a
+decision made against them. Gating either route the way posting/
+messaging are gated would make that impossible — the opposite of what
+the safeguarding flow exists for. This mirrors the same reasoning
+`GuardianConsentController`'s own status endpoint already established:
+a restricted-pending user must be able to reach certain routes *about
+their own restriction* even while restricted.
+
+---
+
+## Who is "the reported user"? (dynamic resolution, no denormalized column)
+
+`Report.targetId` is a bare string, not a real FK — by construction, it
+has to point at three different tables (`Post`, `Comment`, `User`)
+depending on `targetType`, which a single Prisma relation field can't
+express. There is **no** `reportedUserId` column on `Report` — a
+deliberate choice, not an oversight, per the task brief's own framing:
+"you'll need to resolve 'who is the reported user' dynamically... share
+that resolution logic."
+
+`ModerationService.resolveReportedUserId(targetType, targetId)` is that
+one shared private method (since B-044 a thin wrapper over `report-target.util.ts`, which
+`HoldService` also uses to find the second party of a legal hold), used by BOTH:
+- `appealReport`'s eligibility check (only the reported user may
+  appeal), and
+- `actionReport`/`decideAppeal`'s notification steps (Section 8.4: both
+  parties are notified of the outcome).
+
+Resolution:
+- `targetType: 'user'` → `targetId` IS the reported user, if they still
+  exist.
+- `targetType: 'post'` → the post's own `authorId`, if the post still
+  exists.
+- `targetType: 'comment'` → the comment's own `authorId`, if the comment
+  still exists.
+
+Returns `null` if the target has since been deleted (the reported
+post/comment was removed, or — Decision Log #44's cascade — the reported
+user's own account was hard-deleted). Every caller treats `null` as
+"cannot determine the reported user," never as an error surfaced back to
+a report's own reporter/admin actions — a stale report can still be
+listed, dismissed, or actioned even if its target is long gone; it just
+can't be appealed by anyone (nobody can prove they're the reported
+party) and won't generate a second-party notification.
+
+---
+
+## The one-appeal-per-action-cycle design, and the overturn/re-action interaction
+
+A report can be actioned, appealed, and (if overturned) re-actioned and
+re-appealed — this required a real design decision, not just "extend the
+schema and wire the two obvious endpoints":
+
+- **`actionReport` only runs on an `'open'` report** — a 409 otherwise.
+  The *only* path back to `'open'` after a first action is an
+  **overturned** appeal (see below), which is precisely what re-opens the
+  door to a fresh action + a fresh appeal window.
+- **`appealReport` requires `status === 'actioned'`** (not `'reviewed'` —
+  a dismissed report took no action against anyone, so there's nothing
+  to appeal) **and requires `appealStatus` to still be `null`** — one
+  appeal per actioning-cycle, whether that appeal is later upheld or
+  overturned.
+- **On `overturned`**: `status` reverts to `'open'`, `reviewedByAdminId`/
+  `reviewedAt`/`actionTaken` are cleared back to `null` — "reverse the
+  report back to a non-actioned state," per the task brief. `appealStatus`
+  itself is **deliberately left as `'overturned'`** (not reset to `null`)
+  as the historical record of that appeal round.
+- **`actionReport`, when it re-actions a report that has a previous
+  overturned appeal on it, clears the stale appeal fields
+  (`appealStatus`/`appealReason`/`appealedAt`/
+  `appealReviewedByAdminId`/`appealReviewedAt`) back to `null`** as part
+  of the same update. This is the fix for a real bug this design would
+  otherwise have: without it, `appealReport`'s own "already appealed"
+  guard reads `report.appealStatus` off the same row, and a stale
+  `'overturned'` value from the *previous* cycle would incorrectly block
+  a legitimate *new* appeal on the *new* action. Proven directly by the
+  e2e suite's own re-action → re-appeal scenario (see Testing below), not
+  just reasoned about.
+
+**Disclosed limitation, not silently absorbed**: this means a `Report`
+row holds only the most recent action + appeal cycle — there is no
+append-only audit trail across *multiple* action/appeal cycles on the
+same report (e.g. "actioned, overturned, actioned again, upheld this
+time" loses the detail of the first cycle the moment the second one
+starts). A real production moderation system would likely want a
+dedicated append-only `ModerationActionLog`/`AppealLog` entity for that —
+following the same pattern `ConsentAuditRecord` already established for
+consent history surviving a `User` row's own deletion. Flagged as a
+future Decision Log candidate, not built here — genuinely out of this
+PR's scope (the task brief scoped this to extending `Report` directly,
+not building a new audit-ledger entity), and multi-cycle re-actioning is
+itself an edge case beyond what the task brief's own example flow
+describes.
+
+---
+
+## `actionTaken`: `content_removed` is enforced, `user_suspended` is not (B-289, Decision Log #483)
+
+`PATCH /admin/moderation/reports/:id` records one of `content_removed` | `warning_issued` | `user_suspended` |
+`dismissed` | `room_deactivated`. **`content_removed` is now ENFORCED, for exactly three target types: `post`,
+`comment` and `message`.** `user_suspended` and `warning_issued` are still only recorded (the older text of this
+section, which said none of them are enforced, is superseded for `content_removed` only).
+
+- **Soft removal.** `Post`, `Comment` and `Message` each carry `removedByModerationAt` and `removedByReportId` (FK to
+  `Report`, RESTRICT, indexed; migration `20261125090000_add_content_removal`). The row, its text, its media and its
+  engagement rows STAY (evidence; the retention job's report exception and the account hold depend on them). Every
+  user-facing read treats the item as removed; only staff reads (the reported item and the report detail) still return
+  the full item, plus `removedByModerationAt`.
+- **Same step as recording the action.** `actionReport` removes the ONE reported target in the SAME transaction that
+  records the action (`content-removal.util.ts`, `applyContentRemoval`). A context message attached to a message report
+  is never touched. If another report already removed the item, it is left (that report keeps the claim) and the
+  response carries `contentRemoval: 'already_removed'`; `'removed'` is the normal outcome and `'target_not_found'`
+  means the row is gone (the action is still recorded). The key is absent for every other action.
+- **Offered only for those three targets.** `content_removed` on any other target type (user, banter_room,
+  grassroots_team, fixture, enquiry) is a 400 with the stable code `content_removal_not_applicable`.
+- **Counts.** A removed comment, like a hidden one, is not counted in `Post.commentCount` (removal decrements it,
+  guarded so a hidden or already-removed comment is not subtracted twice; deleting a removed comment does not
+  subtract again). A removed post is excluded from every count and from trending hashtags.
+- **Overturned appeal restores.** `decideAppeal` with `overturned` on a `content_removed` report clears both columns
+  in the same transaction, but only if `removedByReportId` is THIS report; a restored comment is counted again unless
+  it is hidden. An upheld appeal changes nothing.
+- **Reads** (full inventory and the test covering each in `docs/backend-content-removal-report.md`): a removed post is
+  absent from feeds (own, club, Banter room), search, saved items, comments, reactions, views, the media report,
+  the contest entry lists, the Final-week carousel, the dashboard's latest posts and trending counts, and a direct
+  `GET /posts/:id` answers exactly like a post that does not exist, except to its AUTHOR, who gets
+  `200 { id, removedByModeration: true }` and nothing else. A removed comment stays in the thread as
+  `{ id, createdAt, removedByModeration: true }`. A removed message stays in the thread and in the conversation
+  preview as `{ id, sentAt, removedByModeration: true }` (messaging/README.md).
+- The guardian notice for `content_removed` (B-279) still fires after commit, as before, and is now literally true.
+- **Contest entries (B-300, Decision Log #488):** removing the post of a contest entry now also takes it out of the
+  contest (ranking, votes, podiums, points) in the same transaction, and an overturned appeal puts it all back.
+  `contest/README.md` ("Removed entries") has the rules; `contest/contest-entry-removal.util.ts` is the seam
+  (`onContestEntryPostRemoved` / `onContestEntryPostRestored`), called from `applyContentRemoval` /
+  `restoreContentRemoval`. `ModerationService` passes `APP_CLOCK` time to both so an injected test clock is honoured.
+  The baseline engagement points earned on a removed post are revoked too (`revokedForRemovalAt` marks exactly those).
+- **Not changed (older text; superseded for contest entries by the bullet above):** contest ranking and points (a removed entry is hidden from lists only), engagement points for
+  likes and comments on removed content, the data export (it still lists a user's own removed posts, comments and sent
+  messages, as stored), and `user_suspended` / `warning_issued` / holds / escalation.
+
+---
+
+## Notification wiring
+
+Both `actionReport` and `decideAppeal` write their `Report` update AND
+the relevant `Notification` row(s) inside one interactive `$transaction`,
+reusing the exact `tx.notification.create()`-inside-a-transaction pattern
+`contest.service.ts`'s `contest_win` trigger established for
+admin-triggered notifications.
+
+**One shared `Notification.type` value, `'moderation_decision'`** — a
+comment-only addition to the schema's `Notification.type` comment (the
+column is a plain `String`, same as every other type value; no
+migration needed), covering both events:
+- `actionReport` → notifies **both** the reporter and the reported user
+  (Section 8.4: "both parties are notified of the outcome"). Guarded
+  against double-notifying the same person on a self-report (reporter ===
+  reported user).
+- `decideAppeal` → notifies **only** the reported user (the appellant) of
+  the appeal outcome — not the reporter a second time, per the task
+  brief's own instruction ("notify the reported user of the appeal
+  outcome").
+
+No self-notification guard is needed for the **admin's own** identity in
+either method — a completely separate `AdminUser` auth domain (Decision
+Log #189-193), mirroring `contest.service.ts`'s own `contest_win`
+reasoning exactly (there is no identity overlap between the admin actor
+and the `User` recipients).
+
+**Disclosed limitation, not built here**: `notifications.service.ts`'s
+read-side resolution (`GET /notifications`, Decision Log #290/#291) does
+not yet know how to resolve `'moderation_decision'`'s `payloadRefId`
+(the `Report` id) into structured display data — the same
+category of gap that file's own header comment already discloses for
+`like`/`comment` (resolves WHAT, not WHO). A future notifications-service
+pass would need to fetch the `Report` and determine, from the caller's
+own id vs. `reporterId`/the resolved reported-user id, whether this is
+"your report was actioned" or "you were actioned" or "your appeal was
+decided" — genuinely out of this PR's scope (this PR never touches
+`modules/notifications/`).
+
+---
+
+## Testing
+
+**Mocked suite** (`src/modules/moderation/*.spec.ts`,
+`src/modules/admin/guards/admin-roles.guard.spec.ts`) covers ordinary
+logic per `test/README.md`'s own "mocked unit tests stay the fast,
+primary layer" principle: every guard/state/permission branch
+(`createReport`'s three target-existence checks, `appealReport`'s
+status/appealStatus/identity checks, `actionReport`'s `'open'`-only
+guard and the dismissed-vs-actioned status mapping, `decideAppeal`'s
+pending-appeal-only guard and Decision Log #138's same-admin rejection,
+the overturn field-reset shape, self-notification guarding, keyset
+pagination, and `AdminRolesGuard`'s own role-allow/deny behavior),
+plus both controllers' HTTP-layer/DTO-validation behavior.
+
+**A real e2e spec** (`test/moderation.e2e-spec.ts`) was added — this hits
+two of `test/README.md`'s own e2e triggers:
+- **A genuinely new Prisma relation**: `Report.reviewedByAdminId` /
+  `.appealReviewedByAdminId`, both real FKs to `AdminUser` (`ON DELETE
+  SET NULL`, matching `Post.clubPageId`/`.banterRoomId`'s own established
+  optional-FK convention in this schema) — never exercised against real
+  Postgres before this PR.
+- **Transaction reasoning**: `actionReport`/`decideAppeal` write the
+  `Report` update and the `Notification` row(s) in one transaction —
+  proven by querying the real `Notification` table directly, not
+  trusting the HTTP response.
+
+The e2e file drives the full real flow the task brief specified end to
+end against real Postgres: report → moderator A actions it
+(`content_removed`) → the reporter (not the reported user) is rejected
+when trying to appeal → the reported user appeals → moderator A (Decision
+Log #138) is rejected from reviewing their own action's appeal →
+moderator B overturns it → the report is genuinely back in the open
+queue with `reviewedByAdminId`/`actionTaken` cleared and `appealStatus`
+preserved as history → it is actioned again → a fresh appeal on the new
+action succeeds (proving the stale-appeal-field-clearing fix). Also
+covers: role-gating against real seeded `editor`/`moderator` `AdminUser`
+rows; the real 404 for a well-formed but non-existent report target
+(confirmed via a `Report.count()` of `0`); the real 409 for a duplicate
+appeal attempt on the same action; the 403 for appealing an
+open/dismissed report; direct `targetType: 'user'` reports and
+appeal-eligibility for them; and `?status=` filtering/pagination against
+real seeded rows.
+
+**Verification, all re-measured directly (stash/pop before-and-after,
+not estimated)**: mocked suite **60 suites / 854 tests, 0 failures → 64
+suites / 905 tests, 0 failures** (4 new suites, 51 new tests — 27 in
+`moderation.service.spec.ts`, 7 in `reports.controller.http.spec.ts`, 11
+in `admin-moderation.controller.http.spec.ts`, 6 in
+`admin-roles.guard.spec.ts`). Full e2e suite (real Postgres/Redis via
+docker-compose, `npm run test:e2e`) **16 suites / 154 tests, 0 failures →
+17 suites / 161 tests, 0 failures** (1 new suite —
+`test/moderation.e2e-spec.ts` — 7 new tests; every pre-existing e2e suite
+still passes unchanged, confirmed by running the whole suite together,
+not just the new file in isolation). Migration
+`20260915003318_add_report_moderation_fields` was genuinely
+`prisma migrate dev`-run against the real local dev database (this
+sandbox reached `binaries.prisma.sh` fine) and separately, independently,
+genuinely applied by the e2e layer's own `global-setup.ts`
+(`prisma migrate deploy` against `soccernity_test`) before any e2e test
+ran — not a flagged, unconfirmed migration. `npx tsc --noEmit`,
+`npm run lint`, and `nest build` are all clean.
+
+---
+
+## Testing (schema/report-severity-escalation-admin-vetting-application — severity, the child-safety-vetting gate, escalate)
+
+**Mocked suite** — `moderation.service.spec.ts` gained: severity
+default/explicit-override cases for both `createReport`/`createPublicReport`;
+a dedicated `listReports` sub-block proving the vetted/non-vetted/no-row
+filtering behavior (including "an admin with no `AdminUser` row at all —
+a since-removed account behind a still-valid token — is treated as
+non-vetted", the same defensive posture `GuardianConsentGuard` already
+takes for its own analogous case); `actionReport`/`decideAppeal`
+sub-blocks proving the 403-before-other-checks ordering, that a
+`concernsMinor: false` report never even queries `AdminUser`, and that a
+vetted admin succeeds; and a new `escalateReport` describe block (404,
+403 for non-vetted, both `escalatedToAuthority` values, and
+status-independence). `admin-moderation.controller.http.spec.ts` gained
+an editor-403 case and DTO-validation/role-gating coverage for the new
+`.../escalate` route, and its existing `listReports` call-shape
+assertion was updated for the new `adminId` parameter.
+
+**A new module, `admin-staff-vetting`, was added with its own full
+mocked + e2e coverage** — see `modules/admin-staff-vetting/README.md`
+for its own Testing section; not duplicated here.
+
+**`test/moderation.e2e-spec.ts` gained**: a severity default/explicit-value
+case against real Postgres; a `child-safety-vetting gate` describe block
+proving, against real seeded `AdminUser` rows (including a `concernsMinor:
+true` `Report` seeded directly via Prisma — see that block's own header
+comment for why `POST /reports/public` itself is deliberately NOT used
+here, the same shared-`'auth'`-throttler-avoidance precedent
+`feed-reactions.e2e-spec.ts`'s own `createUser()` helper already
+established) that an unvetted moderator AND an unvetted superadmin are
+both blocked (list-filtered and 403'd on direct access) while a vetted
+moderator/superadmin is not; and an `escalate` describe block proving the
+403/200 split, that the trail persists in real Postgres, that it is
+genuinely re-callable, and that it works regardless of report status.
+
+**A new e2e file, `test/admin-staff-vetting.e2e-spec.ts`, was added** —
+hits `test/README.md`'s third e2e trigger: `AdminUser.vettedByAdminId` is
+a genuinely NEW self-relation FK (`AdminUser` → `AdminUser`) that no
+application code had ever written to before this PR. Proves the real
+`AdminRolesGuard('superadmin')` genuinely rejects a **moderator**, not
+just an editor (the only negative case most other role-gated e2e tests in
+this codebase prove) — vetting decisions being superadmin-only, not
+moderator-eligible like every other role-gated route in this module, is
+the one place this PR's role-gating diverges from
+`AdminModerationController`'s own `('moderator', 'superadmin')` pattern.
+Its final test threads the two modules together end to end: a real
+`concernsMinor` report, blocked for an unvetted moderator both in the
+list and on direct action, becomes visible/actionable by that **same**
+moderator (same access token, no re-login) the moment a superadmin calls
+`PATCH /admin/users/:id/child-safety-vetting` — proving the gate reads
+fresh from Postgres on the very next request, not cached in the token.
+
+**Verification, all re-measured directly (computed from the exact diff
+of test cases added, cross-checked against two full, real runs of the
+complete suite before opening this PR — not estimated)**: mocked suite
+**102 suites / 1367 tests, 0 failures → 104 suites / 1403 tests, 0
+failures** (2 new suites — both in `admin-staff-vetting/` — 36 new tests:
+18 in `moderation.service.spec.ts`, 6 in
+`admin-moderation.controller.http.spec.ts`, 4 in
+`admin-staff-vetting.service.spec.ts`, 8 in
+`admin-staff-vetting.controller.http.spec.ts`). Full e2e suite (real
+Postgres/Redis via docker-compose, `npm run test:e2e`) **26 suites / 250
+tests, 0 failures → 27 suites / 263 tests, 0 failures** (1 new suite —
+`test/admin-staff-vetting.e2e-spec.ts`, 6 new tests — plus 7 new tests
+added to the existing `test/moderation.e2e-spec.ts`; every pre-existing
+e2e suite re-run and still green alongside both, not just the new/changed
+files in isolation). **Zero `schema.prisma` diff, zero new migration** —
+every field this PR reads/writes on `Report`/`AdminUser` already existed
+from `schema/report-severity-escalation-admin-vetting`. `npx tsc --noEmit`,
+`npm run lint`, and `nest build` are all clean.
+
+---
+
+## AdminActionLog wiring (feat/admin-action-log)
+
+`actionReport`, `decideAppeal`, and `escalateReport` each now call
+`AdminActionLogService.record(...)` once their own state change has
+committed successfully — a separate, general-purpose audit trail from
+this module's own `Report.reviewedByAdminId`/`actionTaken`/appeal fields.
+See `modules/admin-action-log/README.md` for the full reasoning (why it's
+a separate model, why `record()` runs after rather than inside each
+method's own `$transaction`, and the full call-site table across every
+module that writes to it).
+
+---
+
+## Outcome and appeal-decision emails (feat/moderation-outcome-appeal-emails)
+
+Resolves Decision Log #143. Two plain, functional templates on the existing
+`RegistrationEmailService` (no new email abstraction):
+
+- **`report-actioned`** — to the reporter, when `actionReport` commits. A logged-in
+  reporter's address comes from their `User` row; a public reporter's comes from
+  `Report.reporterContactEmail`. Shares only the outcome label and a short, generic
+  reason. Never names the reported party or the evidence, so it can't be used to learn
+  about another account's moderation history.
+- **`appeal-decision`** — to the appellant (the reported user), when `decideAppeal`
+  commits. `overturned` is worded as "the report has been returned to our review
+  queue" and deliberately does NOT claim an enforced reversal, because `actionTaken`
+  is a recorded decision, not an enforced one for `user_suspended` / `warning_issued`; for `content_removed` the content IS
+  restored in the same step (B-289), the wording of the email was not changed.
+
+Both are fire-and-forget after the state change commits (`void` + an internal
+try/catch), so a lookup or Postmark failure can never fail the admin action. A
+deleted account (`accountStatus: 'deleted'`, Decision Log #341) is never emailed,
+since its address is an anonymised placeholder. A missing contact address, or a
+reported user who no longer resolves, sends nothing and is not an error.
+
+**No outcome email for an enquiry report (Decision Log #445, founder decision 2026-10-30,
+`backend/w7-enquiry-report-no-outcome-email`).** A report with `targetType: 'enquiry'`
+(made by escalating a Contact Us message) sends NO `report-actioned` email, for every
+action. The enquirer never made a report, "your report has been actioned" is the wrong
+message, and the address is whatever they typed and may not be theirs. The guard is the
+first line of `notifyReporterOfOutcome`. The other two sends cannot reach an enquiry
+report: `public-report-acknowledgement` is sent only by `createPublicReport` (and
+`'enquiry'` is not an accepted `targetType` there), and `appeal-decision` needs a
+reported user, which an enquiry report never has (`resolveReportedUserId` is always null,
+so `appealReport` refuses it).
+
+**Not built, flagged:** the copy is functional placeholder wording, not
+counsel-reviewed. The reported user is not emailed a report outcome, only the
+appeal decision; Section 8.4's notify-both-parties rule is otherwise still covered
+by the existing in-app `moderation_decision` notifications only.
+
+---
+
+## Files
+
+```
+moderation.module.ts                — wires both foundation modules + both controllers + AdminActionLogModule
+moderation.service.ts                — ModerationService, all business logic
+moderation.constants.ts              — REPORT_TARGET_TYPES, REPORT_ACTIONS, APPEAL_DECISIONS, REPORT_SEVERITIES,
+                                        DEFAULT_REPORT_SEVERITY, CHILD_SAFETY_VETTING_REQUIRED_CODE, page sizes
+cursor.util.ts                       — this module's own (createdAt, id) keyset cursor
+reports.controller.ts                — user-facing: POST /reports, POST /reports/:id/appeal
+public-reports.controller.ts         — public: POST /reports/public
+admin-moderation.controller.ts       — admin-facing: GET/PATCH /admin/moderation/reports*, PATCH .../escalate
+dto/create-report.dto.ts
+dto/create-public-report.dto.ts
+dto/appeal-report.dto.ts
+dto/action-report.dto.ts
+dto/appeal-decision.dto.ts
+dto/escalate-report.dto.ts
+dto/list-reports-query.dto.ts
+../admin/guards/admin-roles.decorator.ts — @AdminRoles(...), new shared admin infra
+../admin/guards/admin-roles.guard.ts     — AdminRolesGuard, new shared admin infra
+../admin-staff-vetting/                  — PATCH /admin/users/:id/child-safety-vetting (own module, own README)
+../admin-action-log/                     — AdminActionLogService.record(...) (own module, own README)
+```
+
+## Appeal window (B-044, Decision Log #376)
+
+`POST /reports/:id/appeal` is refused with a coded **403** (`code: appeal_window_closed`) once
+`reviewedAt + REPORT_APPEAL_WINDOW_DAYS` has been reached (the deadline instant itself is lapsed). Checked
+after eligibility, so a non-party gets the ordinary 403, not this code. A report re-actioned after an overturned
+appeal starts a new window from its new `reviewedAt`. The window length is **configuration, not a counsel-sourced
+figure** (default 30 days, a placeholder), and the message states no duration. The same closure rule drives how long a
+reported account stays held — see `../account-hold/README.md`.
+
+## Admin hold routes (B-045, Decision Log #376, #398 D1, #403 item 8)
+
+The HTTP side of `account-hold`'s `HoldService` (B-044). **No rule is added here**: the reason bounds, the
+audit rows and "nobody is notified" live in `HoldService`; `ModerationHoldsService` only adds the module's access
+shape. All three sit on `AdminModerationController`, so they are behind `AdminJwtAuthGuard` +
+`AdminRolesGuard('moderator', 'superadmin')` (401 with no token, 403 for an editor).
+
+| Route | Does | Success |
+|---|---|---|
+| `POST /admin/moderation/reports/:id/holds/bad-faith` `{ reason }` | holds the REPORTER's account for the bad-faith period | `201 { holds: [HoldView] }` |
+| `POST /admin/moderation/reports/:id/holds/legal` `{ reason }` | holds every party of the report that has an account | `201 { holds: [HoldView…] }` |
+| `PATCH /admin/moderation/holds/:holdId/lift` `{ reason }` | lifts either type of hold | `200 { hold: HoldView }` |
+
+* `reason` is REQUIRED, 10 to 500 characters (DTO `400`; a reason that is only spaces is the coded `400
+  hold_reason_invalid`). Unknown body fields are a `400`.
+* They take a **report id whatever the report's appeal state**, so Appeal Review uses the same routes as Report
+  Detail (#398 D1). There is no separate route.
+* `HoldView` = `{ id, userId, type, reportId, placedBy (admin id), placedAt, expiresAt, liftedAt }`. Reasons and the
+  lifting admin are not returned.
+* Order of checks: report (or hold) `404` → child-safety-vetting gate → the hold rules. The gate is
+  `ModerationService.assertVettedToActOn` (B-297; since B-302, Decision Log #498): a report that concerns a minor, or a
+  MESSAGE report whose sender or any participant is under 18 (fail closed: a missing message row, or a participant with no
+  User row, counts as a minor), needs a vetted admin (`403`, `code: child_safety_vetting_required`, the same as
+  `PATCH reports/:id`, regardless of role). A vetted admin is never blocked and the thread is not looked up for them; a
+  report that is neither never reads `AdminUser` or the thread. A hold id is gated through the report it belongs to. The
+  refusal comes before anything is written (no `AccountHold` row created or lifted, no audit row). A hold with no report
+  (its report was purged, `reportId` NULL) has no gate: any moderator may lift it (Decision Log #499).
+* Coded errors: `404 hold_not_found`; `409` `hold_already_active`, `reporter_has_no_account`,
+  `account_already_deleted`, `no_party_to_hold`, `hold_already_lifted`, `hold_expired`.
+* **Nobody is notified:** no `Notification` row and no email for either party. Each call writes one
+  `AdminActionLog` row per hold, in the hold's transaction.
+* `GET /admin/moderation/reports/:id` keeps every existing field and adds `holds`: the report's ACTIVE holds (not
+  lifted, not past `expiresAt`), oldest first, as `HoldView`, so the screen can show a hold-active state and a Lift
+  control.
+* `GET /admin/users/held-investigations` items gain `isAdminHold` (true for `legal_hold` / `bad_faith`, false for a
+  report-derived hold) next to `holdType`.
+
+## Reports made from a Contact Us enquiry (`backend/w7-contact-enquiry-admin-escalate`, B-046 part B)
+
+A report with `targetType: 'enquiry'` is created only by `POST /admin/contact-enquiries/:id/escalate` (see
+`contact/README.md`); it is not in `REPORT_TARGET_TYPES`, so the public and user routes refuse it (400). In this
+module: the queue list and the detail add `source: 'contact_enquiry'` (absent on other reports), the detail adds
+`contactEnquiry`, `resolveReportedUserId` returns null for it (no notification on closing, no second party), and
+`HoldService` refuses `holds/bad-faith` and `holds/legal` for it with `409 hold_not_applicable`. The
+child-safety-vetting gate applies as for any report with `concernsMinor: true`.
+
+## Reporting a message in a chat (`backend/b067-message-report`; follows Decision Log #472 (b), founder decision 2026-11-08)
+
+`POST /reports` accepts `targetType: 'message'` with `targetId` = the Message id. Same body as every other report:
+`reasonCategory` required (the nine B-284 categories; `child_safety_concern` stores `concernsMinor = true`, Decision
+Log #466), `reason` optional except for `other`, optional `severity`. `JwtAuthGuard` only, so a restricted-pending
+minor can still report (as for every report).
+
+**Who may report.** ONLY the other participant of the conversation (the recipient). The message must be one the
+reporter can currently see. Every refusal is the SAME `404 Message not found` a missing id gives, so a private DM is
+never confirmed to exist to a non-participant (`ModerationService.assertMessageReportable`):
+
+| Case | Result |
+| --- | --- |
+| the reporter is the sender (their own message) | 404 |
+| the reporter is not in the conversation (a stranger, or someone in another conversation) | 404 |
+| the reporter hid the message for themselves (`MessageHide`, "delete for me") | 404 |
+| the message was sent at or before the moment the reporter deleted the chat (`ConversationHide`) | 404 |
+| the message was deleted for everyone (`deletedForEveryoneAt`) | 404 |
+| a Block between the two people | NOT checked: the thread still shows the message to the blocker, and the blocker must be able to report it |
+
+**`POST /reports/public` never accepts `message`.** It uses `PUBLIC_REPORT_TARGET_TYPES` (every type except
+`message`), so the DTO answers a code-less 400 whether or not the message exists. A signed-out reporter is by
+definition not a participant.
+
+**One open report per reporter per message (DEFAULT, founder-veto-able).** A repeat while the reporter's earlier
+report on the same message is still `open` returns that existing report (201, same body shape, no second row). The
+check runs in a transaction under `pg_advisory_xact_lock(hashtext('message-report:<reporter>:<message>'))`, so
+simultaneous submissions create one row. Once that report is closed (`reviewed` or `actioned`) the recipient may
+report the message again. The other user-reportable target types have NO duplicate check, so there was nothing to copy;
+the nearest precedent is `PostMediaReportService`, where a repeat is a success that changes nothing.
+
+**Admin read.** `GET /admin/moderation/reports/:id` on a `message` report adds `reportedMessage`, exactly this
+message and nothing else of the conversation:
+`{ id, sentAt, sender: { publicName }, contentText, originalContentText, editedAt, deletedForEveryone }`.
+The text comes back even if the sender later edited it (`originalContentText` is the text as first sent, null unless
+edited) or deleted it for everyone (the row and text are kept). It carries no other message, no conversation id, no
+participant list, no media, no recipient, and the sender is the public name only (the real name is never selected).
+The shape follows the one existing precedent for attaching the target to a report detail: an `enquiry` report gets
+`contactEnquiry`. **Post and comment reports attach nothing today** (their detail is the Report row alone), so
+`reportedMessage` is the only place a reported target's content is read. The child-safety-vetting gate applies first
+when the report concerns a minor, as for every report.
+
+**The reported person.** `resolveReportedUserId('message', id)` returns the message's `senderId` (like a comment's
+author), so appeal eligibility, the outcome notification to the sender, the guardian notice for a minor sender, the
+report hold (`findInvolvedReports` joins `Message.senderId`) and `HoldService` all work as they do for a comment. A
+report being FILED notifies no one; the sender is never told who reported them or that a message was reported (the
+`moderation_decision` notification carries only the report id).
+
+**Context messages (`backend/b286-message-report-context`, Decision Log #477, B-286).** A `message` report may attach
+other messages of the same conversation so a moderator sees what led to it. `POST /reports` takes an optional
+`contextMessageIds` (array of uuid, at most 20, duplicates dropped, order kept). The field with any other `targetType`
+is a coded 400 `report_context_not_allowed` before any database read (even an empty array); `POST /reports/public`
+never accepts it (global `forbidNonWhitelisted`).
+
+One validation, in one place (`ModerationService.resolveContextMessageIds`), run after the reported message itself has
+passed `assertMessageReportable`. Every id must be:
+
+- in the SAME conversation as the reported message;
+- among the 10 messages immediately BEFORE or the 10 immediately AFTER it in `(sentAt, id)` order. Positions are
+  counted over ALL the conversation's messages, hidden or deleted ones included, so the window does not shift and
+  reveals nothing about what the reporter cannot see;
+- visible to the reporter exactly as the reported message must be: not hidden by them (`MessageHide`), sent after any
+  `ConversationHide` cutoff, not deleted for everyone.
+
+The reporter's OWN messages are allowed (the lookup never reads the sender). The reported message itself is not a
+valid context id. ANY failure, for any id, refuses the whole set with the same `404 "Message not found"` the existing
+refusals give (a missing id, your own message, a stranger's), so nothing about a message the reporter may not see is
+confirmed. Nothing is written when validation fails.
+
+Storage: `ReportContextMessage` (`reportId` CASCADE, `messageId` RESTRICT, composite primary key, `createdAt`;
+migration `20261123090000_add_report_context_message`, additive, rollback in its header). RESTRICT is a deliberate
+safety net: a message that is part of a report's evidence cannot be deleted while the report exists.
+
+**Repeat reports.** The existing rule (one open report per reporter per message returns the existing report) now ALSO
+adds any new valid context ids to it, inside the same transaction and advisory lock. Ids already attached are skipped.
+At most 20 are attached to a report IN TOTAL: when it is nearly full only the first ids that fit (in the order sent)
+are added and the rest are ignored without an error (DEFAULT, founder-veto-able). A repeat whose ids fail validation is
+the 404 and leaves the existing report untouched.
+
+**Admin read** (`GET /admin/moderation/reports/:id` on a message report) keeps `reportedMessage` and adds
+`contextMessages`: an array, empty when none, oldest first (`sentAt`, then `id`). Each entry is
+`{ id, sentAt, sender: { publicName }, sentByReporter, contentText, originalContentText, editedAt, deletedForEveryone }`.
+The text is kept after an edit or a delete-for-everyone, like `reportedMessage`. No conversation id, no recipient, no
+sender id, no other message. The child-safety-vetting gate applies first, as today. Filing a report (with or without
+context) notifies nobody.
+
+**Retention.** The messages in `ReportContextMessage` are evidence. The message retention job (B-287) skips any message
+that has a row there, and the report retention sweep (B-294, "Report retention" below) deletes the report's context ROWS
+but never the context messages. `messageId` RESTRICT makes a naive DELETE fail loudly rather than silently drop
+evidence, and both sweeps skip them on purpose. The account-deletion purge needs no entry of its own: the sender of every such message is
+already covered by `Message.sender` and `Conversation.participantIds`, and the model is listed in
+`REPORT_EVIDENCE_MODELS` (`anonymized-row-purge.references.ts`) so the decision is explicit.
+
+**Vetted-only context (`backend/b293-message-context-vetting`, Decision Log #486, B-293).** The `concernsMinor` gate above keys off the report, and a message report sets that flag only through the reason category `child_safety_concern`, not through the ages of the people in the thread. So on a message report, `getReportById` also reads the viewing admin's vetting fresh and, for an admin who is NOT child-safety-vetted, checks `User.isMinor` now for the reported sender and every participant of the conversation (an anonymised participant counts by the value its row keeps). If any of them is under 18 the response has `contextHidden: true`, `contextMessages: []` (the context query is not even run, so nothing about how many were attached can leak) and `reportedMessage.originalContentText: null`; `editedAt` stays so the screen can show the message was edited. A vetted admin always gets `contextHidden: false` and everything; with nobody under 18 involved, behaviour is unchanged for every admin. Fail closed: a participant with no User row, or a reported message row that cannot be found, counts as a minor involved. A non-vetted admin may still record an action on the report. *[Superseded 2026-11-11 by B-297, see the next paragraph: acting on such a report now needs vetting.]* No other admin read returns an edited original or a report's context: the only readers of `originalContentText` are this one and the edit path in `messaging.service.ts` (which never returns it), and admin search, the action log and the data export select neither it nor context messages. The admin line "Context hidden: this involves a child" is built later in `apps/admin`.
+
+**Moderator actions.** `content_removed` is ENFORCED for a message since B-289 (Decision Log #483): it soft-removes the
+ONE reported message (never a context message), which then reads as a text-less stub for both people. The row and its
+text stay for staff. There is still no moderator hard-delete of a message.
+
+**Purge.** Nothing deletes a `Message` row: `Message.sender` is RESTRICT, the account-deletion sweep removes only the
+user's `MessageHide` rows, and the anonymised-row purge treats `Message.sender` and `Conversation.participantIds` as
+content that blocks a purge. So a reported message cannot be purged while its report is open, and no new exclusion
+was needed. The purge's own raw `Report` check also joins `Message.senderId` now, for parity with comments.
+
+**Not done.** Admin search does not match a report by the sender's username through a message target (it still
+covers user, post and comment targets). `apps/web` has no Report item on the other person's message yet (Figma frame
+A3 `6977:47201` draws it), and `apps/web`/`apps/admin` `ReportTargetType` types do not list `message` yet.
+
+**Vetting to act (`backend/b297-vetting-to-act-on-child-message-reports`, Decision Log #491, B-297).** Viewing stays as above, but ACTING now follows the same reading. `ModerationService.assertVettedToActOn(report, adminId)` (public, so the staff-recorded appeal of B-292 reuses it) is called by `actionReport` and `decideAppeal` after the 404 and before every status check, in place of their old `concernsMinor`-only gate: a `concernsMinor` report needs a vetted admin exactly as before; otherwise a `message` report needs one when `threadInvolvesMinor` is true (same fail-closed reading: no message row, or a participant with no User row, counts as a minor). The refusal is the same coded 403 `child_safety_vetting_required` with the same message. A vetted admin is never blocked and the thread is not looked up for them; a non-message report never looks it up. `getReportById` and `listReports` keep the `concernsMinor`-only gate, so an unvetted admin can still open such a report (context hidden) but cannot record an action or decide its appeal. `escalateReport` already requires vetting for every report. **Hold routes (`backend/b302-vetting-on-hold-routes`, Decision Log #498, #499, B-302):** the three hold routes (`POST .../holds/bad-faith`, `POST .../holds/legal`, `PATCH /admin/moderation/holds/:holdId/lift`) now use this same method instead of their old `concernsMinor`-only check (`ModerationHoldsService` is given `ModerationService`; the old `assertVettedForMinorReport` is removed). Viewing, including the `holds` list on the report detail response, is unchanged (#486). **Left as it is, flagged:** the Report detail response still lists a child-involved message report's active holds to an unvetted admin, who now gets the restricted answer if they try to lift one.
+
+## Recording `user_suspended` suspends the account (B-291, Decision Log #485)
+
+**This supersedes the "`user_suspended` is not enforced" statements earlier in this file** (the older text is history).
+
+`PATCH /admin/moderation/reports/:id` with `user_suspended` now suspends the account behind the target in the SAME
+transaction as the report update, through the shared `AccountSuspensionService` (`account-suspension/`), the same code
+`PATCH /admin/users/:id { status: 'suspended' }` uses. Who is suspended: `resolveReportedUserId` (the user, or the
+author of the post / comment, or the sender of the message).
+
+- **Offered only for `user`, `post`, `comment`, `message` targets.** Any other target type (`banter_room`,
+  `grassroots_team`, `fixture`, `enquiry`) is `400` code `user_suspension_not_applicable`, before anything is written.
+- **After the commit** (never inside the transaction): all sessions revoked, earned engagement points revoked, one
+  guardian `account_suspended` notice (the old `GUARDIAN_NOTICE_FOR_REPORT_ACTION` entry is removed so it is sent once),
+  and the suspension email with a fixed plain-words reason from the report's category. A failure in these steps is
+  logged, not thrown: the decision is already committed.
+- **`User.suspendedByReportId`** (FK `Report`, `ON DELETE SET NULL`; a column beyond Section 3's `User` list, flagged as
+  a Decision Log candidate) is set only when a report causes the suspension of an account that was not already
+  suspended; it is never overwritten; a manual reinstatement from the user page clears it.
+- **Edge cases:** already suspended: the action is recorded, nothing else (no second email, no second guardian notice,
+  link not overwritten). `deleted`: recorded, nothing else. `deactivated` / `pending_deletion`: suspended exactly as on
+  the user page (a pending deletion's `pendingDeletionAt` is cleared).
+- **Overturned appeal** (`decideAppeal`): if the action was `user_suspended` AND the account's `suspendedByReportId`
+  equals this report, the account becomes `active` and the link is cleared in the same transaction, then one guardian
+  `account_reinstated` and the reinstatement email. If the account is no longer suspended by this report (deleted,
+  reinstated by hand, suspended by another report) nothing is changed except clearing a link that still points here.
+  An upheld appeal changes nothing. Points are not restored. The second-reviewer rule (Decision Log #138) is unchanged.
+- **Emails** (`RegistrationEmailService`, queued in the background, tagged `[COPY PENDING LEGAL REVIEW]` in code): the
+  suspension email states a reason line from a single fixed map in code (`suspensionReasonLine`; `child_safety_concern`,
+  `other` and a missing category all give "breaching our community rules"), never free text, the reporter or a
+  duration, and says the person can appeal through the Contact Us page. The reinstatement email says only that the
+  suspension was lifted.
+
+## Report retention (`backend/b294-report-retention`, B-294, Decision Log #487; periods changed by `backend/b299-report-retention-6-7-years`, B-299, #490/#493)
+
+`ReportRetentionService` (`report-retention.service.ts`, provided by `ModerationModule`) deletes a report once it has been
+**closed** for 6 years (`REPORT_RETENTION_YEARS`), or for 7 years (`REPORT_RETENTION_CONCERNS_MINOR_YEARS`) when
+`Report.concernsMinor` is true, together with the content that report removed (B-289). This is counsel's approved "6-7 years"
+(B-294 first built 12 months / 6 years, which replaced it by mistake). Both figures are configuration (`.env.example`, both
+`render.yaml` services, guarded by `env-completeness.spec.ts`; a blank, zero or non-numeric value falls back to the default;
+the old months setting no longer exists).
+
+- **Schedule and size.** Daily at 04:15 (`@Cron('0 15 4 * * *')`, after the 04:00 message retention), oldest `reviewedAt` first,
+  at most `REPORT_RETENTION_MAX_PER_RUN` = 100 reports **deleted** per run (a constant I chose, founder-veto-able; the message
+  job uses 500 but a report may take a post, its media and its comments with it). Skipped and blocked reports do NOT count toward
+  the cap, so a pile of permanently kept reports cannot starve the ones that are due; the run reads candidates 200 at a time
+  until the cap is reached or they run out. `purgeDue(now)` takes an injectable clock. The log carries counts only.
+- **The anchor.** The closure moment is the existing computed predicate `reportClosedAt` (`account-hold.rules.ts`), reused,
+  not reimplemented: dismissed = `reviewedAt`; actioned with no appeal = `reviewedAt` + the appeal window; appeal upheld =
+  `appealReviewedAt`. An open report (including one reopened by an overturned appeal) or one with an appeal pending has no
+  closure and is never due; a closed state missing its timestamp counts as not closed (fail safe). Due = **strictly after**
+  closure + the period, in calendar months (`setUTCMonth`). The SQL pre-filter is only `reviewedAt < now - the shorter period`.
+- **Skipped (kept, with its content, retried next run):** an ACTIVE `legal_hold` or `bad_faith` hold (`findActiveAccountHold`)
+  on the reporter, on the account behind the target, or, for a message report, on the reported message's sender or any other
+  participant of the conversation; an ESCALATED report (`escalatedAt` set), until counsel answers B-206; a removed post whose
+  media is not deletable now (`removedMediaDeletableNow`, the B-206 hook: if it says keep, the WHOLE report is kept); another
+  report that is not yet closed on the removed item or, for a removed post, on a comment under it. A lifted or expired hold
+  does not skip.
+- **Detached, not blocking (B-299, Decision Log #493):** an `AccountHold` row that references the report gets `reportId =
+  NULL` and is otherwise untouched (a hold is audit evidence and outlives the report); a `ContactEnquiry` escalated into the
+  report gets `escalatedReportId = NULL` and nothing else, so the Contact Us 12-month sweep treats it as an ordinary enquiry
+  from its own `lastMessageAt`. Both happen in the deletion transaction, before the report row goes (both foreign keys are
+  RESTRICT), and are counted (`detachedHolds`, `detachedEnquiries`). Because a bad-faith hold must be able to lose its report,
+  migration `20261129090000_account_hold_report_detachable` relaxes `AccountHold_type_shape_check` (a `bad_faith` hold still needs
+  an `expiresAt`, a `legal_hold` still has none; only the `reportId IS NOT NULL` requirement is dropped; the application still
+  always sets it when it places a hold). Nothing in the code assumed a hold's `reportId` is non-null (every reader already types
+  it `string | null`). **Consequences:** the admin enquiry view stops showing an enquiry as escalated once its report is purged,
+  and `ModerationHoldsService.lift` treats a hold with no report as not concerning a minor (its vetting gate reads the report).
+- **Blocked (kept, counted, a finding):** a record outside the deletion list depends on the item and no rule says what to do
+  with it, so nothing is deleted: the removed post is a Contest entry that STILL COUNTS (see "Contest entries (B-307)" below: only
+  an entry in a cycle that is not completed, or one that still holds a winner row); a removed message is attached as context to a
+  DIFFERENT report (RESTRICT FK). The log line counts each kind (`blocked(contestEntry=… contextOfOtherReport=…)`; the
+  contest-entry count is normally 0 now).
+- **What is deleted, in this order, in one Serializable transaction** (re-checked inside it, so a hold placed or a report filed
+  since the scan stops it): (1) the content with `removedByReportId` = this report: for a post, a deferral record for every
+  stored object, the `Hashtag.postCount` decrements, the like/comment notifications that point at it and the notifications about
+  its files, then the post (cascade: comments under it, likes, saves, views, hashtag links, `PostMedia` rows and their media
+  reports); for a comment, the comment (`Post.commentCount` was already reduced at removal and is not touched again); for a
+  message, the message (`MessageHide` cascades) and then the conversation if it has no message left; (2) this report's
+  `ReportContextMessage` rows (the context messages STAY and fall to the message retention); (3) the holds and escalated
+  enquiries are detached; (4) the report.
+- **Stored objects** are deleted only after the commit. Each has a `PostMediaDeferredDeletion` record written in the transaction;
+  it is removed when the object delete succeeds and otherwise left for `RejectedMediaSweepService.processDeferred`, so a failed
+  delete is retried and never lost.
+- **Never touched:** `AdminActionLog`; `PointsLedgerEntry` (earned points stay, Decision Log #483); the `moderation_decision`
+  notifications that point at the report (they already degrade to a generic row). `User.suspendedByReportId` is
+  `ON DELETE SET NULL`: a still-suspended account stays suspended and only loses the link (a manual reinstatement is then the
+  only way back; the appeal window has closed by definition).
+- **Known consequences / findings:** a report whose action was recorded with an unclosed sibling, an
+  escalated report, or a Contest entry that still counts (B-307) is kept until someone decides what to do with that dependency; a report is
+  only re-evaluated, not tracked, so a large permanently-kept set is re-read every night; "another report not yet closed" is
+  judged on closure only, so a sibling report that closed recently but has a longer retention of its own does not hold this one
+  back (its target is then gone when its own clock runs out).
+
+### Contest entries (B-307, `backend/b307-contest-entry-retention-lift`; Decision Log #493 (c), #495 (g))
+
+Until B-307 the sweep kept forever any report whose removed post is a Contest entry, because deleting the post cascades to
+`ContestEntry`. B-300 (Decision Log #495) made a removed entry count for nothing, so the block is lifted for the entries where
+that is provable. `contest-entry-retention.util.ts` holds the analysis; `contest-entry-retention.util.spec.ts` pins it to the
+Prisma schema, and `test/contest-entry-retention.e2e-spec.ts` proves the before/after equality against real Postgres.
+
+What the cascade removes (`ENTRY_CASCADE_TABLES`, the only four relations to `ContestEntry`, all `ON DELETE CASCADE`) and why each
+is already worth nothing for a removed entry in a completed cycle:
+
+| Row deleted by the cascade | Why nothing that counts is lost |
+|---|---|
+| `ContestRoundWinner` | B-300 deleted the removed entry's winner row at removal and revoked the placement points; a restore cannot happen after closure |
+| `ContestVote` | every ranking, tally and "my vote" read filters `post: { is: POST_NOT_REMOVED }`; the weekly podium is derived from non-removed entries only; before the lock the votes were released |
+| `ContestEngagement` | the Phase 1 and monthly rankings take non-removed entries only; baseline points live in `PointsLedgerEntry` (no foreign key, never touched) |
+| `ContestImpression` | folded into `impressionTotal` and deleted at the crown; the exposure view and admin distribution filter removed entries |
+| the `ContestEntry` row | its stored tally/rank are read only through the same non-removed filters; `ContestFinalist`, `ContestStanding`, `PointsLedgerEntry`, `ContestVoteEvent`, `Notification` and `LeaderboardEntry` have no relation to it |
+
+Still blocked (`blockedContestEntry`), because there the cascade WOULD remove something that counts: (1) the entry's cycle is not
+`completed` (its rows are still inputs to the lifecycle; with the 6 / 7-year periods this is unreachable, it guards a mis-set
+period); (2) the entry still has a `ContestRoundWinner` row (B-300 deletes a removed entry's winner row, so one that remains
+means a legacy admin-judged cycle, `monthKey` NULL, which B-300 leaves alone, or an unreconciled state). No other rule is invented.
+
+A restored entry or a pending appeal cannot reach this check: the candidate scan only takes closed reports (`reportClosedAt`),
+and an overturned appeal reopens the report. The 6 / 7-year clocks, the hold / escalation / open-appeal / other-open-report skips
+and the context-of-another-report block are unchanged. The one visible difference after a purge is the admin cycle detail, which
+no longer lists the removed entry (and its round's `entryCount` is one lower).
+
+## Staff-recorded appeal (`backend/b292-staff-recorded-appeal`, B-292, Decision Log #485 (f), #492)
+
+A person suspended by a report cannot sign in, so they cannot call `POST /reports/:id/appeal`. They ask through the
+public Contact Us page and staff record the appeal on their behalf.
+
+**Route.** `POST /admin/moderation/reports/:id/appeal` (`AdminJwtAuthGuard` + `AdminRolesGuard('moderator',
+'superadmin')`, the class-level guards of this controller), body `{ reason }` with exactly `AppealReportDto`'s limits
+(string, 1 to 500 characters, required; any other key is a 400 from the global pipe). `ModerationService.recordAppealOnBehalf`.
+Rules, in this order:
+
+1. 404 `Report not found` if the report is missing.
+2. `assertVettedToActOn` (B-297): a `concernsMinor` report, or a `message` report whose thread involves a child,
+   needs a child-safety-vetted admin (403 `child_safety_vetting_required`).
+3. The report must be `actioned`: otherwise the same 403 `Only an actioned report may be appealed` as `appealReport`.
+4. `actionTaken` must be `user_suspended`: otherwise 400 `staff_appeal_not_applicable` (a person who is not suspended
+   can sign in and appeal themselves).
+5. No appeal yet: otherwise the same 409 `This report has already been appealed`.
+6. The reported account (`resolveReportedUserId`) must exist and not be `deleted` (anonymised): otherwise 409
+   `reported_account_unavailable`.
+7. The appeal window (`appealWindowLapsed` on `reviewedAt`, `REPORT_APPEAL_WINDOW_DAYS`): otherwise the same 403
+   `appeal_window_closed` and message as a self-filed appeal.
+
+On success ONE `updateMany` (guarded on `status: 'actioned'` and `appealStatus: null`, so two admins recording at once
+cannot both win; the loser gets the same 409) writes `appealStatus 'pending'`, `appealReason`, `appealedAt` and the new
+`Report.appealRecordedByAdminId` (migration `20261128090000_add_report_appeal_recorded_by`, additive, FK to `AdminUser`
+`ON DELETE SET NULL` like `reviewedByAdminId`, indexed; NULL means the person appealed themselves). The reported
+person is sent nothing (no email, no notification). An audit row `report.appeal_recorded` (targetType `report`, the
+recording admin as `adminId`, notes `pending`) is written after the update, the way `report.appeal_decided` is; the
+reason text is never in it.
+
+**Deciding.** `decideAppeal` keeps #138 (the admin who actioned the report may not decide) and adds: the admin who
+recorded the appeal may not decide it either (403 `appeal_recorder_cannot_decide`). A staff-recorded appeal therefore
+needs a third admin. Overturning it reinstates the account exactly as for a self-filed appeal (B-291).
+
+**Surfaced to the admin app.** Every queue row and the report detail carry `appealRecordedByStaff` (boolean, false when
+the person appealed themselves or there is no appeal); the detail also carries `appealRecordedBy: { id, fullName } |
+null` (the raw `appealRecordedByAdminId` is on every row, as `reviewedByAdminId` is). No other response changed.
+
+**Closure clock.** A pending appeal is a pending appeal whoever recorded it: `reportClosedAt` returns null while
+`appealStatus` is `pending`, so the report stays open for the hold rules and is never due for the retention sweep
+(B-294) until the appeal is decided. Pinned by a unit test.
+
+**Not built, flagged.** `apps/admin` screens (frames: Figma pass U, `docs/figma-pass-u-report.md`); the audit-log
+screen's client copy of the action list does not know `report.appeal_recorded` yet (it shows the raw key); there is no
+link from a Contact Us enquiry to the appeal it led to.
+
+## Report retention and suspected-illegal media (B-206)
+
+`ReportRetentionService` skips (reason `media`, counted as `skippedMedia`) a closed report that is the `reportId` of an
+active `SuspectedIllegalMedia` record, or that is on a post whose media has an active record (`set_aside`, or inside
+`preserveUntil`). The report is purged on a later run once the record is decided and its preservation date has passed.
+See `modules/suspected-illegal-media/README.md`.

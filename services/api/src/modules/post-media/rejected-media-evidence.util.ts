@@ -1,0 +1,197 @@
+import { Prisma } from '@prisma/client';
+import { resolveReportAppealWindowDays } from '../account-hold/account-hold.config';
+import { findActiveAccountHold, reportClosedAt } from '../account-hold/account-hold.rules';
+
+// backend/b283-delete-rejected-media (B-283; Decision Log #462 (g), #464).
+//
+// THE PROTECTION RULE for the private object of a REJECTED media file. Every lifecycle path now deletes it
+// (post deleted, upload deleted, quarantine purge, unattached purge, account anonymised, account purged), EXCEPT
+// when either of these holds, in which case the deletion is skipped and retried later:
+//
+//   1. the uploader has an ACTIVE ADMIN HOLD (a legal hold or a bad-faith hold, findActiveAccountHold -- the one
+//      read of that rule, not a copy of it); or
+//   2. the post the file is attached to has a report that is NOT YET CLOSED (reportClosedAt, the one closure
+//      predicate of the hold rules, so the appeal window counts as "not yet closed").
+//
+// WHY A RECORD: when a post or an upload is deleted its PostMedia row goes with it, so a skipped deletion has
+// nothing left to retry from. The skip is therefore written to PostMediaDeferredDeletion (in the SAME transaction
+// as the delete, when the caller has one) and RejectedMediaSweepService.processDeferred finishes the job once
+// neither protection applies.
+//
+// backend/suspected-illegal-imagery-path (B-206; founder decision 2026-11-15). A THIRD protection, in this same one
+// place: a file with a SuspectedIllegalMedia record (a child-safety-vetted admin set it aside as suspected illegal
+// imagery) is protected while the record's status is 'set_aside' OR now < preserveUntil, whoever the uploader is and
+// whatever the state of the post or its reports. It is evidence-handling bookkeeping, not a legal conclusion. The
+// record has no foreign key, so it protects the file after the row, the post and the account are gone.
+//
+// WHAT THIS DOES NOT PROTECT: a stray object with no row and no record cannot be tied to a report (the key names
+// only the uploader and the media id), so for it the minimum object age is the only protection; its uploader's
+// hold IS checked, because the key names the uploader.
+
+export interface EvidenceItem {
+  mediaId: string;
+  uploaderId: string;
+  postId: string | null;
+  key: string;
+}
+
+type HoldDb = Pick<Prisma.TransactionClient, 'accountHold'>;
+type ReportDb = Pick<Prisma.TransactionClient, 'report'>;
+type DeferDb = Pick<Prisma.TransactionClient, 'postMediaDeferredDeletion'>;
+type SuspectedDb = Pick<Prisma.TransactionClient, 'suspectedIllegalMedia'>;
+
+/**
+ * The media ids (of those given) whose file is set aside as suspected illegal imagery and still protected: the record
+ * is 'set_aside', or its preserveUntil has not yet passed. A record that is decided AND past its preserveUntil
+ * protects nothing.
+ */
+export async function suspectedMediaUnderProtection(
+  db: SuspectedDb,
+  mediaIds: readonly string[],
+  now: Date,
+): Promise<Set<string>> {
+  const ids = [...new Set(mediaIds)];
+  if (ids.length === 0) return new Set();
+  const rows = await db.suspectedIllegalMedia.findMany({
+    where: { mediaId: { in: ids }, OR: [{ status: 'set_aside' }, { preserveUntil: { gt: now } }] },
+    select: { mediaId: true },
+  });
+  return new Set(rows.map((r) => r.mediaId));
+}
+
+/** The uploaders (of those given) that have an active admin hold right now. */
+export async function uploadersUnderHold(db: HoldDb, uploaderIds: readonly string[], now: Date): Promise<Set<string>> {
+  const held = new Set<string>();
+  for (const id of new Set(uploaderIds)) {
+    if (await findActiveAccountHold(db, id, now)) held.add(id);
+  }
+  return held;
+}
+
+/** The posts (of those given) with a report that is not yet closed (open, appeal pending or appeal window running). */
+export async function postsWithUnclosedReport(
+  db: ReportDb,
+  postIds: readonly string[],
+  now: Date,
+  appealWindowDays: number = resolveReportAppealWindowDays(),
+): Promise<Set<string>> {
+  const ids = [...new Set(postIds)];
+  const open = new Set<string>();
+  if (ids.length === 0) return open;
+  const reports = await db.report.findMany({
+    where: { targetType: 'post', targetId: { in: ids } },
+    select: { targetId: true, status: true, appealStatus: true, reviewedAt: true, appealReviewedAt: true },
+  });
+  for (const r of reports) {
+    const closure = reportClosedAt(r, appealWindowDays);
+    if (closure === null || now.getTime() < closure.getTime()) open.add(r.targetId);
+  }
+  return open;
+}
+
+export interface EvidencePartition {
+  /** Neither protection applies: the object may be deleted now. */
+  free: EvidenceItem[];
+  /** The uploader is under a hold, or the post has an unclosed report: do not delete. */
+  protectedItems: EvidenceItem[];
+}
+
+export async function partitionEvidence(
+  db: HoldDb & ReportDb & SuspectedDb,
+  items: readonly EvidenceItem[],
+  now: Date,
+): Promise<EvidencePartition> {
+  if (items.length === 0) return { free: [], protectedItems: [] };
+  const setAside = await suspectedMediaUnderProtection(
+    db,
+    items.map((i) => i.mediaId),
+    now,
+  );
+  const held = await uploadersUnderHold(
+    db,
+    items.map((i) => i.uploaderId),
+    now,
+  );
+  const reported = await postsWithUnclosedReport(
+    db,
+    items.flatMap((i) => (i.postId ? [i.postId] : [])),
+    now,
+  );
+  const free: EvidenceItem[] = [];
+  const protectedItems: EvidenceItem[] = [];
+  for (const item of items) {
+    if (setAside.has(item.mediaId) || held.has(item.uploaderId) || (item.postId !== null && reported.has(item.postId))) {
+      protectedItems.push(item);
+    } else free.push(item);
+  }
+  return { free, protectedItems };
+}
+
+/** Records the deferred deletions. Idempotent (one record per object key). */
+export async function recordDeferrals(db: DeferDb, items: readonly EvidenceItem[]): Promise<void> {
+  if (items.length === 0) return;
+  await db.postMediaDeferredDeletion.createMany({
+    data: items.map((i) => ({ objectKey: i.key, mediaId: i.mediaId, uploaderId: i.uploaderId, postId: i.postId })),
+    skipDuplicates: true,
+  });
+}
+
+/**
+ * The one call the delete paths make for the rejected files they are removing: returns the keys that may be
+ * deleted now, and records a deferral for every object the protection rule holds back.
+ */
+export async function evidenceKeysToDeleteNow(
+  db: HoldDb & ReportDb & DeferDb & SuspectedDb,
+  items: readonly EvidenceItem[],
+  now: Date,
+): Promise<string[]> {
+  const { free, protectedItems } = await partitionEvidence(db, items, now);
+  await recordDeferrals(db, protectedItems);
+  return free.map((i) => i.key);
+}
+
+// backend/b290-removed-post-media (B-290; Decision Log #484). THE ONE FUNCTION that decides whether the private copy
+// kept of a removed post's media may be deleted now. It is the existing protection rule UNCHANGED (partitionEvidence:
+// the uploader has an active admin hold, or the post has a report not yet closed) with one condition in front of it:
+// the report that REMOVED the post must itself be closed (reportClosedAt, the one closure predicate: the appeal window
+// has lapsed, or the appeal was upheld). B-206 (statutory-reporting / evidence set-aside under counsel) is meant to hook
+// in HERE and nowhere else: a set-aside is one more reason to put an item in `waiting`.
+// BUILT (backend/suspected-illegal-imagery-path): the SuspectedIllegalMedia record is checked inside partitionEvidence,
+// which this function calls, so a set-aside file is `waiting` here too.
+
+export interface RemovedMediaItem extends EvidenceItem {
+  /** Post.removedByReportId: the report whose closure starts the deletion clock. */
+  removingReportId: string;
+}
+
+export interface RemovedMediaPartition {
+  /** The removing report is closed and neither protection applies: delete the private object now. */
+  free: RemovedMediaItem[];
+  /** Not yet: the removing report is still open / in its appeal window, the uploader is held, or a report on the post is open. */
+  waiting: RemovedMediaItem[];
+}
+
+export async function removedMediaDeletableNow(
+  db: HoldDb & ReportDb & SuspectedDb,
+  items: readonly RemovedMediaItem[],
+  now: Date,
+  appealWindowDays: number = resolveReportAppealWindowDays(),
+): Promise<RemovedMediaPartition> {
+  if (items.length === 0) return { free: [], waiting: [] };
+  const reports = await db.report.findMany({
+    where: { id: { in: [...new Set(items.map((i) => i.removingReportId))] } },
+    select: { id: true, status: true, appealStatus: true, reviewedAt: true, appealReviewedAt: true },
+  });
+  const closed = new Set<string>();
+  for (const r of reports) {
+    const closure = reportClosedAt(r, appealWindowDays);
+    if (closure !== null && now.getTime() >= closure.getTime()) closed.add(r.id);
+  }
+  const candidates = items.filter((i) => closed.has(i.removingReportId));
+  const { free } = await partitionEvidence(db, candidates, now);
+  const freeKeys = new Set(free.map((i) => i.key));
+  return {
+    free: candidates.filter((i) => freeKeys.has(i.key)),
+    waiting: items.filter((i) => !closed.has(i.removingReportId) || !freeKeys.has(i.key)),
+  };
+}

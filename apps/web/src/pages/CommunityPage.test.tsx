@@ -1,0 +1,368 @@
+// Following ProfilePage.test.tsx's pattern -- plain DOM assertions, mocks
+// src/api/feed.ts and src/api/users.ts rather than hitting the network,
+// session seeded directly into the in-memory session store.
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import CommunityPage from "./CommunityPage";
+import type { FeedPost } from "../api/feed";
+
+vi.mock("../api/feed", async () => {
+  const actual = await vi.importActual<typeof import("../api/feed")>("../api/feed");
+  return {
+    ...actual,
+    getFeed: vi.fn(),
+    createPost: vi.fn(),
+    likePost: vi.fn(),
+    unlikePost: vi.fn(),
+    savePost: vi.fn(),
+    unsavePost: vi.fn(),
+    getComments: vi.fn(),
+    addComment: vi.fn(),
+  };
+});
+
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return {
+    ...actual,
+    getUser: vi.fn(),
+    followUser: vi.fn(),
+    unfollowUser: vi.fn(),
+  };
+});
+
+vi.mock("../api/contest", async () => {
+  const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
+  return {
+    ...actual,
+    getCurrentContest: vi.fn(),
+    submitContestEntry: vi.fn(),
+    getFinalWeekCarousel: vi.fn(),
+    recordImpression: vi.fn(),
+  };
+});
+
+vi.mock("../api/messaging", async () => {
+  const actual = await vi.importActual<typeof import("../api/messaging")>("../api/messaging");
+  return {
+    ...actual,
+    listConversations: vi.fn(),
+    getMessages: vi.fn(),
+    sendMessage: vi.fn(),
+    markConversationRead: vi.fn(),
+  };
+});
+
+import { getFeed, createPost, likePost } from "../api/feed";
+import { listConversations } from "../api/messaging";
+import { getUser } from "../api/users";
+import {
+  getCurrentContest,
+  getFinalWeekCarousel,
+  submitContestEntry,
+  type CurrentContestResponse,
+} from "../api/contest";
+import { noContest, openContest as baseOpenContest } from "./contest/contestFixtures";
+import { seedSession, clearSession } from "../test/session";
+
+const openContest = (overrides: Partial<CurrentContestResponse> = {}) => baseOpenContest(overrides);
+
+function base64UrlEncode(value: object): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function fakeAccessToken(sub = "user-1"): string {
+  return `${base64UrlEncode({ alg: "none" })}.${base64UrlEncode({ sub, role: "fan" })}.sig`;
+}
+
+function post(overrides: Partial<FeedPost> = {}): FeedPost {
+  return {
+    id: "post-1",
+    authorId: "user-2",
+    author: { id: "user-2", publicName: "Emeka John", isFollowing: false },
+    contentText: "First goal of the season, what a feeling",
+    mediaUrls: [],
+    media: [],
+    clubPageId: null,
+    banterRoomId: null,
+    likeCount: 3,
+    commentCount: 1,
+    viewCount: 0,
+    createdAt: new Date().toISOString(),
+    isLiked: false,
+    isSaved: false,
+    ...overrides,
+  };
+}
+
+afterEach(cleanup);
+beforeEach(() => {
+  clearSession();
+  vi.mocked(getFeed).mockReset();
+  vi.mocked(createPost).mockReset();
+  vi.mocked(likePost).mockReset();
+  vi.mocked(getUser).mockReset();
+  vi.mocked(getCurrentContest).mockReset();
+  vi.mocked(getCurrentContest).mockResolvedValue(noContest());
+  vi.mocked(submitContestEntry).mockReset();
+  vi.mocked(getFinalWeekCarousel).mockReset();
+  vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: false, items: [] });
+  vi.mocked(listConversations).mockReset();
+  vi.mocked(listConversations).mockResolvedValue({ items: [], nextCursor: null });
+});
+
+function renderPage(path = "/community") {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <CommunityPage />
+    </MemoryRouter>,
+  );
+}
+
+describe("CommunityPage", () => {
+  it("shows a log-in prompt and never calls GET /posts/feed when there is no session", () => {
+    renderPage();
+    expect(screen.getByText(/log in to see your community feed/i)).not.toBeNull();
+    expect(getFeed).not.toHaveBeenCalled();
+  });
+
+  it("loads and renders the feed via GET /posts/feed", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+
+    renderPage();
+
+    expect(await screen.findByText(/first goal of the season/i)).not.toBeNull();
+    expect(getFeed).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("shows the Final week carousel above the feed during a live final week, and nothing otherwise", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    vi.mocked(getFinalWeekCarousel).mockResolvedValue({
+      live: true,
+      items: [
+        {
+          entryId: "e1",
+          postId: "p1",
+          finalist: { userId: "u9", publicName: "Sarah Bello" },
+          post: { id: "p1", contentText: "Drill", mediaUrls: [], createdAt: "2026-09-24T10:00:00.000Z" },
+        },
+      ],
+    });
+
+    renderPage();
+
+    const carousel = await screen.findByTestId("final-week-carousel");
+    expect(carousel.textContent).toContain("Sarah Bello");
+    const feedPost = await screen.findByText(/first goal of the season/i);
+    // The module sits above the first post.
+    expect(carousel.compareDocumentPosition(feedPost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders no carousel when the final week is not live", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    renderPage();
+    await screen.findByText(/first goal of the season/i);
+    expect(getFinalWeekCarousel).toHaveBeenCalled();
+    expect(screen.queryByTestId("final-week-carousel")).toBeNull();
+  });
+
+  it("publishes a post via POST /posts and prepends it to the feed", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+    vi.mocked(createPost).mockResolvedValueOnce(
+      post({
+        id: "new-post",
+        authorId: "user-1",
+        author: { id: "user-1", publicName: "Ada Player", isFollowing: false },
+        contentText: "Just posted this",
+      }),
+    );
+
+    renderPage();
+    await screen.findByText(/your feed is quiet/i);
+
+    fireEvent.change(screen.getByLabelText("What's happening?"), { target: { value: "Just posted this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(createPost).toHaveBeenCalledWith(expect.any(String), { contentText: "Just posted this" }));
+    expect(await screen.findByText("Just posted this")).not.toBeNull();
+  });
+
+  it("likes a post via POST /posts/:id/like and reflects the server's fresh count", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [post({ likeCount: 3 })], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+    vi.mocked(likePost).mockResolvedValueOnce({ postId: "post-1", liked: true, likeCount: 4 });
+
+    renderPage();
+    const likeBtn = await screen.findByRole("button", { name: /3 likes/i });
+    fireEvent.click(likeBtn);
+
+    await waitFor(() => expect(likePost).toHaveBeenCalledWith(expect.any(String), "post-1"));
+    expect(await screen.findByRole("button", { name: /4 likes/i })).not.toBeNull();
+  });
+
+  it("does not render a Follow button on the caller's own post", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({
+      items: [post({ authorId: "user-1", author: { id: "user-1", publicName: "Ada Player", isFollowing: false } })],
+      nextCursor: null,
+    });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+
+    renderPage();
+    await screen.findByText(/first goal of the season/i);
+    expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+  });
+
+  it("shows no Contest tab in the composer when no contest is accepting entries", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(noContest());
+
+    renderPage();
+    await screen.findByText(/your feed is quiet/i);
+
+    expect(screen.queryByRole("tab", { name: /contest/i })).toBeNull();
+  });
+
+  it("submits a contest entry: POST /posts then POST /contest/entries with the new post's id", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(openContest());
+    vi.mocked(createPost).mockResolvedValueOnce(
+      post({ id: "entry-post", authorId: "user-1", contentText: "my skill clip caption" }) as never,
+    );
+    vi.mocked(submitContestEntry).mockResolvedValueOnce({
+      id: "ce-1",
+      cycleId: "cycle-1",
+      roundId: "round-2",
+      weekNumber: 2,
+      postId: "entry-post",
+      submittedAt: new Date().toISOString(),
+    });
+
+    renderPage("/community?compose=contest");
+    await screen.findByText(/your feed is quiet/i);
+
+    // Deep-linked into contest mode (GET /contest/current resolves after the feed).
+    const caption = await screen.findByLabelText(/caption for your contest entry/i);
+    expect(screen.getByRole("tab", { name: /contest/i }).getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.change(caption, { target: { value: "my skill clip caption" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
+
+    await waitFor(() =>
+      expect(createPost).toHaveBeenCalledWith(expect.any(String), { contentText: "my skill clip caption" }),
+    );
+    await waitFor(() => expect(submitContestEntry).toHaveBeenCalledWith(expect.any(String), "entry-post"));
+    // The entry post is also prepended to the normal feed.
+    expect(await screen.findByText("my skill clip caption")).not.toBeNull();
+    expect(await screen.findByText(/your entry is in for this week/i)).not.toBeNull();
+  });
+
+  it("shows an 'already entered' state in contest mode when callerEntry is set", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      openContest({ callerEntry: { roundId: "round-2", weekNumber: 2, postId: "p9" } }),
+    );
+
+    renderPage("/community?compose=contest");
+    await screen.findByText(/your feed is quiet/i);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /contest/i }));
+    expect(await screen.findByText(/entered this week.s contest \(week 2\)/i)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /submit entry/i })).toBeNull();
+  });
+
+  it("renders like / save / follow in their already-acted state on initial load from the API's per-caller fields (Decision Log #153)", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({
+      items: [
+        post({
+          likeCount: 7,
+          isLiked: true,
+          isSaved: true,
+          author: { id: "user-2", publicName: "Emeka John", isFollowing: true },
+        }),
+      ],
+      nextCursor: null,
+    });
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
+
+    renderPage();
+
+    // No clicks -- this is the initial render straight from GET /posts/feed.
+    const likeBtn = await screen.findByRole("button", { name: /7 likes/i });
+    expect(likeBtn.getAttribute("aria-pressed")).toBe("true");
+
+    const saveBtn = screen.getByRole("button", { name: /saved/i });
+    expect(saveBtn.getAttribute("aria-pressed")).toBe("true");
+
+    expect(screen.getByRole("button", { name: "Following" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+    expect(likePost).not.toHaveBeenCalled();
+  });
+
+  // B-066 (Figma frame 1306:354): the right rail is the message sidebar.
+  it("shows the message sidebar in the right rail at desktop width, wired to GET /conversations", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    vi.mocked(listConversations).mockResolvedValue({
+      items: [
+        {
+          id: "c1",
+          otherParticipant: { id: "u2", publicName: "Kingsley Chukwudi" },
+          lastMessageAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          lastMessage: { contentText: "Morning", senderId: "u2", sentAt: new Date().toISOString() },
+          unreadCount: 1,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Kingsley Chukwudi")).not.toBeNull();
+    expect(screen.getByRole("complementary", { name: "Messages" })).not.toBeNull();
+    expect(listConversations).toHaveBeenCalledWith(expect.any(String));
+    // The old sample right-rail cards are gone.
+    expect(screen.queryByText("Who to follow")).toBeNull();
+  });
+
+  it("shows no message sidebar and fetches no conversations at phone width", async () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 500 });
+    try {
+      seedSession(fakeAccessToken("user-1"));
+      vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+      vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+
+      renderPage();
+
+      expect(await screen.findByText(/first goal of the season/i)).not.toBeNull();
+      expect(screen.queryByRole("complementary", { name: "Messages" })).toBeNull();
+      expect(listConversations).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: original });
+    }
+  });
+
+  it("does not load conversations when there is no session", () => {
+    renderPage();
+    expect(listConversations).not.toHaveBeenCalled();
+  });
+});

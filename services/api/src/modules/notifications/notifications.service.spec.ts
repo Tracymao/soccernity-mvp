@@ -1,0 +1,693 @@
+import { NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { encodeNotificationCursor } from './cursor.util';
+import { NotificationsService } from './notifications.service';
+
+// Mocked-Prisma unit tests, following banter.service.spec.ts /
+// messaging.service.spec.ts's own convention. This module makes no raw
+// SQL and no transaction/isolation-level claims, so no e2e spec was
+// added — see notifications/README.md.
+
+function buildPrismaMock() {
+  const prisma = {
+    notification: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    block: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    post: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    conversation: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    fixture: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    contestCycle: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    contestStanding: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    postMedia: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    matchData: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  } as unknown as PrismaService;
+
+  return prisma;
+}
+
+const CALLER = 'caller-1';
+
+function row(over: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'notif-1',
+    userId: CALLER,
+    type: 'follow',
+    payloadRefId: 'actor-1',
+    read: false,
+    createdAt: new Date('2026-09-13T10:00:00Z'),
+    ...over,
+  };
+}
+
+describe('NotificationsService', () => {
+  describe('listNotifications', () => {
+    it('paginates newest-first and returns unreadCount alongside the page', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [row({ id: 'n-1' })];
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.notification.count as jest.Mock).mockResolvedValue(3);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: CALLER },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 21,
+        }),
+      );
+      expect(page.unreadCount).toBe(3);
+      expect(page.items).toHaveLength(1);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('sets nextCursor when a page is full and encodes it from the last real row', async () => {
+      const prisma = buildPrismaMock();
+      const rows = Array.from({ length: 21 }, (_, i) =>
+        row({ id: `n-${i}`, createdAt: new Date(2026, 8, 13, 10, 0, 0 - i) }),
+      );
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items).toHaveLength(20);
+      expect(page.nextCursor).not.toBeNull();
+    });
+
+    it('applies the cursor filter when one is supplied', async () => {
+      const prisma = buildPrismaMock();
+      const service = new NotificationsService(prisma);
+      const cursor = encodeNotificationCursor({ createdAt: new Date('2026-09-13T09:00:00Z'), id: 'n-0' });
+
+      await service.listNotifications(CALLER, { cursor });
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              { userId: CALLER },
+              {
+                OR: [
+                  { createdAt: { lt: new Date('2026-09-13T09:00:00Z') } },
+                  { createdAt: new Date('2026-09-13T09:00:00Z'), id: { lt: 'n-0' } },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('resolves a follow notification to its actor via payloadRefId', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'follow', payloadRefId: 'actor-1' }),
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ actor: { id: 'actor-1', publicName: 'Soccernity member' } });
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['actor-1'] } } }),
+      );
+    });
+
+    it('resolves like/comment notifications to the post, with no actor (documented gap)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ id: 'n-like', type: 'like', payloadRefId: 'post-1' }),
+        row({ id: 'n-comment', type: 'comment', payloadRefId: 'post-1' }),
+      ]);
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([
+        { id: 'post-1', contentText: 'hello world', authorId: CALLER },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      // One batched query for both rows, not one per row.
+      expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.post.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['post-1'] }, removedByModerationAt: null } }),
+      );
+      expect(page.items[0].data).toEqual({
+        post: { id: 'post-1', contentText: 'hello world', authorId: CALLER },
+      });
+      expect(page.items[1].data).toEqual({
+        post: { id: 'post-1', contentText: 'hello world', authorId: CALLER },
+      });
+    });
+
+    it('resolves a message notification to the other participant, not the caller', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'message', payloadRefId: 'convo-1' }),
+      ]);
+      (prisma.conversation.findMany as jest.Mock).mockResolvedValue([
+        { id: 'convo-1', participantIds: [CALLER, 'other-1'] },
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'other-1', username: null, displayName: 'Sam' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({
+        conversationId: 'convo-1',
+        otherParticipant: { id: 'other-1', publicName: 'Soccernity member' },
+      });
+    });
+
+    it('resolves a message notification to a ghost participant when the other user was hard-deleted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'message', payloadRefId: 'convo-1' }),
+      ]);
+      (prisma.conversation.findMany as jest.Mock).mockResolvedValue([
+        { id: 'convo-1', participantIds: [CALLER, 'gone-1'] },
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]); // gone-1 no longer exists
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({
+        conversationId: 'convo-1',
+        otherParticipant: { id: 'gone-1', publicName: null },
+      });
+    });
+
+    it('combines follow-actor and message-other-participant ids into ONE User query', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ id: 'n-follow', type: 'follow', payloadRefId: 'actor-1' }),
+        row({ id: 'n-message', type: 'message', payloadRefId: 'convo-1' }),
+      ]);
+      (prisma.conversation.findMany as jest.Mock).mockResolvedValue([
+        { id: 'convo-1', participantIds: [CALLER, 'other-1'] },
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { id: 'actor-1', username: null, displayName: 'Jane' },
+        { id: 'other-1', username: null, displayName: 'Sam' },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['actor-1', 'other-1'] } } }),
+      );
+    });
+
+    it('resolves fixture_scheduled/result_logged to the fixture, with a free-text opponent name falling back correctly', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ id: 'n-1', type: 'fixture_scheduled', payloadRefId: 'fix-1' }),
+        row({ id: 'n-2', type: 'result_logged', payloadRefId: 'fix-2' }),
+      ]);
+      (prisma.fixture.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'fix-1',
+          scheduledAt: new Date('2026-10-01T14:00:00Z'),
+          status: 'scheduled',
+          teamA: { name: 'Riverside FC' },
+          teamB: { name: 'Ikorodu Rangers' },
+          opponentName: null,
+          result: null,
+        },
+        {
+          id: 'fix-2',
+          scheduledAt: new Date('2026-10-08T14:00:00Z'),
+          status: 'full_time',
+          teamA: { name: 'Marina Boys FC' },
+          teamB: null,
+          opponentName: 'Some Local Side',
+          result: { scoreA: 2, scoreB: 1 },
+        },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({
+        fixture: {
+          id: 'fix-1',
+          teamAName: 'Riverside FC',
+          teamBName: 'Ikorodu Rangers',
+          scheduledAt: new Date('2026-10-01T14:00:00Z'),
+          status: 'scheduled',
+          result: null,
+        },
+      });
+      expect(page.items[1].data).toEqual({
+        fixture: {
+          id: 'fix-2',
+          teamAName: 'Marina Boys FC',
+          teamBName: 'Some Local Side',
+          scheduledAt: new Date('2026-10-08T14:00:00Z'),
+          status: 'full_time',
+          result: { scoreA: 2, scoreB: 1 },
+        },
+      });
+    });
+
+    it('resolves contest_win to the cycle title only (no round/position)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_win', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'September Contest' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ cycle: { id: 'cyc-1', title: 'September Contest' } });
+    });
+
+    it.each([
+      ['contest_week_opens', 'cyc-1:2', 2],
+      ['contest_votes_closing', 'cyc-1:3', 3],
+      ['contest_week_result', 'cyc-1:1', 1],
+      ['contest_finalist', 'cyc-1', null],
+      ['contest_reveal', 'cyc-1', null],
+      ['contest_upload_reminder', 'cyc-1', null],
+    ])('resolves %s (payloadRefId %s) to the cycle plus its week (%s)', async (type, payloadRefId, week) => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([row({ type, payloadRefId })]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ cycle: { id: 'cyc-1', title: 'November Challenge' }, week });
+      // The cycle id is the part before the colon, whatever the suffix.
+      expect(prisma.contestCycle.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['cyc-1'] } } }),
+      );
+      expect(prisma.contestStanding.findMany).not.toHaveBeenCalled();
+    });
+
+    it('resolves contest_final_result to "winners" when the cycle has crowned standings', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_final_result', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      (prisma.contestStanding.findMany as jest.Mock).mockResolvedValue([{ cycleId: 'cyc-1' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({
+        cycle: { id: 'cyc-1', title: 'November Challenge' },
+        week: null,
+        outcome: 'winners',
+      });
+    });
+
+    it('resolves contest_final_result to "no_winner" when the cycle has no standings', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_final_result', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toMatchObject({ outcome: 'no_winner' });
+    });
+
+    it('batches several Contest events of one cycle into a single cycle query', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ id: 'n1', type: 'contest_week_opens', payloadRefId: 'cyc-1:1' }),
+        row({ id: 'n2', type: 'contest_week_result', payloadRefId: 'cyc-1:1' }),
+        row({ id: 'n3', type: 'contest_win', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.contestCycle.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items.map((i) => i.data !== null)).toEqual([true, true, true]);
+      // contest_win keeps its original, unchanged shape.
+      expect(page.items[2].data).toEqual({ cycle: { id: 'cyc-1', title: 'November Challenge' } });
+    });
+
+    it('degrades a Contest event whose cycle is gone to data: null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_reveal', payloadRefId: 'gone' }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toBeNull();
+    });
+
+    it('resolves match_kickoff to the match summary, batched into one MatchData query', async () => {
+      const prisma = buildPrismaMock();
+      const kickoffTime = new Date('2026-10-03T19:00:00Z');
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'match_kickoff', payloadRefId: 'ext-1' }),
+        row({ id: 'notif-2', type: 'match_kickoff', payloadRefId: 'ext-2' }),
+      ]);
+      (prisma.matchData.findMany as jest.Mock).mockResolvedValue([
+        {
+          externalRef: 'ext-1',
+          competition: 'Premier League',
+          homeTeamName: 'Chelsea',
+          awayTeamName: 'Liverpool',
+          kickoffTime,
+          status: 'scheduled',
+        },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.matchData.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items[0].data).toEqual({
+        match: {
+          externalRef: 'ext-1',
+          competition: 'Premier League',
+          homeTeamName: 'Chelsea',
+          awayTeamName: 'Liverpool',
+          kickoffTime,
+          status: 'scheduled',
+        },
+      });
+      expect(page.items[1].data).toBeNull();
+    });
+
+    // B-214: a profile-image rejection names the image only. No query is needed and the
+    // moderator's reason is never part of the notification.
+    it('resolves profile_image_rejected to { image } with no extra query, and never carries a reason', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'profile_image_rejected', payloadRefId: 'avatar' }),
+        row({ id: 'notif-2', type: 'profile_image_rejected', payloadRefId: 'cover' }),
+        row({ id: 'notif-3', type: 'profile_image_rejected', payloadRefId: 'banner' }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ image: 'avatar' });
+      expect(page.items[1].data).toEqual({ image: 'cover' });
+      // An unrecognised reference degrades to null rather than inventing a kind.
+      expect(page.items[2].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
+      for (const model of ['post', 'conversation', 'user', 'fixture', 'contestCycle', 'matchData'] as const) {
+        expect((prisma[model].findMany as jest.Mock)).not.toHaveBeenCalled();
+      }
+    });
+
+    // B-139 part (c) (Decision Log #467): a decided username review names the OUTCOME only.
+    it('resolves username_review_decided to { usernameReview: { outcome } } with no extra query, never carries a reason, and degrades an unknown outcome to null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'username_review_decided', payloadRefId: 'reinstated' }),
+        row({ id: 'notif-2', type: 'username_review_decided', payloadRefId: 'declined' }),
+        row({ id: 'notif-3', type: 'username_review_decided', payloadRefId: 'something-else' }),
+        row({ id: 'notif-4', type: 'username_review_decided', payloadRefId: null }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ usernameReview: { outcome: 'reinstated' } });
+      expect(page.items[1].data).toEqual({ usernameReview: { outcome: 'declined' } });
+      expect(page.items[2].data).toBeNull();
+      expect(page.items[3].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
+      for (const model of ['post', 'conversation', 'user', 'fixture', 'contestCycle', 'matchData'] as const) {
+        expect((prisma[model].findMany as jest.Mock)).not.toHaveBeenCalled();
+      }
+    });
+
+    // B-037: post_media_approved / post_media_rejected name the file (kind only); the reason is never here.
+    it('resolves post_media_approved and post_media_rejected to { media: { id, kind } } with one batched lookup, and a deleted file to null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'post_media_approved', payloadRefId: 'media-1' }),
+        row({ id: 'notif-2', type: 'post_media_rejected', payloadRefId: 'media-2' }),
+        row({ id: 'notif-3', type: 'post_media_rejected', payloadRefId: 'media-gone' }),
+      ]);
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { id: 'media-1', kind: 'image' },
+        { id: 'media-2', kind: 'video' },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.postMedia.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items[0].data).toEqual({ media: { id: 'media-1', kind: 'image' } });
+      expect(page.items[1].data).toEqual({ media: { id: 'media-2', kind: 'video' } });
+      expect(page.items[2].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
+    });
+
+    it('resolves to null data when the referenced entity is gone (orphaned payloadRefId)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'like', payloadRefId: 'deleted-post' }),
+      ]);
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]); // hard-deleted, cascaded away
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toBeNull();
+    });
+
+    it('resolves to null data when payloadRefId itself is null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([row({ payloadRefId: null })]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toBeNull();
+    });
+
+    it('issues zero resolution queries for an empty page', async () => {
+      const prisma = buildPrismaMock();
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      expect(prisma.post.findMany).not.toHaveBeenCalled();
+      expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(prisma.fixture.findMany).not.toHaveBeenCalled();
+      expect(prisma.contestCycle.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getUnreadCount', () => {
+    it('counts only unread rows for the caller', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.count as jest.Mock).mockResolvedValue(5);
+      const service = new NotificationsService(prisma);
+
+      const count = await service.getUnreadCount(CALLER);
+
+      expect(count).toBe(5);
+      expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId: CALLER, read: false } });
+    });
+  });
+
+  describe('markRead', () => {
+    it('404s for a non-existent notification id', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
+      const service = new NotificationsService(prisma);
+
+      await expect(service.markRead(CALLER, 'missing')).rejects.toThrow(NotFoundException);
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('404s (never 403) for a notification owned by someone else: the lookup is scoped to the caller', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
+      const service = new NotificationsService(prisma);
+
+      await expect(service.markRead(CALLER, 'notif-1')).rejects.toThrow(NotFoundException);
+      expect((prisma.notification.findFirst as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: 'notif-1',
+        userId: CALLER,
+      });
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('marks an unread notification read and returns the resolved item', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(row({ read: false }));
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
+      const service = new NotificationsService(prisma);
+
+      const result = await service.markRead(CALLER, 'notif-1');
+
+      expect(prisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notif-1' },
+        data: { read: true },
+      });
+      expect(result.read).toBe(true);
+      expect(result.data).toEqual({ actor: { id: 'actor-1', publicName: 'Soccernity member' } });
+    });
+
+    it('is idempotent — an already-read notification is a no-op 200, not a duplicate update', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(row({ read: true }));
+      const service = new NotificationsService(prisma);
+
+      const result = await service.markRead(CALLER, 'notif-1');
+
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+      expect(result.read).toBe(true);
+    });
+  });
+
+  describe('markAllRead', () => {
+    it('marks every unread row read for the caller and returns the count', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.updateMany as jest.Mock).mockResolvedValue({ count: 4 });
+      const service = new NotificationsService(prisma);
+
+      const result = await service.markAllRead(CALLER);
+
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { userId: CALLER, read: false },
+        data: { read: true },
+      });
+      expect(result).toEqual({ markedRead: 4 });
+    });
+  });
+
+  // B-197 (Decision Log #411 item 5): rows between a blocked pair are hidden from both
+  // sides' reads, at read time, and left untouched by read-all / mark-one-read.
+  describe('hiding rows between a blocked pair (B-197)', () => {
+    function withBlocks(prisma: PrismaService, rows: Array<{ blockerId: string; blockedId: string }>) {
+      (prisma.block.findMany as jest.Mock).mockResolvedValue(rows);
+    }
+
+    it('with no Block on either side there is no exclusion and no extra lookup', async () => {
+      const prisma = buildPrismaMock();
+      const service = new NotificationsService(prisma);
+      await service.listNotifications(CALLER, {});
+      expect((prisma.notification.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ userId: CALLER });
+      expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+      expect(prisma.fixture.findMany).not.toHaveBeenCalled();
+    });
+
+    it('hides follow rows by the blocked user, message rows of their thread and fixture rows against their team - in both block directions', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [
+        { blockerId: CALLER, blockedId: 'b-1' },
+        { blockerId: 'b-2', blockedId: CALLER },
+      ]);
+      (prisma.conversation.findMany as jest.Mock).mockResolvedValue([{ id: 'conv-9' }]);
+      (prisma.fixture.findMany as jest.Mock).mockResolvedValue([{ id: 'fix-7' }]);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      const where = (prisma.notification.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({
+        userId: CALLER,
+        NOT: {
+          OR: [
+            { type: 'follow', payloadRefId: { in: ['b-1', 'b-2'] } },
+            { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1', 'b-2'] } },
+            { type: 'message', payloadRefId: { in: ['conv-9'] } },
+            { type: { in: ['fixture_scheduled', 'result_logged'] }, payloadRefId: { in: ['fix-7'] } },
+          ],
+        },
+      });
+      // the conversation / fixture lookups are scoped to the viewer and the blocked users only
+      expect((prisma.conversation.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+        AND: [{ participantIds: { has: CALLER } }, { participantIds: { hasSome: ['b-1', 'b-2'] } }],
+      });
+      // like / comment rows are excluded by Notification.actorId (Decision Log #412 item 1),
+      // and system notification types are never named
+      expect(JSON.stringify(where)).toContain('"actorId":{"not":null,"in":["b-1","b-2"]}');
+      expect(JSON.stringify(where)).not.toMatch(/moderation_decision|contest_/);
+    });
+
+    it('the unread count and the page share ONE Block read and the same exclusion', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      expect(prisma.block.findMany).toHaveBeenCalledTimes(1);
+      const countWhere = (prisma.notification.count as jest.Mock).mock.calls[0][0].where;
+      expect(countWhere).toMatchObject({ userId: CALLER, read: false, NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }, { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1'] } }] } });
+    });
+
+    it('getUnreadCount alone excludes the hidden rows', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: 'b-1', blockedId: CALLER }]);
+      const service = new NotificationsService(prisma);
+      await service.getUnreadCount(CALLER);
+      expect((prisma.notification.count as jest.Mock).mock.calls[0][0].where.NOT).toBeDefined();
+    });
+
+    it('read-all leaves hidden rows untouched (not marked read, not counted)', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      const service = new NotificationsService(prisma);
+      await service.markAllRead(CALLER);
+      expect((prisma.notification.updateMany as jest.Mock).mock.calls[0][0].where).toMatchObject({
+        userId: CALLER,
+        read: false,
+        NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }, { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1'] } }] },
+      });
+    });
+
+    it('a hidden row cannot be marked read by id: it is the same 404 as a missing one', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null); // the filtered lookup finds nothing
+      const service = new NotificationsService(prisma);
+      await expect(service.markRead(CALLER, 'notif-1')).rejects.toThrow(NotFoundException);
+      expect((prisma.notification.findFirst as jest.Mock).mock.calls[0][0].where.NOT).toBeDefined();
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+  });
+});

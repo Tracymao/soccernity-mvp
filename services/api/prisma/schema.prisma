@@ -1,5 +1,5 @@
 // Soccernity — Prisma schema
-// Source of truth: docs/Soccernity_MVP_Build_Plan_v1.1.docx, Section 3 (Data Model)
+// Source of truth: docs/Soccernity_MVP_Build_Plan_v1.7.docx, Section 3 (Data Model)
 // Do not add Discover-pillar (Player Passport, Combine Score, Scout CRM) or
 // Careers-pillar (Job Listing, Certification) models — out of MVP scope per
 // Build Plan Section 2.2. Adding them here is a Decision Log matter (Section 9),
@@ -10,145 +10,1429 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (via Neon's PgBouncer in production) — what the
+  // running app uses for normal query traffic. See DIRECT_URL below and
+  // Decision Log #26 (Build Plan Section 9 / CLAUDE.md) for why these two
+  // are split.
+  url       = env("DATABASE_URL")
+  // Unpooled connection — what `prisma migrate deploy`/`migrate dev` use.
+  // PgBouncer's transaction-pooling mode (Neon's default pooled endpoint)
+  // can interfere with the advisory locks and prepared statements Prisma
+  // Migrate relies on, so migrations must run against a direct connection.
+  // Locally (docker-compose's plain Postgres, no pooler in front of it),
+  // DATABASE_URL and DIRECT_URL are simply set to the identical value —
+  // only real Neon environments have genuinely different values for the two.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------- Community ----------
 
 model User {
-  id                String    @id @default(uuid())
-  email             String    @unique
-  phone             String?
-  passwordHash      String
-  displayName       String
-  dateOfBirth       DateTime
-  isMinor           Boolean   @default(false)
-  role              String    @default("fan") // fan | player | admin
-  verificationStatus String   @default("unverified")
-  createdAt         DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  phone              String?
+  passwordHash       String
+  displayName        String
+  // profile/username-column-and-display-convention (legal-copy Part C row
+  // 33; Decision Log #58/#364) -- a genuine addition beyond Section 3's
+  // literal User field list, flagged per CLAUDE.md's "fixed spec" rule.
+  // Optional, distinct from displayName (the "full name" used in emails
+  // and the owner's own profile). Stored ALREADY LOWERCASED
+  // ([a-z0-9_]{3,30}, enforced by UpdateUserDto and normalised in
+  // UsersService), so this single @unique is case-insensitive by
+  // construction; Postgres treats NULLs as distinct, so any number of users
+  // may have none ("unique where set"). Other users see
+  // resolvePublicName(): username if set, else displayName -- the real
+  // displayName is NOT sent to other users when a username exists.
+  username           String?   @unique
+  // B-032 (Decision Log #369): when the CURRENT username was last CHANGED from
+  // another value. Starts the change cooldown (UsernamePolicyService). Setting
+  // a username from none (first choice at Create Profile, or the pick after an
+  // admin revoke) does NOT write it, so a typo made at first choice can be
+  // fixed once for free; only a change from one value to another does. Cleared
+  // by an admin revoke (B-033).
+  usernameChangedAt  DateTime?
+  // AES-256-GCM ciphertext ("v1:<iv>:<tag>:<ct>"), NEVER plaintext --
+  // security/dob-field-encryption. Encrypted/decrypted only via
+  // DobEncryptionService (src/crypto). Not queryable by range: age logic
+  // reads rows and decrypts in application code. Null for anonymized rows.
+  dateOfBirth        String?
+  isMinor            Boolean   @default(false)
+  // sprint-1/under-16-restrictions -- a genuine addition beyond Section
+  // 3's literal User field list (Decision Log candidate, see
+  // auth/README.md). A NEW, separate tier layered ON TOP of isMinor /
+  // the guardian-consent restriction, never replacing it: true whenever
+  // the declared age at registration is under 16. Set exactly where
+  // isMinor is set (RegistrationService.register, via computeIsUnder16)
+  // and, like isMinor, never rewritten afterwards. Drives the counsel-
+  // requested under-16 controls: no messaging either direction, no
+  // Banter Rooms, read-only Community Groups, guardian contact exposed
+  // on the minor's own profile.
+  isUnder16          Boolean   @default(false)
+  role               String    @default("fan") // fan | player | admin
+  verificationStatus String    @default("unverified")
+  createdAt          DateTime  @default(now())
+
+  // Sprint 1 / sprint-1/f5-f6-missing-endpoints — a genuine addition beyond
+  // Section 3's literal User field list, flagged as a Decision Log
+  // candidate (see auth/README.md's "change-password / deactivate /
+  // delete" entry for the full writeup). Mirrors the existing
+  // consentStatus/verificationStatus string-enum convention already used
+  // twice in this schema, rather than a Boolean + a separate deletion
+  // flag. "active" (default) | "deactivated" (self-service, reversible via
+  // POST /auth/reactivate-account) | "pending_deletion" (self-service,
+  // NOT reversible via any endpoint in this PR — see AuthService.deleteAccount's
+  // own comment; no hard-delete of this row happens anywhere yet, pending
+  // a real retention/erasure policy decision this PR deliberately does not
+  // make unilaterally) | "suspended" (sprint-5/admin-users-dashboard-backend
+  // — ADMIN-imposed only, via PATCH /admin/users/:id, and deliberately
+  // distinct from "deactivated": a suspension must NOT be reversible via
+  // the self-service POST /auth/reactivate-account path the way a
+  // self-deactivation is — AuthService.reactivateAccount/login both
+  // treat "suspended" the same generic-message way they already treat
+  // "pending_deletion", and only PATCH /admin/users/:id can move a
+  // suspended account back to "active". See
+  // modules/admin-users/README.md's Decision Log candidate for the full
+  // reasoning.
+  accountStatus String @default("active")
+
+  // backend/b291-suspension-on-report (B-291, Decision Log #485) -- a genuine addition beyond Section 3's User field list,
+  // flagged as a Decision Log candidate. The report whose user_suspended action suspended this account. Set only when the
+  // suspension is CAUSED by a report and the account was not already suspended (never overwritten); cleared by a manual
+  // reinstatement and by the overturn of THIS report's appeal. Only that report's overturned appeal reinstates the
+  // account automatically. ON DELETE SET NULL: the report-retention sweep will later delete reports.
+  suspendedByReportId String?
+  suspendedByReport   Report? @relation("UserSuspendedByReport", fields: [suspendedByReportId], references: [id], onDelete: SetNull)
+
+  // backend/b086-two-factor (B-086; Decision Log #446, #405 item 8, #404 item 7) -- genuine additions beyond Section
+  // 3's User field list, flagged per CLAUDE.md's "fixed spec" rule (Decision Log candidates; see
+  // modules/two-factor/README.md). Authenticator-app two-factor (TOTP), OPTIONAL for a user.
+  //   totpSecretEncrypted  the TOTP secret, AES-256-GCM ciphertext ("v1:<iv>:<tag>:<ct>") under DOB_ENCRYPTION_KEY
+  //                        (the SAME key and code as dateOfBirth, #405). NEVER plaintext. Null = two-factor is off.
+  //                        A secret that is not yet confirmed lives only in Redis (10 min), never here.
+  //   totpEnabledAt        when the first valid code confirmed enrolment. Null = off. This, not the secret column, is
+  //                        what "two-factor is on" means.
+  //   totpLastUsedStep     the 30-second time step of the last accepted code; a code for a step at or below it is
+  //                        refused (replay protection), updated with an atomic compare.
+  totpSecretEncrypted       String?
+  totpEnabledAt             DateTime?
+  totpLastUsedStep          Int?
+  twoFactorBackupCodes      UserBackupCode[]
+  twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
+  // backend/b060-data-export: the person's own 'Download my data' requests (reverse relation only).
+  dataExportRequests        DataExportRequest[]
+  // backend/email-change (Decision Log #472 default (f), register Section 80b item 8): reverse relation for EmailChangeRequest.
+  emailChangeRequests       EmailChangeRequest[]
+  // backend/b062-notification-preferences (B-062, Decision Log #472 adopted default (c)): reverse relation for NotificationPreference.
+  notificationPreference    NotificationPreference?
+  // backend/b285-web-push (B-285, Decision Log #472 adopted default (e)): the person's browsers that opted in to web push. See PushSubscription.
+  pushSubscriptions         PushSubscription[]
+  // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
+  // user-facing query; see the model's comment.
+  guardianNoticeWithhold    GuardianNoticeWithhold?
+
+  // sprint-2/account-deletion-sweep — a genuine addition beyond Section
+  // 3's literal User field list, flagged per CLAUDE.md's "the data model
+  // is a fixed spec" rule. Set the moment accountStatus flips to
+  // "pending_deletion" (AuthService.deleteAccount), left null otherwise.
+  // Decision Log #42's 30-day grace period has to be measured from
+  // *something* — accountStatus alone records the current state, not
+  // when it started, so AccountDeletionSweepService could not otherwise
+  // tell a request from an hour ago from one from 40 days ago. Never
+  // written to for "deactivated" (Decision Log #42 does not cover that
+  // state, and deactivation stays self-service-reversible).
+  pendingDeletionAt DateTime?
+
+  // backend/w6-purge-anonymised-rows (B-043; Decision Log #375, supersedes #344)
+  // -- a genuine addition beyond Section 3's literal User field list, flagged as
+  // a Decision Log candidate. The moment the account was anonymised in place
+  // (AccountDeletionSweepService.anonymizeUser, written in the SAME transaction as
+  // accountStatus -> 'deleted'; covers the daily sweep and the admin immediate
+  // delete). pendingDeletionAt is cleared by the anonymiser and nothing else
+  // recorded WHEN a row became 'deleted', so the 30-day purge clock in #375 had
+  // nothing to count from. NULL on every row that was never anonymised AND on any
+  // row anonymised before this column existed (no backfill, the platform is not
+  // live): such a row is never selected by AnonymizedRowPurgeService. Kept at its
+  // first value if anonymizeUser is re-run on an already-anonymised row.
+  anonymizedAt DateTime?
+
+  // backend/team-organiser-flag — a genuine addition beyond Section 3's
+  // literal User field list, flagged as a Decision Log candidate (see
+  // grassroots/README.md for the full writeup). Deliberately SEPARATE
+  // from `role` above (fan | player | admin, currently unenforced
+  // anywhere in this codebase) — this is a narrow, single-purpose flag
+  // for one thing only: "has this user ever registered a Grassroots
+  // team." Set exactly once, inside the same transaction as a successful
+  // POST /teams (GrassrootsService.createTeam) — never settable any
+  // other way, and never unset (registering a second team, or a team
+  // being deleted, does not change it; there is no team-deletion
+  // endpoint anyway). Read on GET /users/:id (UsersService.OWN_PROFILE_SELECT)
+  // so apps/web can conditionally show/hide the Grassroots
+  // create/manage actions (create fixture, log result, manage team)
+  // without a second endpoint — browsing (team list, fixture list,
+  // results) stays visible to every logged-in user regardless of this
+  // flag; this is a manage-vs-browse UI convenience only, never a trust
+  // boundary — every Grassroots write endpoint still enforces its own
+  // real per-team/per-fixture organiser check server-side
+  // (Decision Log #255) regardless of what this flag says.
+  isTeamOrganiser Boolean @default(false)
+
+  // backend/b061-dm-permission-media-sensitive (build register B-061; Decision Log #472
+  // adopted defaults (d) and (i)) -- two genuine additions beyond Section 3's literal
+  // User field list, columns only, flagged as a Decision Log candidate.
+  //   dmPermission    "who can START a new conversation with me": everyone | following |
+  //                   none (CHECK constraint in the migration). It can only TIGHTEN the
+  //                   safeguarding rules (#346, #347, #12, Block), never loosen them.
+  //                   "following" = the RECIPIENT follows the sender. Governs STARTING
+  //                   new conversations only; existing threads keep working.
+  //   mediaSensitive  the author's "mark my pictures and videos as sensitive" toggle
+  //                   (default off). Read at READ time from the author's current value,
+  //                   so a change also applies to posts already published. Post media
+  //                   only (not avatars, covers or contest entries).
+  dmPermission    String  @default("everyone")
+  mediaSensitive  Boolean @default(false)
+
+  // backend/b061-read-receipts (B-061; Decision Log #472, founder decision 2026-11-08) -- a genuine addition beyond
+  // Section 3's User field list, flagged as a Decision Log candidate. NULLABLE on purpose: NULL = "use the age
+  // default", decided at READ time (ON for an adult account, OFF for an under-18 account, DEFAULT founder-veto-able),
+  // so an account that turns 18 changes default with no backfill. An explicit true or false always wins. Controls only
+  // what is DISCLOSED about Message.readAt; Message.readAt itself is still recorded either way. Reset to NULL on
+  // anonymisation.
+  readReceipts    Boolean?
+
+  // backend/b060-public-profile-toggle (build register B-060; founder decision 2026-11-08) -- a genuine
+  // addition beyond Section 3's User field list, flagged as a Decision Log candidate. The "Public profile"
+  // toggle (Settings > Privacy). true (default) = nothing changes for anyone. false = a FOLLOWERS-ONLY
+  // profile: a viewer who is not the owner and does not follow the owner sees only a minimal card (public
+  // name, avatar, an isPrivate marker) and none of the owner's posts, lists or activity
+  // (users/profile-visibility.util.ts is the one rule; users/README.md has the inventory). Following is
+  // instant and needs no approval, so this limits casual browsing, search and links, not a determined viewer.
+  // An UNDER-18 account cannot set it (403 profile_visibility_not_available) and its effective value is
+  // always "public" (the existing safeguarding rules decide, unchanged): the column is only ever read
+  // together with isMinor. Reset to true on anonymisation. Read at READ time, no cache.
+  isProfilePublic Boolean @default(true)
+
+  // backend/w2-country-storage (build register B-023; Decision Log #368) --
+  // genuine additions beyond Section 3's literal User field list. Country is
+  // mandatory at the Age Gate (declared by the user) and DERIVED at Register
+  // from the request IP against a LOCAL GeoLite2 database. The IP is read
+  // transiently in memory and is NEVER stored here or anywhere else; only the
+  // four values below persist.
+  //   declaredCountry          ISO-3166 alpha-2, as typed/selected by the user
+  //                            (Age Gate). Unverified. NULL for legacy rows and
+  //                            while the web Age Gate does not yet send it.
+  //   derivedCountry           ISO-3166 alpha-2 resolved from the IP; NULL when
+  //                            the lookup did not resolve.
+  //   countryDerivationMethod  'geolite2_local' (resolved) | 'unresolved'
+  //                            (lookup ran and did not resolve -- database
+  //                            missing, no usable IP, or no match). NULL only
+  //                            for rows created before this existed.
+  //   countryDerivedAt         when the lookup ran.
+  // The DERIVED code is authoritative for safeguarding checks (US under-13
+  // card verification) and demographic grouping; an unresolved lookup applies
+  // the STRONGER control (card verification for every under-13). The declared
+  // code is kept for audit/mismatch review and is never used to loosen a
+  // safeguarding decision. A CHECK constraint keeps the four values coherent.
+  declaredCountry         String?
+  derivedCountry          String?
+  countryDerivationMethod String?
+  countryDerivedAt        DateTime?
+
+  // backend/w5-profile-block (B-038, B-035, B-081; Decision Log #371, #394,
+  // #403 item 17) -- genuine additions beyond Section 3's literal User field
+  // list, flagged per CLAUDE.md's "fixed spec" rule. Public-profile content
+  // chosen by the user at Create Profile / Edit Profile. All nullable; none is
+  // required to complete a profile (username alone does, #404).
+  //   bio             free text, <= 160 characters, screened by the
+  //                   pre-publication sensitive-content screen (#366/#394 A3).
+  //   preferredClub   free text (#392 item 8): NOT clubAffiliationId and not an
+  //                   FK. Held for the owner only; the other-user profile does
+  //                   not expose it (not in the #371 list, OPEN).
+  //   profileCountry  the OPTIONAL profile country (#403 item 17): ISO-3166
+  //                   alpha-2, chosen by the user, shown only if filled in. It is
+  //                   deliberately NOT declaredCountry / derivedCountry above:
+  //                   those are the SAFEGUARDING country (never shown, never
+  //                   editable, decides US under-13 card verification) and must
+  //                   never be copied into or out of this column. A minor's
+  //                   country is therefore visible only if the minor enters it.
+  bio            String?
+  preferredClub  String?
+  profileCountry String?
+
+  // The avatar (#371, B-035, B-036). The upload route stores the object through
+  // the storage layer and records where. avatarStatus gates VISIBILITY: only
+  // 'approved' is served to other users. A new upload is 'pending' and is stored in
+  // the PRIVATE prefix (private-profile/); only the automatic image check
+  // (ProfileImageCheckService, B-036) approves it, and it first copies the file to the
+  // PUBLIC prefix (profile-media/). avatarKey always holds the file's CURRENT key (the
+  // prefix says private or public); avatarUrl holds its FUTURE public URL, served to
+  // other users only while the status is 'approved' and the key is public. 'rejected'
+  // is set by the check or by the review queue (B-037). url, key and status are all
+  // NULL or all set (CHECK constraint in the migration).
+  avatarUrl             String?
+  avatarKey             String?
+  avatarStatus          String?
+  // B-214 (Decision Log #412 item 2, #398 D2): why a moderator rejected the avatar.
+  // Set ONLY together with avatarStatus 'rejected' (UserImageReviewService, one
+  // transaction that also writes the Notification), cleared by the next upload,
+  // by delete and by anonymization. Admin-written text, owner-only: returned on the
+  // owner's own GET /users/:id and never selected by any other-user read. The
+  // Notification does not copy it. CHECK in the migration: only on a rejected image.
+  avatarRejectionReason String?
+  // backend/b037-profile-image-review (B-037): when the CURRENT avatar file was stored. Set by the upload route,
+  // cleared with the avatar (delete, anonymisation). A genuine addition beyond Section 3's User list, flagged for
+  // the Decision Log: the moderator queue lists profile pictures beside post media and needs an upload time to
+  // order and page by. Rows uploaded before this column existed are NULL (age unknown, listed as the oldest).
+  avatarUploadedAt DateTime?
+
+  // The cover photo (B-196, #411 item 4): the avatar pipeline with the same rule.
+  // Same three-columns-move-together shape, the same private-then-public storage and the
+  // same visibility gate: only an 'approved' cover is served to other users, a new upload
+  // is 'pending' (private prefix), and only the image check (B-036) approves it. url, key
+  // and status are all NULL or all set (CHECK constraint in the migration).
+  coverUrl             String?
+  coverKey             String?
+  coverStatus          String?
+  // B-214: the cover's rejection reason, same rules as avatarRejectionReason.
+  coverRejectionReason String?
+  // B-037: when the CURRENT cover file was stored; same rules as avatarUploadedAt.
+  coverUploadedAt DateTime?
 
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
-  guardian          Guardian?
+  guardian Guardian?
 
+  // Single, narrowly-scoped "this is my club" declared-identity field —
+  // a grassroots-player-identity concept, distinct from fan-page
+  // membership below. Named "ClubAffiliation" explicitly (see the
+  // sibling comment on ClubPage.affiliatedPlayers) so Prisma doesn't
+  // ambiguously fold this relation together with clubMemberships below
+  // — see that field's comment for the real bug this fixes.
+  // POST /clubs/:id/join (Build Plan Section 4.4, sprint-2/club-pages)
+  // never reads or writes clubAffiliationId/clubAffiliation.
   clubAffiliationId String?
-  clubAffiliation   ClubPage? @relation(fields: [clubAffiliationId], references: [id])
+  clubAffiliation   ClubPage? @relation("ClubAffiliation", fields: [clubAffiliationId], references: [id])
 
-  posts             Post[]
-  comments          Comment[]
-  savedPosts        SavedPost[]
-  followedBy        Follow[]        @relation("followee")
-  following         Follow[]        @relation("follower")
-  notifications     Notification[]
-  reportsFiled      Report[]        @relation("reporter")
-  messagesSent      Message[]
-  createdTeams      GrassrootsTeam[]
-  resultsEntered    Result[]
-  leaderboardEntry  LeaderboardEntry[]
+  // Many-to-many club-fan-page membership backing POST /clubs/:id/join
+  // (Build Plan Section 4.4) — see ClubPage.members' own comment for
+  // the full reasoning on why this is the mechanism "join" uses, and
+  // why it had to be given an explicit relation name to work correctly
+  // at all.
+  clubMemberships ClubPage[] @relation("ClubMembership")
+
+  // Decision Log #74 / #128 -- the ONE club this user "represents" for the
+  // Leaderboard's By-club scope and points attribution. Deliberately a
+  // separate, explicitly named relation: NOT clubAffiliationId (dead,
+  // written by nothing) and NOT clubMemberships (the fan-page m2m join).
+  // Must always be one of the user's own clubMemberships -- enforced in
+  // UsersService.setRepresentedClub, not by the database. Cleared by
+  // ClubsService.leaveClub when the user leaves that club. Set only via
+  // PATCH /users/:id/represented-club.
+  representedClubId String?
+  representedClub   ClubPage? @relation("RepresentedClub", fields: [representedClubId], references: [id], onDelete: SetNull)
+
+  // sprint-3/banter-rooms-backend — the reverse side of
+  // BanterRoomMember.user (see that model). Mechanical array field
+  // required by Prisma; no business data of its own.
+  banterRoomMemberships BanterRoomMember[]
+
+  // sprint-3/community-groups-backend (Decision Log #281) — the two
+  // reverse sides CommunityGroup/CommunityGroupMember need. Mechanical
+  // array fields required by Prisma; no business data of their own.
+  // `createdCommunityGroups` is CommunityGroup.createdBy's reverse side
+  // (a real FK from the start — unlike BanterRoom.createdBy, which
+  // Section 3 scaffolded as a bare String, CommunityGroup has no Section
+  // 3 precedent to defer to, so createdById is cascade-FK'd per Decision
+  // Log #44 from day one).
+  createdCommunityGroups    CommunityGroup[]
+  communityGroupMemberships CommunityGroupMember[]
+
+  posts              Post[]
+  comments           Comment[]
+  savedPosts         SavedPost[]
+  likes              Like[]
+  // sprint-4/post-view-tracking -- the reverse side of PostView.viewer
+  // (see that model). Nullable on PostView's own side (an anonymous
+  // view has no viewer), so this array is simply every view a LOGGED-IN
+  // account is on record for; no business data of its own.
+  postViews          PostView[]
+  // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): every file this user has
+  // uploaded for a post or a contest entry. RESTRICT like the other user-owned tables; the
+  // anonymiser deletes the rows (and the stored objects) first.
+  postMedia          PostMedia[]
+  postMediaReports   PostMediaReport[]
+  followedBy         Follow[]            @relation("followee")
+  following          Follow[]            @relation("follower")
+  // backend/w5-profile-block (B-039, Decision Log #396): the two sides of Block.
+  // blocksMade = rows where THIS user is the blocker; blockedBy = rows where
+  // this user is the one blocked. Mechanical relation fields, no business data.
+  blocksMade         Block[]             @relation("blocker")
+  blockedBy          Block[]             @relation("blocked")
+  // backend/w6-hold-rule-extension (B-044): admin-placed legal / bad-faith holds on this account.
+  accountHolds       AccountHold[]
+  // backend/w7-contact-us-enquiry (B-046): Contact Us enquiries sent while signed in.
+  contactEnquiries   ContactEnquiry[]
+  notifications      Notification[]
+  matchSubscriptions MatchSubscription[]
+  reportsFiled       Report[]            @relation("reporter")
+  messagesSent       Message[]
+  // backend/b067-message-edit-delete-hide (B-067): this user's per-message and per-conversation hides.
+  messageHides       MessageHide[]
+  conversationHides  ConversationHide[]
+  createdTeams       GrassrootsTeam[]
+  resultsEntered     Result[]
+  leaderboardEntry   LeaderboardEntry[]
+
+  // sprint-2/contest-data-model-backend (Decision Log #218/#219). All four
+  // are onDelete: Cascade on their own FK side (below) -- matching
+  // Decision Log #44 (cascade), so AccountDeletionSweepService's single
+  // tx.user.delete() keeps working with no per-table handling added.
+  contestEntries     ContestEntry[]
+  contestRoundWins   ContestRoundWinner[]
+  contestVotes       ContestVote[]
+  contestStandings   ContestStanding[]
+  contestFinalists   ContestFinalist[]
+  // backend/w7-contest (B-091): the engagement this account GAVE to contest entries.
+  contestEngagements ContestEngagement[]
+  // backend/w11-exposure (B-092): the Final-week carousel impressions this account generated as a VIEWER.
+  contestImpressions ContestImpression[]
+  pointsLedger       PointsLedgerEntry[]
+
+  // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
+  // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
+  // <= cutoff), so the daily sweep isn't a full table scan.
+  @@index([accountStatus, pendingDeletionAt])
+  @@index([suspendedByReportId])
+  // backend/w6-purge-anonymised-rows -- backs AnonymizedRowPurgeService's selection.
+  @@index([accountStatus, anonymizedAt])
 }
 
 // Guardian consent record — implements the six-screen flow in
 // Build Plan Section 8.3. consent_status must be "confirmed" before a
 // minor's profile becomes visible outside the guardian relationship.
 model Guardian {
-  id               String    @id @default(uuid())
-  minorUserId      String    @unique
-  minorUser        User      @relation(fields: [minorUserId], references: [id])
-  name             String
-  email            String
-  relationship     String
-  consentStatus    String    @default("pending") // pending | confirmed
-  consentToken     String    @unique
-  consentTimestamp DateTime?
+  id                    String    @id @default(uuid())
+  minorUserId           String    @unique
+  // sprint-2/account-deletion-cascade -- DELIBERATELY left as the
+  // implicit default (RESTRICT on Postgres when no onDelete is given),
+  // NOT changed to Cascade alongside every other User-referencing
+  // relation in this schema. Decision Log #44 (cascade) explicitly does
+  // NOT apply to Guardian -- Decision Log #42 already resolved this
+  // relation separately: AccountDeletionSweepService snapshots the
+  // needed consent-proof fields into ConsentAuditRecord and deletes the
+  // real Guardian row itself, BEFORE the User row, inside one
+  // transaction (see account-deletion-sweep.service.ts). That mechanism
+  // depends on RESTRICT still blocking a direct User delete while a
+  // Guardian row remains -- if this were Cascade, Postgres would delete
+  // Guardian silently on its own timeline, and the service's explicit
+  // snapshot-then-delete ordering would no longer be the only path to a
+  // successful hard-delete, undermining the whole reason
+  // ConsentAuditRecord exists. This omission is deliberate, confirmed
+  // unchanged by this PR -- not an oversight.
+  minorUser             User      @relation(fields: [minorUserId], references: [id])
+  name                  String
+  email                 String
+  relationship          String
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- "declined" is a
+  // NEW value added by that PR, joining the original pending|confirmed
+  // pair. It is reached three ways, all of which then transition the
+  // minor's User row to accountStatus "pending_deletion" via the one
+  // shared AuthService.startPendingDeletion() primitive:
+  //   1. the guardian actively declines   (POST /auth/guardian-consent/decline)
+  //   2. the guardian withdraws consent   (POST /auth/guardian-consent/withdraw)
+  //   3. nobody ever answers              (GuardianConsentExpirySweepService,
+  //      after the initial token AND one automatic re-send have both lapsed)
+  //
+  // NO migration was required for the value itself -- this column is
+  // already a free-form String, matching the string-enum convention
+  // User.accountStatus / User.verificationStatus / AdminUser.accountStatus
+  // / Category.status / Fixture.status / ContestCycle.status all use.
+  // FLAGGED as a real Decision Log candidate rather than silently assumed
+  // safe forever: this is a safeguarding field (CLAUDE.md non-negotiable
+  // #1), and a typo'd write ("Declined", "decline") would land a value no
+  // reader recognises. Every enforcement site today is an ALLOWLIST
+  // (=== 'confirmed'), never a denylist, so such a typo would fail SAFE
+  // (the minor stays restricted) -- but the decline/deletion path would
+  // then silently never fire. A CHECK constraint on this one column
+  // (NOT a Prisma enum, which would change the generated TS type at every
+  // read site and make adding a future value a migration) was the
+  // recommended fix -- NOW INTRODUCED by Decision Log #338 (migration
+  // 20260919160000_...), for this one safeguarding column only; the six
+  // sibling columns are unchanged.
+  //
+  // Audit note: ConsentAuditRecord snapshots this value verbatim, so what
+  // is stored here is what survives the minor's hard-delete as consent
+  // proof. Decision Log #338: an active decline, a withdrawal and a silent
+  // timeout are now distinguishable via consentDeclineSource below (all
+  // three still land as consentStatus 'declined'). ConsentAuditRecord's
+  // shape is unchanged and does not snapshot the source.
+  consentStatus         String    @default("pending") // pending | confirmed | declined -- CHECK-enforced
+  consentToken          String    @unique
+  consentTokenExpiresAt DateTime
+  consentTimestamp      DateTime?
+
+  // Decision Log #348 (UK GDPR Art. 7(1) evidentiary record) -- captured
+  // at the SAME write as consentTimestamp (confirmConsent), because
+  // ConsentAuditRecord only exists from hard-delete time and can only
+  // snapshot what the Guardian row already holds. NULL until confirmed
+  // and for rows confirmed before this existed (never backfilled).
+  // consentScreenVersion: manually-bumped constant, see
+  // consent-screen-version.constants.ts. consentDeviceType: coarse
+  // "mobile" | "desktop" | "unknown", never the raw User-Agent.
+  consentScreenVersion String?
+  consentDeviceType    String?
+
+  // sprint-1/coppa-card-verification -- a technical control, NOT a legal
+  // conclusion (Decision Log #4 stays open). For a child who is under 13
+  // AND self-declared as US-resident (or declared no country -- fail
+  // toward the stronger control), the emailed-link confirmation is not
+  // enough on its own; the guardian must also complete a small,
+  // immediately-refunded card charge.
+  //   declaredCountry            DEPRECATED (build register B-023, Decision
+  //                              Log #368): no longer written. Country now
+  //                              lives on User (declaredCountry / derivedCountry
+  //                              / countryDerivationMethod / countryDerivedAt)
+  //                              and the DERIVED code decides card verification.
+  //                              Existing values were copied to User.declaredCountry
+  //                              by the migration; the column itself is left in
+  //                              place (expand/contract) and is dropped in a
+  //                              later migration once nothing reads it.
+  //   cardVerificationRequired   Decided ONCE at registration and frozen, so
+  //                              a child who turns 13 while pending is not
+  //                              silently moved to a different path. Default
+  //                              false: every pre-existing row keeps today's
+  //                              email-link-only flow untouched.
+  //   stripePaymentIntentId      A Stripe REFERENCE id only. No card data of
+  //                              any kind ever reaches or is stored by this
+  //                              service.
+  //   cardVerifiedAt / cardRefundedAt  charge succeeded / refund issued.
+  //                              verified-but-not-refunded is a real,
+  //                              retryable state (see the service).
+  //   consentVerificationMethod  audit: 'email_link' | 'email_link_plus_card_charge'
+  //                              set in the SAME write as consentTimestamp.
+  //   consentVerificationAt      that same instant.
+  declaredCountry           String?
+  cardVerificationRequired  Boolean   @default(false)
+  stripePaymentIntentId     String?
+  cardVerifiedAt            DateTime?
+  cardRefundedAt            DateTime?
+  consentVerificationMethod String?
+  consentVerificationAt     DateTime?
+
+  // Decision Log #338 -- WHY consentStatus is 'declined'. One of
+  // 'guardian_explicit' (guardian actively declined) | 'guardian_withdrawal'
+  // (guardian withdrew previously-given consent) | 'expiry_timeout' (nobody
+  // answered; the sweep's implicit decline). NULL for every row that is not
+  // 'declined', and for any row declined before this column existed.
+  // Written only by GuardianConsentService.refuseConsentAndScheduleDeletion().
+  // Enforced by a CHECK constraint (see migration
+  // 20260919160000_guardian_consent_status_check_and_decline_source), which
+  // Prisma cannot model -- a String, not a Prisma enum, on purpose.
+  consentDeclineSource String?
+
+  // B-102 / B-110 (Decision Log #389, #395 B2, #402, #403): how many times a
+  // guardian has EXPLICITLY declined this minor's request. INTERNAL -- no API
+  // exposes it (the decline page shows a static sentence, never "N of 3").
+  // Declines 1 and 2 leave the account open and the row reopenable (resend /
+  // change guardian email); the third (MAX_EXPLICIT_DECLINES) blocks login and
+  // enters pending_deletion with the 30-day grace. Expiry, the second lapse
+  // and post-approval withdrawal never increment it. Changing the guardian
+  // email does NOT reset it; only a support DOB-correction restart does (B-103,
+  // #403 item 15). CHECK >= 0 in migration 20261017140000_add_guardian_decline_count.
+  declineCount Int @default(0)
+
+  // B-126 / B-131 (Decision Log #406 items 1 and 11) -- WHEN this row last
+  // became 'declined', for any reason (explicit decline 1, 2 or 3, post-approval
+  // withdrawal, or an expiry refusal). Two readers:
+  //   - GuardianConsentExpirySweepService.sweepStaleDeclines: a row declined at
+  //     decline 1 or 2 that is not reopened within GUARDIAN_DECLINE_LAPSE_DAYS
+  //     (default 14) is put on the lapse path of an unanswered request. This is
+  //     where the 14 days START.
+  //   - the status response's lastDecisionAt (the later of this and
+  //     consentTimestamp, so approval and withdrawal are both covered).
+  // Kept (not cleared) when a declined row is reopened, so lastDecisionAt still
+  // names the last decision; overwritten by the next decline; cleared by a
+  // DOB-correction restart (the request it described no longer exists).
+  // NULL for rows that were declined before this column existed, except the
+  // reopenable ones, which the migration stamps with the deploy time.
+  consentDeclinedAt DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- records the ONE
+  // automatic re-send GuardianConsentExpirySweepService performs when the
+  // original consent token lapses unanswered. This is the field that
+  // distinguishes a FIRST expiry (null -> re-send + nudge the minor) from
+  // a SECOND expiry (non-null -> treat as an implicit decline).
+  //
+  // Deliberately a nullable timestamp, not an Int counter: the system
+  // sends exactly one automated chase, and a counter would imply a
+  // configurable N-reminders policy that does not exist. The timestamp is
+  // also independently useful for audit ("when did the platform chase
+  // this?").
+  //
+  // Deriving this from existing data instead was considered and rejected
+  // as genuinely unsafe, not merely inelegant. consentTokenExpiresAt minus
+  // the configured TTL approximates the issue time, so comparing it
+  // against User.createdAt would reveal whether the token had ever been
+  // rotated -- but (a) that breaks silently if
+  // GUARDIAN_CONSENT_TOKEN_TTL_HOURS is ever changed between issuance and
+  // the sweep, and (b) it cannot distinguish this automatic re-send from a
+  // MANUAL one the minor triggered via POST /auth/guardian-consent/resend.
+  // A minor who had manually re-sent even once would therefore look
+  // "already chased", and the very next lapse would schedule their account
+  // for deletion having never sent the automated warning at all -- a real
+  // safeguarding misfire on a minors' platform, not a cosmetic one.
+  //
+  // Defaults to NULL, so every Guardian row that already exists when this
+  // ships gets its one automatic re-send on the first sweep after deploy.
+  // No existing pending account is ever fast-tracked to deletion.
+  consentAutoResentAt DateTime?
+
+  // B-029 (Decision Log #372, build register W3) -- the guardian pressed
+  // "Report incorrect details" on the consent page: the minor's name / date of
+  // birth shown in the request summary is wrong. NULL = no open report;
+  // non-NULL = when it was raised (re-reporting keeps the FIRST time).
+  //
+  // WHILE OPEN: confirmConsent() and card-verification createIntent() refuse
+  // (approving a request whose facts the approver says are wrong is not
+  // consent to the right thing), but DECLINE and WITHDRAW stay available --
+  // #372's "decline remains available". Cleared only by support, through
+  // POST /admin/users/:id/incorrect-details-report/resolve (audited), or by
+  // the DOB-correction tool (B-103, built). Deliberately NOT cleared
+  // by changeGuardianEmail: the report is about the minor's details, not the
+  // guardian, so swapping in a different guardian must not wipe it.
+  //
+  // Nothing free-text is collected from the unauthenticated token holder: no
+  // note, no "correct" DOB (data minimisation, Part C row 22). Support
+  // contacts the guardian at Guardian.email. What an open flag should do to
+  // the consent flow is the OPEN point of #372; "blocks approve only" is the
+  // adopted, veto-able default.
+  incorrectDetailsReportedAt DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- the withdrawal
+  // credential, deliberately SEPARATE from consentToken rather than
+  // reusing it. Withdrawal is only ever available once consentStatus is
+  // "confirmed", and re-using consentToken would both destroy the
+  // original consent record's token and conflate two credentials that
+  // authorise opposite actions. Issued fresh (single-use, rotated on every
+  // request) by POST /auth/guardian-consent/withdraw/request and emailed
+  // to Guardian.email -- so possession of the guardian's inbox is
+  // re-proven at withdrawal time, not inherited from a months-old consent
+  // email. Nullable because the overwhelming majority of Guardian rows
+  // never enter a withdrawal flow at all.
+  withdrawalToken          String?   @unique
+  withdrawalTokenExpiresAt DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- backs
+  // GuardianConsentExpirySweepService's own hourly query
+  // (consentStatus = 'pending' AND consentTokenExpiresAt <= now), so the
+  // sweep is not a full table scan. Same reasoning, and the same shape, as
+  // User.@@index([accountStatus, pendingDeletionAt]) for the account
+  // deletion sweep.
+  @@index([consentStatus, consentTokenExpiresAt])
+  @@index([consentStatus, consentDeclinedAt])
+}
+
+// B-032 / B-033 (Decision Log #398 D3, #402 item 3): one row per username an
+// admin has REVOKED. Two rules read it:
+//   1. For `holdUntil` (30 days after the revoke) NOBODY can take that handle.
+//   2. For ever, the revoked USER (`userId`) can never pick that handle again.
+// `userId` is a plain string, not a foreign key, on purpose (same reasoning as
+// ConsentAuditRecord.minorUserId): a moderation record must survive the
+// account's later anonymization or deletion, and a real FK would add one more
+// RESTRICT reference to User (Decision Log #341). The admin's REASON is not
+// stored here: it lives in the AdminActionLog row written in the same
+// transaction (action 'user.username_revoked'). `username` is stored
+// lowercase, exactly as User.username is.
+model RevokedUsername {
+  id        String   @id @default(uuid())
+  username  String
+  userId    String
+  revokedAt DateTime @default(now())
+  holdUntil DateTime
+  // backend/b139-username-review (B-139 part (c), Decision Log #467): the AdminUser who revoked. A plain string,
+  // not a foreign key, for the same reason userId is not one (a moderation record outlives the accounts it
+  // names). Set by the revoke service from now on; NULL on rows written before this column existed, where the
+  // review route falls back to the 'user.username_revoked' AdminActionLog row. It is how "a DIFFERENT admin
+  // decides" is enforced.
+  revokedByAdminId String?
+  // The user's one request for a review of THIS revocation (if any). Deleting this record deletes the request.
+  reviewRequest UsernameReviewRequest?
+
+  @@unique([username, userId])
+  @@index([username, holdUntil])
+}
+// backend/b060-data-export (B-060; Decision Log #472 adopted default (g)) -- a genuine addition beyond Section 3's
+// entity list, flagged as a Decision Log candidate. One row per 'Download my data' request by the account holder.
+//   - status: preparing -> ready | failed. A ready row always has fileKey, readyAt and expiresAt (CHECK).
+//   - fileKey: the JSON file in PRIVATE storage under data-export/ (never post-media/ or profile-media/, the two
+//     prefixes the public address serves, B-265). The file is deleted, with this row, when expiresAt passes
+//     (DataExportSweepService), and with the account (anonymizeUser / minimiseHeldUser).
+//   - The file holds ONLY the person's own profile, posts, comments, follows (id and public name) and sent messages.
+//   - FK is RESTRICT like every other User reference (Decision Log #341); the anonymiser deletes the rows.
+model DataExportRequest {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  status    String    @default("preparing") // preparing | ready | failed
+  createdAt DateTime  @default(now())
+  readyAt   DateTime?
+  fileKey   String?
+  expiresAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+}
+
+
+// backend/b139-username-review (B-139 part (c), Decision Log #467, founder decision 2026-11-03): a revoked user's
+// request for a REVIEW of an admin's username removal. ONE per revocation (revokedUsernameId is unique). A genuine
+// addition beyond Section 3's entity list -- flagged as a Decision Log candidate, not silently added.
+//   - `userId` is a plain string for the same reason RevokedUsername.userId is (the record must survive the
+//     account's anonymization; a real FK would add a RESTRICT reference to User, #341).
+//   - `status` is a plain string, like every other status column here: pending | reinstated | declined. A
+//     reinstated request is written for an instant and then deleted with its RevokedUsername record (the decision
+//     lives in the audit log), so 'reinstated' is never read back.
+//   - The deciding admin's REASON is NOT stored here: it goes to the AdminActionLog row written in the same
+//     transaction ('user.username_review_decided'). `decidedByAdminId` is a plain string like RevokedUsername's.
+//   - The row is deleted by cascade with its RevokedUsername record (the anonymization-plus-hold path and the
+//     reinstatement), and explicitly at anonymization (the message is the user's free text).
+model UsernameReviewRequest {
+  id                String          @id @default(uuid())
+  revokedUsernameId String          @unique
+  revokedUsername   RevokedUsername @relation(fields: [revokedUsernameId], references: [id], onDelete: Cascade)
+  userId            String
+  // Optional free text from the user, trimmed, at most 500 characters (CHECK in the migration).
+  message           String?
+  status            String          @default("pending")
+  createdAt         DateTime        @default(now())
+  decidedAt         DateTime?
+  decidedByAdminId  String?
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+// sprint-2/account-deletion-sweep, implementing Decision Log #42's
+// "ARCHITECTURE IMPLICATION" paragraph. Guardian.minorUserId is
+// ON DELETE RESTRICT against User (confirmed directly against the real
+// migration SQL, not assumed) -- hard-deleting a User row with a
+// Guardian row still attached fails outright at the database level, it
+// does not silently cascade or orphan. AccountDeletionSweepService must
+// therefore snapshot what Decision Log #42 calls "proof that guardian
+// consent was validly obtained" into THIS table and delete the real
+// Guardian row, before it can hard-delete the User row at all.
+//
+// minorUserId is a deliberate plain String, NOT a @relation/foreign key
+// to User -- this table's entire purpose is to survive independently of
+// the User row it describes, and it is only ever written at the exact
+// moment that row is about to be hard-deleted. A real FK here would make
+// "survives the User row's hard-delete" structurally impossible.
+//
+// Deliberately NOT full Guardian PII -- no name, no email, no
+// relationship. Decision Log #42 asks for only "what's needed to prove
+// consent occurred" for a future legal-defense claim, not a mirror of
+// the Guardian row. consentStatus + consentConfirmedAt is that minimum:
+// enough to show whether (and when) a guardian actually confirmed
+// consent for this specific minorUserId before the account was deleted.
+//
+// createdAt is this record's own creation time -- i.e. the hard-delete
+// moment, not the original consent-confirmation moment (Guardian rows
+// carry their own consentTimestamp for that, snapshotted separately into
+// consentConfirmedAt below). Decision Log #42's own math -- "~7 months
+// total from the original delete-account request" for a 30-day grace
+// period plus a 6-month consent-record retention -- only holds if the
+// 6-month purge clock in AccountDeletionSweepService starts here, at
+// hard-delete time, not at the (possibly years-earlier) original
+// consent-confirmation time. Indexed for the sweep's own purge query.
+model ConsentAuditRecord {
+  id                   String    @id @default(uuid())
+  minorUserId          String
+  // Guardian.consentStatus's own value at the moment of hard-delete --
+  // "pending" is a real, expected case here too (a restricted-pending
+  // minor who deletes their own account before a guardian ever
+  // confirms), not just "confirmed".
+  consentStatus        String
+  // Guardian.consentTimestamp's own value, snapshotted -- null when
+  // consentStatus was "pending" at hard-delete time.
+  consentConfirmedAt   DateTime?
+  // How consent was (or would have been) captured -- currently always
+  // the one flow this codebase implements (Build Plan Section 8.3's
+  // emailed-token confirm link, GuardianConsentModule). A plain string,
+  // not an enum, so a second consent method added later doesn't need a
+  // migration to describe existing rows.
+  consentMethod        String    @default("guardian-consent-link")
+  // Decision Log #348 -- snapshots of Guardian.consentScreenVersion /
+  // consentDeviceType. Nullable: rows created before this, pending rows,
+  // and confirmations predating capture have neither; never backfilled.
+  consentScreenVersion String?
+  deviceType           String? // "mobile" | "desktop" | "unknown"
+  // sprint-1/coppa-card-verification -- snapshots of
+  // Guardian.consentVerificationMethod / consentVerificationAt. Nullable:
+  // rows confirmed before this existed and pending rows have neither.
+  verificationMethod   String?
+  verificationAt       DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([createdAt])
 }
 
 model ClubPage {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   league      String?
   country     String?
   logoUrl     String?
-  memberCount Int      @default(0)
-  members     User[]
-  posts       Post[]
+  // Denormalized cache for GET /clubs and GET /clubs/:id (Build Plan
+  // Section 4.4, sprint-2/club-pages) — same category as
+  // Post.likeCount/Post.commentCount above: incremented transactionally
+  // alongside adding a row to `members` (POST /clubs/:id/join), never
+  // trust this in isolation, and it's recomputable via
+  // members.count()/prisma.user.count({ where: { clubMemberships: {
+  // some: { id: this.id } } } }) if it ever drifts. There is
+  // deliberately no decrement path: Section 4.4 lists no
+  // leave/unjoin endpoint (contrast with follow/like/save, which are
+  // all POST+DELETE pairs) — see clubs/README.md's "join-only, no
+  // leave" gap.
+  memberCount Int     @default(0)
+
+  // Real, verified fix to a pre-existing bug in this field, found while
+  // building POST /clubs/:id/join (sprint-2/club-pages) — flagged as a
+  // Decision Log candidate, see clubs/README.md. Before this PR,
+  // `members User[]` had NO explicit @relation name, and neither did
+  // User.clubAffiliation's FK relation above. Because both are the only
+  // User<->ClubPage relations of their respective directions (one list
+  // field of type User[] here, one single field of type ClubPage? on
+  // User), Prisma's default relation-matching silently paired them into
+  // ONE relation — verified directly against a live Prisma client
+  // before this fix: calling `clubPage.update({ data: { members: {
+  // connect: { id: userId } } } })` actually wrote to
+  // `User.clubAffiliationId`, not a separate join table (no
+  // `_ClubPageToUser`-style table existed in the migration history
+  // either). That would have meant "join a club fan page" silently
+  // overwrote a user's single declared clubAffiliationId — exactly the
+  // field this module's brief explicitly says never to touch. The
+  // explicit `@relation("ClubMembership", ...)` name here (paired with
+  // User.clubMemberships) and `@relation("ClubAffiliation", ...)` on
+  // clubAffiliation (paired with affiliatedPlayers below) disambiguate
+  // the two into genuinely separate relations — this migration creates
+  // a real `_ClubMembership` implicit join table for the first time.
+  members User[] @relation("ClubMembership")
+
+  // Reverse side of User.clubAffiliation, required by Prisma for the
+  // relation to resolve at all now that it has its own explicit name
+  // (see `members`' comment above) — not exposed by any endpoint in
+  // this module. Section 4.4 has no "list users declaring this as their
+  // club" endpoint, and none is added speculatively here.
+  affiliatedPlayers User[] @relation("ClubAffiliation")
+
+  // Reverse side of User.representedClub (Decision Log #74). Mechanical
+  // array field required by Prisma; no endpoint reads it.
+  representedBy User[] @relation("RepresentedClub")
+
+  posts Post[]
 }
 
+// sprint-5/grassroots-records-service (Section 4.5) — GrassrootsModule is
+// now wired into app.module.ts. The PERMISSION MODEL for this feature is
+// enforced entirely by joining through `createdById` (Decision Log #255):
+//   - POST /fixtures       -> caller must be teamA.createdById
+//   - POST /fixtures/:id/result, PATCH /fixtures/:id/status
+//                          -> caller must be teamA.createdById OR
+//                             (teamBId set) teamB.createdById
+//   - POST /teams          -> createdById = caller
+// GET reads (team, fixture, list) are JwtAuthGuard-only. The four write
+// endpoints are additionally GuardianConsentGuard-gated (Decision Log
+// #21). No permission column was added — no schema change. See
+// modules/grassroots/README.md for the full matrix.
+//
+// sprint-2/account-deletion-cascade -- createdBy is Cascade (Decision Log
+// #44), but Fixture.teamAId/teamBId (below) referencing THIS model, and
+// Result.fixtureId (below) referencing Fixture, are still RESTRICT and
+// deliberately UNCHANGED by sprint-5/grassroots-records-service: that PR
+// builds only the read/write endpoints (zero schema diff by design), and
+// the account-deletion hard-delete sweep (Decision Log #42/#44) is a
+// separate concern. Whoever revisits account-deletion cascade coverage
+// should bring Fixture.teamAId/teamBId + Result.fixtureId under the #44
+// cascade principle then, exactly as the pre-existing note here already
+// flagged -- a User who created a team with existing fixtures would
+// otherwise hit the RESTRICT wall #44 fixes for Post/Comment/Like. Still
+// unreachable via the deletion sweep in practice only because
+// GrassrootsTeam.createdBy IS Cascade while its children are not, so the
+// FK block surfaces there first.
 model GrassrootsTeam {
-  id            String    @id @default(uuid())
-  name          String
-  city          String
-  leagueType    String // informal | school | academy
-  createdById   String
-  createdBy     User      @relation(fields: [createdById], references: [id])
-  verified      Boolean   @default(false)
-  fixturesHome  Fixture[] @relation("teamA")
-  fixturesAway  Fixture[] @relation("teamB")
+  id           String    @id @default(uuid())
+  name         String
+  city         String
+  leagueType   String // informal | school | academy
+  createdById  String?
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  verified     Boolean   @default(false)
+  fixturesHome Fixture[] @relation("teamA")
+  fixturesAway Fixture[] @relation("teamB")
 }
 
 model Fixture {
-  id            String          @id @default(uuid())
-  teamAId       String
-  teamA         GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
-  teamBId       String?
-  teamB         GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
-  scheduledAt   DateTime
-  venue         String?
-  status        String          @default("scheduled") // scheduled | live | full_time
-  result        Result?
+  id           String          @id @default(uuid())
+  teamAId      String
+  teamA        GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
+  // teamBId XOR opponentName (or neither):
+  //   - teamBId set          -> the away side is a registered Soccernity team.
+  //   - opponentName set      -> the away side is NOT on Soccernity; its name
+  //                              is persisted free-text (Decision Log #256),
+  //                              e.g. "Riverside FC".
+  //   - both null             -> the "Opponent to be confirmed" state,
+  //                              rendered publicly as "Opponent TBC".
+  // "Both set" is rejected at the API layer (POST /fixtures -> 400), not by a
+  // DB constraint. POST /fixtures also rejects teamBId === teamAId. The
+  // "Opponent TBC" display fallback (when both are absent) is a frontend
+  // concern -- the API returns the raw fields only.
+  teamBId      String?
+  teamB        GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
+  // Free-text away-opponent name for a fixture whose opponent is not a
+  // registered Soccernity team (Decision Log #256, backend half by
+  // sprint-5/grassroots-opponent-name). Set only via POST /fixtures; there
+  // is no PATCH /fixtures/:id, so an already-created fully-TBD fixture
+  // cannot be renamed yet (flagged follow-up).
+  opponentName String?
+  scheduledAt  DateTime
+  venue        String?
+  // Status machine (sprint-5/grassroots-records-service, Decision Log
+  // #254). A new fixture is always "scheduled". Legal forward moves:
+  //   scheduled --("Start match", PATCH /fixtures/:id/status)--> live
+  //   live      --("End match",   PATCH /fixtures/:id/status)--> full_time
+  //   scheduled|live --(POST /fixtures/:id/result)-----------> full_time
+  // Every other transition (backwards, full_time -> anything, a no-op
+  // same-status PATCH, scheduled -> full_time via PATCH) is a 409.
+  // Enforced in GrassrootsService, not by a DB constraint. There is no
+  // "postponed"/"cancelled" value -- flagged open, not added.
+  status       String          @default("scheduled") // scheduled | live | full_time
+  result       Result?
 }
 
 model Result {
-  id            String   @id @default(uuid())
-  fixtureId     String   @unique
-  fixture       Fixture  @relation(fields: [fixtureId], references: [id])
-  scoreA        Int
-  scoreB        Int
-  enteredById   String
-  enteredBy     User     @relation(fields: [enteredById], references: [id])
-  enteredAt     DateTime @default(now())
+  id          String   @id @default(uuid())
+  // @unique -> at most one Result per Fixture. This is the "first write
+  // is final" backstop (sprint-5/grassroots-records-service, Decision Log
+  // #255): POST /fixtures/:id/result creates this row inside an
+  // interactive transaction and 409s if one already exists; a genuine
+  // concurrent race that passes both pre-checks hits this constraint
+  // (Prisma P2002) and is re-thrown as the same 409, never a 500. There
+  // is NO amend/dispute endpoint in MVP -- correction is a parked founder
+  // candidate (see grassroots/README.md).
+  fixtureId   String   @unique
+  fixture     Fixture  @relation(fields: [fixtureId], references: [id])
+  scoreA      Int
+  scoreB      Int
+  // = the caller of POST /fixtures/:id/result (a creator of either team).
+  enteredById String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  enteredBy   User     @relation(fields: [enteredById], references: [id])
+  enteredAt   DateTime @default(now())
 }
 
 model Post {
-  id            String    @id @default(uuid())
-  authorId      String
-  author        User      @relation(fields: [authorId], references: [id])
-  contentText   String
-  mediaUrls     String[]
-  clubPageId    String?
-  clubPage      ClubPage? @relation(fields: [clubPageId], references: [id])
-  banterRoomId  String?
-  banterRoom    BanterRoom? @relation(fields: [banterRoomId], references: [id])
-  likeCount     Int       @default(0)
-  commentCount  Int       @default(0)
-  createdAt     DateTime  @default(now())
-  comments      Comment[]
-  savedBy       SavedPost[]
+  id                String        @id @default(uuid())
+  // Keyset-pagination tiebreaker for feed.service.ts's
+  // paginatePostsWithViewerState (GET /posts/feed, GET /clubs/:id/feed,
+  // GET /banter-rooms/:id/posts) -- `id` is a random UUID with zero
+  // relation to insertion order, so two posts sharing the same
+  // millisecond-precision `createdAt` were tiebroken in an order
+  // unrelated to which one was actually created first. `sequence` is a
+  // genuinely monotonically-increasing Postgres-assigned counter, so
+  // ties now resolve in true creation order and a page fetched twice in
+  // a row can never duplicate or omit a row because of an arbitrary
+  // UUID comparison. Deliberately NEVER selected into the public API
+  // payload (see POST_SELECT in feed.service.ts) -- purely an internal
+  // pagination-ordering detail, not a field clients should see or rely
+  // on.
+  sequence          Int           @unique @default(autoincrement())
+  authorId          String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  // CORRECTION (feat/post-delete-and-comment-settings): this comment
+  // previously claimed Comment.post/SavedPost.post/Like.post already
+  // carried onDelete: Cascade. That was FALSE -- none had an onDelete
+  // clause (Postgres RESTRICT), and #341's migration never touched them.
+  // As of this change it is TRUE: Comment, SavedPost, Like, PostHashtag
+  // and PostView all cascade from Post (ContestEntry already did), so
+  // DELETE /posts/:id removes every trace of the post including other
+  // users' engagement on it (founder decision, Decision Log #360).
+  author            User          @relation(fields: [authorId], references: [id])
+  contentText       String
+  mediaUrls         String[]
+  clubPageId        String?
+  clubPage          ClubPage?     @relation(fields: [clubPageId], references: [id])
+  banterRoomId      String?
+  banterRoom        BanterRoom?   @relation(fields: [banterRoomId], references: [id])
+  // Denormalized cache for feed-rendering performance (avoids a COUNT()
+  // per post on every feed load). Must be incremented/decremented
+  // transactionally alongside Like row creation/deletion by whichever
+  // service implements POST/DELETE /posts/:id/like (Build Plan
+  // Section 4.3) — never trust this in isolation as authoritative, and
+  // it should be recomputable via Like.count({ where: { postId } }) if
+  // it ever drifts from the real Like rows.
+  // sprint-2/contest-data-model-backend — a Post can be submitted AS one
+  // Contest entry (the "Create a Post — For Contest" flow). At most one
+  // entry per Post (ContestEntry.postId is @unique). onDelete: Cascade on
+  // that side, so deleting a Post takes its entry with it.
+  contestEntry      ContestEntry?
+  // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): the uploaded media attached to
+  // this post. A post with ANY attached media that is not 'approved' is visible to its author only
+  // (post-visibility.util.ts). Deleting the post deletes these rows (Cascade); the stored objects are
+  // removed by the application, not the database.
+  media             PostMedia[]
+  likeCount         Int           @default(0)
+  // Same denormalized-cache obligation as likeCount immediately above:
+  // must be incremented transactionally alongside Comment row creation
+  // by whichever code path implements POST /posts/:id/comments (Build
+  // Plan Section 4.3) — never trust this in isolation as authoritative,
+  // and it's recomputable via Comment.count({ where: { postId } }) if it
+  // ever drifts. A decrement path NOW EXISTS (sprint-2/comment-delete):
+  // Section 4.3 as originally written has no DELETE
+  // /posts/:id/comments/:commentId, but that endpoint has since been
+  // added as a genuine spec addition, not a literal Section 4.3 line item
+  // — see feed/README.md's Decision Log candidate on this. FeedService's
+  // deleteComment() decrements this field transactionally alongside the
+  // Comment row's deletion, using the same updateMany-with-a-floor-guard
+  // (commentCount: { gt: 0 }) pattern unlikePost() already established
+  // for likeCount — see feed.service.ts.
+  commentCount      Int           @default(0)
+  // backend/w7-contest (B-091, Decision Log #386/#400/#405). A FINAL (week 4) contest entry is
+  // hidden from everyone but its author until the reveal at 00:00 on day 25: while
+  // visibleFrom > now() the post is invisible to every other viewer and engagement on it is
+  // refused. NULL on every ordinary post. Cleared by the pin-removal step.
+  visibleFrom       DateTime?
+  // A final entry is "not also a normal Community-feed post" during the contest month (#404 item
+  // 15): GET /posts/feed omits it until this instant (00:00 Europe/London on the 1st of the next
+  // month = the pin removal, #406 item 5), after which it is an ordinary post. NULL on every
+  // ordinary post.
+  communityFeedFrom DateTime?
+  // Who may add NEW comments: everyone | followers (the commenter must follow
+  // the post's author) | off. The author can always comment. Bare String with
+  // a service-enforced allow-list (BanterRoom.scopeType/status convention).
+  // Never retroactively removes existing comments.
+  commentPermission String        @default("everyone")
+  // backend/b289-content-removal (B-289, Decision Log #483): set by ModerationService.actionReport when a
+  // moderator records content_removed against THIS post. Soft removal: the row, its text, its media and its
+  // engagement rows STAY as evidence; every user-facing read treats the post as absent, and only staff can read
+  // it. removedByReportId is the report that removed it (RESTRICT: a report that removed content is never
+  // deleted); an overturned appeal on that report clears both columns. Both NULL = not removed.
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?       @relation("PostRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
+  // sprint-4/post-view-tracking (Build Plan Section 4.3, POST
+  // /posts/:id/view) -- same denormalized-cache convention as
+  // likeCount/commentCount above: incremented transactionally alongside
+  // PostView row creation, never trusted in isolation, and recomputable
+  // via PostView.count({ where: { postId } }) if it ever drifts. Unlike
+  // likeCount, this has NO decrement path and never will -- a view can't
+  // be "un-viewed."
+  //
+  // It is deliberately NOT always equal to PostView.count({ where: {
+  // postId } }): an anonymous view (PostView.viewerId null) increments
+  // this on EVERY call with no de-duplication at all (see PostView's own
+  // comment and FeedService.recordView) -- so this counts view EVENTS,
+  // not unique viewers, and can legitimately run ahead of the number of
+  // distinct real people who viewed the post.
+  viewCount         Int           @default(0)
+  createdAt         DateTime      @default(now())
+  comments          Comment[]
+  savedBy           SavedPost[]
+  likes             Like[]
+  views             PostView[]
+  // sprint-4/trending-topics-backend (Build Plan Section 4.7, GET
+  // /trending) -- see PostHashtag below.
+  hashtags          PostHashtag[]
+
+  @@index([removedByReportId])
 }
 
 model Comment {
   id          String   @id @default(uuid())
+  // Same keyset-pagination-tiebreaker fix as Post.sequence above, for
+  // feed.service.ts's getComments (createdAt asc, ordered oldest-first)
+  // -- `id` is a random UUID unrelated to insertion order; `sequence` is
+  // a real monotonic counter, so comments left in the same millisecond
+  // sort in the order they were actually posted. Never selected into the
+  // public API payload.
+  sequence    Int      @unique @default(autoincrement())
   postId      String
-  post        Post     @relation(fields: [postId], references: [id])
+  // sprint-2/account-deletion-cascade -- NOT itself one of Decision Log
+  // #44's eleven User-referencing tables, but load-bearing for it:
+  // without this, cascading a Post away (via Post.author's own Cascade,
+  // above) would still hit this RESTRICT and abort the whole delete the
+  // moment ANY comment -- including one from a completely different,
+  // unrelated user -- exists on that post. See account-deletion/README.md
+  // for the full mechanical explanation and the founder's own explicit
+  // "cascading Post also cascades away Comment/Like/SavedPost rows
+  // written by OTHER, unrelated users" framing of this exact consequence.
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId    String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   author      User     @relation(fields: [authorId], references: [id])
   contentText String
+  // Hidden by the POST's author (a hide, not a delete -- the row stays, is
+  // still cascade-deleted with the post, and the commenter keeps their copy).
+  // Hidden comments do not count toward Post.commentCount.
+  hidden      Boolean  @default(false)
+  // backend/b289-content-removal (B-289, Decision Log #483): same meaning as Post.removedByModerationAt. A removed
+  // comment stays in the thread as a text-less stub and, like a hidden one, does not count toward
+  // Post.commentCount (removal decrements it, an overturned appeal restores it).
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?  @relation("CommentRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
+
+  @@index([removedByReportId])
 }
 
 model BanterRoom {
-  id          String @id @default(uuid())
+  id          String             @id @default(uuid())
   name        String
-  scopeType   String // club | league | country | topic
+  // club | league | country | topic. A bare category label only — there
+  // is deliberately NO scope-target field (which club / which league):
+  // sprint-3/banter-rooms-backend treats scopeType as a filterable
+  // category and `name` as free text. A genuine "which Arsenal room"
+  // needs a scopeRef/scopeName addition — still flagged as a Decision Log
+  // candidate in banter/README.md, not built (Decision Log #276's OTHER
+  // flagged item — the `POST /banter-rooms/:id/topics` half of #276 is
+  // resolved below by BanterRoomTopic/Topic; this scopeRef/scopeName gap
+  // is a separate, still-open item on the same Decision Log entry).
+  //
+  // scopeType:'topic' remains a room CATEGORY value ("this room is
+  // topic-scoped, not club/league/country-scoped") — it is deliberately
+  // NOT the same concept as the BanterRoomTopic/Topic tagging system
+  // below (sprint-3/banter-room-topics). A room can have scopeType:'club'
+  // and still carry Topic tags like "Transfers"/"Match Day" — the two
+  // axes are orthogonal, exactly as Decision Log #276 originally
+  // distinguished them ("scopeType:'topic' is a room category, not a
+  // room *having* topics").
+  scopeType   String
+  // sprint-3/banter-room-scope-ref (Decision Log #276 item b). The id of
+  // the real entity this room is about, validated server-side against the
+  // table matching scopeType — there is no native polymorphic FK in
+  // Prisma, so the pairing is enforced in BanterService, never trusted
+  // from the client. Only scopeType 'club' can resolve today: the schema
+  // has a ClubPage table but NO League or Country table (ClubPage.league /
+  // ClubPage.country are free-text), so 'league'/'country' rooms keep a
+  // null scopeRef until those entities exist. 'topic' is never entity-
+  // scoped. Deliberately NOT a foreign key (a polymorphic column would
+  // need a per-type relation), so a referenced ClubPage row is not
+  // cascaded on deletion — there is no ClubPage deletion path today.
+  scopeRef    String?
+  // Denormalized snapshot of the referenced entity's display name
+  // (ClubPage.name for scopeType 'club'). Kept in sync by
+  // BanterService.syncScopeNames on every room read: a stale snapshot is
+  // re-resolved from the real entity and written back, so a rename
+  // doesn't leave a permanently wrong label. Null whenever scopeRef is.
+  scopeName   String?
+  // Optional, text-only room description (Decision Log #404 item 10: the room is the
+  // thread, room posts are the comments; founder decision 2026-11-14). Set once at
+  // creation (POST /banter-rooms), trimmed, 1-500 characters when present; blank is
+  // stored as NULL, as is every room created before this column existed. No edit path
+  // exists (not decided). No attachment, GIF or poll.
+  description String?
+  // The user who created the room. Kept as a bare String (not a User
+  // @relation) exactly as Section 3 scaffolded it — making it a real FK
+  // would pull room creation into the Decision Log #44 account-deletion
+  // cascade scope for no MVP benefit. Flagged in banter/README.md.
+  //
+  // sprint-3/banter-room-topics also uses this field as the real
+  // authorization anchor for POST /banter-rooms/:id/topics ("only the
+  // room's creator may attach topics") — see banter/README.md's Permission
+  // model section for the full reasoning.
   createdBy   String
-  memberCount Int    @default(0)
+  // Decision Log #357 — "active" | "inactive", the Figma Bants room status
+  // dot. A plain String with a service-enforced allow-list (BanterService),
+  // the same convention as scopeType. Settable by the room creator
+  // (PATCH /banter-rooms/:id/status) and by a moderator's room_deactivated
+  // action via the Report/moderation queue. Only "inactive" is ever
+  // written by moderation; there is no moderator "reactivate" action.
+  status      String             @default("active")
+  // Creation timestamp, added for the Bants filter modal's Date range
+  // (Decision Log #358) — filter-only, deliberately NOT a sort key: the
+  // room catalogue stays alphabetical by name (cursor.util.ts). Rooms that
+  // existed before this column was added read as the migration's run time,
+  // not their real creation date — there was no timestamp to backfill from.
+  createdAt   DateTime           @default(now())
+  // Denormalized cache of members.count(), the same discipline as
+  // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
+  // keeps this in sync transactionally alongside every BanterRoomMember
+  // create/delete (BanterService.joinRoom / leaveRoom / createRoom) —
+  // never trust it in isolation; recomputable via
+  // BanterRoomMember.count({ where: { banterRoomId } }).
+  memberCount Int                @default(0)
   posts       Post[]
+  // sprint-3/banter-rooms-backend — the membership join table that
+  // Section 3 never gave BanterRoom, without which "My Bants" (Build
+  // Plan Section 6, Sprint 3) is impossible. An explicit join model
+  // (not an implicit Prisma m2m like ClubPage.members) so joinRoom can
+  // use a P2002-catch for idempotency — exactly like Like/Follow — and
+  // avoid the raw $executeRaw the implicit-m2m _ClubMembership forced on
+  // ClubsService.joinClub.
+  members     BanterRoomMember[]
+  // sprint-3/banter-room-topics — resolves Decision Log #276's
+  // "POST /banter-rooms/:id/topics" gap. See BanterRoomTopic/Topic below.
+  topics      BanterRoomTopic[]
+}
+
+// sprint-3/banter-room-topics — resolves the "no Topic entity" half of
+// Decision Log #276 (Section 4.4's originally-named, previously-unbuilt
+// `POST /banter-rooms/:id/topics`). A genuine addition beyond Section 3's
+// literal 20-entity list, flagged per CLAUDE.md's "the data model is a
+// fixed spec" rule — the same category of flagged addition
+// CommunityGroup/BanterRoomMember already made for their own features.
+//
+// Deliberately NOT the same concept as Hashtag/PostHashtag (search
+// module, sprint-4/trending-topics-backend) — checked directly before
+// building this, not assumed distinct. Hashtag rows are auto-EXTRACTED
+// from free Post.contentText via a #(\w+) regex scan and exist purely to
+// power GET /trending's windowed decay aggregation; a BanterRoom Topic is
+// a manually CURATED, creator-attached categorization tag with a
+// completely different lifecycle and no decay/trending concept at all.
+// Reusing Hashtag here would conflate two unrelated concerns (a room's
+// stable topical identity vs. a rolling popularity signal over post
+// text) — kept as two separate models.
+model Topic {
+  id   String @id @default(uuid())
+  name String
+
+  // name.trim().toLowerCase(), @unique — the SAME anti-duplicate pattern
+  // CommunityGroup.nameNormalized already establishes (community-groups
+  // module, sprint-3/community-groups-backend). Enforced via
+  // BanterService.attachOneTopic's per-name upsert (never a plain
+  // create) — "attach a topic named 'Transfers'" and "attach a topic
+  // named 'transfers'" always resolve to the same Topic row. A genuine
+  // concurrent double-create of the same normalized name is retried
+  // (bounded, whole-transaction) rather than recovered mid-transaction —
+  // see BanterService.attachOneTopic's own comment for why a
+  // create-then-catch-and-recover design here was a real, reproduced
+  // bug, not just a theoretical risk.
+  nameNormalized String @unique
+
+  createdAt DateTime          @default(now())
+  rooms     BanterRoomTopic[]
+}
+
+// The BanterRoom <-> Topic join. Sprint-3/banter-room-topics — mirrors
+// BanterRoomMember / CommunityGroupMember / Like / SavedPost / Follow's
+// exact shape: an EXPLICIT join model (never an implicit Prisma m2m — see
+// ClubPage.members' own real silent-relation-merge-bug precedent this
+// schema's own history already carries), a surrogate `id` + `@@unique`
+// composite for P2002-catch idempotency (attaching an already-attached
+// topic is a no-op, not an error — see BanterService.attachTopics).
+//
+// MANY-TO-MANY, not a single nullable `topicId` FK on BanterRoom — a real
+// cardinality judgment call, argued in full in banter/README.md's
+// Permission model section. Short version: Section 4.4's own route is
+// named `POST /banter-rooms/:id/topics` (plural, collection-style sub-
+// resource), the same shape this codebase already uses for a genuinely
+// multi-valued relationship (compare `GET /banter-rooms/:id/posts`, a
+// collection under a resource) — a single-FK design would more naturally
+// be expressed as `PATCH /banter-rooms/:id { topicId }`, which is not
+// what Section 4.4 names. A room built around a topic-scoped
+// conversation ("Transfer Deadline Day Chat") plausibly touches more than
+// one topical tag at once ("Transfers" + "Deadline Day"), and nothing in
+// scopeType's own four-value category axis (club | league | country |
+// topic) forces a 1:1 topic relationship — scopeType already IS the
+// single-value axis; Topic is the orthogonal, genuinely multi-valued one.
+model BanterRoomTopic {
+  id           String     @id @default(uuid())
+  banterRoomId String
+  banterRoom   BanterRoom @relation(fields: [banterRoomId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic      @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  // When this topic was attached to this room — no Section-5.5 list
+  // endpoint currently orders by it (the topics catalog orders
+  // alphabetically by name, matching BanterRoom/ClubPage's own
+  // no-timestamp-column convention — see banter/cursor.util.ts), but kept
+  // for the same "a join row's own attach time is real, disclosable data"
+  // reasoning BanterRoomMember.joinedAt / CommunityGroupMember.joinedAt
+  // already carry.
+  createdAt    DateTime   @default(now())
+
+  @@unique([banterRoomId, topicId])
+}
+
+// sprint-3/banter-rooms-backend — per-user Banter Room membership,
+// backing POST/DELETE /banter-rooms/:id/join and GET /banter-rooms/mine
+// ("My Bants"). Mirrors Like / SavedPost / Follow's exact shape: an
+// explicit join model with @@unique on the pair, a joinedAt timestamp
+// (keyset pagination for "My Bants" needs a real column to order by —
+// same reason Like.likedAt / SavedPost.savedAt / Follow.createdAt exist,
+// all flagged additions beyond Section 3's literal field list, this one
+// too). Both FKs onDelete: Cascade per Decision Log #44 — a user delete
+// cascades these rows away with no per-table handling in
+// AccountDeletionSweepService.
+model BanterRoomMember {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  banterRoomId String
+  banterRoom   BanterRoom @relation(fields: [banterRoomId], references: [id], onDelete: Cascade)
+  joinedAt     DateTime   @default(now())
+
+  @@unique([userId, banterRoomId])
+}
+
+// sprint-3/community-groups-backend — Build Plan Sprint 3, Decision Log
+// #281 (figma-screen-builder design: `sprint-3/community-groups-design`).
+// A durable-attribute interest group — grouped by at least one of City /
+// Position Played / Career Track (a "fantasy league" 4th dimension was
+// explicitly considered and left out — see community-groups/README.md and
+// Decision Log #281 item 4). Distinct from BanterRoom (a scope-category
+// room, no lasting attribute) and ClubPage (a licensed-club fan page) —
+// Section 5.7's safety-sensitive-action list names "joining a Banter Room
+// **or Community Group**" literally (see clubs.controller.ts's own guard
+// comment quoting this), which is the direct textual referent this model
+// finally gives a schema to.
+//
+// Unlike BanterRoom (which Section 3 already scaffolded with a bare
+// createdBy String), this model has NO prior Section 3 precedent to defer
+// to at all — it is a genuine, flagged addition beyond Section 3's
+// literal 20-entity list (Decision Log #281). Built WITH its membership
+// join table (CommunityGroupMember, below) from the very first PR — not
+// retroactively, the mistake banter/README.md's own "Schema change"
+// section documents BanterRoom/BanterRoomMember making (BanterRoom shipped
+// with memberCount and no join table at all, so "My Bants" was impossible
+// until a follow-up PR added one). Deliberately not repeated here.
+model CommunityGroup {
+  id   String @id @default(uuid())
+  name String
+
+  // name.trim().toLowerCase(), @unique — the one deliberate, lightweight
+  // anti-spam safeguard for Decision Log #281's flagged item 1 ("who may
+  // create a group" — see community-groups/README.md's Permission model
+  // section for the full resolution). Enforced at creation as a clear
+  // 409, never a raw P2002 surfaced to the client. Everything else
+  // (moderation queue, group size limits, a creation rate-limit beyond
+  // whatever platform-wide throttling already exists) is deliberately
+  // NOT built — flagged as open Decision Log candidates, the same
+  // "flagged, not built" precedent Decision Log #255/#275 already set for
+  // their own analogous Grassroots/Banter Room questions.
+  nameNormalized String @unique
+
+  // At least one of the three grouping dimensions must be present —
+  // enforced at the DTO/service layer
+  // (CreateCommunityGroupDto.atLeastOneDimension + defence-in-depth in
+  // CommunityGroupsService.createGroup), never a DB CHECK constraint —
+  // this codebase's established convention for cross-field rules (see
+  // Fixture's teamBId/opponentName XOR rule, enforced in
+  // GrassrootsService.createFixture, not in this schema). All three stay
+  // nullable so a group can specify any subset without inventing
+  // placeholder values for the rest.
+  city           String?
+  positionPlayed String?
+  careerTrack    String?
+
+  createdById String
+  // Decision Log #44 (cascade) — see account-deletion/README.md. A real
+  // FK from day one (unlike BanterRoom.createdBy's bare String, which
+  // Section 3 itself scaffolded that way) since this model has no prior
+  // schema to defer to.
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Denormalized cache of members.count() — same discipline as
+  // Post.likeCount / ClubPage.memberCount / BanterRoom.memberCount
+  // (Decision Log #199/#275). Starts at 1: the creator is auto-joined
+  // (CommunityGroupsService.createGroup), the same "create a group ->
+  // you're in it" precedent BanterService.createRoom already set. Never
+  // trust it in isolation — recomputable via
+  // CommunityGroupMember.count({ where: { communityGroupId } }).
+  memberCount Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  members CommunityGroupMember[]
+}
+
+// sprint-3/community-groups-backend — per-user Community Group
+// membership, backing POST/DELETE /community-groups/:id/join and
+// GET /community-groups/:id/members. Shipped in the SAME PR as
+// CommunityGroup above (see that model's own comment on why this matters)
+// — the exact shape of BanterRoomMember / Like / SavedPost / Follow: an
+// explicit join model (never an implicit Prisma m2m — see
+// ClubPage.members' own comment on the real silent-relation-merge bug
+// that route caused) with @@unique on the pair for P2002-catch
+// idempotency, and a joinedAt timestamp (flagged addition beyond "nothing
+// to diverge from" — the same Section 5.5 "a list endpoint needs a real
+// column to order by" reasoning Like.likedAt / SavedPost.savedAt /
+// Follow.createdAt / BanterRoomMember.joinedAt already carry). Both FKs
+// onDelete: Cascade per Decision Log #44.
+model CommunityGroupMember {
+  id               String         @id @default(uuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityGroupId String
+  communityGroup   CommunityGroup @relation(fields: [communityGroupId], references: [id], onDelete: Cascade)
+  joinedAt         DateTime       @default(now())
+
+  @@unique([userId, communityGroupId])
 }
 
 model Conversation {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   participantIds String[]
-  createdAt      DateTime  @default(now())
-  messages       Message[]
+
+  // sprint-3/messaging-direct-messaging (Decision Log #277) -- two
+  // genuine additions beyond Section 3's literal Conversation field
+  // list, flagged per CLAUDE.md's "the data model is a fixed spec"
+  // rule; both founder-approved.
+  //
+  // participantKey: a deterministic key for the participant SET (the
+  // participant ids sorted and ':'-joined), @unique so
+  // POST /conversations's find-or-create is race-safe -- two concurrent
+  // "start a conversation with the same person" requests can't create
+  // two rows, because the second create hits a P2002 and is caught,
+  // then re-reads the existing row. The exact idempotency mechanism
+  // Like.@@unique([userId, postId]) gives FeedService.likePost. Set once
+  // at creation, never mutated: participants don't change in MVP, and
+  // DMs are strictly 2-party (see messaging/README.md -- group
+  // conversations are out of scope, this shape supports 2 participants).
+  participantKey String @unique
+
+  // lastMessageAt: GET /conversations orders the caller's inbox by most
+  // recent activity. Conversation had only createdAt, so a chatty old
+  // thread would have sunk below a newer idle one. Seeded to createdAt
+  // on creation, bumped to the new message's sentAt on every send --
+  // inside the same interactive transaction as the Message row, so the
+  // two can never land independently. Keyset-paginated
+  // (lastMessageAt desc, id desc).
+  lastMessageAt DateTime @default(now())
+
+  createdAt DateTime  @default(now())
+  messages  Message[]
+  hides     ConversationHide[]
+
+  @@index([lastMessageAt])
+}
+
+// backend/b067-message-edit-delete-hide (B-067, Decision Log #472 (b)): "delete for me" on ONE message. A per-user
+// view preference: the message stays for the other person and in the database. Deleted by the anonymiser (a
+// behavioural row of the account), see account-deletion/README.md.
+model MessageHide {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  hiddenAt  DateTime @default(now())
+
+  @@id([userId, messageId])
+  @@index([messageId])
+}
+
+// backend/b067-message-edit-delete-hide (B-067): "delete chat" for the caller only. Messages sent at or before
+// hiddenAt are left out of this user's reads; a message newer than hiddenAt brings the conversation back showing
+// only the newer messages. The other person's view is unchanged.
+model ConversationHide {
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  hiddenAt       DateTime     @default(now())
+
+  @@id([userId, conversationId])
+  @@index([conversationId])
 }
 
 model Message {
@@ -156,114 +1440,1779 @@ model Message {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   senderId       String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   sender         User         @relation(fields: [senderId], references: [id])
   contentText    String
   mediaUrl       String?
   sentAt         DateTime     @default(now())
   readAt         DateTime?
+
+  // backend/b067-message-edit-delete-hide (B-067, Decision Log #472 (b)) -- additive.
+  // editedAt: set on every edit. originalContentText: the text as first sent, written ONCE on the first edit
+  // and never overwritten; NO user-facing read returns it (it is kept under the existing message retention).
+  // The only read is the admin report detail of a message report (ModerationService.getReportById), where it is
+  // returned to a child-safety-vetted admin always and to any other admin only when no participant is under 18
+  // (B-293, Decision Log #486). deletedForEveryoneAt: the sender deleted the message for both people;
+  // the row, the text and any original STAY in the database until the retention job (below) removes them, reads
+  // show a placeholder.
+  //
+  // backend/b287-message-retention (B-287, Decision Log #478): MessageRetentionService deletes a message
+  // MESSAGE_RETENTION_MONTHS (default 12) after sentAt, minors and adults alike, with its originalContentText,
+  // EXCEPT a message a Report (targetType 'message') points at or that a ReportContextMessage row attached to a
+  // report. MessageHide rows go by cascade; a conversation left with no messages is deleted by the same job.
+  editedAt             DateTime?
+  originalContentText  String?
+  deletedForEveryoneAt DateTime?
+  // backend/b289-content-removal (B-289, Decision Log #483): same meaning as Post.removedByModerationAt. A removed
+  // message stays in the thread and in the conversation preview as a text-less stub for both people; the row, the
+  // text and any original stay for staff (and for the retention job's report exception).
+  removedByModerationAt DateTime?
+  removedByReportId     String?
+  removedByReport       Report?      @relation("MessageRemovedByReport", fields: [removedByReportId], references: [id], onDelete: Restrict)
+  hides                MessageHide[]
+  // backend/b286-message-report-context: the reports that attached this message as surrounding context.
+  reportContexts       ReportContextMessage[]
+
+  // sprint-3/messaging-direct-messaging -- GET /conversations/:id/messages
+  // filters by conversationId and keyset-paginates newest-first
+  // (sentAt desc, id desc); PATCH /conversations/:id/read filters by
+  // conversationId + senderId + readAt. Postgres does not auto-index
+  // foreign keys, so this is added explicitly.
+  @@index([conversationId, sentAt])
+  @@index([removedByReportId])
 }
 
 model Notification {
   id           String   @id @default(uuid())
   userId       String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   user         User     @relation(fields: [userId], references: [id])
-  type         String // follow | comment | like | reply | system
+  // sprint-3/notification-triggers-message-fixture-contest (Decision Log
+  // #87): the permanent MVP set, all wired -- follow (users.service.ts),
+  // like | comment (feed.service.ts), message (messaging.service.ts,
+  // collapsed to one unread row per conversation, not per message),
+  // fixture_scheduled | result_logged (grassroots.service.ts), contest_win
+  // (contest.service.ts, one per ContestRoundWinner row, not the monthly
+  // ContestStanding crown). `reply` / `system` (this comment's previous
+  // wording) were never actually implemented anywhere -- dropped.
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | profile_image_rejected (B-214, payloadRefId = 'avatar' | 'cover'; the reason is NOT copied, it lives on User) | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16 | username_review_decided (backend/b139-username-review, Decision Log #467; payloadRefId = 'reinstated' | 'declined'; the admin's reason is NOT copied)
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
+  // backend/w3c-contest-notifications (B-122). NULL for every notification written by a
+  // user-triggered action (the pre-existing types); set only by the scheduled Contest
+  // fan-out (ContestNotificationSweepService) as "<type>|<cycleId>|<week or ->|<userId>".
+  // The UNIQUE index is what makes a re-run (or two overlapping instances) unable to
+  // write the same event to the same account twice: createMany({ skipDuplicates }) turns a
+  // collision into a no-op. Postgres treats NULLs as distinct, so unkeyed rows never clash.
+  // Never selected into any API payload.
+  dedupeKey    String?  @unique
+  // Decision Log #412 item 1: the user whose action caused this row. Set ONLY for
+  // like and comment (FeedService.likePost / addComment), the two types whose payloadRefId is a
+  // Post and so could not otherwise be attributed to a person (#290). NULL for every other type
+  // (their actor is derivable from payloadRefId, or there is none: system notifications) and for
+  // every row written before this column existed. Deliberately a plain string, not an FK, like
+  // payloadRefId: an anonymized User row is never deleted (#341), so an FK would add a User
+  // reverse relation for no integrity gain. Used only to hide a blocked pair's rows at read time
+  // (notifications/block-visibility.util.ts); never selected into any API payload.
+  actorId      String?
+  // backend/b285-web-push (B-285): set by the per-minute push sweep (PushSweepService) when the generic web push for this
+  // row has been sent, or claimed for sending. NULL = not pushed (the usual state for anyone with no push subscription
+  // and for every row older than the sweep window). Never selected into any API payload.
+  pushSentAt   DateTime?
+
+  @@index([userId, actorId])
 }
 
 model SavedPost {
   id       String   @id @default(uuid())
+  // Same keyset-pagination-tiebreaker fix as Post.sequence /
+  // Comment.sequence above, for feed.service.ts's getSavedPosts
+  // (savedAt desc). The previous tiebreaker was `postId` -- itself a
+  // random UUID (a foreign key to Post.id) with no relation to WHEN this
+  // particular row was saved -- so two posts saved in the same
+  // millisecond tiebroke in an order unrelated to save order.
+  // `sequence` is a real monotonic counter on THIS row, so ties resolve
+  // in true most-recently-saved-first order. Never selected into the
+  // public API payload.
+  sequence Int      @unique @default(autoincrement())
   userId   String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   user     User     @relation(fields: [userId], references: [id])
   postId   String
-  post     Post     @relation(fields: [postId], references: [id])
+  // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
+  // way Comment.post is (see that model's comment): a Post cascading
+  // away from its author's User delete must keep cascading into
+  // SavedPost rows saved by OTHER users too, or the whole delete aborts.
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   savedAt  DateTime @default(now())
 
   @@unique([userId, postId])
 }
 
+// Per-user like record backing POST/DELETE /posts/:id/like (Build Plan
+// Section 4.3). Post.likeCount stays as a denormalized cache alongside
+// this — see the comment there.
+model Like {
+  id      String   @id @default(uuid())
+  userId  String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user    User     @relation(fields: [userId], references: [id])
+  postId  String
+  // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
+  // way Comment.post is (see that model's comment): a Post cascading
+  // away from its author's User delete must keep cascading into Like
+  // rows from OTHER users too, or the whole delete aborts.
+  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  likedAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
 model Follow {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
+  // Keyset-pagination tiebreaker for users.service.ts's getFollowers/
+  // getFollowing (fix/follow-pagination-tiebreaker) -- `id` is a random
+  // UUID with zero relation to insertion order, the exact same class of
+  // bug fix/feed-pagination-tiebreaker already fixed for Post.sequence /
+  // Comment.sequence / SavedPost.sequence (see each column's own comment
+  // for the full reasoning). Two Follow rows sharing the same
+  // millisecond-precision `createdAt` used to tiebreak on `id desc`, an
+  // order unrelated to which follow actually happened first. `sequence`
+  // is a genuinely monotonically-increasing Postgres-assigned counter, so
+  // ties now resolve in true creation order. Deliberately NEVER selected
+  // into the public API payload (getFollowers/getFollowing only ever
+  // return the embedded follower/followee user, never the Follow row
+  // itself) -- purely an internal pagination-ordering detail.
+  sequence   Int      @unique @default(autoincrement())
   followerId String
-  follower   User   @relation("follower", fields: [followerId], references: [id])
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  follower   User     @relation("follower", fields: [followerId], references: [id])
   followeeId String
-  followee   User   @relation("followee", fields: [followeeId], references: [id])
+  followee   User     @relation("followee", fields: [followeeId], references: [id])
+  // Added ahead of GET /users/:id/followers and GET /users/:id/following
+  // (Build Plan Section 4.2, Sprint 2) -- a genuine addition beyond
+  // Section 3's literal field list, flagged here and in
+  // users/README.md as a Decision Log candidate rather than added
+  // silently. Section 3 didn't give Follow a timestamp at all, but
+  // Section 5.5 requires every list endpoint to be paginated, and
+  // Section 4.2's own followers/following lists have no other field to
+  // order by -- id is a random UUID (Prisma's default uuid() is v4, not
+  // sequential), so it carries no chronological meaning on its own and
+  // can only serve as a keyset tiebreaker, the same role it already
+  // plays for Post/Comment/Like. This mirrors the precedent Like.likedAt
+  // and SavedPost.savedAt already set: both of those join-table models
+  // needed a timestamp for the exact same reason (ordering their own
+  // list endpoints) and both got one without controversy -- Follow
+  // should not be the one join table left without one.
+  createdAt  DateTime @default(now())
 
   @@unique([followerId, followeeId])
 }
 
+// backend/w5-profile-block (B-039; Decision Log #396, #402 item 4, #403 item 16,
+// #404 items 8 and 11, #406 item 12) -- a genuine addition beyond Section 3's
+// 20 entities, flagged per CLAUDE.md's "fixed spec" rule.
+//
+// One row = "blocker has blocked blocked". The rules (all decided, none
+// invented): the blocked user is NOT told; a block hides posts, comments and
+// like identities (none are listed anywhere), search results and rosters in
+// BOTH directions; counts are unchanged; follows are removed in both
+// directions when the block is made and are NOT restored by an unblock;
+// messages stop in both directions; the leaderboard is unaffected; the blocked
+// user sees the blocker's profile as not found, identical to a profile that
+// does not exist; a block applies on top of the age rules (#346, #347), which
+// apply first. The reason is optional, never editable (unblock and re-block to
+// change it) and visible to the blocker only. No date is ever exposed.
+//
+// `sequence` is the stable ordering for the blocker's list (the date itself is
+// not shown and must not leak through a cursor, so the cursor carries only the
+// sequence). Both FKs are RESTRICT, like Follow (Decision Log #341: the User row
+// is anonymized in place, never deleted); anonymizeUser deletes the rows.
+model Block {
+  id        String   @id @default(uuid())
+  sequence  Int      @unique @default(autoincrement())
+  blockerId String
+  blocker   User     @relation("blocker", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("blocked", fields: [blockedId], references: [id])
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+// sprint-4/trending-topics-backend -- Build Plan Section 4.7 (GET
+// /trending). No hashtag/topic model existed anywhere in this schema
+// before this PR. Hashtags are extracted from Post.contentText at
+// creation time (FeedService.createPost, via
+// search/hashtag.util.ts's recordPostHashtags) with a simple #(\w+)
+// regex scan, normalized to lowercase so "#EPL"/"#epl" group as the
+// same tag -- see search/README.md's "Trending topics" section for the
+// full extraction rule and the v1 simplifications this carries.
+model Hashtag {
+  id        String        @id @default(uuid())
+  tag       String        @unique
+  // Denormalized ALL-TIME cache -- the SAME convention Post.likeCount /
+  // Post.commentCount / ClubPage.memberCount / BanterRoom.memberCount /
+  // CommunityGroup.memberCount already establish: incremented
+  // transactionally alongside every PostHashtag row this tag gets, and
+  // decremented (floor-guarded) by FeedService.deletePost when a post
+  // carrying the tag is hard-deleted (DELETE /posts/:id), and always recomputable via
+  // PostHashtag.count({ where: { hashtagId } }) if it ever drifts.
+  // NOT what GET /trending reads from -- an all-time running total can
+  // never "decay," so the trending query aggregates PostHashtag.createdAt
+  // directly instead (see trending.service.ts). postCount exists purely
+  // as a cheap all-time popularity figure, kept alongside the source rows
+  // the same way every other denormalized counter in this schema is.
+  postCount Int           @default(0)
+  createdAt DateTime      @default(now())
+  posts     PostHashtag[]
+}
+
+// The Post <-> Hashtag join. An EXPLICIT model, never an implicit Prisma
+// m2m (see ClubPage.members's own real silent-relation-merge-bug
+// precedent this schema's own history already carries) -- a surrogate
+// `id` + `@@unique` composite, matching Like/Follow/SavedPost/
+// BanterRoomMember/CommunityGroupMember's own established shape in this
+// file rather than a composite primary key (no model anywhere in this
+// schema uses one).
+model PostHashtag {
+  id        String   @id @default(uuid())
+  postId    String
+  // onDelete: Cascade -- DELETE /posts/:id (feat/post-delete-and-comment-settings)
+  // hard-deletes the Post, and its hashtag links go with it. Before that
+  // endpoint existed this FK's RESTRICT default was inert; it would now
+  // have blocked every delete.
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  hashtagId String
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id])
+  // Denormalized COPY of the owning Post's own createdAt at extraction
+  // time -- not this row's own write time. The two are identical in
+  // practice today (extraction only ever runs inside
+  // FeedService.createPost's own transaction), but recording the POST's
+  // timestamp here is what makes this row's age -- and therefore the
+  // trending decay computed from it -- mean "how old is the post that
+  // used this hashtag," not "how long ago this join row happened to be
+  // written." Lets trending.service.ts window/decay directly off this
+  // table without an extra join back to Post on every read.
+  createdAt DateTime @default(now())
+
+  @@unique([postId, hashtagId])
+  // Backs GET /trending's own windowed aggregation (WHERE hashtagId
+  // grouped, createdAt within the rolling window) -- the same
+  // "@@index([foreignKeyId, timestampColumn])" shape Message's own
+  // @@index([conversationId, sentAt]) already establishes for an
+  // identical "one FK's rows, ordered/windowed by time" access pattern.
+  @@index([hashtagId, createdAt])
+}
+
+// Backs POST /posts/:id/view (Build Plan Section 4.3) -- the view
+// tracking this project has never had until now (confirmed by grep
+// before this PR: no viewCount field, no view-tracking table anywhere).
+// Motivated by the Search & Trending video carousel needing a real,
+// non-fabricated view count to sort/display. Modeled directly on Like's
+// own shape -- a surrogate `id` + `@@unique` composite, matching
+// Like/Follow/SavedPost/PostHashtag's established convention in this
+// file over an implicit Prisma m2m or a composite primary key -- with
+// one deliberate difference: viewerId is nullable, because this
+// endpoint allows anonymous views (OptionalJwtAuthGuard, not
+// JwtAuthGuard -- see feed.controller.ts).
+//
+// De-duplication is a genuine, disclosed v1 simplification, not an
+// oversight:
+//   - Logged-in viewer (viewerId set): @@unique([viewerId, postId])
+//     makes a second view from the same user a no-op, via the exact
+//     insert-then-catch-P2002 idempotency pattern Like/SavedPost already
+//     use (see FeedService.recordView). One real person can inflate
+//     Post.viewCount by at most 1, ever.
+//   - Anonymous viewer (viewerId null): Postgres treats every NULL in a
+//     unique index as distinct from every other NULL, so this
+//     constraint provides NO de-duplication for anonymous calls at all
+//     -- each one is a genuinely new row, and Post.viewCount increments
+//     every time. Building real anonymous-session dedup (a
+//     cookie/fingerprint-keyed store) is explicitly out of scope for
+//     this PR; the tradeoff is documented here and in feed/README.md
+//     rather than silently accepted.
+//
+// This is also a v1 simplification in a second sense: it records "was
+// this post's media opened," nothing more -- no duration tracking, no
+// completion/watch-through tracking, just a single event per (viewer,
+// post) pair (or, for an anonymous caller, per call).
+model PostView {
+  id     String @id @default(uuid())
+  postId String
+  // onDelete: Cascade -- see PostHashtag.post: DELETE /posts/:id
+  // (feat/post-delete-and-comment-settings) removes view rows with the post.
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Nullable -- an anonymous view has no viewer to record. Matches
+  // GrassrootsTeam.createdById's own nullable-User-relation shape
+  // exactly (String? + User? + explicit onDelete: Restrict).
+  viewerId String?
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  viewer   User?   @relation(fields: [viewerId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@unique([viewerId, postId])
+}
+
 // Feeds the Admin moderation queue — Build Plan Section 8.4.
 model Report {
-  id         String   @id @default(uuid())
-  reporterId String
-  reporter   User     @relation("reporter", fields: [reporterId], references: [id])
-  targetType String // post | user | comment
-  targetId   String
-  reason     String
-  status     String   @default("open") // open | reviewed | actioned
-  createdAt  DateTime @default(now())
+  id                   String     @id @default(uuid())
+  // schema/report-severity-escalation-admin-vetting -- reporterId/reporter
+  // are now OPTIONAL. Section 3's original Report assumed every report
+  // comes from a logged-in User, but Section 8.4's own moderation
+  // workflow (and the safeguarding non-negotiables) require a report
+  // route for a non-authenticated party -- a parent, a school, a member
+  // of the public with no Soccernity account -- to flag content
+  // concerning a minor without first having to register. There is no
+  // application code in this PR wiring such a route; this is the schema
+  // groundwork only, flagged as a Decision Log candidate rather than
+  // added silently. When reporterId is null, reporterContactEmail /
+  // reporterContactName carry whatever contact info the non-authenticated
+  // reporter gave (both also null if none was given -- an anonymous tip).
+  // A reporter with a real User row should never have both reporterId set
+  // AND a contact field set; that invariant is not enforced at the schema
+  // level (no CHECK constraint here) and would need application-level
+  // validation once a route is built.
+  reporterId           String?
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  // onDelete: Restrict is now stated EXPLICITLY -- reporterId became
+  // optional in this PR, and Prisma's own default onDelete action for an
+  // optional relation is SetNull, not Restrict. Explicit here so making
+  // this field optional (to support a non-authenticated reporter) does
+  // not silently weaken the existing, deliberate RESTRICT safety net for
+  // reports filed by a real User.
+  reporter             User?      @relation("reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reporterContactEmail String?
+  reporterContactName  String?
+  targetType           String // post | user | comment | message | banter_room | grassroots_team | fixture (plus enquiry, admin-only); message = a Message id, reportable only by the conversation recipient (b067-message-report)
+  targetId             String
+  reason               String
+  // backend/b284-report-reason-categories (Decision Log #465, B-284) -- a genuine addition beyond Section 3's
+  // Report field list, flagged per CLAUDE.md's "the data model is a fixed spec" rule. The reporter's chosen
+  // reason category: one of harassment_or_bullying | hate_or_abusive_language | threats_or_violence |
+  // child_safety_concern | sexual_or_inappropriate_content | impersonation_or_fake_account | spam_or_scam |
+  // privacy_or_image_misuse | other (REPORT_REASON_CATEGORIES in moderation.constants.ts). A plain String, not a
+  // Prisma enum, like status and severity. NULL = not categorised: every report made before this column, a
+  // Grassroots sensitive-content report and a report raised by escalating a contact enquiry. Never backfilled.
+  // A category sets no severity; only 'child_safety_concern' sets concernsMinor (always true, Decision Log #466,
+  // resolveConcernsMinor in report-concerns-minor.util.ts). `reason` above stays the free-text description (the
+  // empty string when the reporter gave none; required only for 'other').
+  reasonCategory       String?
+  status               String     @default("open") // open | reviewed | actioned
+  createdAt            DateTime   @default(now())
+  // Whether the reported content/behaviour concerns a minor -- distinct
+  // from severity (a low-severity report can still concern a minor, and
+  // vice versa). Defaults false; no application code sets this yet, so
+  // it is always false on every report filed through the existing
+  // POST /reports route until a future PR adds the UI/logic to set it
+  // (e.g. a checkbox, or an automatic inference from the reported user's
+  // own isMinor flag).
+  concernsMinor        Boolean    @default(false)
+  // low | medium | high | critical. A plain String, not a Prisma enum --
+  // matches this model's own existing status/actionTaken/appealStatus
+  // string-enum convention rather than introducing a different pattern
+  // for one field. Defaults "medium"; no application code reads or
+  // writes this yet.
+  severity             String     @default("medium")
+  // Escalation trail -- a report that needs to go beyond ordinary
+  // moderator review (e.g. to a designated child-safety lead, or
+  // ultimately to an external authority). escalatedByAdminId is
+  // deliberately independent of reviewedByAdminId/appealReviewedByAdminId
+  // below -- escalating is not the same act as reviewing or deciding an
+  // appeal, and nothing here requires it to be a DIFFERENT admin the way
+  // Decision Log #138 requires for appeal review. escalatedToAuthority
+  // records only that a decision was made to escalate outside Soccernity
+  // (e.g. to a regulator or law enforcement) -- it does not itself send
+  // anything anywhere; no application code exists yet to act on any of
+  // these four fields.
+  escalatedAt          DateTime?
+  escalatedByAdminId   String?
+  escalatedByAdmin     AdminUser? @relation("reportEscalatedBy", fields: [escalatedByAdminId], references: [id])
+  escalationNotes      String?
+  escalatedToAuthority Boolean    @default(false)
+
+  // sprint-5/admin-moderation-queue-backend additions below -- a genuine
+  // schema addition beyond Section 3's original six-field Report list,
+  // flagged per CLAUDE.md's "the data model is a fixed spec" rule (see
+  // this PR's own Decision Log candidate write-up in
+  // modules/moderation/README.md) rather than added silently. Section 3
+  // gave Report no way to record WHO reviewed it, WHAT action was taken,
+  // or the appeal trail Section 8.4's own workflow text assumes exists
+  // ("a report is submitted... a second admin/moderator reviews the
+  // appeal", Decision Log #138).
+  //
+  // reviewedByAdminId / reviewedAt / actionTaken are set together, once,
+  // by PATCH /admin/moderation/reports/:id. actionTaken is one of
+  // content_removed | warning_issued | user_suspended | dismissed --
+  // maps onto this model's own pre-existing three-value `status` enum
+  // (dismissed -> 'reviewed', anything else -> 'actioned'), not a fourth
+  // status value. Recording the action does NOT itself enforce it --
+  // there is no soft-delete/hidden flag on Post/Comment and no
+  // admin-triggered suspend endpoint on User anywhere in this codebase
+  // yet; see moderation/README.md's disclosed-limitation note.
+  reviewedByAdminId String?
+  reviewedByAdmin   AdminUser? @relation("reportReviewedBy", fields: [reviewedByAdminId], references: [id])
+  reviewedAt        DateTime?
+  actionTaken       String? // content_removed | warning_issued | user_suspended | dismissed
+
+  // The appeal trail -- only the REPORTED user (never the reporter) may
+  // appeal, and only once a report has actually been actioned (POST
+  // /reports/:id/appeal). appealStatus is null until a reported user
+  // files one, then 'pending' until a SECOND admin/moderator (never the
+  // one in reviewedByAdminId -- Decision Log #138, hard-enforced in
+  // ModerationService, not just documented) decides 'upheld' (the
+  // original action stands) or 'overturned' (Report.status reverts to
+  // 'open', reviewedByAdminId/reviewedAt/actionTaken are cleared, so the
+  // report re-enters the open queue as if never actioned).
+  appealStatus            String? // null | pending | upheld | overturned
+  appealReason            String?
+  appealedAt              DateTime?
+  appealReviewedByAdminId String?
+  appealReviewedByAdmin   AdminUser? @relation("reportAppealReviewedBy", fields: [appealReviewedByAdminId], references: [id])
+  appealReviewedAt        DateTime?
+  // backend/b292-staff-recorded-appeal (B-292, Decision Log #485 (f), #492): the admin who RECORDED the appeal on the
+  // reported person's behalf (POST /admin/moderation/reports/:id/appeal; a suspended person cannot sign in to appeal).
+  // NULL = the person appealed themselves. The recorder may not also decide the appeal. A genuine addition beyond
+  // Section 3's Report list (Decision Log candidate).
+  appealRecordedByAdminId String?
+  appealRecordedByAdmin   AdminUser? @relation("reportAppealRecordedBy", fields: [appealRecordedByAdminId], references: [id])
+
+  // backend/b286-message-report-context (Decision Log #477): messages the reporter attached as context to a
+  // 'message' report. See ReportContextMessage.
+  contextMessages ReportContextMessage[]
+
+  // backend/w6-hold-rule-extension (B-044) -- reverse relation for AccountHold.report.
+  accountHolds     AccountHold[]
+  // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.escalatedReport.
+  contactEnquiries ContactEnquiry[]
+  // backend/b289-content-removal (B-289, Decision Log #483): the post, comments and messages this report removed
+  // (content_removed). A report removes at most ONE target; the arrays exist for the relation only.
+  removedPosts     Post[]    @relation("PostRemovedByReport")
+  removedComments  Comment[] @relation("CommentRemovedByReport")
+  removedMessages  Message[] @relation("MessageRemovedByReport")
+  // backend/b291-suspension-on-report (B-291): accounts this report suspended (user_suspended). Relation only.
+  suspendedUsers   User[]    @relation("UserSuspendedByReport")
+
+  @@index([appealRecordedByAdminId])
+}
+
+// backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and
+// #403 item 8) -- a genuine NEW model, flagged as a Decision Log candidate per CLAUDE.md's "the data model
+// is a fixed spec" rule. The two ADMIN-placed holds that keep an account out of anonymisation:
+//   legal_hold  holds an account in full until an admin lifts it (expiresAt NULL). One row per party that
+//               has an account (reporter and reported user), all pointing at the same report.
+//   bad_faith   placed on the REPORTER when a report is found to have been made in bad faith. Holds the
+//               account in full for BAD_FAITH_HOLD_MONTHS (expiresAt = placedAt + that), or until lifted.
+// A hold is ACTIVE while liftedAt IS NULL and (expiresAt IS NULL or expiresAt > now). Lifting works for both
+// types, needs a reason, and the held user is NOT told (#403 item 8). The report-based rules (open report,
+// appeal window, 6 months after closure) are NOT rows here: they are derived from Report, see
+// modules/account-hold/account-hold.rules.ts. userId is a real FK (RESTRICT, like every other reference to
+// User, #341): an anonymised user's row survives, so this record does too -- it is audit evidence.
+// reportId is always set when a hold is placed; it becomes NULL only when the report retention job deletes the
+// report (B-299), which detaches the hold and keeps the row.
+// CHECK constraints in the migration keep type, the lifted-together columns and the type/expiry/report
+// combinations coherent.
+model AccountHold {
+  id              String     @id @default(uuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type            String // legal_hold | bad_faith
+  reportId        String?
+  report          Report?    @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  placedByAdminId String
+  placedByAdmin   AdminUser  @relation("accountHoldPlacedBy", fields: [placedByAdminId], references: [id], onDelete: Restrict)
+  placeReason     String
+  placedAt        DateTime   @default(now())
+  expiresAt       DateTime?
+  liftedAt        DateTime?
+  liftedByAdminId String?
+  liftedByAdmin   AdminUser? @relation("accountHoldLiftedBy", fields: [liftedByAdminId], references: [id], onDelete: Restrict)
+  liftReason      String?
+
+  @@index([userId, liftedAt])
+  @@index([reportId])
+}
+
+// backend/w7-contact-us-enquiry (B-046; Decision Log #440, #444, founder decisions 2026-10-30). A message sent
+// through the public Contact Us form. A genuine addition beyond Section 3's entity list -- flagged as a
+// Decision Log candidate, not added silently.
+//
+// userId is set only when the sender was signed in (OptionalJwtAuthGuard); a guest's enquiry carries just the
+// name and email they typed. name and email are what the sender typed, NOT a copy of the account's.
+//
+// Retention (#440): deleted 12 months after lastMessageAt (the LAST message in the enquiry; today an
+// enquiry has one message, so it equals createdAt) by ContactEnquiryRetentionService, UNLESS
+// escalatedReportId is set (#444: an admin turned it into a report, and that record's retention applies
+// instead). escalatedReportId and handledByAdminId are written by the admin inbox (part B, not built yet).
+//
+// All three foreign keys are RESTRICT, stated explicitly (userId and escalatedReportId are optional, and
+// Prisma's default for an optional relation is SetNull): an escalated enquiry must never be silently
+// un-escalated, and a User row is never deleted from under an enquiry (account deletion removes the user's
+// non-escalated enquiries first; an escalated one blocks the purge, like a report).
+model ContactEnquiry {
+  id                String     @id @default(uuid())
+  name              String
+  email             String
+  // technical_issues | editorial_complaints | data | suggestions | enquiries | feedback | suspension_appeal
+  // (the six Contact Us categories of the founder decision 2026-10-30, plus suspension_appeal, Decision Log #492,
+  // B-298). CHECK-constrained in the migration.
+  category          String
+  subject           String
+  message           String
+  userId            String?
+  user              User?      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  // new | handled. CHECK-constrained in the migration.
+  status            String     @default("new")
+  createdAt         DateTime   @default(now())
+  lastMessageAt     DateTime   @default(now())
+  handledAt         DateTime?
+  handledByAdminId  String?
+  handledByAdmin    AdminUser? @relation("contactEnquiryHandledBy", fields: [handledByAdminId], references: [id], onDelete: Restrict)
+  escalatedReportId String?
+  escalatedReport   Report?    @relation(fields: [escalatedReportId], references: [id], onDelete: Restrict)
+
+  @@index([lastMessageAt])
+  @@index([userId])
+  @@index([status, createdAt])
 }
 
 model MediaAsset {
-  id         String   @id @default(uuid())
-  uploaderId String
-  url        String
-  type       String // image | video
-  size       Int
-  createdAt  DateTime @default(now())
+  id               String    @id @default(uuid())
+  uploaderId       String
+  url              String
+  type             String // image | video
+  size             Int
+  createdAt        DateTime  @default(now())
+  // sprint-5/admin-media-storage-backend addition, flagged per CLAUDE.md's
+  // "the data model is a fixed spec" rule — Section 3's original
+  // MediaAsset had `url` but no separate object-storage key. `url` is
+  // built from the provider config (endpoint/bucket/region) at upload
+  // time and would break StorageService.delete()'s ability to locate the
+  // object again if that config ever changes (a moved bucket, a CDN
+  // domain swapped in later — the same class of change Decision Log #26
+  // already anticipates for hosting generally); `key` is the durable,
+  // provider-config-independent identifier the object actually lives
+  // under. Not read or written by any endpoint in this PR (no
+  // DELETE /admin/media/:id route exists yet — see media/README.md's
+  // "What this PR does NOT do") but stored now so a future delete
+  // endpoint doesn't need a backfill migration or a fragile
+  // parse-the-key-back-out-of-the-URL workaround.
+  key              String
+  // feat/article-cover-image addition, resolving Decision Log #334 — the
+  // reverse side of Article.coverImage (see that model's own comment).
+  // Plural/array because one MediaAsset could in principle be reused as
+  // the cover of more than one Article (no uniqueness constraint stops
+  // that, and nothing in this ticket's brief asked for one).
+  coverForArticles Article[]
 }
 
 // ---------- Admin & Operations Console (Log Book Section 6.6) ----------
 
 model Article {
-  id            String    @id @default(uuid())
+  id            String      @id @default(uuid())
   title         String
   body          String
   categoryId    String
-  category      Category  @relation(fields: [categoryId], references: [id])
+  category      Category    @relation(fields: [categoryId], references: [id])
   authorAdminId String
-  authorAdmin   AdminUser @relation(fields: [authorAdminId], references: [id])
-  status        String    @default("draft") // draft | published
+  authorAdmin   AdminUser   @relation(fields: [authorAdminId], references: [id])
+  status        String      @default("draft") // draft | published
   publishedAt   DateTime?
+  // feat/article-excerpt-field addition, resolving Decision Log #333 —
+  // a nullable, admin-editable curated excerpt. Nullable (not every
+  // article needs a hand-written one): the public read path
+  // (blog.service.ts's toPublicArticleListItem) uses this value when
+  // set, falling back to excerpt.util.ts's truncateExcerpt(body) when
+  // it's null/empty — the fallback stays in place, not replaced.
+  excerpt       String?
+  // sprint-5/admin-articles-categories-backend addition, flagged per
+  // CLAUDE.md's "the data model is a fixed spec" rule — Section 3's
+  // original Article had no timestamp at all. Needed for two real,
+  // unavoidable reasons: ArticlesPage.tsx's own "Date" column has
+  // nothing else to show for a still-draft article (publishedAt is
+  // null until publish), and GET /admin/articles (a genuine addition
+  // beyond Section 4.8's literal POST/PATCH-only line — see
+  // modules/admin-content/README.md) needs a real column to
+  // keyset-paginate by, the same gap Follow.createdAt / Like.likedAt /
+  // BanterRoomMember.joinedAt each closed for their own models.
+  createdAt     DateTime    @default(now())
+  // feat/article-cover-image addition, resolving Decision Log #334 — a
+  // genuine schema addition beyond Section 3's original Article field
+  // list, flagged per CLAUDE.md's "the data model is a fixed spec" rule
+  // rather than added silently. Nullable (not every article needs a
+  // cover image) and `onDelete: SetNull` — deliberately NOT Cascade or
+  // Restrict: losing the linked MediaAsset (a future DELETE
+  // /admin/media/:id route, or any other removal path) must not take
+  // the Article down with it or block the deletion outright, the same
+  // "don't let losing an unrelated row break otherwise-fine content"
+  // discipline Decision Log #341's account-anonymization redesign
+  // already applied (Comment/Like/SavedPost surviving a deleted User via
+  // RESTRICT-then-anonymize rather than a cross-content cascade). A
+  // deleted cover image simply leaves the Article's coverImageId null
+  // again — no code anywhere currently sets it back to null on its own,
+  // so this is presently the ONLY way that happens.
+  coverImageId  String?
+  coverImage    MediaAsset? @relation(fields: [coverImageId], references: [id], onDelete: SetNull)
 }
 
 model Category {
-  id       String    @id @default(uuid())
-  name     String
-  slug     String    @unique
-  articles Article[]
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  articles  Article[]
+  // sprint-5/admin-articles-categories-backend additions, both flagged
+  // per CLAUDE.md's "the data model is a fixed spec" rule — see
+  // modules/admin-content/README.md for the full reasoning.
+  // "active" | "inactive" — CategoriesPage.tsx's own Figma design
+  // already renders a Status column with both values; Category had no
+  // field to back it. Mirrors User.accountStatus / AdminUser.accountStatus's
+  // existing string-enum convention. Retiring a category (inactive)
+  // rather than deleting it is deliberate — Article.categoryId has no
+  // ON DELETE CASCADE, so a hard delete would orphan every Article
+  // referencing it; Section 4.8 also defines no category-deletion route.
+  status    String    @default("active")
+  // Same "a list endpoint needs a real column to order/page by" gap as
+  // Article.createdAt above — GET /admin/categories has nothing else to
+  // keyset-paginate on.
+  createdAt DateTime  @default(now())
 }
 
+// sprint-2/admin-console-account-entity — Decision Log #54's resolution:
+// the Admin Console needs a real, separate account/auth data model, NOT
+// User with a role check bolted on. AdminUser already existed in this
+// schema (original Section 3 entity, Admin & Operations Console pillar)
+// but only carried {id, email, role, articles} — enough to attribute an
+// Article, never enough to actually log an admin/moderator in or back a
+// real "Admin Profile" screen (Full name / Email / Role / Phone).
+// Deliberately kept the existing name/id space rather than introducing a
+// second, competing "AdminAccount" model — Article.authorAdmin already
+// points at this model, and Section 3 already spec'd this entity under
+// this name; renaming it would be unrelated churn to an existing spec'd
+// entity, not something this PR's brief asked for. Flagged as the actual
+// Decision Log candidate this surfaces: #54's own framing ("an
+// admin-account data model that doesn't exist") was not quite accurate —
+// a minimal one already did — the real gap was that it was never fleshed
+// out or given its own auth path, both of which this PR now builds.
 model AdminUser {
-  id       String    @id @default(uuid())
-  email    String    @unique
-  role     String // editor | moderator | superadmin
-  articles Article[]
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  // sprint-2/admin-console-account-entity additions below — genuine
+  // schema additions beyond Section 3's original AdminUser field list,
+  // flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
+  // than added silently.
+  passwordHash          String
+  fullName              String
+  phone                 String?
+  // "active" | "deactivated" — mirrors User.accountStatus's existing
+  // string-enum convention. No self-service deactivate/reactivate
+  // endpoint exists for AdminUser (nothing in the Admin Profile screen
+  // asks for one) — this field is written only by a superadmin-facing
+  // action (or a manual DB flip). AdminAuthService.login() checks this
+  // the same way AuthService.login() checks User.accountStatus.
+  // feat/admin-staff-status (Decision Log #193, resolved): PATCH
+  // /admin/staff/:id/status (admin-staff-roles module, superadmin-only)
+  // is that action — it sets this field, revoking every existing session
+  // for the target admin on a deactivation, and is rejected with a 409
+  // if it would deactivate the last remaining active superadmin.
+  accountStatus         String    @default("active")
+  role                  String // editor | moderator | superadmin
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  articles              Article[]
+  // sprint-5/admin-moderation-queue-backend -- reverse relations for
+  // Report's two new AdminUser FKs (see Report's own comment). Named
+  // explicitly (not left for Prisma to auto-name) so the two don't
+  // collide on the same generated field name.
+  reviewedReports       Report[]  @relation("reportReviewedBy")
+  appealReviewedReports Report[]  @relation("reportAppealReviewedBy")
+  // backend/b292-staff-recorded-appeal -- reverse relation for Report.appealRecordedByAdmin.
+  appealRecordedReports Report[]  @relation("reportAppealRecordedBy")
+  // schema/report-severity-escalation-admin-vetting -- reverse relation
+  // for Report.escalatedByAdmin (see Report's own comment on the
+  // escalation trail fields). No application code sets this yet.
+  escalatedReports      Report[]  @relation("reportEscalatedBy")
+
+  // childSafetyVetted / vettedAt / vettedByAdminId -- a genuine schema
+  // addition beyond this model's own existing field list, flagged per
+  // CLAUDE.md's "the data model is a fixed spec" rule rather than added
+  // silently. Records whether THIS admin/moderator has been through a
+  // separate, real-world child-safety vetting process (e.g. a DBS check
+  // or local equivalent) before being trusted with Report review on a
+  // minors' platform -- a real safeguarding gap this schema previously
+  // had no way to represent at all: any editor/moderator/superadmin row
+  // could review a report concerning a minor with no record of whether
+  // that person had ever actually been vetted for it. childSafetyVetted
+  // defaults false (unvetted) on every existing and future row; no
+  // migration backfill flips it true for anyone, since a real vetting
+  // decision cannot be inferred from existing data and must not be
+  // assumed. vettedByAdminId is a self-relation (a superadmin vets
+  // another admin/moderator) -- deliberately NOT the same field as
+  // reviewedByAdminId/escalatedByAdmin above, since vetting a colleague
+  // is a distinct act from reviewing or escalating a report. No
+  // application code reads or writes any of these three fields yet --
+  // no vetting endpoint, no gate on Report review keyed to this flag.
+  childSafetyVetted       Boolean                  @default(false)
+  vettedAt                DateTime?
+  vettedByAdminId         String?
+  vettedByAdmin           AdminUser?               @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
+  vettedAdmins            AdminUser[]              @relation("adminVettedBy")
+  // backend/b086-two-factor (B-086, B-270; Decision Log #446) -- same three fields as User (see the comment there):
+  // authenticator-app two-factor for an admin, MANDATORY before launch (enforced at sign-in by ADMIN_2FA_ENFORCED),
+  // secret encrypted with DOB_ENCRYPTION_KEY, replay protection by totpLastUsedStep. A peer superadmin can reset it
+  // (never one's own); clearing these fields and deleting the AdminBackupCode rows is what a reset is.
+  totpSecretEncrypted     String?
+  totpEnabledAt           DateTime?
+  totpLastUsedStep        Int?
+  twoFactorBackupCodes    AdminBackupCode[]
+  // Reverse relation for AdminActionLog.admin (see that model's own
+  // comment). No application code writes AdminActionLog rows yet.
+  actionLogs              AdminActionLog[]
+  // backend/w6-hold-rule-extension (B-044) -- reverse relations for AccountHold's two AdminUser FKs.
+  placedAccountHolds      AccountHold[]            @relation("accountHoldPlacedBy")
+  liftedAccountHolds      AccountHold[]            @relation("accountHoldLiftedBy")
+  // backend/b280-withhold-guardian-notices (B-280) -- reverse relation for GuardianNoticeWithhold.setByAdmin.
+  guardianNoticeWithholds GuardianNoticeWithhold[] @relation("guardianNoticeWithholdSetBy")
+  // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.handledByAdmin.
+  handledContactEnquiries ContactEnquiry[]         @relation("contactEnquiryHandledBy")
 }
 
-// ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6) ----------
+// schema/report-severity-escalation-admin-vetting -- a genuine new model,
+// flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
+// than added silently. A general-purpose, append-only audit trail of
+// admin/moderator actions -- distinct from Report's own
+// reviewedByAdminId/actionTaken/appeal fields, which record ONLY the
+// moderation-decision lifecycle of one specific Report. AdminActionLog
+// is meant to eventually cover every admin-console action worth an audit
+// record (user suspensions, article edits, category changes, etc.), not
+// just Report review -- but no application code writes to this model in
+// this PR; it is schema groundwork only.
+model AdminActionLog {
+  id         String    @id @default(uuid())
+  adminId    String
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  notes      String?
+  createdAt  DateTime  @default(now())
+}
 
+// ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6, resolved
+// to Highlightly on the design side by the figma-screen-builder "Highlightly data redesign" pass;
+// this is the backend half — sprint-4/sports-hub-highlightly-backend) ----------
+
+// A genuine schema REDESIGN, not just an extension — flagged as a Decision Log candidate in
+// modules/sports/README.md, per CLAUDE.md's "the data model is a fixed spec" rule. Section 3's
+// original seven bare fields (externalRef/competition/teams/score/status/kickoffTime) are ALL KEPT
+// UNTOUCHED, still populated on every write, so nothing that already reads this literal shape (none
+// of it — MatchData had zero live reads before this PR, confirmed by grep) silently breaks. Every
+// field below `kickoffTime` is a genuine addition.
+//
+// Modelling approach, stated plainly per this PR's own task brief: HYBRID, not one scheme for
+// everything.
+//   - The match/fixture itself (id, teams, score, status, kickoff, league, venue) is NORMALIZED as
+//     real columns, because it's the one thing this module needs to relationally QUERY — filter by
+//     date, filter by league, filter by live status, order by kickoff time, paginate. None of that
+//     is expressible against an opaque JSON blob without either a GIN index (real added complexity
+//     for a table this small) or reading every row into the app to filter in memory.
+//   - Match statistics / lineups / events / head-to-head / highlights are all stored as JSON
+//     columns, one per sub-resource, each with its own `*UpdatedAt` timestamp. Nothing in this
+//     module (or Section 4.6's own endpoint contract) ever queries into a SINGLE FIELD of a stat
+//     row, a single player's lineup slot, or a single event — every one of Section 4.6's own GET
+//     endpoints reads and returns the WHOLE document for one match at once, and Highlightly's own
+//     API returns each of those as a whole document too (see the client — GET
+//     /statistics/{matchId}, /lineups/{matchId}, /events/{id} each return one complete array/object
+//     per call, not incremental diffs). During a live match, refreshing normalized child rows would
+//     mean diffing and upserting ~18 stat rows + 22 lineup slots + a growing events list on every
+//     poll; overwriting one JSON column is a single UPDATE, cheap regardless of how much the
+//     document's internal shape varies match-to-match (different competitions return different stat
+//     categories — a JSON column tolerates that with zero migration, a normalized StatRow table
+//     would need a stat-type catalog).
+//   - Standings is its OWN model (below), not a JSON column on MatchData, because it isn't
+//     match-scoped at all — GET /sports/standings?league= is queried by league (+ season), and one
+//     standings table covers an entire competition's worth of matches. Same "whole document
+//     overwrite" reasoning applies to ITS contents (an ordered array of every team's row) — Section
+//     4.6 never asks "give me just Arsenal's row", it asks for the whole table.
 model MatchData {
-  id            String   @id @default(uuid())
-  externalRef   String   @unique
-  competition   String
-  teams         String[]
-  score         String?
-  status        String // scheduled | live | full_time
-  kickoffTime   DateTime
+  id          String   @id @default(uuid())
+  externalRef String   @unique
+  competition String
+  teams       String[]
+  score       String?
+  status      String // scheduled | live | full_time | postponed | cancelled — widened from the
+  // original three-value comment; Highlightly's own `state.description` genuinely reports
+  // "Postponed"/"Cancelled" outcomes a real fixture list has to represent. `statusDetail` below
+  // carries the raw upstream string (e.g. "Second half", "45+2", "Half time") for display —
+  // `status` itself stays this coarse three-bucket-plus-two-terminal-outcomes enum, since that's
+  // the only granularity any of Section 4.6's own endpoints (live-scores vs. everything else)
+  // actually branch on.
+  kickoffTime DateTime
+
+  // ---- Genuine additions beyond Section 3's literal seven fields (flagged) ----
+
+  leagueId     String? // Highlightly's own league id — what GET /sports/standings?league= and the
+  // optional league filter on live-scores/fixtures actually filter by. Nullable: a match fetched
+  // before this field existed, or from a provider response missing it, still has somewhere to live.
+  leagueName   String? // display name, independent of `competition` above (kept for back-compat) so
+  // a future rename of `competition`'s own semantics doesn't have to touch this.
+  season       String?
+  round        String?
+  venue        String?
+  homeTeamId   String?
+  homeTeamName String?
+  homeTeamLogo String?
+  awayTeamId   String?
+  awayTeamName String?
+  awayTeamLogo String?
+  homeScore    Int?
+  awayScore    Int?
+  // `statusDetail` — see the `status` field's own comment above.
+  statusDetail String?
+
+  // Sub-resource documents — see this model's own header comment for why each is a whole-document
+  // JSON blob with its own independent freshness timestamp, not normalized child rows. A null value
+  // means "never fetched yet" (distinct from an empty array/object, which means "fetched, and
+  // Highlightly genuinely returned nothing" — e.g. a scheduled match with no lineup announced yet).
+  statistics          Json?
+  statisticsUpdatedAt DateTime?
+  // Per-player box score (GET /box-score/{matchId}), one vendor call per match. Consumed only by the
+  // Match Centre's Statistics tab, never by a list endpoint — see sports.service.ts's
+  // getMatchBoxScore for the call-frequency reasoning.
+  boxScore            Json?
+  boxScoreUpdatedAt   DateTime?
+  lineups             Json?
+  lineupsUpdatedAt    DateTime?
+  // Also the source data for the momentum endpoint (Decision Log candidate, see
+  // modules/sports/README.md) — momentum is DERIVED from these events at read time, not stored as
+  // its own separate cached document. No dedicated Highlightly "momentum" endpoint is confirmed to
+  // exist (it isn't in the public API documentation), so this is the only real data available to
+  // compute it from.
+  events              Json?
+  eventsUpdatedAt     DateTime?
+  h2h                 Json?
+  h2hUpdatedAt        DateTime?
+  highlights          Json?
+  highlightsUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kickoffTime])
+  @@index([leagueId])
+  @@index([status])
+}
+
+// One row per (league, season) — GET /sports/standings?league=&season=. `table` is the whole
+// ordered array of team rows (rank, team, played/won/drawn/lost, goalsFor/goalsAgainst/goalDiff,
+// points, form) exactly as Highlightly's own /standings response shapes it — see this model
+// family's own header comment on MatchData for why this is a JSON document, not a normalized
+// StandingRow-per-team table.
+model Standing {
+  id        String   @id @default(uuid())
+  leagueId  String
+  season    String
+  table     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([leagueId, season])
+}
+
+// sprint-4/match-kickoff-alerts (Decision Log #336 item 2). A user's opt-in to a kickoff alert for
+// one match. `externalRef` is deliberately a plain string with NO foreign key to MatchData: match
+// rows are upserted from the vendor and a subscription must survive a refresh that rewrites or
+// briefly lacks the row. The kickoff job joins on externalRef in application code.
+// `notifiedAt` is the at-most-once claim: set in the same transaction as the Notification row it
+// produces, so a second instance or a retry can never deliver twice.
+model MatchSubscription {
+  id          String    @id @default(uuid())
+  userId      String
+  // RESTRICT is the same safety net every other User relation carries (Decision Log #341): the
+  // User row is never hard-deleted, and anonymizeUser deletes these rows explicitly first.
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  externalRef String
+  createdAt   DateTime  @default(now())
+  notifiedAt  DateTime?
+
+  @@unique([userId, externalRef])
+  @@index([notifiedAt, externalRef])
 }
 
 // ---------- Play & Compete (leaderboard only — MVP scope, Build Plan Section 2.1) ----------
 
+// The MATERIALISED leaderboard rollup (Build Plan Section 4.9,
+// GET /leaderboard?period=). Recalculated on a schedule (Section 3's own
+// note) from PointsLedgerEntry below. That rollup job + the GET
+// /leaderboard endpoint are Sprint 6 — NOT built by
+// sprint-2/contest-data-model-backend, which builds only the ledger this
+// table would be computed from. Left exactly as Section 3 specified it.
 model LeaderboardEntry {
-  id      String @id @default(uuid())
-  userId  String
-  user    User   @relation(fields: [userId], references: [id])
-  points  Int    @default(0)
-  rank    Int?
-  period  String // e.g. "2026-W33"
+  id            String @id @default(uuid())
+  userId        String
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user          User   @relation(fields: [userId], references: [id])
+  // backend/w12-points (B-093, Decision Log #383): QUARTER-POINT units (1 point = 4 units). Ranking
+  // uses this exact value; the API shows it rounded to the nearest whole point (half rounds up).
+  quarterPoints Int    @default(0)
+  rank          Int?
+  period        String // e.g. "2026-W33"
+  // Decision Log #128 -- which board this row belongs to: '' = the Overall
+  // (global) board, otherwise a ClubPage id for that club's board. An empty
+  // string rather than NULL so the unique key below stays enforceable
+  // (Postgres treats NULLs as distinct in a UNIQUE index).
+  clubId        String @default("")
+  // backend/b053-leaderboard-periods (B-053, Decision Log #472): this row's rank on the SAME board (same
+  // period, same clubId) as it stood seven days earlier, derived from the PointsLedgerEntry ledger by
+  // LeaderboardHistoryRollupService. NULL = the person was not on that board then (or the baseline has
+  // not been computed for this row yet): never 0. GET /leaderboard returns rank - rankSevenDaysAgo.
+  rankSevenDaysAgo Int?
 
-  @@unique([userId, period])
+  @@unique([userId, period, clubId])
+}
+
+// ---------- Play & Compete: Contest (weekly skill-challenge cycle) ----------
+//
+// sprint-2/contest-data-model-backend — Decision Log #218 (schema) and
+// #219 (scoring weights). Build Plan Section 3 has NO Contest/Competition
+// entity at all — confirmed absent, not stubbed (Decision Log #188). This
+// is genuinely new architecture, authorised by the founder for this task
+// and anticipated by Decision Log #61 (monthly phases), #70 (weeks-1–3
+// progressive fill), #71 (Contest is its own board tab), #130 (points
+// model), and #188 (the active-contest check the Create Post mode-tab
+// needs). See services/api/src/modules/contest/README.md.
+//
+// The broader "Competition" umbrella (Decision Log #72/#73 — admin-created
+// Prediction / Commentary types with per-type SCORE columns) is
+// DELIBERATELY NOT modelled here: still Build Plan Section 2.2-deferred
+// ("Prediction & commentary challenges ... Phase 2"), and the Contest
+// mechanic is the one with real designed screens and a real user flow
+// today. PointsLedgerEntry.source reserves 'competition_result' for it.
+
+// One monthly Contest cycle (Decision Log #381, #386, #387, #399, #400; docs/contest-spec.md).
+//
+// backend/w7-contest (B-091) REPLACES the admin-judged model of Decision Log #218/#241: a contest
+// is no longer judged by an admin. It runs itself on the fixed Europe/London calendar of the spec
+// -- weeks 1-3 (entries, engagement ranking, a vote, a 20:00 lock), then the week-4 final (finalist
+// uploads, the 00:00 reveal on day 25, likes + comments to month end) -- driven by
+// ContestLifecycleService. An admin only CREATES and (within the locking rules of section 4a) EDITS
+// the contest; the dates are derived from `monthKey` and never editable.
+//
+// `monthKey` ("YYYY-MM", the London month, @unique) is what marks a cycle as one of the new
+// self-running ones. Rows from the old admin-judged model have monthKey NULL and are never touched
+// by the lifecycle service. New-model rows are held to their invariants by the CHECK constraints in
+// migration 20261025090000.
+//
+// Status: active (weeks 1-3 and the upload window) -> final (after the reveal, only if there are
+// finalists) -> completed (crowned, or the month ended with no final / no winner).
+// Phases for the existing read model (vacant / week_1 / ... / crowned) are still DERIVED
+// (ContestService.derivePhase), never stored.
+model ContestCycle {
+  id            String    @id @default(uuid())
+  title         String
+  status        String    @default("active")
+  startsAt      DateTime
+  endsAt        DateTime
+  // finalOpenedAt: set at the reveal (status -> final). crownedAt: set when the cycle completes.
+  finalOpenedAt DateTime?
+  crownedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  // ---- backend/w7-contest (B-091) ----
+  // "YYYY-MM", the London calendar month this contest runs in. NULL = a legacy admin-judged cycle.
+  monthKey                 String?   @unique
+  description              String?
+  // x: the points a finalist needs to be considered for the final top 3 (section 4, 10). ADMIN-ONLY:
+  // never returned by a user-facing endpoint. Required (>= 1) for every new-model cycle.
+  minimumTally             Int?
+  // Placement points (section 9d), set per contest; defaults are the spec's. Awarded to the ledger
+  // when the week is decided (weekly) or the month is crowned (monthly).
+  weeklyPoints1            Int       @default(500)
+  weeklyPoints2            Int       @default(300)
+  weeklyPoints3            Int       @default(150)
+  monthlyPoints1           Int       @default(2000)
+  monthlyPoints2           Int       @default(1200)
+  monthlyPoints3           Int       @default(600)
+  // Week 4 only (Decision Log #399 E2, #402). Lock when week 4 starts.
+  followersExcludedWeek4   Boolean   @default(false)
+  exposureTolerancePercent Int       @default(10)
+  exposureViewerDailyCap   Int       @default(3)
+  // Lifecycle stamps. All set once, by the lifecycle service, from the calendar.
+  finalistsSelectedAt      DateTime?
+  revealedAt               DateTime?
+  pinsRemovedAt            DateTime?
+  // backend/b300-contest-entry-removal (Decision Log #488): the instant the FINALIST SET was frozen, taken
+  // at the first moment it is needed at or after Week 4 opens (schedule.final.opensAt). From then on the
+  // finalists are the ContestFinalist rows, no longer the distinct current weekly winners: a person promoted
+  // to weekly winner afterwards cannot enter the final, and a weekly winner who loses the win stays a
+  // finalist. NULL = not frozen yet, finalists are derived from ContestRoundWinner.
+  finalistsFrozenAt        DateTime?
+  // true when the month ended with no final (no finalist) or with no finalist reaching the minimum
+  // tally: the leaderboard shows "No winner this month" / no final.
+  noWinner                 Boolean   @default(false)
+
+  rounds    ContestRound[]
+  entries   ContestEntry[]
+  standings ContestStanding[]
+  finalists ContestFinalist[]
+
+  @@index([status])
+}
+
+// One round of a cycle: weeks 1-3 (the weekly challenge) and week 4 (the final).
+//
+// backend/w7-contest: week 4 now has a round row too (weekNumber = 4). It carries the final's task
+// text and window, and a finalist's final entry is a ContestEntry in it -- which is what "the server
+// flags it as a final entry" means: ContestEntry.round.weekNumber = 4, no hashtag parsing.
+//
+// status: open (Phase 1: entries) -> voting (Phase 2: the top 10 are voted on) -> judged (the 20:00
+// lock calculated the result, or the week was forfeited at the end of Phase 1). Week 4: open -> judged.
+// opensAt = the week's 08:00 opening; closesAt = the (exclusive) end of the round's last window:
+// the vote lock for weeks 1-3, the reveal for week 4.
+model ContestRound {
+  id         String       @id @default(uuid())
+  cycleId    String
+  cycle      ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  weekNumber Int // 1 | 2 | 3 | 4
+  status     String       @default("open")
+  opensAt    DateTime
+  closesAt   DateTime
+  judgedAt   DateTime?
+  createdAt  DateTime     @default(now())
+
+  // ---- backend/w7-contest (B-091) ----
+  // The admin's free-text task for the week (weeks 1-3) / the final (week 4). Editable until the week starts.
+  task                  String?
+  // Weeks 1-3: the view-qualifying watch limit L in seconds (3-120, section 9c). Locked once the week
+  // has started. NULL for week 4 (views are not counted in the final).
+  viewWatchLimitSeconds Int?
+  // Set at the end of Phase 1 when fewer than 3 entries were made: the week is forfeited, nobody is
+  // placed, no points are awarded, and the reason is shown to users (section 7).
+  forfeited             Boolean   @default(false)
+  forfeitReason         String?
+  phase1ClosedAt        DateTime?
+
+  entries ContestEntry[]
+  winners ContestRoundWinner[]
+  votes   ContestVote[]
+
+  @@unique([cycleId, weekNumber])
+}
+
+// A Post submitted AS a contest entry. A weekly entry goes into round 1-3 during Phase 1; a final
+// entry goes into round 4 (finalists only, days 22-24). ONE entry per user per round
+// (@@unique([roundId, userId])).
+model ContestEntry {
+  id          String       @id @default(uuid())
+  cycleId     String
+  cycle       ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  roundId     String
+  round       ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  postId      String       @unique
+  post        Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Denormalised author (= post.authorId) -- backs the per-round one-entry rule and "my entries"
+  // reads without a Post join. Cascade per DL #44.
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submittedAt DateTime     @default(now())
+
+  // ---- backend/w7-contest (B-091) ----
+  // Phase 1 result, written once at the end of Phase 1 (weeks 1-3 only).
+  phase1Tally     Int?
+  phase1Rank      Int?
+  // true for the top 10 (or all, if fewer): only these can be voted on.
+  qualified       Boolean   @default(false)
+  // Final (week 4) result, written once at the crown.
+  finalTally      Int?
+  finalRank       Int?
+  // The pin (section 6, #404 item 9): the entry is pinned on its author's profile from submission
+  // until the contest ends (00:00 London on the 1st). pinnedUntil is that instant, fixed at
+  // submission; pinRemovedAt is stamped by the lifecycle service when it removes the pin. The label
+  // stays "Contest post" after the pin is gone.
+  pinnedUntil     DateTime?
+  pinRemovedAt    DateTime?
+  // backend/w11-exposure (B-092): the Final-week carousel impressions this entry received, as ONE
+  // total per entry. Written once, at the crown, from the per-viewer ContestImpression rows (which
+  // are deleted in the same transaction). NULL until then, and always NULL for weekly entries.
+  impressionTotal Int?
+
+  winner      ContestRoundWinner?
+  votes       ContestVote[]
+  engagements ContestEngagement[]
+  impressions ContestImpression[]
+
+  @@unique([roundId, userId])
+  @@index([cycleId])
+}
+
+// The weekly top-3 for one round -- written by ContestLifecycleService at the 20:00 lock. `position`
+// is 1|2|3 and is unique within a round now that the vote tie-break is total (section 8); the schema
+// still does not enforce it, to keep legacy rows (which allowed ties) valid.
+model ContestRoundWinner {
+  id        String       @id @default(uuid())
+  roundId   String
+  round     ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  entryId   String       @unique
+  entry     ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  // Denormalised (= entry.userId). Cascade per DL #44.
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position  Int // 1 | 2 | 3
+  createdAt DateTime     @default(now())
+}
+
+// A vote in Phase 2: ONE per account per round (section 8), self-vote allowed. Retracting a vote
+// DELETES the row (a retracted vote reduces the tally and no longer counts toward "earliest vote
+// reached"); changing a vote is a retract then a new vote (Decision Log #401, no separate "Change
+// vote"). The history of casts and retractions is kept in ContestVoteEvent.
+//
+// backend/w3c-contest-notifications created this table for the votes-closing reminder; B-091 owns it
+// now and writes it (ContestVotingService). Its shape is unchanged, so the reminder's relation
+// filter (User.contestVotes none { roundId }) still means "has not voted in this round".
+model ContestVote {
+  id        String       @id @default(uuid())
+  roundId   String
+  round     ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  voterId   String
+  // Decision Log #341: RESTRICT is the deliberate safety net, a User row is never hard-deleted.
+  voter     User         @relation(fields: [voterId], references: [id])
+  entryId   String
+  entry     ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([roundId, voterId])
+  @@index([entryId])
+}
+
+// backend/w7-contest (B-091, spec section 13: "one per user per round, retractable, with an event
+// log and timestamps"). Append-only history of every vote cast and retracted. Plain string ids and
+// no foreign keys, like ConsentAuditRecord / PointsLedgerEntry: an audit trail must outlive the rows
+// it describes. Holds no personal data beyond opaque ids.
+model ContestVoteEvent {
+  id         String   @id @default(uuid())
+  roundId    String
+  voterId    String
+  entryId    String
+  // cast | retract | release | restore
+  //   release: the vote was freed because the entry it was for was removed by a moderator (B-300, #488);
+  //            the ContestVote row is deleted, so the voter's slot is free again.
+  //   restore: the entry was restored before the lock and the freed vote came back (its original createdAt).
+  action     String
+  occurredAt DateTime
+
+  @@index([roundId, voterId, occurredAt])
+}
+
+// backend/w7-contest (B-091, Decision Log #382, #386; spec sections 9a, 10). The log of qualifying
+// engagement on contest entries: ONE row per (entry, giver, kind) -- a like, a comment, a qualified
+// view. It exists because two contest rules cannot be answered from the Like / Comment tables:
+//   1. "Follow status is FROZEN at the moment an account engages" (week-4 followers-excluded mode):
+//      followedAtEngagement is the snapshot taken then.
+//   2. Engagement before a contest's counting window opens (before the reveal, or on a post that
+//      was not an entry yet) must not count, and engagement after it closes must not either.
+// Written inside the same transaction as the Like / Comment by FeedService (through
+// contest-engagement.util), removed in the same transaction when the like is undone or the last
+// visible comment is removed ("removed engagement excluded"). Only engagement INSIDE the entry's
+// counting window is recorded: weeks 1-3 from the submission to the end of Phase 1, the final from
+// the reveal to the end of the month.
+//
+// Whether the giver is allowed to count (active, verified email, not restricted) is NOT stored: it is
+// evaluated when the tally is taken, so an account restricted later stops counting.
+// kind 'view' is the seam for B-093's server-validated view heartbeats: nothing writes it yet.
+model ContestEngagement {
+  id                   String       @id @default(uuid())
+  entryId              String
+  entry                ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  userId               String
+  // Decision Log #341: RESTRICT, as ContestVote.voter.
+  user                 User         @relation(fields: [userId], references: [id])
+  // like | comment | view
+  kind                 String
+  followedAtEngagement Boolean
+  occurredAt           DateTime
+
+  @@unique([entryId, userId, kind])
+  @@index([entryId, occurredAt])
+}
+
+// backend/w11-exposure (B-092; Decision Log #388, #400, #403 item 11, #404 items 6 and 15, #405 items
+// 1 and 7; docs/contest-spec.md section 10b). One row per QUALIFYING carousel impression of a
+// Week-4 final entry: the "Final week" carousel tile was at least 50% in view for one uninterrupted
+// second (the client sends that event; the server validates window, eligibility, ownership and cap).
+//
+// It exists for ONE purpose: the balanced-impression rotation (serve the finalist with the fewest
+// impressions next, keep counts within the tolerance) and the per-viewer daily cap. It is NEVER a
+// score, never ranked on, and no impression count is ever returned to a user.
+//
+// What is stored about the VIEWER is exactly: viewerId, eventId (a random id the client generated for
+// the event -- the idempotency key), dayKey (the Europe/London calendar day, the cap window) and
+// occurredAt. No IP, no user agent, no dwell time, no scroll position, no device, no entry-order.
+//
+// Retention: per-viewer rows live only while the final week is live. At the crown
+// (ContestLifecycleService.complete) they are folded into ContestEntry.impressionTotal and DELETED in
+// the same transaction; anonymising a viewer's account deletes that viewer's rows at once. The
+// viewer FK is RESTRICT, like ContestVote / ContestEngagement (Decision Log #341).
+model ContestImpression {
+  id         String       @id @default(uuid())
+  entryId    String
+  entry      ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  viewerId   String
+  viewer     User         @relation(fields: [viewerId], references: [id])
+  // Client-generated id of the qualifying event: the idempotency key (replaying it never counts twice).
+  eventId    String
+  // Europe/London calendar day, "YYYY-MM-DD": the window of the per-viewer daily cap.
+  dayKey     String
+  occurredAt DateTime
+
+  @@unique([viewerId, entryId, eventId])
+  @@index([entryId])
+  @@index([viewerId, entryId, dayKey])
+}
+
+// The monthly crowned top-3 (Decision Log #61 state 3 / #69 medals) —
+// written by POST /admin/contest/cycles/:id/crown. `position` ties
+// allowed, same as ContestRoundWinner.
+model ContestStanding {
+  id        String       @id @default(uuid())
+  cycleId   String
+  cycle     ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position  Int // 1 | 2 | 3 (ties allowed)
+  createdAt DateTime     @default(now())
+
+  @@unique([cycleId, userId])
+}
+
+// backend/b300-contest-entry-removal (Decision Log #488): the frozen finalist set of a cycle. Written once,
+// at the first moment the set is needed at or after Week 4 opens, under a lock on the cycle row (see
+// contest-finalists.util.ts). Before that moment the finalists are derived from ContestRoundWinner.
+model ContestFinalist {
+  id        String       @id @default(uuid())
+  cycleId   String
+  cycle     ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([cycleId, userId])
+}
+
+// Append-only points ledger — one row per point-earning event.
+// sprint-2/contest-data-model-backend, Decision Log #219 (the scoring
+// weights the founder delegated to backend-api in Decision Log #130).
+//
+// The Leaderboard's ranking integer (Build Plan Section 4.9 / DL #130) is
+// SUM(points) over a time window, per represented club (DL #128). That
+// aggregation, the GET /leaderboard endpoint, and the scheduled
+// LeaderboardEntry rollup are ALL Sprint 6 — not built here. This table
+// is the primitive they read.
+//
+// points may be negative in principle (nothing writes a negative today);
+// engagement points are awarded once per distinct event and never
+// revoked — see points.constants.ts.
+model PointsLedgerEntry {
+  id            String    @id @default(uuid())
+  userId        String
+  // Cascade per DL #44 — the sweep's tx.user.delete() must keep working.
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Baseline engagement (Decision Log #382/#383), one source per side per kind:
+  //   engagement_view_given | engagement_like_given | engagement_comment_given     (the giver, 1 point)
+  //   engagement_view_received | engagement_like_received | engagement_comment_received  (the creator, 0.25)
+  // Contest placement: contest_weekly_win | contest_monthly_crown
+  // ('competition_result' reserved for DL #73's unbuilt Competition system.)
+  source        String
+  // The domain row this award is for. Given rows: the Post id. Received rows: "<postId>:<giverId>"
+  // (one quarter point per unique account per post). Placement rows: a ContestRound id (weekly) or
+  // ContestCycle id (crown). A plain string, NOT a foreign key: the ledger is an audit trail that must
+  // outlive whatever it references, the same reasoning as ConsentAuditRecord.minorUserId.
+  refId         String
+  // backend/w12-points (B-093): QUARTER-POINT units (1 point = 4 units; a received view/like/comment is
+  // 1 unit). Stored exactly, displayed rounded (half up), ranked on the exact value.
+  quarterPoints Int
+  // Baseline engagement rows only: the Post the engagement was on (so "post removed" can revoke every
+  // row for it) and, on a RECEIVED row, the account whose engagement earned it (so "account later
+  // restricted" can revoke what that account earned others). Plain strings, no foreign keys.
+  postId        String?
+  counterpartId String?
+  // Revocation (spec 9b): set when the engagement is removed (unlike, comment removed, post removed) or
+  // the account is later restricted. A revoked row counts for nothing, including the daily cap counters
+  // ("revoking a point also reduces that day's cap counter"). A removed-then-restored engagement clears
+  // it again, so the engagement earns its point once. The row itself is never deleted.
+  revokedAt     DateTime?
+  // backend/b300-contest-entry-removal (Decision Log #488): set (with revokedAt) ONLY on a baseline row that a
+  // moderator's content_removed on a CONTEST ENTRY's post revoked, so an overturned appeal brings back exactly
+  // those rows and never one revoked for another reason (an unlike, a removed comment, a restricted account).
+  revokedForRemovalAt DateTime?
+  // Snapshot of the user's represented club at award time (Decision Log
+  // #128). Populated by awardPoints() from User.representedClubId, so a
+  // later change of represented club never moves already-earned points.
+  // NULL = unattributed: either the user represented no club when the
+  // point was earned, or the point predates this column (no backfill —
+  // see leaderboard/README.md).
+  clubId        String?
+  occurredAt    DateTime  @default(now())
+
+  // Idempotency backstop: one award per (source, refId, user). A repeat
+  // like on the same post, or re-running round judging, cannot double-pay.
+  @@unique([source, refId, userId])
+  @@index([userId, occurredAt])
+  @@index([postId])
+  @@index([counterpartId])
+}
+
+// Decision Log #349 (sprint-1/age-reclassification-sweep) -- append-only
+// audit of every isMinor / isUnder16 reclassification the daily
+// AgeReclassificationSweepService makes (both directions, one row per
+// field changed). A safeguarding-relevant state change, so it is durable
+// on purpose: userId is a plain string, NOT a foreign key, so the row
+// survives the account's anonymization/deletion (same stance as
+// ConsentAuditRecord.minorUserId). Holds no date of birth -- only the
+// derived age at the moment of change.
+model AgeReclassificationLog {
+  id          String   @id @default(uuid())
+  userId      String
+  field       String // "isMinor" | "isUnder16"
+  fromValue   Boolean
+  toValue     Boolean
+  ageAtChange Int
+  occurredAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([occurredAt])
+}
+
+// feat/admin-dashboard-page-views -- Decision Log #306
+// (admin-dashboard/README.md's own candidate: "no page-view/visit-tracking
+// model or middleware exists anywhere in this codebase"). A genuine schema
+// addition beyond Section 3's fixed 20-entity list, flagged here per
+// CLAUDE.md's "the data model is a fixed spec" rule -- the same discipline
+// every prior schema-addition PR in this project has followed (Follow.
+// createdAt, BanterRoomMember.joinedAt, AgeReclassificationLog, etc.).
+// Backs GET /admin/dashboard/stats' `totalVisits` (now a real, all-time
+// count instead of an explicit null) and `visitsByMonth` -- see
+// modules/page-views/README.md for the full design, including exactly
+// which GET requests are counted as a "page view" and which aren't.
+//
+// STRICTLY ANONYMOUS AGGREGATE COUNTING -- a hard constraint, not a style
+// choice (CLAUDE.md non-negotiable #1: never weaken User/Guardian
+// safeguarding; this is a minors' platform, and adding any per-user
+// identity here would open a new personal-data-collection question the
+// DPIA -- docs/sprint-1-dpia-outline-draft.md -- has never reviewed). This
+// row deliberately carries:
+//   - NO userId / viewerId / any FK to User at all. Contrast PostView
+//     (above), which DOES record an optional viewerId -- that model exists
+//     for a genuinely different purpose (per-post view counts on content a
+//     specific viewer chose to open), not anonymous traffic counting.
+//   - NO IP address.
+//   - NO session id, cookie, or device fingerprint of any kind.
+//   - NO user-agent string.
+// If a future feature genuinely needs per-user or per-session analytics,
+// that is a new, separate DPIA-reviewed decision -- not an extension of
+// this model.
+model PageView {
+  id String @id @default(uuid())
+
+  // A coarse, low-cardinality ROUTE TEMPLATE, never a raw URL with query
+  // strings or entity ids baked in -- e.g. "/community", "/posts/:id" (the
+  // literal Nest route pattern, with dynamic segments left un-substituted,
+  // exactly as Nest's own @Controller()/@Get() decorators declare them).
+  // See PageViewInterceptor for how this is derived and
+  // modules/page-views/README.md for the full "what counts as a page
+  // view" reasoning.
+  route String
+
+  occurredAt DateTime @default(now())
+
+  @@index([route])
+  @@index([occurredAt])
+}
+
+// backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419). One file a user uploaded for a post
+// or a contest entry. The file goes browser -> object store through a one-time link into a QUARANTINE
+// prefix, then the server verifies it, strips its metadata and moves it to the public prefix. It is then
+// 'pending' and invisible to everyone but its uploader until it is approved (automatically by the
+// Rekognition check, or by a moderator). decisionSource records which.
+//
+// Status flow: pending -> approved | rejected. 'pending' with decisionSource NULL is the moderator queue
+// (the automatic check found something between the pass and reject thresholds, gave up after its retries,
+// or the check service is not configured). Nothing here is EVER approved by default.
+//
+// checkLabels holds moderation CATEGORY NAMES only (never confidences, never an image), and is never
+// returned to the uploader. decidedBy is a plain admin id (no foreign key: the decision must survive the
+// admin account).
+model PostMedia {
+  id                  String    @id @default(uuid())
+  // Insertion order, for keyset pagination of the (future) moderator queue.
+  sequence            Int       @unique @default(autoincrement())
+  uploaderId          String
+  uploader            User      @relation(fields: [uploaderId], references: [id])
+  // 'image' | 'video'. Fixed at link creation from the declared content type.
+  kind                String
+  declaredContentType String
+  declaredSize        Int
+  // 'awaiting_upload' (link issued) | 'processing' (confirm in progress) | 'ready' (verified, stripped,
+  // stored in the public prefix).
+  uploadState         String    @default("awaiting_upload")
+  processingUntil     DateTime?
+  // Set while the unprocessed original exists; cleared once it is deleted. A row whose quarantineKey is
+  // still set 24 h after createdAt is purged.
+  quarantineKey       String?   @unique
+  // backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2). A processed file is written
+  // to a PRIVATE prefix (privateKey) that no public base URL maps to, and is copied to the PUBLIC prefix
+  // (publicKey) only when it is approved. publicKey / publicUrl are the DETERMINISTIC public location,
+  // computed at confirm time so Post.mediaUrls can point at it; the object only exists there while
+  // publishedAt is set. Invariant the reconciler enforces: a public object exists iff status 'approved' and
+  // not hiddenPendingReview. A rejected file keeps its privateKey object only while its row exists: every
+  // lifecycle deletion (post deleted, upload deleted, quarantine/unattached purge, account anonymised or
+  // purged) now deletes it too (B-283, Decision Log #464), unless the uploader has an active hold or the post
+  // has an open report, in which case the deletion is recorded in PostMediaDeferredDeletion and retried.
+  // Statutory-reporting/evidence handling stays OPEN under counsel (B-206).
+  privateKey          String?   @unique
+  // Set while the object is in the public prefix; NULL otherwise.
+  publishedAt         DateTime?
+  publicKey           String?   @unique
+  publicUrl           String?
+  // The PROCESSED file's size and type (after stripping), and a video's duration.
+  byteSize            Int?
+  contentType         String?
+  durationSeconds     Float?
+  // 'pending' | 'approved' | 'rejected'
+  status              String    @default("pending")
+  // 'auto' | 'moderator'; NULL while pending.
+  decisionSource      String?
+  rejectionReason     String?
+  checkLabels         Json?
+  decidedAt           DateTime?
+  decidedBy           String?
+  // The automatic check's own bookkeeping. 'not_queued' (nothing to check yet) | 'queued' | 'checking'
+  // | 'done' | 'gave_up'. checkNextAt is when a queued row is next due; checkLeaseUntil frees a row
+  // whose worker died mid-check.
+  checkState          String    @default("not_queued")
+  checkAttempts       Int       @default(0)
+  checkNextAt         DateTime?
+  checkLeaseUntil     DateTime?
+  checkedAt           DateTime?
+  // The last failure's error NAME only (never content).
+  checkError          String?
+  // NULL until attached to a post. Cascade: deleting the post deletes the row; the stored objects are
+  // deleted by the application.
+  postId              String?
+  post                Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  confirmedAt         DateTime?
+  // backend/b290-removed-post-media (B-290, Decision Log #484). Set when the removing report CLOSED and the file's
+  // private object was deleted (privateKey is then NULL). The row stays (so does the post). While the post is
+  // removed by moderation and this is NULL, the private object is kept as evidence and the public copy is
+  // withdrawn: the reconciler invariant is 'a public object exists iff approved, not held and the post is not
+  // removed by moderation'.
+  deletedByModerationAt DateTime?
+  createdAt           DateTime  @default(now())
+
+  // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). The moderator review queue.
+  // reviewEnteredAt / reviewEntrySource: when and how the item FIRST entered the queue ('auto_check' =
+  // the automatic check left it uncertain, gave up, or never ran; 'user_report' = a user reported an
+  // approved item). NULL for an item that never needed a human. An item is in the queue while it is
+  // pending with reviewEnteredAt set, or while reportCount > 0.
+  reviewEnteredAt     DateTime?
+  reviewEntrySource   String?
+  // OPEN (undecided) user reports on an approved item; reset to 0 by a moderator decision.
+  reportCount         Int               @default(0)
+  // Set when reportCount reaches the configured threshold: the item (and so its post) is hidden from
+  // everyone but its author until a moderator decides. Cleared by the decision.
+  hiddenPendingReview Boolean           @default(false)
+  reports             PostMediaReport[]
+
+  @@index([postId])
+  @@index([uploaderId, createdAt])
+  @@index([status, checkState, checkNextAt])
+  @@index([createdAt])
+  @@index([reviewEnteredAt])
+  @@index([reportCount])
+  @@index([publishedAt])
+}
+
+// backend/w15-media-review-queue (B-037). One user's report of one approved item. Unique per
+// (media, reporter): a user can report an item once, ever (a resolved report still blocks a repeat).
+// resolvedAt is set when a moderator decides the item.
+model PostMediaReport {
+  id         String    @id @default(uuid())
+  mediaId    String
+  media      PostMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User      @relation(fields: [reporterId], references: [id])
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  // backend/media-privacy-vetting-followups (B-259; Decision Log #430 item 4). Optional free text from the
+  // reporter, trimmed, at most 500 characters. Shown to moderators in the review queue ONLY: never to the
+  // uploader or any other user.
+  reason     String?
+
+  @@unique([mediaId, reporterId])
+  @@index([createdAt])
+}
+
+// backend/b283-delete-rejected-media (B-283; Decision Log #462 (g), #464). A genuine new model, flagged per CLAUDE.md's
+// "fixed spec" rule. One stored media object whose deletion was DEFERRED because, at the moment its PostMedia row
+// went away (post deleted, upload deleted, account anonymised), the uploader had an active hold or the post had a
+// report that was not yet closed. The row is gone, so without this record nothing could retry the deletion.
+// RejectedMediaSweepService.processDeferred deletes the object (and this record) once neither protection applies.
+// uploaderId and postId are plain strings with NO foreign key on purpose: the record must outlive the account and the
+// post it describes. objectKey is unique: one record per object.
+model PostMediaDeferredDeletion {
+  id         String   @id @default(uuid())
+  objectKey  String   @unique
+  mediaId    String
+  uploaderId String
+  postId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// backend/suspected-illegal-imagery-path (B-206; founder decision 2026-11-15). A genuine new model, flagged per
+// CLAUDE.md's "fixed spec" rule. The record of ONE uploaded file a child-safety-vetted admin SET ASIDE as suspected
+// illegal imagery. It is evidence-handling bookkeeping, NOT a legal conclusion: it holds the file's private object out of
+// every deletion path (rejected-media-evidence.util.ts) until preserveUntil, and carries the filing record (who the
+// admin says it was reported to, the reference, when) written by hand after the filing was made OUTSIDE this system.
+// Nothing here contacts anyone. mediaId, uploaderId, postId and reportId are plain strings with NO foreign key on
+// purpose: the record must outlive the PostMedia row, the post, the account and the report it describes. mediaId is
+// unique: one record per file. status: set_aside (filing not yet decided) | filed | not_filed; the file stays protected
+// while status is set_aside OR now < preserveUntil. reason is the admin's internal note (never sent anywhere, never
+// copied into the audit log). uploaderCountry is a snapshot (derivedCountry, else declaredCountry) used only to
+// suggest receiving bodies; uploaderIsMinor is a snapshot too.
+model SuspectedIllegalMedia {
+  id                String    @id @default(uuid())
+  mediaId           String    @unique
+  uploaderId        String
+  postId            String?
+  reportId          String?
+  objectKey         String?
+  kind              String
+  reason            String
+  uploaderCountry   String?
+  uploaderIsMinor   Boolean   @default(false)
+  status            String    @default("set_aside")
+  setAsideByAdminId String
+  setAsideAt        DateTime  @default(now())
+  preserveUntil     DateTime
+  decidedByAdminId  String?
+  decidedAt         DateTime?
+  bodyKey           String?
+  bodyOther         String?
+  reference         String?
+  filedAt           DateTime?
+  note              String?
+  notFiledReason    String?
+  createdAt         DateTime  @default(now())
+
+  @@index([status])
+  @@index([preserveUntil])
+  @@index([reportId])
+  @@index([uploaderId])
+  @@index([postId])
+}
+
+// backend/b086-two-factor (B-086; Decision Log #404 item 7, #405 item 8, #446). A genuine new model, flagged per
+// CLAUDE.md's "fixed spec" rule. One of a user's 10 single-use recovery codes. codeHash is argon2id (PasswordService) of
+// the normalised 10-character code -- the plaintext is shown to the user once and never stored. usedAt is the single-use
+// marker, spent with an updateMany guarded on usedAt IS NULL. All of a user's codes are deleted when two-factor is turned
+// off or regenerated. Cascade: gone with the account row.
+model UserBackupCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// The admin equivalent of UserBackupCode (B-270): a separate table so the two auth domains share no rows.
+model AdminBackupCode {
+  id        String    @id @default(uuid())
+  adminId   String
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([adminId])
+}
+
+// backend/b276-two-factor-recovery (B-276; Decision Log #455, #456). A request by a USER who has lost BOTH their
+// authenticator device AND their backup codes to have two-factor removed. Users only: admins keep the peer-superadmin
+// reset. Adult or minor is decided when the request is made (User.isMinor) and stored in `kind`.
+//
+//   kind   'adult'    a link goes to the account's own email; confirming starts a 24-hour wait (executeAt); an hourly
+//                     sweep removes two-factor when it passes unless the request was cancelled first
+//          'guardian' (a minor with a confirmed guardian) a link goes to the GUARDIAN's email, valid 72 hours; the
+//                     guardian approves (two-factor removed at once) or declines
+//   state  pending     link sent, not yet used (and, while expiresAt is in the future, usable)
+//          waiting     adult confirmed; waiting for executeAt
+//          done        two-factor was removed
+//          cancelled   adult cancelled it, or a successful two-factor sign-in cancelled it
+//          declined    guardian answered "I didn't expect this"
+//          superseded  replaced by a newer request, or the account changed in between
+//   (CHECK constraint in the migration.) At most ONE request per account is active (pending or waiting): a partial
+//   unique index in the migration, which Prisma cannot express here.
+//
+// The two tokens (the link in the email, the adult's separate cancel link) are 256-bit random secrets stored ONLY as
+// SHA-256 hashes; the emailed token is "<id>.<secret>" so the row is found by id and the hash compared in constant
+// time. doneAt is when the request reached its end (done, cancelled, declined or superseded); a daily-style sweep
+// deletes ended rows 30 days after doneAt and never-used rows 30 days after expiresAt. Cascade: gone with the account
+// row (the anonymiser also deletes them, they hold nothing worth keeping).
+model TwoFactorRecoveryRequest {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind            String
+  state           String    @default("pending")
+  linkTokenHash   String
+  cancelTokenHash String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  confirmedAt     DateTime?
+  executeAt       DateTime?
+  doneAt          DateTime?
+
+  @@index([userId])
+  @@index([state, executeAt])
+  @@index([state, doneAt])
+}
+
+// backend/b280-withhold-guardian-notices (B-280; Decision Log #458, on #455 / #456). A genuine NEW model, flagged as a
+// Decision Log candidate per CLAUDE.md's "the data model is a fixed spec" rule. One row per MINOR's account while a
+// child-safety-vetted admin has "withhold guardian notices" switched ON; the row is DELETED when it is cleared (the
+// history of sets, reviews and clears lives in AdminActionLog). While a row exists the guardian security notices
+// (B-275), the guardian safety-action notices (B-279) and guardian-assisted two-factor recovery (B-276) are off for that
+// account; consent mechanics are untouched.
+//
+// A table of its own, NOT columns on User, on purpose: no existing User select, serialiser or spread can leak the
+// flag or its reason. Nothing user-facing reads this model. The reason is visible to child-safety-vetted admins only.
+//
+// userId is unique (one flag per account) and CASCADEs like TwoFactorRecoveryRequest; the anonymiser also deletes the
+// row in the same transaction that anonymises the account (a held-only-by-report account is MINIMISED, not
+// anonymised, and keeps its flag). setByAdminId is RESTRICT, like every other AdminUser reference.
+// lastReviewedAt / lastReviewNote hold only the LATEST review. There is no automatic expiry: "review due" is derived
+// (30 days after the later of setAt and lastReviewedAt) and changes nothing by itself.
+model GuardianNoticeWithhold {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setByAdminId   String
+  setByAdmin     AdminUser @relation("guardianNoticeWithholdSetBy", fields: [setByAdminId], references: [id], onDelete: Restrict)
+  reason         String
+  setAt          DateTime  @default(now())
+  lastReviewedAt DateTime?
+  lastReviewNote String?
+
+  @@index([setByAdminId])
+}
+
+// backend/b036-avatar-cover-check (B-036; Decision Log #411 item 1, #394 A2, #468). A genuine NEW model beyond
+// Section 3's entity list (flagged per CLAUDE.md's "the data model is a fixed spec" rule): the retry state of the
+// automatic image check (Amazon Rekognition) for ONE avatar or cover of one user. It holds bookkeeping only -- no
+// image, no labels, no user content.
+//   userId + kind  primary key: at most one row per image slot.
+//   objectKey      the stored file this row describes; a re-upload has a new key, so a row whose objectKey no
+//                  longer equals the user's avatarKey / coverKey is stale and is overwritten by the next claim.
+//   state          'retry'   claimed or failed, try again at nextAttemptAt (the claim itself pushes nextAttemptAt
+//                            forward by the lease, so two sweeps cannot take the same image)
+//                  'review'  checked, result between the thresholds: stays pending, waits for the moderator queue (B-037)
+//                  'gave_up' failed the configured number of times: stays pending, waits for a moderator
+//   attempts       failed attempts so far
+//   nextAttemptAt  when a 'retry' row is next due
+// userId is a plain string with NO foreign key (retry bookkeeping, not content); the row is deleted when the image is
+// approved or rejected, and by anonymisation. Nothing about the image is ever approved by default: no row means
+// "not checked yet", and a pending image stays pending until the check (or a moderator) decides.
+model ProfileImageCheck {
+  userId        String
+  kind          String
+  objectKey     String
+  state         String    @default("retry")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+
+  @@id([userId, kind])
+  @@index([state, nextAttemptAt])
+}
+
+// backend/email-change (B-059; Decision Log #472 adopted default (f), register Section 80b item 8). A genuine NEW
+// model beyond Section 3's entity list (flagged per CLAUDE.md's "the data model is a fixed spec" rule). One row per
+// email-change request: a signed-in user proved their password (and a second factor when it is on), and a
+// verification link was sent to newEmail. Nothing changes on User until the link is used.
+//   newEmail   lower-cased and trimmed at write time.
+//   tokenHash  SHA-256 (hex) of the emailed secret; the secret itself is never stored (the way password-reset tokens
+//              are held). Unique, so the link lookup is a single indexed read.
+//   usedAt     set in the same transaction that changes User.email; a used or expired row is dead.
+// ONE pending (unused) request per user: a new request deletes the earlier unused one, so its link stops working.
+// CASCADE on User like the other per-account credential rows; the anonymiser also deletes them explicitly (an open
+// request holds an address and a link-token hash).
+model EmailChangeRequest {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// backend/b062-notification-preferences (B-062; Decision Log #472 adopted default (c)). The person's notification
+// filters: the Quality filter and the three "mute" options on the Settings > Notification Preferences leaves.
+// ONE row per user (userId is the primary key); NO row means all four are false. Genuine addition beyond Section 3's
+// entity list, flagged as a Decision Log candidate. The rule that reads it is notification-policy.util.ts: a
+// notification the rule suppresses is NOT stored (DEFAULT, founder-veto-able), and only like, comment and follow
+// notifications are ever affected. CASCADE on User like the other per-account rows; the anonymiser deletes it too.
+model NotificationPreference {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qualityFilter    Boolean  @default(false)
+  muteNonFollowing Boolean  @default(false)
+  muteNonFollowers Boolean  @default(false)
+  muteNewAccounts  Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}
+
+// backend/b285-web-push (B-285; Decision Log #472 adopted default (e)): one row per BROWSER that opted in to web push.
+// A genuine addition beyond Section 3's entity list, flagged as a Decision Log candidate. `endpoint` is the push
+// service address the browser handed us (unique: one row per browser; subscribing again from the same browser is
+// idempotent, and if a different account subscribes from the same browser the row moves to that account). `p256dh`
+// and `auth` are the browser's public key and secret for encrypting the payload. Credential-like data: never
+// returned by any endpoint and never logged. CASCADE on User like the other per-account rows; the anonymiser also
+// deletes the rows (a held or anonymised account must not keep receiving pushes).
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// backend/b286-message-report-context (B-286, Decision Log #477): the messages a reporter attached to a 'message'
+// report as surrounding context (at most 20 per report; each within 10 messages before or after the reported one,
+// in the same conversation, and visible to the reporter). A genuine addition beyond Section 3's entity list.
+// messageId is RESTRICT on purpose, a deliberate safety net: a message that is part of a report's evidence must
+// never be deleted (the retention sweep that is built later must skip these messages, see moderation/README.md).
+// Deleting a Report removes its rows (CASCADE). No User relation: the sender is reached through Message.sender.
+model ReportContextMessage {
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@id([reportId, messageId])
+  @@index([messageId])
 }

@@ -1,0 +1,462 @@
+// Route table for apps/web.
+//
+// react-router is pinned to ^8.3.0 in package.json -- upgraded from
+// react-router@7.18.2 (Decision Log #25) once React 19 landed (Decision
+// Log #27) satisfied v8's react/react-dom >=19.2.7 peer floor; see
+// Decision Log #28 for the v7->v8 upgrade itself. react-router-dom (the
+// v6 package this app originally migrated off of) no longer exists as of
+// v8 -- it's fully removed upstream, not just deprecated -- but this app
+// already imported everything from the unified "react-router" package
+// since the v7 migration, so that removal has no effect here. This app
+// renders via plain ReactDOM.createRoot (src/main.tsx), not SSR/
+// hydration, so the "react-router/dom" subpath (needed only for
+// framework-mode hydration) is not used here -- createBrowserRouter/
+// RouterProvider/Outlet/Link/NavLink/useNavigate/useSearchParams/
+// MemoryRouter all still come from the main "react-router" package,
+// confirmed still exported from there in v8.3.0. This still uses the
+// same v6.4+ data-router API (createBrowserRouter + RouterProvider), not
+// the older <BrowserRouter>/<Switch> v5 pattern. No `future` flags were
+// ever opted into here, so v8's removal of the `future.v8_*` flag set
+// required no changes to this file.
+//
+// Add your route as a child of the root AppShell route below -- you do
+// NOT need to touch AppShell, Header, or main.tsx to do this. Replace the
+// corresponding placeholder page file in src/pages instead of adding a
+// new route path, unless your screen genuinely needs a new path not
+// listed here (in which case, add it here too).
+//
+// EXCEPTION: the four core auth routes (/login, /signup, /forgot-password,
+// /reset-password) are children of AuthChrome, not AppShell -- they get
+// the logo-only "Top Bar -- Soccernity" instead of the full site Header
+// (Build Plan Decision Log #172; see AuthChrome.tsx / LoginPage.tsx).
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
+import AppShell from "../layout/AppShell";
+import FooterLayout from "../layout/FooterLayout";
+import AuthChrome from "../layout/AuthChrome";
+import HomePage from "../pages/HomePage";
+import SportsHubPage from "../pages/SportsHubPage";
+import MatchCentrePage from "../pages/sports-hub/MatchCentrePage";
+import BlogPage from "../pages/BlogPage";
+import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
+import LeaderboardPage from "../pages/LeaderboardPage";
+import ContestPage from "../pages/ContestPage";
+import ContestVotingPage from "../pages/ContestVotingPage";
+import CommunityPage from "../pages/CommunityPage";
+import PostPage from "../pages/PostPage";
+import SearchTrendingPage from "../pages/SearchTrendingPage";
+import ClubsPage from "../pages/ClubsPage";
+import ClubFanPage from "../pages/ClubFanPage";
+import GrassrootsPage from "../pages/GrassrootsPage";
+import GrassrootsTeamPage from "../pages/GrassrootsTeamPage";
+import GrassrootsRegisterTeamPage from "../pages/GrassrootsRegisterTeamPage";
+import GrassrootsScheduleFixturePage from "../pages/GrassrootsScheduleFixturePage";
+import GrassrootsFixturePage from "../pages/GrassrootsFixturePage";
+import CommunityGroupsPage from "../pages/CommunityGroupsPage";
+import CommunityGroupPage from "../pages/CommunityGroupPage";
+import CreateCommunityGroupPage from "../pages/CreateCommunityGroupPage";
+import ComingSoonPage from "../pages/ComingSoonPage";
+import BanterPage from "../pages/BanterPage";
+import BanterRoomPage from "../pages/BanterRoomPage";
+import MessagesPage from "../pages/MessagesPage";
+import NewConversationPage from "../pages/messages/NewConversationPage";
+import ConversationPage from "../pages/messages/ConversationPage";
+import LoginPage from "../pages/LoginPage";
+import SignupPage from "../pages/SignupPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
+import GuardianConsentPage from "../pages/GuardianConsentPage";
+import ChangeGuardianEmailPage from "../pages/guardian-consent/ChangeGuardianEmailPage";
+import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
+import GuardianWithdrawalPage from "../pages/guardian-consent/GuardianWithdrawalPage";
+import RecoveryConfirmPage from "../pages/twoFactor/recovery/RecoveryConfirmPage";
+import RecoveryCancelPage from "../pages/twoFactor/recovery/RecoveryCancelPage";
+import RecoveryGuardianPage from "../pages/twoFactor/recovery/RecoveryGuardianPage";
+import VerifyEmailPage from "../pages/VerifyEmailPage";
+import VerifyEmailPromptPage from "../pages/VerifyEmailPromptPage";
+import CreateProfilePage from "../pages/CreateProfilePage";
+import ContinuePage from "../pages/ContinuePage";
+import ClubPickerRoute from "../pages/signup/ClubPickerRoute";
+import ProfilePage from "../pages/ProfilePage";
+import NotificationCentrePage from "../pages/NotificationCentrePage";
+import PrivacySettingsPage from "../pages/PrivacySettingsPage";
+import DirectMessagesSettingsPage from "../pages/settings/DirectMessagesSettingsPage";
+import YourPostsSettingsPage from "../pages/settings/YourPostsSettingsPage";
+import BlockedUsersPage from "../pages/settings/BlockedUsersPage";
+import DataExportPage from "../pages/settings/DataExportPage";
+import OtherProfilePage from "../pages/OtherProfilePage";
+import ChangePasswordPage from "../pages/settings/ChangePasswordPage";
+import AccountInformationPage from "../pages/settings/AccountInformationPage";
+import ChangeEmailPage from "../pages/settings/ChangeEmailPage";
+import EmailChangeConfirmPage from "../pages/email-change/EmailChangeConfirmPage";
+import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
+import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
+import SettingsLayout from "../pages/settings/SettingsLayout";
+import SettingsLandingPage from "../pages/settings/SettingsLandingPage";
+import SettingsMenuPage from "../pages/settings/SettingsMenuPage";
+import AccountOverviewPage from "../pages/settings/AccountOverviewPage";
+import ClubRepresentationPage from "../pages/settings/ClubRepresentationPage";
+import SecurityOverviewPage from "../pages/settings/SecurityOverviewPage";
+import TwoFactorAuthPage from "../pages/settings/TwoFactorAuthPage";
+import NotificationPreferencesPage from "../pages/settings/NotificationPreferencesPage";
+import NotificationFiltersPage from "../pages/settings/NotificationFiltersPage";
+import PushNotificationsPage from "../pages/settings/PushNotificationsPage";
+import EmailNotificationsPage from "../pages/settings/EmailNotificationsPage";
+import MutedAccountsPage from "../pages/settings/MutedAccountsPage";
+import DisplaySettingsPage from "../pages/settings/DisplaySettingsPage";
+import AccessibilityPage from "../pages/settings/AccessibilityPage";
+import DisplayDensityPage from "../pages/settings/DisplayDensityPage";
+import LanguagePage from "../pages/settings/LanguagePage";
+import DataUsagePage from "../pages/settings/DataUsagePage";
+import InactiveAccountPage from "../pages/InactiveAccountPage";
+import ReportPage from "../pages/ReportPage";
+import ContactPage from "../pages/ContactPage";
+import NotFoundPage from "../pages/NotFoundPage";
+import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
+
+// Exported separately from `router` so tests can mount the real route tree
+// via createMemoryRouter(routes, ...) without a browser history.
+export const routes: RouteObject[] = [
+  {
+    // Core auth routes -- logo-only Top Bar, NOT the site Header. Pathless
+    // layout route: children below resolve to /login, /signup, etc. See
+    // AuthChrome.tsx and Build Plan Decision Log #172.
+    element: <AuthChrome />,
+    children: [
+      { path: "login", element: <LoginPage /> }, // F2
+      { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
+      { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
+      { path: "reset-password", element: <ResetPasswordPage /> }, // F4
+      // Login-time interstitial for a deactivated ("inactive") account:
+      // reached only from LoginPage, which passes { email, password } via
+      // in-memory router state. Activate -> POST /auth/reactivate-account;
+      // Delete -> POST /auth/delete-inactive-account. Figma "Inactive
+      // Account" 1662:2782 -> "— Delete (Confirm)" 6217:14677 (Decision
+      // Log #220/#221). See InactiveAccountPage.tsx.
+      { path: "account/inactive", element: <InactiveAccountPage /> },
+      // B-125 (Decision Log #367, #394 A6): the sign-up flow after Register,
+      // driven by the server's `nextStep` (lib/onboarding.ts). Register -> a
+      // minor goes to /guardian-consent (Restricted Pending); an adult goes
+      // to the verify prompt -> Create Profile -> the one-time Club Picker ->
+      // /community. All under the logo-only Top Bar like the rest of the
+      // pre-app flow. `continue` is a resolver for places with no fresh
+      // `nextStep` of their own (Verified screen, approved-consent page).
+      { path: "verify-email/prompt", element: <VerifyEmailPromptPage /> },
+      { path: "create-profile", element: <CreateProfilePage /> },
+      { path: "signup/clubs", element: <ClubPickerRoute /> },
+      { path: "continue", element: <ContinuePage /> },
+      // Guardian withdrawal (B-080 / B-112, Decision Log #414 item 1): a guardian taking back consent.
+      // The guardian has no account, so this is under the logo-only Top Bar like the Figma frames
+      // (6654:2 and the five that follow). `?token=` is the withdrawal email's link and pre-fills the
+      // code; the consent email links here without a token. See GuardianWithdrawalPage.tsx.
+      { path: "guardian-consent/withdraw", element: <GuardianWithdrawalPage /> },
+      // The guardian's own confirm page (F5; W9 B-176): the same reasoning as the withdrawal page above
+      // (a guardian has no account and needs no site nav), and the Figma frame 5108:6629 is a bare
+      // centred card with the logo. The page's full-bleed CSS cancels AuthChrome's 32px padding.
+      { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> },
+      // User two-factor recovery (B-278; backend B-276, Decision Log #455, #456): the pages the lost-device
+      // recovery emails link to. Nobody is signed in here (the person cannot sign in; a guardian has no
+      // account), so they sit under the logo-only Top Bar like the guardian pages. `?token=` selects the
+      // request; each page reads its link on load (no side effects) and only changes anything on a button press.
+      { path: "two-factor-recovery/confirm", element: <RecoveryConfirmPage /> },
+      { path: "two-factor-recovery/cancel", element: <RecoveryCancelPage /> },
+      { path: "two-factor-recovery/guardian", element: <RecoveryGuardianPage /> },
+      // B-059: the page the email-change link opens. Public (the link's secret is the credential),
+      // so it sits under the logo-only Top Bar like the other emailed-link pages.
+      { path: "email-change/confirm", element: <EmailChangeConfirmPage /> },
+    ],
+  },
+  {
+    path: "/",
+    element: <AppShell />,
+    children: [
+      {
+        // FooterLayout -- pathless layout route that renders the shared
+        // <Footer /> after the page. Its children are EXACTLY the routes
+        // whose canonical Figma frame carries the standardized site footer
+        // (Decision Log #209/#210/#213), plus the 404 page (Decision Log
+        // #228 -- standard error-page recovery pattern): Home, Sports Hub,
+        // Blog, Article Detail, 404. Everything else stays a direct
+        // AppShell child below and renders with no footer -- Community /
+        // Clubs / ClubFanPage / Banter / Leaderboard / Contest have no
+        // footer in their Figma frames (Leaderboard and Contest were
+        // moved out per Decision Log #227/#228; confirmed live for the
+        // rest), and the guardian-consent / profile / verify-email flows
+        // are full-bleed forms. See FooterLayout.tsx.
+        element: <FooterLayout />,
+        children: [
+          // "/" is the logged-out marketing landing page (Decision Log
+          // #46: canonical Figma frame 5204:6728). Decision Log #152: a
+          // signed-in visitor is redirected to /community from inside
+          // HomePage itself (it checks getStoredAccessToken() and renders
+          // <Navigate> when a session exists) -- there is no separate
+          // authenticated-homepage route or design.
+          { index: true, element: <HomePage /> },
+
+          // Content nav (see Header's primaryNavItems in
+          // src/layout/navigation.ts).
+          { path: "sports-hub", element: <SportsHubPage /> },
+          { path: "blog", element: <BlogPage /> },
+          // Blog -- Article Detail (Figma "Blog -- Article Detail ..."
+          // frames, Decision Log #197). Dummy content -- no blog backend
+          // exists. See ../pages/blog/ArticleDetailPage.tsx.
+          { path: "blog/:articleId", element: <ArticleDetailPage /> },
+
+          // Scouting / Academy -- the navbar's last two reserved slots
+          // (Decision Log #284), both pointed at the same reusable
+          // ComingSoonPage component (Decision Log #285), configured with
+          // a different feature name rather than two duplicated page
+          // files. Under FooterLayout: the Figma "Coming Soon" frames
+          // carry the canonical site footer, same as Home/Sports Hub/
+          // Blog/Article Detail. No login gate -- like Blog/Sports Hub,
+          // the content is identical regardless of auth state, and the
+          // shared Header already renders the correct chrome either way.
+          { path: "scouting", element: <ComingSoonPage featureName="Scouting" /> },
+          { path: "academy", element: <ComingSoonPage featureName="Academy" /> },
+
+          // Contact Us (B-046 / B-047, Decision Log #445). Public: no login gate (a guest, a signed-in
+          // user and a restricted-pending account can all write to support). Under FooterLayout because
+          // every Contact Us Figma frame (6113:14053, 6113:14199, 6115:14611, 6115:14684) carries the
+          // canonical site footer. The footer's own "Contact Us" link points here.
+          { path: "contact", element: <ContactPage /> },
+
+          // 404. A genuinely unmatched path under "/" falls through to
+          // this splat (React Router ranks by specificity across the whole
+          // config regardless of nesting depth, so every real route above
+          // and below still wins its own path). Lives here, under
+          // FooterLayout, so the error page gets the site footer for
+          // recovery links -- Decision Log #228.
+          { path: "*", element: <NotFoundPage /> },
+        ],
+      },
+
+      // The authenticated feed -- Sprint 2's functional core (Feed +
+      // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx. No
+      // footer -- not in the Figma frame.
+      { path: "community", element: <CommunityPage /> },
+      // One post on its own page: where a Final week carousel tile opens the entry (B-092).
+      { path: "posts/:postId", element: <PostPage /> },
+      // Search & Trending (Build Plan Section 4.7's GET /search, Decision
+      // Log #139). No site footer -- not in the Figma frame (2876:4628 /
+      // 5780:8581), same as Community/Clubs/Banter. No Navbar/drawer entry
+      // point yet -- same "reachable by direct URL first, nav wiring is a
+      // flagged follow-up" precedent Clubs (#156) and Grassroots (#266)
+      // shipped under before their own nav entries landed. Only the
+      // search field + filter chip tabs are wired in this PR -- the
+      // trending topics sidebar, trending news, suggested people,
+      // fixtures, and video carousel are unbuilt placeholder slots, see
+      // SearchTrendingPage.tsx's own header comment.
+      { path: "search", element: <SearchTrendingPage /> },
+      { path: "banter", element: <BanterPage /> },
+      // Banter Room -- a single room's feed + posting (Build Plan Section
+      // 4.4, BanterModule -- Decision Log #275/#276). No Figma frame
+      // exists for this screen (the Bants frames only show the room
+      // LIST); built plain and flagged -- see BanterRoomPage.tsx's own
+      // header comment.
+      { path: "banter/:roomId", element: <BanterRoomPage /> },
+
+      // Direct Messaging (Build Plan Section 4.7, MessagingModule --
+      // sprint-3/messaging-direct-messaging, Decision Log #277). No site
+      // footer -- the Message pillar Figma frames carry none, matching
+      // Community/Clubs/Banter. `new` is a static segment and outrank the
+      // `:conversationId` param in React Router v8's specificity ranking
+      // (the same Grassroots register/fixtures precedent), so
+      // /messages/new never resolves to ConversationPage.
+      //
+      //   /messages                        inbox (GET /conversations)
+      //   /messages/new                    recipient picker (Decision Log #139)
+      //   /messages/:conversationId        one thread, send + read
+      { path: "messages", element: <MessagesPage /> },
+      { path: "messages/new", element: <NewConversationPage /> },
+      { path: "messages/:conversationId", element: <ConversationPage /> },
+      // Persistent Club Pages (Build Plan Section 6 Sprint 2 "Club
+      // Pages"). /clubs browses the catalogue (GET /clubs); /clubs/:id
+      // is a single club's fan page (GET /clubs/:id). Both convert
+      // sprint-2/club-pages-design (PR #142); see ClubsPage.tsx. No
+      // Navbar entry point yet — Decision Log #156 is still open.
+      { path: "clubs", element: <ClubsPage /> },
+      { path: "clubs/:id", element: <ClubFanPage /> },
+
+      // Grassroots Record-Keeping (Build Plan Section 4.5). No site footer
+      // — not in the Figma frames. Grassroots GET endpoints are
+      // JwtAuthGuard-only, not public (Decision Log #269); see
+      // GrassrootsPage.tsx. Nav entry point: the mobile drawer only for
+      // now (Decision Log #266) — no desktop icon-navbar glyph yet.
+      //
+      //   /grassroots                      browse teams (GET /teams?city=)
+      //   /grassroots/:teamId              a team's public page + fixtures
+      //   /grassroots/register             register a team (POST /teams)
+      //   /grassroots/:teamId/fixtures/new schedule a fixture (POST /fixtures)
+      //   /grassroots/fixtures/:fixtureId  manage / log a fixture, status-
+      //                                    driven for frames 6/7/8
+      //
+      // `register` and `fixtures` are static segments and outrank the
+      // `:teamId` param in React Router v8's specificity ranking, so
+      // /grassroots/register and /grassroots/fixtures/:id never resolve
+      // to GrassrootsTeamPage. The read-only surfaces landed in
+      // sprint-5/grassroots-conversion-read (Decision Log #270); the
+      // organiser flows here are sprint-5/grassroots-conversion-organiser
+      // (Decision Log #271).
+      { path: "grassroots", element: <GrassrootsPage /> },
+      { path: "grassroots/register", element: <GrassrootsRegisterTeamPage /> },
+      { path: "grassroots/fixtures/:fixtureId", element: <GrassrootsFixturePage /> },
+      { path: "grassroots/:teamId", element: <GrassrootsTeamPage /> },
+      { path: "grassroots/:teamId/fixtures/new", element: <GrassrootsScheduleFixturePage /> },
+
+      // Community Groups (Build Plan Sprint 3, Decision Log #281 --
+      // CommunityGroupsModule, sprint-3/community-groups-backend). No site
+      // footer -- not in the Figma frames, matching Clubs/Grassroots/
+      // Banter. GET routes are JwtAuthGuard-only, not public; see
+      // CommunityGroupsPage.tsx. Nav entry point: the account
+      // dropdown/drawer only, NOT the desktop icon navbar (Decision Log
+      // #282 -- the founder placed Groups in the account surface, unlike
+      // Clubs/Grassroots).
+      //
+      //   /groups              browse (GET /community-groups)
+      //   /groups/new          create a group (POST /community-groups)
+      //   /groups/:groupId     a group's page (GET /community-groups/:id)
+      //
+      // `new` is a static segment and outranks the `:groupId` param in
+      // React Router v8's specificity ranking (the same Grassroots
+      // register/fixtures precedent), so /groups/new never resolves to
+      // CommunityGroupPage.
+      { path: "groups", element: <CommunityGroupsPage /> },
+      { path: "groups/new", element: <CreateCommunityGroupPage /> },
+      { path: "groups/:groupId", element: <CommunityGroupPage /> },
+
+      // Match Centre -- the Sports Hub match drill-down (Build Plan
+      // Section 4.6, SportsService -- sprint-4/sports-hub-frontend-wiring,
+      // Decision Log #6/#311-322). No site footer -- a detail/drill-down
+      // page, same category as ClubFanPage/GrassrootsTeamPage/ContestPage
+      // (not in FooterLayout's own route list). No login gate -- every
+      // SportsService route is genuinely public, same as SportsHubPage
+      // itself. See sports-hub/MatchCentrePage.tsx.
+      { path: "sports-hub/matches/:matchId", element: <MatchCentrePage /> },
+
+      // Leaderboard + Contest -- direct AppShell children, NO site footer.
+      // Both were moved out of FooterLayout: the founder decided the
+      // Leaderboard must not carry the site footer (Decision Log #227,
+      // sprint-2/leaderboard-footer-removal-and-contest-rules-modal), and
+      // the Contest details frame (Figma 2155:1062) never had one --
+      // FooterLayout's old comment documented the opposite (Decision Log
+      // #228). LeaderboardPage: login-gated, Contest tab wired to
+      // GET /contest/current (Decision Log #129/#61/#70/#71).
+      // ContestPage: "this month's Contest", reached via the Leaderboard
+      // Contest tab connector and the composer's contest-mode success
+      // message. See LeaderboardPage.tsx / ContestPage.tsx.
+      { path: "leaderboard", element: <LeaderboardPage /> },
+      { path: "contest", element: <ContestPage /> },
+      // Phase 2 voting (B-098): the entries and the one-vote toggle. No site footer, like /contest.
+      { path: "contest/voting", element: <ContestVotingPage /> },
+
+      // Report a concern -- an unauthenticated public reporting page
+      // (POST /reports/public, ModerationModule's PublicReportsController).
+      // No Figma frame exists for this; built plain, see ReportPage.tsx's
+      // own header comment. No login gate -- reachable with no session at
+      // all, that's the whole point. No site footer -- a utility page,
+      // same category as ClubFanPage/GrassrootsTeamPage/ContestPage. Nav
+      // entry point: linked from Footer.tsx (there's no separate help/
+      // support hub anywhere in this app to link from instead).
+      { path: "report", element: <ReportPage /> },
+
+      // Auth-flow routes that stay under AppShell (built full-bleed within
+      // its content area -- see each page's CSS header comment). The core
+      // auth routes /login, /signup, /forgot-password and /reset-password
+      // are NOT here -- they're children of AuthChrome above.
+      //
+      // F5: /guardian-consent is the MINOR's own authenticated status view
+      // (GET /auth/guardian-consent/status); /guardian-consent/confirm (now a
+      // child of AuthChrome, W9) is
+      // the new, separate, public route for the GUARDIAN's own
+      // unauthenticated confirmation action (POST /auth/guardian-consent)
+      // -- see GuardianConsentConfirmPage.tsx's header comment for the
+      // full routing-split argument.
+      { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
+      // Decision Log #365 -- the minor's own "Change guardian email" screen
+      // (Figma 5498:7164); authenticated, pending-consent only.
+      { path: "guardian-consent/change-email", element: <ChangeGuardianEmailPage /> },
+      { path: "profile", element: <ProfilePage /> }, // F6
+      // Another person's profile (B-082, B-108): public-profile, Follow, Message, Block.
+      { path: "users/:userId", element: <OtherProfilePage /> },
+
+      // Notification Centre (Build Plan Section 4.7, NotificationsModule —
+      // sprint-3/notifications-read-api, Decision Log #290) converting the
+      // finalized Figma design (Decision Log #279). No site footer — not
+      // in the Figma frame, matching Community/Clubs/Grassroots/Banter.
+      { path: "notifications", element: <NotificationCentrePage /> },
+
+      // Settings (Decision Log #230 consolidated structure). SettingsLayout
+      // is the shared shell (Figma "Settings Shell" 6339:16094: desktop
+      // rail / mobile back bar). sprint-2/settings-shell-to-code-account
+      // (PR 1 of a staged set) built the shell, the landing, the Account
+      // section and re-parented Privacy/Deactivate/Delete.
+      // sprint-2/settings-shell-to-code-security (PR 2) built the
+      // Security & Account Settings section (hub + Two-Factor Auth (SMS)
+      // leaf — no live backend, see TwoFactorAuthPage.tsx).
+      // sprint-2/settings-shell-to-code-notifications (PR 3) built the
+      // Notification Preferences section (hub + Filters / Push / Email /
+      // Muted accounts leaves — no live backend for any of them, see
+      // NotificationPreferencesPage.tsx and its 4 leaf pages).
+      // sprint-2/settings-shell-to-code-display (PR 4, the last of the
+      // staged set) builds the Display, Language & Region section (hub +
+      // Accessibility / Display (density) / Language / Data usage
+      // leaves — no live backend for any of them, see
+      // DisplaySettingsPage.tsx and its 4 leaf pages). All 5 Decision Log
+      // #230 sections now have real screens; SettingsSectionPlaceholder
+      // has no remaining route to render and was deleted. No site
+      // footer.
+      {
+        path: "settings",
+        element: <SettingsLayout />,
+        children: [
+          { index: true, element: <SettingsLandingPage /> },
+          { path: "menu", element: <SettingsMenuPage /> },
+          { path: "account", element: <AccountOverviewPage /> },
+          { path: "account/change-password", element: <ChangePasswordPage /> },
+          // B-059: Account Information and the email-change steps (Figma 6989:49962 ..).
+          { path: "account/information", element: <AccountInformationPage /> },
+          { path: "account/information/change-email", element: <ChangeEmailPage /> },
+          { path: "account/deactivate", element: <DeactivateAccountPage /> },
+          { path: "account/delete", element: <DeleteAccountPage /> },
+          { path: "privacy", element: <PrivacySettingsPage /> },
+          // B-108: the blocker's own list, with Unblock (Figma 6705:26172).
+          { path: "privacy/blocked", element: <BlockedUsersPage /> },
+          // B-061: Direct Messages and Your Posts (Figma 6981:48879 .., 6983:48741 ..).
+          { path: "privacy/direct-messages", element: <DirectMessagesSettingsPage /> },
+          { path: "privacy/your-posts", element: <YourPostsSettingsPage /> },
+          // B-060: Download my data (Figma 6991:53920 ..).
+          { path: "privacy/download-data", element: <DataExportPage /> },
+          { path: "security", element: <SecurityOverviewPage /> },
+          { path: "security/two-factor", element: <TwoFactorAuthPage /> },
+          { path: "notifications", element: <NotificationPreferencesPage /> },
+          { path: "notifications/filters", element: <NotificationFiltersPage /> },
+          { path: "notifications/push", element: <PushNotificationsPage /> },
+          { path: "notifications/email", element: <EmailNotificationsPage /> },
+          { path: "notifications/muted-accounts", element: <MutedAccountsPage /> },
+          { path: "display", element: <DisplaySettingsPage /> },
+          { path: "display/accessibility", element: <AccessibilityPage /> },
+          { path: "display/density", element: <DisplayDensityPage /> },
+          { path: "display/language", element: <LanguagePage /> },
+          { path: "display/data-usage", element: <DataUsagePage /> },
+        ],
+      },
+      // Decision Log #74 — the represented-club selector. A standalone flow
+      // screen in Figma (own top bar, no Settings rail), so it sits directly
+      // under AppShell rather than inside SettingsLayout.
+      { path: "settings/account/club-representation", element: <ClubRepresentationPage /> },
+      // Old flat paths (linked from earlier builds) redirect, not 404.
+      { path: "settings/deactivate", element: <Navigate to="/settings/account/deactivate" replace /> },
+      { path: "settings/delete-account", element: <Navigate to="/settings/account/delete" replace /> },
+      // Added during a Sprint 1 cleanup review -- was missing entirely,
+      // not a pre-existing placeholder. See VerifyEmailPage.tsx.
+      { path: "verify-email", element: <VerifyEmailPage /> }, // F7
+      // Public legal pages: render the draft legal copy document (with its
+      // own "NOT APPROVED" banner while that status holds). No login gate.
+      { path: "terms", element: <TermsPage /> },
+      { path: "privacy", element: <PrivacyPage /> },
+      // NOTE: the "*" 404 route lives under FooterLayout above (so the
+      // error page gets the site footer -- Decision Log #228), not here.
+    ],
+  },
+];
+
+export const router = createBrowserRouter(routes);

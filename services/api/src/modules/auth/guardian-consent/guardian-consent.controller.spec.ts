@@ -1,0 +1,608 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import * as request from 'supertest';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AuthRateLimitModule } from '../rate-limit/rate-limit.module';
+import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
+import { GuardianConsentController } from './guardian-consent.controller';
+import { GuardianCardVerificationService } from './guardian-card-verification.service';
+import { GuardianConsentService } from './guardian-consent.service';
+import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
+import { GuardianWithdrawalThrottlerGuard } from './guardian-withdrawal-throttle';
+
+const AUTHENTICATED_MINOR = { sub: 'minor-1', role: 'fan' };
+const VALID_CHANGE = { name: 'New Guardian', email: 'new-guardian@example.com', relationship: 'Legal Guardian' };
+
+// Exercises real HTTP request/response handling (routing, DTO
+// validation, status codes) with GuardianConsentService mocked out,
+// mirroring registration/registration.controller.spec.ts's and
+// password-reset/password-reset.controller.spec.ts's pattern.
+describe('GuardianConsentController (HTTP layer)', () => {
+  let app: INestApplication;
+  const guardianConsentService = {
+    confirmConsent: jest.fn(),
+    resendConsent: jest.fn(),
+    getConsentStatus: jest.fn(),
+    // sprint-1/guardian-consent-decline-withdraw-expiry
+    declineConsent: jest.fn(),
+    requestWithdrawal: jest.fn(),
+    withdrawConsent: jest.fn(),
+    // safeguarding/guardian-email-change-endpoint
+    changeGuardianEmail: jest.fn(),
+    // B-029
+    reportIncorrectDetails: jest.fn(),
+  };
+  const cardVerification = { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() };
+  // Pass-through by default; individual tests make it throw 429.
+  const emailChangeLimiter = { run: jest.fn(async (_id: string, change: () => Promise<unknown>) => change()) };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [GuardianConsentController],
+      providers: [
+        { provide: GuardianConsentService, useValue: guardianConsentService },
+        { provide: GuardianCardVerificationService, useValue: cardVerification },
+        { provide: GuardianEmailChangeLimiter, useValue: emailChangeLimiter },
+      ],
+    })
+      // /auth/guardian-consent/resend carries @AuthRateLimit() (DPIA
+      // finding R5) -- overridden here, same reasoning as
+      // registration.controller.spec.ts's AuthThrottlerGuard override,
+      // so these unrelated assertions aren't affected by request count.
+      // Real rate-limit enforcement is exercised separately below.
+      .overrideGuard(AuthThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      // B-112: the two withdrawal routes carry their own throttle guard;
+      // overridden for the same reason. Real enforcement is exercised in the
+      // "withdrawal routes (real rate limiting)" block below.
+      .overrideGuard(GuardianWithdrawalThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints)
+      // carries JwtAuthGuard -- overridden here, same pattern
+      // auth.controller.http.spec.ts and users.controller.http.spec.ts
+      // already use, since this TestingModule has no real
+      // TokenService/PrismaService for the real guard to depend on.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_MINOR;
+          return true;
+        },
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('POST /auth/guardian-consent', () => {
+    it('returns 200 on a valid, unused token', async () => {
+      guardianConsentService.confirmConsent.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 'a-real-token' })
+        .expect(200);
+
+      expect(response.body).toEqual({ message: 'Guardian consent confirmed.' });
+      expect(guardianConsentService.confirmConsent).toHaveBeenCalledWith('a-real-token', 'unknown');
+    });
+
+    it.each([
+      ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148', 'mobile'],
+      ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0', 'desktop'],
+    ])('derives a coarse device type from the User-Agent (%s)', async (ua, expected) => {
+      guardianConsentService.confirmConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .set('User-Agent', ua)
+        .send({ consentToken: 'a-real-token' })
+        .expect(200);
+
+      expect(guardianConsentService.confirmConsent).toHaveBeenCalledWith('a-real-token', expected);
+    });
+
+    it('returns 200 idempotently when the same token is submitted again', async () => {
+      guardianConsentService.confirmConsent.mockResolvedValue(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 'a-real-token' })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 'a-real-token' })
+        .expect(200);
+
+      expect(response.body).toEqual({ message: 'Guardian consent confirmed.' });
+      expect(guardianConsentService.confirmConsent).toHaveBeenCalledTimes(2);
+    });
+
+    it('maps an invalid-token BadRequestException to 400', async () => {
+      guardianConsentService.confirmConsent.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired consent token'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 'not-a-real-token' })
+        .expect(400);
+    });
+
+    it('rejects a body missing consentToken with 400', async () => {
+      await request(app.getHttpServer()).post('/auth/guardian-consent').send({}).expect(400);
+
+      expect(guardianConsentService.confirmConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong-type consentToken field with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 12345 })
+        .expect(400);
+
+      expect(guardianConsentService.confirmConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unexpected extra field with 400 (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .send({ consentToken: 'a-real-token', role: 'admin' })
+        .expect(400);
+
+      expect(guardianConsentService.confirmConsent).not.toHaveBeenCalled();
+    });
+  });
+
+  // DPIA finding R5's re-send path.
+  describe('POST /auth/guardian-consent/resend', () => {
+    it('returns 200 with a generic message for a known, pending email', async () => {
+      guardianConsentService.resendConsent.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        message: 'If that account has a guardian consent request pending, a new email has been sent.',
+      });
+      expect(guardianConsentService.resendConsent).toHaveBeenCalledWith('minor@example.com');
+    });
+
+    it('returns the exact same generic response for an unknown email (non-enumeration)', async () => {
+      guardianConsentService.resendConsent.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'nobody@example.com' })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        message: 'If that account has a guardian consent request pending, a new email has been sent.',
+      });
+    });
+
+    it('returns the exact same generic response for an already-confirmed guardian (non-enumeration)', async () => {
+      guardianConsentService.resendConsent.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'already-confirmed@example.com' })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        message: 'If that account has a guardian consent request pending, a new email has been sent.',
+      });
+    });
+
+    it('rejects a body missing email with 400', async () => {
+      await request(app.getHttpServer()).post('/auth/guardian-consent/resend').send({}).expect(400);
+
+      expect(guardianConsentService.resendConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-email string with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+
+      expect(guardianConsentService.resendConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unexpected extra field with 400 (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'minor@example.com', consentToken: 'sneaking-this-in' })
+        .expect(400);
+
+      expect(guardianConsentService.resendConsent).not.toHaveBeenCalled();
+    });
+  });
+
+  // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints).
+  // JwtAuthGuard only -- see guardian-consent.service.ts's
+  // getConsentStatus() and auth/README.md for the full guard-choice
+  // reasoning (a restricted-pending minor must be able to check their own
+  // status, so this can't be gated behind GuardianConsentGuard itself).
+  describe('GET /auth/guardian-consent/status', () => {
+    it('returns 200 with the real consent-status shape, keyed off the caller-from-JWT id', async () => {
+      guardianConsentService.getConsentStatus.mockResolvedValueOnce({
+        consentStatus: 'pending',
+        guardianEmail: 'guardian@example.com',
+        canResend: true,
+        consentTimestamp: null,
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/auth/guardian-consent/status')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        consentStatus: 'pending',
+        guardianEmail: 'guardian@example.com',
+        canResend: true,
+        consentTimestamp: null,
+      });
+      expect(guardianConsentService.getConsentStatus).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub);
+    });
+
+    it('maps a NotFoundException (no Guardian row for this caller) to 404', async () => {
+      guardianConsentService.getConsentStatus.mockRejectedValueOnce(
+        new NotFoundException('No guardian consent record exists for this account'),
+      );
+
+      await request(app.getHttpServer()).get('/auth/guardian-consent/status').expect(404);
+    });
+  });
+
+  // safeguarding/guardian-email-change-endpoint (Decision Log #365).
+  describe('POST /auth/guardian-consent/change-guardian-email', () => {
+    it('returns 200, keyed off the caller-from-JWT id, forwarding name, email and relationship', async () => {
+      guardianConsentService.changeGuardianEmail.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(200);
+
+      expect(response.body.message).toMatch(/new consent request has been sent/i);
+      expect(guardianConsentService.changeGuardianEmail).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub, VALID_CHANGE);
+      expect(emailChangeLimiter.run).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub, expect.any(Function));
+    });
+
+    it('400s on an invalid email and never calls the service', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ ...VALID_CHANGE, email: 'not-an-email' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('400s when name or relationship is missing, or relationship is not an allowed value', async () => {
+      const post = (body: object) =>
+        request(app.getHttpServer()).post('/auth/guardian-consent/change-guardian-email').send(body);
+      await post({ email: 'new-guardian@example.com' }).expect(400);
+      await post({ ...VALID_CHANGE, name: '' }).expect(400);
+      await post({ ...VALID_CHANGE, relationship: 'Neighbour' }).expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the per-minor limiter 429 and does not run the change', async () => {
+      emailChangeLimiter.run.mockRejectedValueOnce(new HttpException('Too many', HttpStatus.TOO_MANY_REQUESTS));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(429);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('rejects a caller-supplied minor id / extra fields (whitelist + forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ ...VALID_CHANGE, minorUserId: 'someone-else' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('maps a ConflictException (already confirmed) to 409 and a NotFoundException to 404', async () => {
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new ConflictException('confirmed'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(409);
+
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new NotFoundException('none'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(404);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // sprint-1/guardian-consent-decline-withdraw-expiry
+  // -----------------------------------------------------------------
+
+  describe('POST /auth/guardian-consent/decline', () => {
+    it('returns 200 and forwards the consent token', async () => {
+      guardianConsentService.declineConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'token-123' })
+        .expect(200)
+        .expect({ message: 'Guardian consent declined.' });
+
+      expect(guardianConsentService.declineConsent).toHaveBeenCalledWith('token-123');
+    });
+
+    it('rejects a missing consentToken with 400 before reaching the service', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({})
+        .expect(400);
+
+      expect(guardianConsentService.declineConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown extra property (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'token-123', accountStatus: 'active' })
+        .expect(400);
+
+      expect(guardianConsentService.declineConsent).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service\'s BadRequestException as a 400', async () => {
+      guardianConsentService.declineConsent.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired consent token'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'stale' })
+        .expect(400);
+    });
+  });
+
+  // B-029 (Decision Log #372)
+  describe('POST /auth/guardian-consent/report-incorrect-details', () => {
+    it('returns 200 and forwards only the consent token', async () => {
+      guardianConsentService.reportIncorrectDetails.mockResolvedValueOnce(undefined);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/report-incorrect-details')
+        .send({ consentToken: 'token-123' })
+        .expect(200);
+
+      expect(res.body.message).toMatch(/support will review/i);
+      expect(guardianConsentService.reportIncorrectDetails).toHaveBeenCalledWith('token-123');
+    });
+
+    it('rejects a missing consentToken with 400 before reaching the service', async () => {
+      await request(app.getHttpServer()).post('/auth/guardian-consent/report-incorrect-details').send({}).expect(400);
+      expect(guardianConsentService.reportIncorrectDetails).not.toHaveBeenCalled();
+    });
+
+    it('accepts NOTHING else: a smuggled date of birth or note is a 400 (data minimisation)', async () => {
+      for (const extra of [{ dateOfBirth: '2012-01-01' }, { note: 'wrong birthday' }, { correctDob: '2011-05-05' }]) {
+        await request(app.getHttpServer())
+          .post('/auth/guardian-consent/report-incorrect-details')
+          .send({ consentToken: 'token-123', ...extra })
+          .expect(400);
+      }
+      expect(guardianConsentService.reportIncorrectDetails).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the service's BadRequestException as a 400", async () => {
+      guardianConsentService.reportIncorrectDetails.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired consent token'),
+      );
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/report-incorrect-details')
+        .send({ consentToken: 'stale' })
+        .expect(400);
+    });
+
+    it('is rate limited like the other token routes (AuthRateLimit metadata present)', () => {
+      const guards = Reflect.getMetadata('__guards__', GuardianConsentController.prototype.reportIncorrectDetails) ?? [];
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('POST /auth/guardian-consent/withdraw/request', () => {
+    it('returns the same generic message whether or not anything matched', async () => {
+      guardianConsentService.requestWithdrawal.mockResolvedValue(undefined);
+
+      const matched = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+
+      const unmatched = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'nobody@example.com' })
+        .expect(200);
+
+      // Non-enumeration: the two responses must be byte-identical.
+      expect(matched.body).toEqual(unmatched.body);
+      expect(matched.body.message).toMatch(/if that account/i);
+    });
+
+    it('rejects a malformed email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+
+      expect(guardianConsentService.requestWithdrawal).not.toHaveBeenCalled();
+    });
+
+    it('is routed distinctly from POST /auth/guardian-consent/withdraw', async () => {
+      // The two withdrawal routes are a prefix of one another; this
+      // guards against a routing regression where /withdraw/request
+      // silently falls through to /withdraw (which would consume a
+      // token that was never issued).
+      guardianConsentService.requestWithdrawal.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+
+      expect(guardianConsentService.requestWithdrawal).toHaveBeenCalledTimes(1);
+      expect(guardianConsentService.withdrawConsent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/guardian-consent/withdraw', () => {
+    it('returns 200 and forwards the withdrawal token', async () => {
+      guardianConsentService.withdrawConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ withdrawalToken: 'wd-123' })
+        .expect(200)
+        .expect({ message: 'Guardian consent withdrawn.' });
+
+      expect(guardianConsentService.withdrawConsent).toHaveBeenCalledWith('wd-123');
+    });
+
+    it('rejects a consentToken posted to the withdrawal route', async () => {
+      // The DTO field is deliberately named differently from the consent
+      // DTO's, so a frontend cannot post the wrong credential and have it
+      // silently accepted.
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ consentToken: 'token-123' })
+        .expect(400);
+
+      expect(guardianConsentService.withdrawConsent).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service\'s BadRequestException as a 400', async () => {
+      guardianConsentService.withdrawConsent.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired withdrawal token'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ withdrawalToken: 'spent' })
+        .expect(400);
+    });
+  });
+
+  describe('card verification routes (sprint-1/coppa-card-verification)', () => {
+    it('rejects any card-data field on every card route (forbidNonWhitelisted), so raw card data can never be accepted', async () => {
+      for (const path of ['verification', 'card/intent', 'card/complete']) {
+        await request(app.getHttpServer())
+          .post(`/auth/guardian-consent/${path}`)
+          .send({ consentToken: 't', cardNumber: '4242424242424242', cvc: '123', exp: '12/30' })
+          .expect(400);
+      }
+      expect(cardVerification.getRequirements).not.toHaveBeenCalled();
+      expect(cardVerification.createIntent).not.toHaveBeenCalled();
+      expect(cardVerification.complete).not.toHaveBeenCalled();
+    });
+
+    it('delegates each route with only the consent token', async () => {
+      cardVerification.getRequirements.mockResolvedValue({ cardRequired: true, cardVerified: false });
+      cardVerification.createIntent.mockResolvedValue({ clientSecret: 'cs', publishableKey: 'pk' });
+      cardVerification.complete.mockResolvedValue({ cardRequired: true, cardVerified: true });
+
+      await request(app.getHttpServer()).post('/auth/guardian-consent/verification').send({ consentToken: 't' }).expect(200);
+      await request(app.getHttpServer()).post('/auth/guardian-consent/card/intent').send({ consentToken: 't' }).expect(200);
+      await request(app.getHttpServer()).post('/auth/guardian-consent/card/complete').send({ consentToken: 't' }).expect(200);
+
+      expect(cardVerification.getRequirements).toHaveBeenCalledWith('t');
+      expect(cardVerification.createIntent).toHaveBeenCalledWith('t');
+      expect(cardVerification.complete).toHaveBeenCalledWith('t');
+    });
+  });
+});
+
+// Separate app instance with the REAL AuthThrottlerGuard (not overridden)
+// wired via AuthRateLimitModule, same DI graph GuardianConsentModule
+// actually uses in production -- proves @AuthRateLimit() is genuinely
+// applied to POST /auth/guardian-consent/resend, not just present in
+// source but silently no-op'd. AuthThrottlerGuard's own general
+// "blocks once the limit is exceeded" counting logic is already
+// thoroughly covered by rate-limit/auth-throttler.guard.spec.ts; this
+// test only proves this specific route is actually behind it.
+describe('POST /auth/guardian-consent/resend (real rate limiting)', () => {
+  let app: INestApplication;
+  const guardianConsentService = { confirmConsent: jest.fn(), resendConsent: jest.fn().mockResolvedValue(undefined) };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AuthRateLimitModule],
+      controllers: [GuardianConsentController],
+      providers: [
+        { provide: GuardianConsentService, useValue: guardianConsentService },
+        { provide: GuardianCardVerificationService, useValue: { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() } },
+        { provide: GuardianEmailChangeLimiter, useValue: { run: jest.fn() } },
+        AuthThrottlerGuard,
+      ],
+    })
+      // Same reasoning as the block above -- GET /auth/guardian-consent/status's
+      // JwtAuthGuard needs overriding here too, or module compilation
+      // itself fails (this describe block never exercises that route,
+      // but Nest still resolves every guard referenced anywhere in the
+      // controller at compile time).
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_MINOR;
+          return true;
+        },
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('blocks with 429 once the default rate limit (5 per window) is exceeded', async () => {
+    for (let i = 0; i < 5; i++) {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/resend')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+    }
+
+    await request(app.getHttpServer())
+      .post('/auth/guardian-consent/resend')
+      .send({ email: 'minor@example.com' })
+      .expect(429);
+  });
+});

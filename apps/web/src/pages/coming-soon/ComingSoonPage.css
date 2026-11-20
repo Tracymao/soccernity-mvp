@@ -1,0 +1,61 @@
+/* Coming Soon. Figma source: "Coming Soon — Desktop/Mobile — Logged
+ * In/Out" (Decision Log #285). Colour values reference the app-wide
+ * --sn-* custom properties from src/theme/applyTheme.ts.
+ *
+ * White text on the navy badge/CTA -- the token map has no
+ * --sn-text-on-navy equivalent, so white is hardcoded here, the same
+ * disclosed exception ProfilePage.css / HomePage.css / ContestPage.css
+ * already use. */
+
+.cs-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  text-align: center;
+  padding: 96px 24px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.cs-page__icon {
+  display: block;
+}
+
+.cs-page__badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font: 600 12px "Montserrat", sans-serif;
+  letter-spacing: 1px;
+}
+
+.cs-page__title {
+  font: 800 40px "Montserrat", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}
+
+.cs-page__body {
+  font: 500 16px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.cs-page__cta {
+  display: inline-flex;
+  align-items: center;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  border-radius: 8px;
+  padding: 16px 32px;
+  font: 600 16px "Montserrat", sans-serif;
+  text-decoration: none;
+}
+
+.cs-page__cta:hover {
+  opacity: 0.9;
+}

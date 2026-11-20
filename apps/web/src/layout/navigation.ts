@@ -1,0 +1,184 @@
+// Nav config for the site header and the mobile Navigation Drawer.
+//
+// Phase 2 of the founder-directed navbar correction (Decision Log #161).
+// The previous list was a text-label nav (LIVE SCORE / NEWS / LEADERBOARD
+// / BANTER / COMMUNITY) built without instruction; it is replaced here by
+// the canonical Figma icon nav from the "header 4" / "header 7" variants
+// of the Header COMPONENT_SET (nodes 2838:3502 / 2841:4104,
+// "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6). Icon order there is:
+// Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots,
+// Scouting, Academy.
+//
+// DECISION LOG #272 -- the "grassroots" icon was appended (7th, last,
+// after Clubs) to the shared Web app Navbar COMPONENT_SET on both live
+// desktop variants (header 4 / header 7). This file is the 1:1 code
+// mirror of that component; the entry below matches the canonical order
+// and the tinted (bare-stroke-glyph-in-a-green-tint-tile) style landed
+// there verbatim -- same treatment as Clubs (Decision Log #159).
+//
+// DECISION LOG #284 -- "scouting" and "academy" were appended (8th and
+// 9th, last, after Grassroots) to the same COMPONENT_SET, on both live
+// desktop variants -- the two icons the standing nav policy explicitly
+// reserved as exceptions when Community Groups went to the account
+// dropdown/drawer instead (Decision Log #282). The 9-icon set is now
+// closed to further additions by default. Both point at a shared
+// ComingSoonPage (Decision Log #285) rendered with a different
+// `featureName` -- see router.tsx's /scouting and /academy routes --
+// since neither pillar has any real screen yet (Decision Log #3, Phase 2,
+// not MVP-blocking). Mirrored here as real, available entries (not
+// `available: false`) since both routes exist as of this same PR --
+// unlike Grassroots/Messages/Settings, which were flipped on separately
+// once their real routes landed, there's no reason to stage this one:
+// the destination page and the nav entry ship together.
+//
+// DECISION LOG #165 -- fully resolved: "Blog" is the label and the
+// internal identifier for this content pillar everywhere. The founder's
+// final call is that the page is not news-specific -- it's the general
+// write-up section covering every content type, including sponsored
+// articles for revenue. An earlier PR already set the user-facing "Blog"
+// label (nav item + drawer item); the rename of the internal `/news`
+// route path and NewsPage.tsx -> `/blog` and BlogPage.tsx is now done
+// too, so nothing named "news" remains for this pillar.
+import navSportsHub from "../assets/icons/nav-sports-hub.svg";
+import navBlog from "../assets/icons/nav-blog.svg";
+import navCommunity from "../assets/icons/nav-community.svg";
+import navLeaderboard from "../assets/icons/nav-leaderboard.svg";
+import navBants from "../assets/icons/nav-bants.svg";
+import navClubs from "../assets/icons/nav-clubs.svg";
+import navGrassroots from "../assets/icons/nav-grassroots.svg";
+import navScouting from "../assets/icons/nav-scouting.svg";
+import navAcademy from "../assets/icons/nav-academy.svg";
+
+export interface NavItem {
+  label: string;
+  to: string;
+  /** Imported SVG asset URL (exported from Figma -- see assets/icons). */
+  icon: string;
+  /**
+   * Wrap the glyph in a green-tint rounded square. The Figma frame does
+   * this for the two icons whose exported SVG is a bare stroke glyph
+   * (Sports Hub, Clubs); the other four bake the tint tile into the SVG.
+   */
+  tinted?: boolean;
+}
+
+export const primaryNavItems: NavItem[] = [
+  { label: "Sports Hub", to: "/sports-hub", icon: navSportsHub, tinted: true },
+  { label: "Blog", to: "/blog", icon: navBlog },
+  { label: "Community", to: "/community", icon: navCommunity },
+  { label: "Leaderboard", to: "/leaderboard", icon: navLeaderboard },
+  { label: "Bants", to: "/banter", icon: navBants },
+  { label: "Clubs", to: "/clubs", icon: navClubs, tinted: true },
+  // Grassroots Record-Keeping (Build Plan Section 4.5). 7th icon, last,
+  // after Clubs -- mirrors the Figma header 4 / header 7 order landed by
+  // Decision Log #272. `tinted: true`: the exported SVG is a bare navy
+  // stroke glyph, so the green-tint tile is applied in CSS (same as
+  // Sports Hub and Clubs).
+  { label: "Grassroots", to: "/grassroots", icon: navGrassroots, tinted: true },
+  // Scouting and Academy (Decision Log #284/#285) -- the navbar's last
+  // two reserved slots. Both a bare navy stroke glyph, tinted the same
+  // way as Sports Hub/Clubs/Grassroots. Both route to the same
+  // ComingSoonPage component, configured with a different feature name.
+  { label: "Scouting", to: "/scouting", icon: navScouting, tinted: true },
+  { label: "Academy", to: "/academy", icon: navAcademy, tinted: true },
+];
+
+export interface DrawerNavItem {
+  label: string;
+  to: string;
+  /**
+   * false => the route does not exist in src/app/router.tsx yet. Rendered
+   * as a non-navigating, visibly-disabled row rather than a link that
+   * would fall through to the 404 page (Decision Log #166). Defaults to
+   * true (route exists) when omitted.
+   */
+  available?: boolean;
+}
+
+// Mobile Navigation Drawer -- canonical order from the Figma
+// "Navigation Drawer -- Mobile" COMPONENT (node 5870:10689), the
+// canonical mobile-web primary nav (Decision Log #162). Log out is an
+// action, rendered separately below the divider.
+//
+// DECISION LOG #282 -- "Home" removed. The drawer is opened via the
+// avatar and the header logo already links home (working in code, same
+// precedent as #162), so the row was redundant.
+//
+// Messages removed as its own row (founder edit made directly in the Figma
+// Navigation Drawer, no Decision Log entry). The messages icon beside the
+// avatar in Header.tsx (/messages) is the mobile messages entry point and
+// is not gated by !isMobile, so the drawer row was a straight duplicate.
+//
+// DECISION LOG #287/#288 -- "Profile" removed as its own row. The
+// founder folded profile navigation into the "Signed in as" identity
+// block instead (NavDrawer.tsx now wraps it in a NavLink to /profile),
+// reclaiming a row the same way #282 reclaimed one by dropping Home.
+// This array is the 1:1 code mirror of the live Figma component's own
+// row order -- pulled fresh from Figma for this PR, not carried over
+// from the pre-#287 order minus Profile.
+export const drawerNavItems: DrawerNavItem[] = [
+  { label: "Community", to: "/community" },
+  // /notifications now resolves (sprint-3/notification-centre-to-code,
+  // Decision Log #291 -- NotificationCentrePage.tsx, converting the
+  // finalized design from Decision Log #279) -- same "flip available once
+  // the route exists" precedent Messages/Clubs/Grassroots/Settings each
+  // got.
+  { label: "Notifications", to: "/notifications" },
+  { label: "Sports Hub", to: "/sports-hub" },
+  { label: "Blog", to: "/blog" },
+  { label: "Bants", to: "/banter" },
+  { label: "Leaderboard", to: "/leaderboard" },
+  { label: "Clubs", to: "/clubs" },
+  // Community Groups (Decision Log #1, #281) does not get a navbar icon
+  // -- the founder placed it in the account surface instead (Decision Log
+  // #282). Now resolves (sprint-3/community-groups-frontend,
+  // CommunityGroupsPage.tsx) -- `available` omitted, same "flip once the
+  // route exists" precedent as Grassroots/Messages/Settings below.
+  { label: "Groups", to: "/groups" },
+  // Grassroots Record-Keeping (Build Plan Section 4.5). Decision Log
+  // #266 first scoped the nav entry point to the drawer only; the
+  // desktop icon-navbar glyph followed as its own figma-design-system
+  // task (Decision Log #272) and is now mirrored into primaryNavItems
+  // above.
+  { label: "Grassroots", to: "/grassroots" },
+  // /settings resolves (the Settings landing) as of
+  // sprint-2/settings-shell-to-code-account. Account and Privacy are real —
+  // the other sections render a "not built yet" placeholder —
+  // but the account still has a reachable Settings entry now rather than
+  // an orphan page (the gap Decision Log #156 flagged for Clubs).
+  { label: "Settings", to: "/settings" },
+];
+
+// Desktop account dropdown -- from the Figma "Dropdown menu/notification
+// on" component (node 2841:5363): Profile, Notification, Settings, Groups,
+// Log out. The Figma "Notification" row carries an unread-count badge --
+// now real (sprint-3/notification-centre-to-code, Decision Log #291),
+// rendered by AccountDropdown.tsx itself via api/notifications.ts's
+// getUnreadCount, not from this array (DrawerNavItem has no numeric-badge
+// field -- adding one here would mean every OTHER consumer of this array,
+// including NavDrawer's non-Notification rows, has to account for a field
+// that's meaningless to them). Log out is rendered separately as an
+// action.
+//
+// Groups (Decision Log #1, #281) landed here rather than the navbar per
+// Decision Log #282; now resolves (sprint-3/community-groups-frontend).
+export const accountMenuItems: DrawerNavItem[] = [
+  { label: "Profile", to: "/profile" },
+  { label: "Notification", to: "/notifications" },
+  { label: "Settings", to: "/settings" },
+  { label: "Groups", to: "/groups" },
+];
+
+// FC4 (Decision Log #408 item 8, B-178): the logged-out mobile drawer, as drawn in Figma
+// pass K4 (frame 6785:29485). A logged-out visitor can open only the sections that have no
+// login gate -- confirmed against router.tsx and the page sources in the K4 report
+// (section 6): Sports Hub, Blog, Scouting and Academy (both Coming Soon pages). Every other
+// section renders a "Log in to..." prompt, so it is not listed. Login and Sign up are
+// buttons in the drawer itself, not rows. No Home row (the header logo links home), as in
+// the signed-in drawer (Decision Log #282).
+export const loggedOutDrawerNavItems: DrawerNavItem[] = [
+  { label: "Sports Hub", to: "/sports-hub" },
+  { label: "Blog", to: "/blog" },
+  { label: "Scouting", to: "/scouting" },
+  { label: "Academy", to: "/academy" },
+];

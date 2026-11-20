@@ -1,0 +1,930 @@
+/* Moderation admin screens (Figma nodes 5794:8635 / 5796:8635 / 5796:8753
+ * — Decision Log #135/#189, backed by
+ * sprint-5/admin-moderation-queue-backend). Light mode only; every colour
+ * is a --sn-* token. Destructive/blocking actions are navy, not red — no
+ * destructive token exists (non-negotiable #3), same convention
+ * pages/contest/contest.css uses. */
+
+.mod-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.mod-back {
+  font-size: 13px;
+}
+
+.mod-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.mod-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.mod-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.mod-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.mod-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.mod-loading,
+.mod-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.mod-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.mod-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.mod-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mod-table__row {
+  display: grid;
+  grid-template-columns: 100px 90px 130px 1.3fr 110px 100px 90px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mod-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.mod-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.mod-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.mod-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.mod-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* schema/report-severity-escalation-admin-vetting-application — the
+ * "concerns a minor" flag. A distinct outline treatment (not a solid
+ * fill) so it doesn't read as just another severity/status pill at a
+ * glance — still navy/surface only, no new colour (non-negotiable #3). */
+.mod-pill--minor {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-brand-navy);
+  font-weight: 700;
+  text-transform: none;
+}
+
+.mod-flags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* links + buttons */
+
+.mod-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.mod-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.mod-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mod-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.mod-btn--sm {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.mod-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* callouts */
+
+.mod-callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+.mod-callout__bar {
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+  align-self: stretch;
+}
+
+.mod-callout p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  line-height: 1.5;
+}
+
+.mod-callout code {
+  font-size: 12px;
+}
+
+/* field readout (Report Detail / Appeal Review) */
+
+.mod-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--sn-text-secondary);
+}
+
+.mod-field__value {
+  font-size: 14px;
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
+
+/* The reported message on a message report (ReportedMessageFields.tsx). Same tinted block as the enquiry
+ * message (.ce-message); kept as its own class so the two screens can change independently. */
+
+.mod-message-text {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Messages around the reported one (ContextMessagesCard.tsx). */
+
+.mod-context__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-context__row {
+  display: grid;
+  grid-template-columns: 56px 220px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.mod-context__row--reported {
+  border: 2px solid var(--sn-brand-navy);
+}
+
+.mod-context__time {
+  color: var(--sn-text-secondary);
+}
+
+.mod-context__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mod-context__name {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.mod-context__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mod-context__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mod-context__original {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mod-context__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mod-context__pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.mod-context__pill--reporter {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.mod-context__pill--reported {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-context__pill--edited {
+  background-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.mod-context__pill--deleted {
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+@media (max-width: 900px) {
+  .mod-context__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .mod-context__marks {
+    justify-content: flex-start;
+  }
+}
+
+/* Escalate card + the child-safety-vetting restricted state
+ * (schema/report-severity-escalation-admin-vetting-application). */
+
+.mod-card--restricted {
+  border: 1px solid var(--sn-brand-navy);
+}
+
+.mod-escalate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mod-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.mod-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.mod-checkbox input {
+  margin-top: 3px;
+}
+
+a.mod-tab {
+  text-decoration: none;
+}
+
+/* B-045 case-level holds (Figma Report Detail Bad Faith Confirm 6672:27278,
+ * Legal Hold Confirm 6672:27349, Legal Hold Active 6672:28898, Held
+ * Investigations 6647:23351). Tokens only. The alert colour is the accent of the
+ * error and alert callouts (bar, border) and nothing else: error text and buttons
+ * stay navy because white on the alert red is below AA. */
+
+.mod-pill--plain {
+  text-transform: none;
+}
+
+.mod-pill--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.mod-btn--neutral {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.mod-callout--alert .mod-callout__bar {
+  background-color: var(--sn-semantic-alert);
+}
+
+.mod-callout-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-left: 6px solid var(--sn-semantic-alert);
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mod-hold-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-hold-status__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.mod-hold-status__since {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* dialog */
+
+.mod-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.mod-dialog {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 16px;
+  background-color: var(--sn-background-surface);
+  box-shadow:
+    0 24px 56px var(--sn-shadow-key),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 2px 6px var(--sn-shadow-ambient);
+}
+
+.mod-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.mod-dialog__head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.mod-dialog__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mod-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 28px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.mod-dialog__text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.mod-dialog__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.mod-dialog__input {
+  min-height: 96px;
+  background-color: var(--sn-green-tint-12);
+  border-color: transparent;
+}
+
+.mod-dialog__input[aria-invalid="true"] {
+  border: 2px solid var(--sn-semantic-alert);
+}
+
+.mod-dialog__field-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.mod-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 28px 24px;
+}
+
+/* B-295 suspension dialog (Figma 7042:61845, 7045:63231): the consequence list and the nine-category radio list. */
+
+.mod-dialog__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.mod-radio-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+}
+
+/* An unanswered required choice is marked with the alert border only, never with text colour. */
+.mod-radio-list--invalid {
+  border: 2px solid var(--sn-semantic-alert);
+}
+
+.mod-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+/* The explanatory line under the Take action buttons. */
+.mod-helper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+/* held investigations */
+
+.hi-page-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hi-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hi-filter__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hi-field {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hi-field__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-color: var(--sn-green-tint-12);
+}
+
+.hi-field__box[data-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
+}
+
+.hi-field__box input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.hi-field__box:focus-within {
+  border-color: var(--sn-brand-navy);
+}
+
+.hi-field__unit {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.hi-field__error::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--sn-semantic-alert);
+}
+
+.hi-table__row {
+  display: grid;
+  grid-template-columns: 150px 200px 150px 100px 70px minmax(0, 1fr) 110px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.hi-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.hi-name {
+  font-family: inherit;
+}
+
+.hi-table__row {
+  min-width: 0;
+}
+
+.hi-table__row + .hi-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.hi-empty {
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.hi-empty__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* B-046 part B: Contact enquiries (Figma Admin Contact Enquiries Tab 6876:30850, Enquiry Detail 6878:31198,
+ * Escalate Dialog 6879:31526, Report Detail From Contact Enquiry 6878:31683). Tokens only; the alert colour
+ * stays an accent (callout bar), never text or a button fill. */
+
+.hi-field__box select {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.ce-table__row {
+  display: grid;
+  grid-template-columns: 96px 130px minmax(0, 1.3fr) 130px minmax(0, 1.1fr) 80px 80px 90px 70px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.ce-table__row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.ce-table__row + .ce-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.ce-cell--name {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ce-banner__title {
+  font-weight: 600;
+}
+
+.ce-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ce-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ce-kv {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 13px;
+}
+
+.ce-kv--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.ce-kv__label {
+  color: var(--sn-text-secondary);
+}
+
+.ce-kv__value {
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
+
+.ce-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ce-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Escalate dialog: the severity select and the boxed "This concerns a minor" option. */
+
+.mod-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mod-select:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.mod-checkbox--boxed {
+  padding: 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+}
+
+.mod-checkbox--boxed > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mod-checkbox__title {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.mod-checkbox__help {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ce-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

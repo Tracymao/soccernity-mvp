@@ -1,0 +1,294 @@
+// Site header / chrome.
+//
+// Phase 2 of the founder-directed navbar correction (Decision Log #161).
+// Structure and tokens follow the Figma Header COMPONENT_SET (node
+// 2824:4309, "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6):
+//   - "header 7" (2841:4104) -- logged-out: wordmark, search, icon nav,
+//     Login button.
+//   - "header 4" (2838:3502) -- logged-in: wordmark, search, icon nav,
+//     messages icon, avatar.
+//
+// Auth state is read from the stored access token (src/lib/session.ts) --
+// there is no AuthContext in this app yet (see that file's header
+// comment). The header re-reads it on every navigation (via
+// useLocation().key), so the login redirect and the logout redirect both
+// flip the header between the two variants without a full reload.
+//
+// FC4 (Decision Log #408 item 8, B-178): at <= 820px the header is the Figma
+// header 4 / header 7 -- mobile (K4 frames 6784:29454 / 6784:29476): logo, a
+// search icon, then the messages glyph and avatar (signed in) or the Login
+// button and a menu control (logged out). The nine-icon row and the search box
+// are desktop only. Signed in, the avatar opens NavDrawer; logged out, the menu
+// control opens NavDrawer's "logged-out" variant (the public sections plus
+// Login and Sign up).
+//
+// The avatar opens two different real overlays by design (Decision Log
+// #162): the account dropdown on desktop, the Navigation Drawer on
+// mobile -- picked by useIsMobile().
+//
+// B-230 (Decision Log #417 item 2, #468): the avatar circle shows the owner's
+// initials (their displayName, lib/initials.ts -- the same rule the drawer uses)
+// when there is no approved picture, and the approved picture otherwise; see
+// HeaderAvatarFace.tsx. It reads the same `profile` as NavDrawer below.
+//
+// Decision Log #168: when a session exists, Header fetches the signed-in
+// user's profile once (getUser(accessToken, sub)) and passes it to
+// NavDrawer for its identity block. The fetch is keyed on the access
+// token, so it runs once per session -- not on every drawer open/close.
+// A pending or failed fetch leaves `profile` null, which NavDrawer
+// renders as its generic "Signed in" fallback.
+//
+// Decision Log #291 (sprint-3/notification-centre-to-code): Header also
+// fetches the caller's unread notification count (GET
+// /notifications/unread-count -- a single COUNT query, cheap enough for
+// this) and re-fetches it on every navigation (keyed on
+// [accessToken, location.key], unlike the profile fetch's once-per-
+// session key) so the avatar dot and the account menus' badge reflect a
+// notification just read on /notifications once the user navigates away
+// from it. `unreadCount` drives both the avatar's "Has Unread" dot
+// (Figma's Avatar component, Decision Log #99/#103 -- substituting
+// brand/green for the Figma-bound semantic/alert, since that token isn't
+// exposed to apps/web, the same substitution the Grassroots LIVE
+// indicator already made) and the numeric badge on the account
+// dropdown / drawer's Notification(s) row (Figma's navy count-pill,
+// Decision Log #88).
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
+import logoMark from "../assets/icons/soccernity-logo-mark.svg";
+import searchIcon from "../assets/icons/search.svg";
+import messagesIcon from "../assets/icons/messages.svg";
+import searchMobileIcon from "../assets/icons/search-mobile.svg";
+import menuIcon from "../assets/icons/menu-hamburger.svg";
+import { getUser, type UserProfile } from "../api/users";
+import { getUnreadCount } from "../api/notifications";
+import { decodeAccessToken } from "../lib/session";
+import { useAuth } from "../lib/AuthContext";
+import { primaryNavItems } from "./navigation";
+import { useIsMobile } from "./useIsMobile";
+import AccountDropdown from "./AccountDropdown";
+import NavDrawer from "./NavDrawer";
+import HeaderAvatarFace from "./HeaderAvatarFace";
+import "./Header.css";
+
+export default function Header() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+
+  // B-246: the in-memory session. useAuth() subscribes to the store, so this
+  // re-renders on sign-in, on a token rotation and when ANOTHER tab signs out
+  // (BroadcastChannel) -- not only on navigation.
+  const { accessToken, signOut } = useAuth();
+  const hasSession = Boolean(accessToken);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  // Close any open overlay when the route changes or the session ends.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.key, hasSession]);
+
+  // Desktop account dropdown: close on a click outside the avatar + menu
+  // wrapper (Decision Log #106). Mounted only while open, so no listener
+  // outlives the menu.
+  useEffect(() => {
+    if (!menuOpen || isMobile) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuOpen, isMobile]);
+
+  // Fetch the signed-in user's profile once per session, for NavDrawer's
+  // identity block (Decision Log #168). Keyed on the token itself: it
+  // runs on login and is cleared on logout, but a plain navigation
+  // (same token) does not refetch. A failure leaves `profile` null --
+  // NavDrawer falls back to its generic "Signed in" row, navigation
+  // still works.
+  useEffect(() => {
+    if (!accessToken) {
+      setProfile(null);
+      return;
+    }
+    const decoded = decodeAccessToken(accessToken);
+    if (!decoded) {
+      setProfile(null);
+      return;
+    }
+    let cancelled = false;
+    setProfile(null);
+    getUser(accessToken, decoded.sub)
+      .then((result) => {
+        if (!cancelled) setProfile(result);
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  // Re-fetched on every navigation (not just once per session, unlike the
+  // profile fetch above) -- see the header comment for why.
+  useEffect(() => {
+    if (!accessToken) {
+      setUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+    getUnreadCount(accessToken)
+      .then((count) => {
+        if (!cancelled) setUnreadCount(count);
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, location.key]);
+
+  function handleLogout() {
+    // B-017 / B-246: POST /auth/logout revokes the refresh cookie server-side
+    // (best-effort, not awaited) and the in-memory token is cleared in this and
+    // every other tab; the UI never waits on the network.
+    signOut();
+    setMenuOpen(false);
+    navigate("/");
+  }
+
+  return (
+    <header className={isMobile ? "sn-header sn-header--mobile" : "sn-header"}>
+      <div className="sn-header__brand">
+        <NavLink to="/" className="sn-header__logo-link" aria-label="Soccernity home">
+          <img src={logoMark} alt="" className="sn-header__logo-mark" width={32} height={32} />
+          <span className="sn-header__wordmark">Soccernity</span>
+        </NavLink>
+      </div>
+
+      {/* Desktop (> 820 px): the search box and the nine-icon row. On mobile neither is
+          rendered: the Figma mobile header (header 4 / header 7 -- mobile, FC4, B-178)
+          draws the logo, a search icon and the account / Login controls only; the sections
+          are reached through the Navigation Drawer. */}
+      {!isMobile && (
+        <>
+          <div className="sn-header__search" role="search">
+            <img src={searchIcon} alt="" className="sn-header__search-icon" width={16} height={16} />
+            {/* Placeholder only -- no search functionality yet, out of scope for the app shell. */}
+            <input
+              type="search"
+              className="sn-header__search-input"
+              placeholder="Search Soccernity"
+              aria-label="Search Soccernity"
+              disabled
+            />
+          </div>
+
+          <nav className="sn-header__nav" aria-label="Primary">
+            <ul className="sn-header__nav-list">
+              {primaryNavItems.map((item) => (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    aria-label={item.label}
+                    className={({ isActive }) =>
+                      isActive ? "sn-header__nav-link sn-header__nav-link--active" : "sn-header__nav-link"
+                    }
+                  >
+                    <span
+                      className={
+                        item.tinted
+                          ? "sn-header__nav-icon sn-header__nav-icon--tinted"
+                          : "sn-header__nav-icon"
+                      }
+                    >
+                      <img src={item.icon} alt="" />
+                    </span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </>
+      )}
+
+      <div className="sn-header__auth">
+        {isMobile && (
+          <Link to="/search" className="sn-header__search-link" aria-label="Search">
+            <img src={searchMobileIcon} alt="" width={24} height={24} />
+          </Link>
+        )}
+        {hasSession ? (
+          <div className="sn-header__account" ref={accountRef}>
+            {/* Messages: /messages now resolves (sprint-3/banter-
+                messaging-to-code, Decision Log #277) -- closes the
+                messages half of Decision Log #166. Notifications (the
+                account-dropdown row) stays inert -- separate module, no
+                apps/web conversion yet. */}
+            <Link to="/messages" className="sn-header__messages" aria-label="Messages">
+              <img src={messagesIcon} alt="" width={26} height={25} />
+            </Link>
+            <button
+              type="button"
+              className="sn-header__avatar"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <HeaderAvatarFace profile={profile} />
+              {unreadCount > 0 && <span className="sn-header__avatar-dot" aria-hidden="true" />}
+            </button>
+            {menuOpen && !isMobile && (
+              <AccountDropdown
+                onNavigate={() => setMenuOpen(false)}
+                onLogout={handleLogout}
+                unreadCount={unreadCount}
+              />
+            )}
+          </div>
+        ) : (
+          <>
+            <Link to="/login" className="sn-header__login-button">
+              Login
+            </Link>
+            {isMobile && (
+              <button
+                type="button"
+                className="sn-header__menu-button"
+                aria-label="Open menu"
+                aria-haspopup="dialog"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <img src={menuIcon} alt="" width={24} height={24} />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {menuOpen && isMobile && !hasSession && (
+        <NavDrawer variant="logged-out" onClose={() => setMenuOpen(false)} onLogout={handleLogout} />
+      )}
+
+      {menuOpen && isMobile && hasSession && (
+        <NavDrawer
+          onClose={() => setMenuOpen(false)}
+          onLogout={handleLogout}
+          profile={profile}
+          unreadCount={unreadCount}
+        />
+      )}
+    </header>
+  );
+}

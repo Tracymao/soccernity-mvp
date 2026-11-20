@@ -1,5 +1,963 @@
 # feed module
 
 Build target: Sprint 2 — Section 4.3 of the MVP Build Plan.
-Endpoints for this module: see the matching subsection of Build Plan Section 4.
-Not yet implemented — this is a placeholder so the sprint owner is visible in the file tree.
+
+## Status
+
+**Slice one (`POST /posts` + `GET /posts/feed`) — done, merged to `main`
+(PR #53).** **Slice two (the remaining seven endpoints) — done, merged to
+`main` (PR #54).** **`DELETE /posts/:id/comments/:commentId` — done,
+`sprint-2/comment-delete`, a genuine addition beyond Section 4.3's
+original list, see "Comment deletion" below.** **`POST /posts/:id/view`
+— done, `sprint-4/post-view-tracking`, also a genuine addition beyond
+Section 4.3's original list, see "View tracking" below.**
+
+Section 4.3 lists nine endpoints total:
+
+```
+POST   /posts                       — slice one
+GET    /posts/feed                  — slice one
+GET    /posts/:id                   — slice two
+POST   /posts/:id/like               — slice two
+DELETE /posts/:id/like               — slice two
+POST   /posts/:id/comments           — slice two
+GET    /posts/:id/comments           — slice two
+POST   /posts/:id/save               — slice two
+DELETE /posts/:id/save               — slice two
+GET    /users/:id/saved-posts        — slice two
+```
+
+All nine endpoints in Section 4.3 now exist. Beyond Section 4.3's
+original list, `DELETE /posts/:id/comments/:commentId`
+(`sprint-2/comment-delete`) closes the comment-deletion gap
+`schema.prisma`'s own comment on `Post.commentCount` has flagged since PR
+#54 — see "Comment deletion (`DELETE /posts/:id/comments/:commentId`) —
+a genuine spec addition" below. Nothing in Section 4.4 (Club & Banter
+Service — `GET /clubs`, `GET /clubs/:id`, `POST /clubs/:id/join`, all of
+`/banter-rooms*`) is built by this module — see "Deliberately out of
+scope" below.
+
+---
+
+## Slice one — `POST /posts` + `GET /posts/feed`
+
+This section is preserved from PR #53 as-is; slice two did not modify
+`createPost()` or `getFeed()`.
+
+### Spec discrepancy flagged, not silently resolved
+
+**1. Is `POST /posts` gated by `GuardianConsentGuard`?**
+
+Build Plan Section 8.3 step 5 enumerates the restricted-pending state's
+three behaviors verbatim: "no public profile visibility, no DMs from
+unverified accounts, no participation in Banter Rooms beyond
+read-only." Read literally, general feed post creation isn't one of
+the three — `auth/README.md`'s own PR B7 status update reached the same
+literal reading and left the guard unattached anywhere, for exactly
+this reason.
+
+However, Build Plan Section 5.7 (the auth implementation spec) says,
+independently and more broadly: *"Re-check current status against the
+database on every safety-sensitive action (**posting**, messaging,
+joining a Banter Room or Community Group), not just on login."*
+Section 5.7 names "posting" explicitly as a safety-sensitive action
+requiring this re-check — it isn't limited to Banter Room posting.
+
+This PR follows Section 5.7's explicit instruction: `POST /posts` is
+gated by `@UseGuards(JwtAuthGuard, GuardianConsentGuard)`, the same
+ordering convention documented on `guardian-consent.guard.ts`. This is
+a judgment call, not a mechanical read of a single unambiguous
+sentence — **flagged as a Decision Log candidate**: should Section 8.3
+step 5's enumerated list be read as exhaustive (in which case general
+feed posting should NOT be gated, and this PR over-applies the guard),
+or should Section 5.7's broader "posting" language control (in which
+case this PR's reading is correct, and step 5's list was simply
+non-exhaustive)? Whoever resolves Decision Log #12 (DM restriction
+scope, Build Plan Section 9) or otherwise revisits Section 8.3's exact
+wording should settle this explicitly rather than leave two sections
+in tension. **Slice two inherits this exact same unresolved question
+and extends it to comments — see below.**
+
+`GET /posts/feed` is deliberately **not** gated by `GuardianConsentGuard`
+— only `JwtAuthGuard`. Reading a feed isn't the safety-sensitive action
+posting is; nothing in Section 8.3 step 5 or Section 5.7's
+safety-sensitive-action list says reading one's own feed should be
+blocked, and blocking it would work against "the account exists but is
+restricted" (Section 8.3 step 5's own framing — restricted, not
+disabled).
+
+**2. What is `GET /posts/feed`'s scope, beyond "paginated"?**
+
+Section 4.3 lists the endpoint itself but does not define what posts it
+should return. This PR's judgment call: the caller's own posts, plus
+posts by any user the caller follows (`Follow` model — `followerId` is
+the caller, `followeeId` is who they follow). This is the only social
+graph mechanism that exists at this point in the build (Sprint 2's own
+scope per `CLAUDE.md`: "Follow" is explicitly listed alongside Feed
+Service). **Flagged, not assumed complete**: club-page and Banter-Room
+membership are deliberately NOT part of this scope query — a post
+tagged with a `clubPageId`/`banterRoomId` from a club/room the caller
+belongs to, written by someone the caller doesn't follow, will **not**
+currently appear in that caller's feed. Whether club/room membership
+should also pull posts into a member's feed (independent of following
+the specific author) is an open product question Section 4.3 doesn't
+answer either way — a Decision Log candidate for whoever builds
+`ClubPage`/`BanterRoom` membership flows (Section 4.4, Sprint 3+), not
+resolved unilaterally here.
+
+### What's implemented
+
+- **`POST /posts`** — `@UseGuards(JwtAuthGuard, GuardianConsentGuard)`.
+  `authorId` comes from `@CurrentUser()` (the verified JWT `sub`
+  claim), never from the request body — `CreatePostDto` has no
+  `authorId` field, and the global `ValidationPipe`
+  (`forbidNonWhitelisted: true`) rejects a request that tries to smuggle
+  one in.
+  - `contentText` (string, required, 1–3000 chars — see
+    `dto/create-post.dto.ts` for why 3000 was chosen).
+  - `mediaUrls` (optional array of URL strings, max 10 items).
+  - `clubPageId` / `banterRoomId` (both optional strings). Setting
+    **both** on the same post is rejected with a 400
+    (`FeedService.createPost`'s cross-field check, following the same
+    "cross-field rules belong in the service, not a DTO decorator"
+    precedent `RegistrationService` established for
+    "guardian required when isMinor"). A well-formed but
+    non-existent `clubPageId`/`banterRoomId` (valid string, no matching
+    row) is also rejected with a 400 — the underlying Postgres
+    foreign-key violation (Prisma error code `P2003`) is caught and
+    mapped, not left to surface as an unhandled 500.
+  - Returns the created post with a minimal embedded `author` (`id`,
+    `displayName` only — see below).
+
+- **`GET /posts/feed`** — `@UseGuards(JwtAuthGuard)` only. Cursor-based
+  (keyset) pagination, not offset — see `dto/feed-query.dto.ts` and
+  `cursor.util.ts` for the full reasoning (an offset degrades under
+  concurrent inserts, which a feed has by definition). Query params:
+  - `cursor` (optional, opaque — base64 of an internal
+    `{ createdAt, sequence }` envelope; a client should treat it as a
+    black box, not construct one).
+  - `limit` (optional, integer, 1–50; default 20 if omitted). Both
+    numbers are deliberate, documented choices — Section 5.5 requires
+    pagination but doesn't specify page sizes.
+  - Ordered most-recent-first: `createdAt desc, sequence desc` (the
+    tiebreaker for rows sharing an identical `createdAt` timestamp).
+    **Fixed a real bug, not just tidied**: this used to tiebreak on
+    `id` — `Post.id` is a random `@default(uuid())` with zero relation
+    to insertion order, so two posts created in the same millisecond
+    (this codebase's `createdAt` columns are `TIMESTAMP(3)`, so a real
+    collision under any burst of activity — concurrent requests, a
+    batch/seed import — is not a hypothetical) tiebroke in an order
+    unrelated to which one was actually created first. `Post.sequence`
+    (see its own comment in `schema.prisma`) is a genuine
+    Postgres-assigned `SERIAL`, so ties now resolve in true creation
+    order. `getComments`/`getSavedPosts` below had the identical
+    problem via their own `id`/`postId` tiebreakers and got the same
+    fix (`Comment.sequence`/`SavedPost.sequence`) — see each entry's own
+    note. `cursor.util.ts` still exports the original, unchanged
+    `id`-keyed `FeedCursor`/`encodeFeedCursor`/`decodeFeedCursor` too —
+    `users.service.ts`'s `getFollowers`/`getFollowing` import those
+    directly (an exception to this codebase's usual
+    per-module-cursor-util-copy convention) and were deliberately left
+    alone, out of this fix's scope; the new sequence-keyed shape is a
+    second, additively-added pair
+    (`FeedSequenceCursor`/`encodeFeedSequenceCursor`/
+    `decodeFeedSequenceCursor`), not a breaking change to the first.
+  - Response shape: `{ items: Post[], nextCursor: string | null }` —
+    `sequence` itself is never part of this payload (see
+    `POST_SELECT_WITH_SEQUENCE`'s own comment in `feed.service.ts`);
+    it's fetched internally to build `nextCursor` and stripped back off
+    before a page is returned.
+  - Does not select `comments`, `likes`, or `savedBy` relations on the
+    list payload — Section 5.5's "keep list payloads lean" — only the
+    already-denormalized `likeCount`/`commentCount` ints.
+
+---
+
+## Slice two — the remaining seven endpoints
+
+Section 4.3's endpoint list has more surface area than slice one, and
+so does this section — every guard/scope judgment call below is argued
+at the same depth as slice one's two, not thinner.
+
+### Spec discrepancies flagged, not silently resolved
+
+**3. Is liking "posting" in Section 5.7's sense?**
+
+No. `POST`/`DELETE /posts/:id/like` are `@UseGuards(JwtAuthGuard)` only
+— deliberately not `GuardianConsentGuard`. Section 5.7's
+safety-sensitive-action list is "posting, messaging, joining a Banter
+Room or Community Group." A like produces no content of its own —
+nothing new is visible to any other user as a result of it beyond a
+number changing — so it doesn't fit "posting" the way `POST /posts`
+itself does (per point 1 above) or the way commenting does (point 4,
+below). This reading isn't inherited automatically from slice one's own
+`POST /posts` conclusion; it's argued independently here because liking
+and posting are different enough actions that the same conclusion
+shouldn't be assumed to carry over silently. Not flagged as a Decision
+Log candidate — this one reads unambiguous enough under Section 5.7's
+own language that there's no real tension to resolve, unlike points 1
+and 4.
+
+**4. Is commenting "posting" in Section 5.7's sense?**
+
+Yes — this one lands the opposite way from liking, and is flagged as a
+Decision Log candidate, same as point 1. `POST /posts/:id/comments` is
+`@UseGuards(JwtAuthGuard, GuardianConsentGuard)`. Unlike a like, a
+comment is genuine original user-generated content, visible to every
+other reader of the post's comment thread — in that respect it's
+materially closer to `POST /posts` itself than to liking or saving. The
+same tension from point 1 applies here with the same shape: Section
+8.3 step 5's enumerated restricted-pending list doesn't literally say
+"commenting," but Section 5.7's broader "posting" language is read here
+as covering it, for the same reason slice one read it as covering feed
+posts. **Flagged as the same open Decision Log candidate as point 1** —
+whoever resolves whether Section 8.3 step 5's list is exhaustive should
+resolve `POST /posts`, `POST /posts/:id/comments`, and any future
+content-creation endpoint (Banter Room posts, Sprint 3) together, not
+piecemeal.
+
+`GET /posts/:id/comments` is `@UseGuards(JwtAuthGuard)` only — reading,
+same category as `GET /posts/feed` and `GET /posts/:id`.
+
+**5. Is saving "posting" in Section 5.7's sense?**
+
+No. `POST`/`DELETE /posts/:id/save` are `@UseGuards(JwtAuthGuard)` only.
+A save is a private bookmarking action — it creates no content visible
+to anyone but the person who saved it (there's no `GET
+/posts/:id/saved-by` or equivalent, and none is in Section 4.3). It's
+even further from "posting" than liking is, since a like at least
+surfaces as a visible count change on the post itself; a save doesn't
+surface anywhere except the saver's own `GET /users/:id/saved-posts`.
+
+**6. What is `GET /posts/:id`'s field shape?**
+
+Reuses `POST_SELECT` unmodified — the same fields `GET /posts/feed`
+returns for each list item. No divergence was needed: nothing about
+viewing a single post calls for more or fewer fields than viewing it in
+a list. A non-existent `:id` is a 404 (`FeedService.getPostById`
+throws `NotFoundException`), never a silent `null` 200.
+
+**7. What is `GET /posts/:id/comments`'s ordering?**
+
+Section 4.3 doesn't specify. This PR's judgment call: oldest-first
+(`createdAt asc, id asc`), the opposite direction from the feed's own
+most-recent-first. A comment thread reads naturally top-to-bottom in
+the order it was written — the same convention this codebase's own
+Figma-derived screens already follow, and the same convention
+essentially every comment UI (this platform's genuine competitors
+included) uses. Not flagged as a Decision Log candidate — this is a UX
+convention strong enough that there's no real ambiguity to resolve, but
+it IS a genuine judgment call (Section 4.3 is silent) and is documented
+as one rather than assumed.
+
+**8. Does `GET /users/:id/saved-posts` require `:id` to equal the
+caller's own id, or are saved posts publicly viewable?**
+
+Section 4.3 doesn't say either way. This PR defaults to the
+**conservative reading — self-only, 403 on mismatch** — the identical
+precedent `users/README.md` established for `GET`/`PATCH /users/:id`
+(`UsersController.assertSelf()`; `SavedPostsController.assertSelf()`
+here is a deliberate, small, same-shape duplicate — see
+`saved-posts.controller.ts`'s own comment on why it isn't extracted
+into a shared helper). **Flagged as a Decision Log candidate**: there's
+a real product argument on both sides — "saved" often implies a private
+bookmark list, but a public "reading list" a user curates and shares
+isn't an unreasonable feature either. Whoever revisits this should
+decide deliberately, not have the conservative default calcify into the
+permanent behavior by omission.
+
+### What's implemented
+
+- **`GET /posts/:id`** — `@UseGuards(JwtAuthGuard)` only. See point 6.
+  404 (not a silent null) for a non-existent id.
+
+- **`POST /posts/:id/like`** — `@UseGuards(JwtAuthGuard)` only (point
+  3). `HttpCode(200)`, not Nest's POST default of 201 — a like/unlike
+  toggle doesn't always "create a resource" on a given call (see
+  idempotency below), so 200-with-resulting-state fits better than
+  "Created." Response: `{ postId, liked: true, likeCount: number }`.
+  - **Idempotent**: liking an already-liked post is a 200 success, not
+    a 500 or a 409. `Like.@@unique([userId, postId])` backs this —
+    Postgres raises a unique-constraint violation (Prisma `P2002`) on
+    the duplicate `create`, which `FeedService.likePost` catches and
+    treats as success **without** double-incrementing `likeCount`.
+  - **Atomic counter update**: the `Like` row's creation and
+    `Post.likeCount`'s increment happen inside one Prisma **interactive
+    transaction** (`$transaction(async (tx) => ...)`), not the array
+    form (`$transaction([...])`). This is a deliberate divergence from
+    slice one's own code (which has no transaction at all) and is
+    worth explaining: the array form evaluates every operation eagerly
+    — each `prisma.model.method(...)` call happens before `$transaction`
+    itself runs — so there's no clean way to make the second operation
+    (the increment) conditional on whether the first (the `Like`
+    create) actually succeeded. The callback form runs top-to-bottom
+    with ordinary `await`/throw semantics: if `tx.like.create` throws,
+    `tx.post.update` never executes at all, and the whole transaction
+    rolls back — exactly the "never trust this counter in isolation,
+    always keep it consistent with the real rows" obligation
+    `schema.prisma`'s comment on `Post.likeCount` describes.
+  - `postId` not referencing a real `Post` → 404 (checked before any
+    write is attempted, via `FeedService.assertPostExists`, shared by
+    all six action endpoints below).
+
+- **`DELETE /posts/:id/like`** — `@UseGuards(JwtAuthGuard)` only.
+  Response: `{ postId, liked: false, likeCount: number }`.
+  - **Idempotent**: unliking a post that was never liked (or already
+    unliked) is a 200 success, not a 404 — "you don't have this liked"
+    and "you successfully ensured this isn't liked" are the same
+    observable end state.
+  - **Race-safe decrement**: the decrement is expressed as
+    `post.updateMany({ where: { id, likeCount: { gt: 0 } }, ... })`
+    inside the same interactive transaction as the `Like` row's
+    deletion — `likeCount` can never be driven negative even under two
+    concurrent unlike requests. A concurrent-delete race itself (a
+    second request's delete losing to a first, surfacing as Prisma
+    `P2025`) is also caught and treated as the same idempotent success.
+  - `postId` not referencing a real `Post` → 404.
+
+- **`POST /posts/:id/comments`** — `@UseGuards(JwtAuthGuard,
+  GuardianConsentGuard)` (point 4). `authorId` comes from
+  `@CurrentUser()`, never the body (`CreateCommentDto` has no
+  `authorId` field, whitelist-enforced same as `CreatePostDto`).
+  `contentText`: string, required, 1–3000 chars — **reuses**
+  `CreatePostDto`'s own 3000 rather than inventing an unexplained
+  second number (see `dto/create-comment.dto.ts`). Default Nest 201 on
+  success (a comment, unlike a like/save, is always a genuine new row
+  on every successful call — there's no idempotency to reflect in the
+  status code).
+  - **Atomic counter update**: same interactive-transaction pattern as
+    the like endpoints — the `Comment` row's creation and
+    `Post.commentCount`'s increment happen in one
+    `$transaction(async (tx) => ...)` call. See the new comment on
+    `Post.commentCount` in `schema.prisma` for the obligation this
+    honors, and its explicit note that **there is no decrement path**:
+    Section 4.3 has no `DELETE /posts/:id/comments/:commentId`, so
+    nothing in this codebase ever removes a `Comment` row. Whoever adds
+    comment deletion later — a genuine addition beyond Section 4.3 as
+    currently written, not a spec'd endpoint this PR should build
+    speculatively — must add the matching decrement then, following the
+    same `updateMany`-with-a-floor-guard pattern `unlikePost` already
+    established for exactly this kind of "no going negative" concern.
+  - `postId` not referencing a real `Post` → 404.
+
+- **`GET /posts/:id/comments`** — `@UseGuards(JwtAuthGuard)` only
+  (point 4). Same keyset-cursor pagination pattern as `GET /posts/feed`
+  — reuses `cursor.util.ts`'s `encode`/`decodeFeedCursor` as-is, no
+  second cursor format invented. Ordered oldest-first (point 7):
+  `createdAt asc, id asc`. Query params (`cursor`, `limit`) and response
+  shape (`{ items, nextCursor }`) identical in contract to `GET
+  /posts/feed` — reuses `FeedQueryDto` directly rather than a
+  duplicate, near-identical DTO. `postId` not referencing a real `Post`
+  → 404.
+
+- **`POST /posts/:id/save`** — `@UseGuards(JwtAuthGuard)` only (point
+  5). `HttpCode(200)`, same reasoning as the like endpoint. Response:
+  `{ postId, saved: true }`.
+  - **Idempotent**: saving an already-saved post is a 200 success.
+    `SavedPost.@@unique([userId, postId])` backs this the same way
+    `Like`'s uniqueness constraint backs `likePost`'s idempotency —
+    Prisma `P2002` on the duplicate `create` is caught and treated as
+    success.
+  - **No counter to maintain**: unlike `Like`, `SavedPost` has no
+    denormalized count anywhere on `Post` or itself — nothing to
+    increment. This is a simpler code path than like/unlike for exactly
+    that reason (a plain `create`/catch-`P2002`, no transaction
+    needed — there's no second write to keep atomic with the first).
+  - `postId` not referencing a real `Post` → 404.
+
+- **`DELETE /posts/:id/save`** — `@UseGuards(JwtAuthGuard)` only.
+  Response: `{ postId, saved: false }`. Idempotent (P2025 on a
+  non-existent `SavedPost` row is caught, treated as success, not a
+  404) — again simpler than `unlikePost` since there's no counter to
+  guard against going negative. `postId` not referencing a real `Post`
+  → 404.
+
+- **`GET /users/:id/saved-posts`** — lives on `SavedPostsController`
+  (`saved-posts.controller.ts`), not `FeedController`, because its path
+  is under `/users`, not `/posts` — see that file's own header comment
+  for why it's still in this module (shares `FeedService` and this
+  module's conventions) rather than `UsersModule`.
+  `@UseGuards(JwtAuthGuard)` only; self-only scope enforced in the
+  controller (point 8), not the service — `FeedService.getSavedPosts`
+  receives an already-verified `userId` and has no scope-checking
+  concern of its own. Same keyset-cursor pagination pattern again, most
+  recently saved first (`savedAt desc`, `postId` as the tiebreaker —
+  `SavedPost`'s own `id` isn't selected since `@@unique([userId,
+  postId])` already makes `postId` unique within one caller's rows).
+  Each item embeds the full post (`POST_SELECT`, same
+  field-minimization discipline as everywhere else) alongside
+  `savedAt`. **Note on cursor reuse**: the cursor envelope's field is
+  named `createdAt` (from `cursor.util.ts`'s original, feed-specific
+  naming) but is reused here to carry `SavedPost.savedAt` — the
+  envelope shape is generic (`{ timestamp, id }`) despite the field
+  name, and renaming it would touch every existing call site and test
+  for no behavioral gain, so this is documented at the two call sites
+  in `feed.service.ts` rather than acted on.
+
+- **Author/counter field discipline, extended from slice one**: every
+  new select shape in this slice (`COMMENT_SELECT`, the embedded `post`
+  in `SAVED_POST_SELECT`) reuses the same `POST_AUTHOR_SELECT` (`id` +
+  `displayName` only) slice one established — no `passwordHash`,
+  `isMinor`, `email`, `phone`, `dateOfBirth`, or `verificationStatus`
+  ever leaves Postgres via any of these seven endpoints' code paths.
+
+### Deliberately out of scope for this PR
+
+- Everything in Section 4.4 (Club & Banter Service) — unchanged from
+  slice one's own scope note; still Sprint 2 (clubs) / Sprint 3
+  (Banter Rooms), neither touched by either feed slice.
+- ~~Wiring `comment`/`like` events into `Notification`~~ — was Sprint 2
+  scope per `CLAUDE.md` but explicitly deferred to a separate PR at the
+  time this slice was written (this slice created the real `Like`/
+  `Comment` rows for the first time in this codebase, which is what made
+  that follow-up buildable). **Retrofitted by
+  `sprint-2/follow-and-notifications`** — `FeedService.likePost` and
+  `FeedService.addComment`'s existing `$transaction` callbacks now each
+  also create a `Notification` row (recipient: the post's author, never
+  the actor; no self-notification). `unlikePost` does not and should
+  not (removing an action isn't performing one). See
+  `users/README.md`'s Sprint 2 section for the full reasoning, the
+  `payloadRefId` convention this established, and why it lives there
+  rather than here (that PR's actual new endpoints — `Follow` — are a
+  User Service concern per Section 4.2, and Follow's own notification is
+  what motivated doing all three triggers together).
+- ~~`DELETE /posts/:id/comments/:commentId`~~ — was not in Section 4.3 at
+  all when slice two shipped; see point on `Post.commentCount`'s missing
+  decrement path above, and was deliberately not built speculatively at
+  the time. **Built by `sprint-2/comment-delete`** — see the dedicated
+  section below for the full reasoning; this bullet is left in place for
+  the historical record of what slice two itself did and didn't ship.
+- Anything club/room-membership-aware in `GET /posts/feed`'s scope —
+  unchanged from slice one's own flagged gap (see point 2 above);
+  slice two didn't touch `getFeed()`.
+
+---
+
+## Comment deletion (`DELETE /posts/:id/comments/:commentId`) — a genuine spec addition
+
+Section 4.3, as originally written, lists nine endpoints and none of them
+is a comment-deletion route — slice two's own README section (above) and
+`schema.prisma`'s comment on `Post.commentCount` both flagged this
+explicitly rather than building it speculatively: "whoever eventually
+adds comment deletion... must add the matching decrement then." This PR
+is that follow-up. **Flagged as a Decision Log candidate**, same as every
+other genuine addition beyond a literal Section 3/4 field or endpoint
+list this codebase has made this sprint (`Follow.createdAt`, the
+`_ClubMembership` relation names, `DELETE /clubs/:id/join`): Section 4.3
+should arguably have paired every POST/DELETE-capable Section-3 entity
+symmetrically from the start (it does for `Like`, `SavedPost`, `Follow`,
+and now `ClubPage` membership), and `Comment` was the one exception until
+now. Whoever next revisits Section 4.3's own text should add this line
+item explicitly rather than leave the spec silently out of sync with what
+this codebase actually implements.
+
+### Is this endpoint idempotent, like unlike/unsave/unfollow/leave?
+
+**No — and this is a deliberate, argued departure from every other
+DELETE endpoint in this module and its sibling modules.** Every existing
+idempotent-DELETE endpoint in this codebase (`unlikePost`, `unsavePost`,
+`unfollowUser`, `leaveClub`) is backed by a **many-to-many toggle
+relationship** — `Like`/`SavedPost`/`Follow`'s own `@@unique([...])`
+constraints, or `ClubPage.members`'s implicit join table — where "this
+relationship doesn't exist" is a normal resting state a caller can
+observe and re-trigger repeatedly with no meaningful difference between
+"it was never there" and "I just removed it."
+
+A `Comment` is different in kind: it has its own **single-row primary-key
+identity** (`Comment.id`), the same as a `Post` does. Once a specific
+`commentId` is deleted, a second `DELETE` on that exact id is genuinely
+indistinguishable from calling it on a `commentId` that never existed at
+all — there is no "current state" left to report back as a 200, the way
+`{ liked: false, likeCount: N }` meaningfully describes the post's state
+after an unlike. Synthesizing a 200 here would misrepresent what actually
+happened (nothing, the second time) as a successful no-op action, when in
+truth the resource is just gone. This endpoint therefore returns a
+genuine 404 on a repeat delete, and `feed.service.spec.ts`/
+`feed-reactions.e2e-spec.ts` both include an explicit test proving this
+directly (delete once → 204/success; delete the same id again → 404) —
+not just documented as an intention.
+
+### Why existence-and-belongs-to-this-post is checked BEFORE authorization, and why a mismatch is 404 not 403
+
+`FeedService.deleteComment(postId, commentId, requestingUserId)` first
+loads the comment and checks two things together: does a `Comment` with
+this `commentId` exist at all, and if so, does its own `postId` match the
+`:id` in the URL? Either failure — no such comment, or a comment that
+exists but belongs to a *different* post — is a **404**, before
+authorization is even considered.
+
+This is a deliberate distinction, not an oversight: a `commentId` that
+exists under a different post is a **resource-identity mismatch** (the
+URL is simply wrong about where this comment lives), not an authorization
+question. Returning 403 for that case would leak information the caller
+has no right to (confirming "this id is real, you're just not allowed to
+touch it") when the caller's URL itself doesn't even correctly describe
+the resource they're pointing at. `feed-reactions.e2e-spec.ts` proves
+this concretely: a commenter who **genuinely authored** the comment in
+question still gets a 404, not a 403 or a success, when they target it
+via the wrong post's URL — confirming this is resource-identity
+reasoning, not an authorization shortcut that happens to reject them for
+an unrelated reason.
+
+### Authorization: comment author OR post author, never neither
+
+Once existence-and-identity is settled, `requestingUserId` must equal
+either `comment.authorId` or the post's own `authorId` — anyone else gets
+a **403** `ForbiddenException`, the same "authenticated but not
+authorized for this resource" convention `UsersController.assertSelf()`
+/ `SavedPostsController.assertSelf()` already established elsewhere in
+this codebase (403, not 404, once the resource's existence itself isn't
+in question).
+
+There is no moderator/admin role anywhere in this codebase's `User.role`
+field (`fan | player | admin` exists as a string, but nothing in Section
+4's endpoint list or this codebase's guards currently branches on
+`admin`) — so "post author can also delete" is the only sensible
+moderation mechanism available today, and matches how comment moderation
+works on comparable platforms: you can always delete your own comment,
+and the author of a post can remove comments left on it. Both
+`feed.service.spec.ts` and `feed-reactions.e2e-spec.ts` cover both halves
+of this OR independently (comment-author-deletes-own-comment, and
+post-author-deletes-someone-else's-comment-on-their-own-post), not just
+the union.
+
+### Guard choice: `JwtAuthGuard` only, argued fresh (not inherited from `POST /posts/:id/comments`)
+
+`POST /posts/:id/comments` is gated by `GuardianConsentGuard` (point 4,
+above) because Decision Log #21 confirmed that creating a comment is
+"closer to posting" — genuinely new content, visible to every reader of
+the thread. `DELETE /posts/:id/comments/:commentId` does not inherit that
+conclusion automatically; it's argued fresh here, the same discipline
+point 3 (liking) used rather than assuming a shared conclusion with
+point 4 (commenting) just because both involve a `Comment` row.
+
+Removing your own content, or moderating content left on your own post,
+produces **no new visible content** — the exact same category
+`unlikePost`/`unsavePost` already sit in (point 3/5 above: "removing an
+action isn't performing one," to reuse the phrase this README already
+uses for why `unlikePost` gets no `Notification`). Section 5.7's
+safety-sensitive-action list ("posting, messaging, joining a Banter Room
+or Community Group") has no more claim on a deletion than it does on an
+unlike. `@UseGuards(JwtAuthGuard)` only.
+
+### Response shape: default 204, not 200-with-state
+
+Every other action endpoint in this module (`like`/`unlike`,
+`save`/`unsave`) returns `200` with the resulting state
+(`{ postId, liked: boolean, likeCount: number }` etc.) because those are
+idempotent **toggles** — the whole point of the response is to tell the
+caller the current state after their call, which might not have changed
+anything on this particular request. A comment deletion has no such
+"current state" left to report: once it succeeds, the resource is gone,
+and (per the idempotency argument above) a second call is a 404, not
+another state snapshot. NestJS's own default success code for a route
+with no meaningful response body — `204 No Content` — fits this better
+than inventing a `{ deleted: true }` envelope with nothing useful in it,
+so `@HttpCode(HttpStatus.NO_CONTENT)` is used explicitly rather than
+relying on an implicit default, mirroring this codebase's existing habit
+of stating HTTP-code choices explicitly rather than leaving them to
+frameworks defaults to imply intent (see `@HttpCode(200)`'s own comments
+on the like/save routes).
+
+### No `Notification` wiring
+
+Deleting a comment does not create or remove any `Notification` row.
+There is no existing precedent for "notify someone their content was
+removed" anywhere in this codebase's notification wiring
+(`sprint-2/follow-and-notifications` only ever creates `Notification`
+rows for `like`/`comment`/`follow` — actions that produce something,
+never actions that remove something), and nothing in Section 4's spec or
+Section 6's Sprint 2 scope calls for one here. Not built speculatively.
+
+### Atomic counter update
+
+The `Comment` row's deletion and `Post.commentCount`'s decrement happen
+inside one Prisma interactive `$transaction` — the same
+create-side/delete-side pairing discipline `addComment`
+(`tx.comment.create` + `tx.post.update({ commentCount: { increment: 1 }
+})`) and `unlikePost` (`tx.like.delete` + a floor-guarded
+`tx.post.updateMany`) already established. The decrement itself uses
+`updateMany` with a `commentCount: { gt: 0 }` where-clause floor guard —
+the exact pattern `unlikePost` uses for `likeCount`, and the exact
+two-layer reasoning `leaveClub` documents for `memberCount`: existence is
+already gated by `Comment`'s own primary key (not a toggle relationship),
+so a straightforward delete-then-decrement shouldn't be able to
+double-fire under normal operation, but the floor guard is cheap,
+already-established codebase precedent, and costs nothing to include as
+a second line of defense.
+
+### What's implemented
+
+- **`DELETE /posts/:id/comments/:commentId`** — `@UseGuards(JwtAuthGuard)`
+  only. `204 No Content` (no response body) on success.
+  - A non-existent `commentId`, or one that exists but references a
+    different `postId` than the URL → **404**, checked before
+    authorization.
+  - Neither the comment's author nor the post's author → **403**.
+  - **Not idempotent**: a second delete of the same real comment is a
+    **404**, not a repeated 204 — see the dedicated section above.
+  - Atomic, floor-guarded `Post.commentCount` decrement, same pattern as
+    `unlikePost`'s `likeCount` decrement.
+
+### Verification
+
+Mocked unit coverage (`feed.service.spec.ts`, `feed.controller.http.spec.ts`):
+not-found (missing comment), not-found (wrong post), forbidden (neither
+role), success via the comment author, success via the post author, the
+transactional `updateMany`-floor-guard call shape, and the
+non-idempotent delete-twice-is-404 sequence — both at the service layer
+and, separately, at the HTTP layer (confirming the controller doesn't
+swallow or reshape `FeedService`'s thrown exceptions).
+
+Real e2e coverage, against real Postgres
+(`test/feed-reactions.e2e-spec.ts`'s new "comment deletion" describe
+block, extending the existing file rather than adding a sibling one):
+comment-author deletion and post-author deletion both genuinely remove
+the `Comment` row (queried directly, not inferred from the HTTP status)
+and decrement `Post.commentCount` by exactly 1; a third user is rejected
+with 403 with the row and counter both provably **unchanged**; a
+non-existent `commentId` is a 404; a `commentId` belonging to a different
+post is a 404 even when the requester genuinely authored that comment
+(the resource-identity-mismatch proof described above); deleting the
+same real comment twice is 204 then 404; and a
+comment/comment/delete/comment sequence lands `Post.commentCount` at
+exactly 2, matching `Comment.count()` at every intermediate step — the
+same "no drift across a real operation sequence" proof
+`counters.e2e-spec.ts` established for likes, applied here for the first
+time to comment deletion. This file's new tests reuse the existing
+`createUser()`-via-Prisma-plus-real-`TokenService` helper (not `POST
+/auth/register`) for the same, already-documented `AuthThrottlerGuard`
+rate-limit reason every other describe block in this file does.
+
+Mocked suite after this branch: **34 suites / 356 tests, 0 failures**
+(up from a freshly re-measured 34 suites / 344 tests, 1 failure
+immediately before this branch's changes on the same clean `main` —
+that pre-existing failure, `auth-rate-limit.decorator.spec.ts`'s
+`AUTH_RATE_LIMIT_MAX`-respecting test, is unrelated to this PR: it was
+reproduced twice on clean `main` before any edit in this branch was
+made, and passed cleanly on every run of the full suite once this
+branch's own changes were in place — a flake, not a regression this PR
+introduced or is responsible for fixing). e2e suite: **6 suites / 37
+tests, 0 failures** (up from a freshly re-measured 6 suites / 30 tests, 0
+failures immediately before this branch's changes — 7 new tests, no new
+spec file, this branch extends `test/feed-reactions.e2e-spec.ts` rather
+than adding one).
+
+**Correction (`sprint-2/e2e-test-infrastructure`, superseding the
+paragraph below):** this section originally claimed real HTTP
+verification against live Postgres/Redis via docker-compose, "not
+mocked." That claim was inaccurate — the same was also claimed (and is
+also being corrected) for slice one, which this paragraph says it follows
+"the same approach as." What was actually built and run was
+`feed.controller.http.spec.ts` / `saved-posts.controller.http.spec.ts`
+(HTTP-layer routing/guard/DTO-validation coverage with `FeedService`
+mocked — `{ provide: FeedService, useValue: <mocked object> }`, no real
+Prisma or Postgres) and `feed.service.spec.ts` (service-logic coverage,
+including the like/comment/save transaction and counter reasoning,
+against a hand-built mock `PrismaService`, not a real Postgres
+transaction). Confirm this directly by reading any of those files. No
+test file, script, or committed artifact in this codebase ever actually
+connected to a real Postgres instance before
+`sprint-2/e2e-test-infrastructure`. The "Confirmed live, end to end"
+bullets below describe a real database connection and real HTTP requests
+that, as far as this codebase's own history can verify, never actually
+happened — treat them as an inaccurate narrative, not evidence. This
+matters more here than in most modules: the guidance in
+`test/README.md` is specifically that transaction/isolation-level
+reasoning (exactly what `likePost`/`addComment`/`savePost`'s paired
+counter increments rest on) is one of the three categories that most
+needs real e2e coverage, precisely because a mock's `$transaction`
+simulation — however careful — cannot prove Postgres's actual READ
+COMMITTED behavior matches the code's assumptions.
+**What is newly, genuinely true as of `sprint-2/e2e-test-infrastructure`:**
+none of Section 4.3's nine endpoints have e2e coverage yet — this PR's
+initial e2e slice covers `auth.e2e-spec.ts` and `clubs.e2e-spec.ts` only
+(the concrete `_ClubMembership` raw-SQL gap that motivated the whole
+layer). Adding real e2e coverage for the like/comment/save transactional
+counter behavior described below is flagged as the natural next backlog
+item for this module, per `test/README.md`'s guiding principle — not
+something this PR closes.
+
+<details>
+<summary>Original (inaccurate) verification narrative — kept for history, not to be trusted as evidence</summary>
+
+Real HTTP verification against live Postgres/Redis (docker-compose),
+not mocked — same approach as slice one: real `User`/`Guardian`/`Post`
+rows inserted via the real Prisma client, tokens minted with the
+`jsonwebtoken` library matching `TokenService`'s exact `{ sub, role }`
+payload shape and the configured `JWT_SECRET`, against a real running
+`dist/main.js` server (migrations confirmed already up to date — this
+PR's only `schema.prisma` change is a comment, no migration needed).
+Confirmed live, end to end, for all seven endpoints:
+
+- `GET /posts/:id`: 200 with no `passwordHash`/`isMinor` on the
+  embedded author; 404 for a non-existent id; `GET /posts/feed` still
+  resolves correctly on the same controller (no route-shadowing
+  regression from adding `:id`).
+- Like/unlike counter-correctness sequence — like, like again, unlike,
+  unlike again — verified to **net to exactly 0** by reading
+  `Post.likeCount` and `Like.count()` back from Postgres after each
+  step, not just checking HTTP status codes: 1st like → `likeCount`
+  contribution of 1 and exactly 1 `Like` row; 2nd (duplicate) like →
+  still 1 and still 1 row (200, not 500); 1st unlike → 0 and 0 rows;
+  2nd (duplicate) unlike → still 0 and still 0 rows (200, not 404).
+  `POST /posts/:id/like` on a non-existent post → 404.
+- Comments: a comment posts successfully for a consented account (201,
+  no `passwordHash` on the embedded author); the identical request for
+  a pending-consent minor is blocked 403 `guardian_consent_pending`,
+  confirming `GuardianConsentGuard` is genuinely wired on this route,
+  not just documented; two comments on one post leave
+  `Post.commentCount` at exactly 2 in Postgres, matching
+  `Comment.count()`; `GET /posts/:id/comments` returns both, oldest
+  first; both routes 404 on a non-existent `postId`.
+  - **Guardian-consent guard placement is asymmetric by design between
+    `POST` and `GET`**: unlike slice one's `feed.controller.http.spec.ts`
+    (which verifies the guard's presence/absence with a real,
+    DI-resolved `GuardianConsentGuard`), the equivalent live check here
+    used a real pending-consent minor account and confirmed the 403
+    directly against Postgres, since this PR's Jest suite (see below)
+    also carries that same real-guard-wiring regression coverage
+    forward for the comment routes.
+- Saves: double-save leaves exactly 1 `SavedPost` row (200, not 500);
+  double-unsave stays at 0 rows (200, not 404); `POST
+  /posts/:id/save` on a non-existent post → 404.
+- `GET /users/:id/saved-posts`: returns the caller's own saved posts
+  with the full post embedded (no `passwordHash`/`isMinor` on its
+  author); requesting another user's `:id` → 403, confirming the
+  self-only default from point 8 is live, not just documented;
+  `limit=1` against two saved posts returns exactly one item and a
+  non-null `nextCursor`.
+
+</details>
+
+Also covered by committed Jest suites (unit + HTTP-layer, following
+`feed.controller.http.spec.ts`'s own slice-one precedent of leaving
+`GuardianConsentGuard` real/DI-resolved rather than overridden away, so
+the comment-route guard assertions above are genuine regression tests,
+not just documented intentions):
+
+- `feed.service.spec.ts` — extended with `getPostById`,
+  `likePost`/`unlikePost` (including the P2002/P2025 idempotency paths
+  and the full like/like/unlike/unlike net-to-0 integer sequence),
+  `addComment`/`getComments` (including the ascending-cursor filter and
+  the transactional counter increment), `savePost`/`unsavePost`
+  (including their own P2002/P2025 idempotency paths), and
+  `getSavedPosts` (including its descending `savedAt`/`postId` cursor
+  filter). The mock `PrismaService`'s `$transaction` now simulates the
+  real interactive-transaction callback form (`fn(prisma)`) rather than
+  the array form slice one never needed — see the mock's own comment in
+  `feed.service.spec.ts` for why array-form mocking (naive
+  `Promise.all`) would have silently passed tests that a real Prisma
+  client's atomicity guarantees would have caught as a bug (the
+  increment/decrement running even when the paired create/delete
+  failed).
+- `feed.controller.http.spec.ts` — extended with HTTP-layer coverage
+  for all seven new routes, including route-ordering (`GET /posts/feed`
+  vs `GET /posts/:id`), 404 propagation from `FeedService`, idempotency
+  at the HTTP layer (repeated POST/DELETE still 200), and the
+  comment-route guardian-consent-guard regression case described above.
+- `saved-posts.controller.http.spec.ts` — new file, HTTP-layer coverage
+  for `GET /users/:id/saved-posts`'s self-only 403 enforcement and
+  pagination pass-through.
+
+Full `services/api` suite after this PR: **29 suites / 262 tests, 0
+failures** (up from 28/208 measured immediately before this branch's
+changes — see `CLAUDE.md`'s Sprint 2 status bullet for the corrected,
+directly re-measured baseline this PR started from).
+
+---
+
+## Per-caller viewer state on `GET /posts/feed` + `GET /posts/:id` (`sprint-2/feed-per-user-flags`, closes Decision Log #153)
+
+`GET /posts/feed` and `GET /posts/:id` now return three extra booleans
+per post, telling the **calling user** their own relationship to it:
+
+- `isLiked` — a `Like` row exists for `(callerId, postId)`
+- `isSaved` — a `SavedPost` row exists for `(callerId, postId)`
+- `author.isFollowing` — a `Follow` row exists for `(followerId: callerId,
+  followeeId: post.authorId)`
+
+None are stored columns — they're computed per request. The raw
+`POST_SELECT` / `FeedPost` type is unchanged; the returned shape is the
+new intersection type `FeedPostWithViewerState`.
+
+### Why this was a real gap
+
+`GET /posts/feed`'s payload could tell you a post's `likeCount` but not
+whether *you* were one of those likers — so `apps/web`'s `PostCard.tsx`
+had to render every like/save/follow control in its default state on
+load and after every refresh, correcting only for actions taken in the
+current session (Decision Log #153). This closes that.
+
+### No N+1
+
+`getFeed` → `attachViewerState(userId, posts)`:
+
+- zero-post page → returns `[]`, **issues no lookups** (no empty-`IN`
+  queries).
+- otherwise **three batched queries** (`Promise.all`):
+  `like.findMany({ where: { userId, postId: { in: postIds } } })`,
+  the same for `savedPost`, and
+  `follow.findMany({ where: { followerId: userId, followeeId: { in: otherAuthorIds } } })`
+  where `otherAuthorIds` is the **deduped** author set **minus the
+  caller** — a self-follow row can't exist (`UsersService.followUser`
+  rejects it), so the caller's own posts get `isFollowing: false` with
+  nothing queried, and if the whole page is the caller's own the follow
+  query is skipped.
+- one `.map` over the page attaches the flags from three `Set`s.
+
+`getPostById(postId, userId)` — one row, so three unique-key `findUnique`
+existence checks (again `Promise.all`, again skipping the follow check
+for an own post). `NotFoundException` for a missing post is still thrown
+**before** any viewer-state lookup.
+
+### Controller change
+
+`feed.controller.ts` `getById` gained `@CurrentUser() user:
+AccessTokenPayload` and passes `user.sub` to `getPostById` — a
+handler-signature change (it was `@Param('id')`-only). `JwtAuthGuard`
+already attaches `request.user`; no new guard wiring.
+
+### Deliberately not enriched
+
+- `createPost` (`POST /posts`) — a brand-new post: all three flags are
+  trivially `false`. Left returning the raw shape.
+- `getSavedPosts` (`GET /users/:id/saved-posts`) — `isSaved` would be
+  trivially `true`; `isLiked` / `isFollowing` would need the same
+  enrichment. Flagged in a comment on `SAVED_POST_SELECT`; the
+  saved-posts screen isn't built yet.
+
+### Sibling gap flagged, not fixed
+
+`GET /clubs` (`ClubsService.listClubs` → `ClubSummary`) has the identical
+shape of gap — no per-user `joined` / `isMember` field, only the
+join/leave action responses carry membership state. Out of scope for
+Decision Log #153; recorded as a new Decision Log candidate in the PR
+report. **RESOLVED — `sprint-2/clubs-joined-flag`, Decision Log #154.**
+
+---
+
+## `FeedService.getClubFeed` — the club fan-page feed (`sprint-2/club-fan-page-backend`, closes the backend half of Decision Log #157)
+
+`GET /clubs/:id/feed` (the route lives on `ClubsController`, not here —
+it's `/clubs`-prefixed) is the club fan-page feed: every `Post` whose
+`clubPageId` matches, newest-first. `ClubsModule` imports `FeedModule`
+(which now `exports: [FeedService]`) and delegates to
+`FeedService.getClubFeed(clubPageId, userId, query)`.
+
+Why it lives on `FeedService` and not `ClubsService`: so it reuses
+`POST_SELECT`, `attachViewerState` (Decision Log #153), `buildCursorFilter`,
+and the feed cursor util unchanged — the response is the **exact same**
+`FeedPage` / `FeedPostWithViewerState` shape `GET /posts/feed` returns.
+`getFeed` and `getClubFeed` now differ only in their WHERE clause
+(`{ clubPageId }` vs. the own-posts-plus-follows `OR`) and share a private
+`paginatePostsWithViewerState` helper — the same "two callers, identical
+shape, factor once" call `UsersService.toFollowPage` made; `getComments` /
+`getSavedPosts` keep their own inline repetition (single callers).
+
+This is a **genuine addition beyond Section 4.3/4.4's literal endpoint
+list** — `GET /posts/feed`'s own scope comment / point 2 above flagged
+exactly this ("club-page membership is deliberately NOT part of
+`getFeed`'s scope... a Decision Log candidate for whoever builds
+`ClubPage` membership flows"). `getClubFeed` is a separate route, not a
+change to `getFeed`'s scope — `getFeed` still never reads `Post.clubPageId`.
+Full detail (guard choice, no restricted-pending-minor filter needed,
+scope-is-clubPageId-alone) in `clubs/README.md`'s "Club fan-page feed +
+roster" section.
+
+## Status update — inactive-author filter (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+`getFeed`, `getClubFeed` and `getPostById` now AND an
+`ACTIVE_AUTHOR_POST_FILTER` (`author: { accountStatus: 'active' }`) into
+their query: a deactivated or `pending_deletion` author's posts must not
+appear to anyone else. `getPostById` switched `findUnique` → `findFirst`
+for this and 404s such a post (the "hide via 404" convention). The
+caller of all three is always an active account (login / `JwtAuthGuard`
+reject non-active, deactivation revokes every session), so the filter
+can never hide the caller's own posts. Reverses automatically on
+reactivation — no per-post backfill. `GET /posts/:id/comments` is a
+deliberate non-change (filtering a mid-thread comment drifts
+`Post.commentCount`, and Section 4.3 has no comment-visibility model);
+`getSavedPosts` is unchanged (the caller's own private bookmark list).
+
+## `POST /posts/:id/view` — view tracking (`sprint-4/post-view-tracking`)
+
+A genuine addition beyond Section 4.3's original nine-endpoint list —
+same "spec-gap addition, flagged not silent" treatment as
+`DELETE /posts/:id/comments/:commentId` above. Motivated by the Search &
+Trending video carousel needing a real, non-fabricated view count to
+sort/display — before this PR nothing in this codebase tracked views at
+all: no `viewCount` field, no view-tracking table (confirmed by grep).
+
+**Schema**: `Post.viewCount Int @default(0)` (the same denormalized-cache
+convention as `likeCount`/`commentCount`) plus a new `PostView` model
+(`postId`, nullable `viewerId`, `createdAt`, `@@unique([viewerId,
+postId])`) — modeled directly on `Like`'s shape. See both models' own
+`schema.prisma` comments for the full reasoning.
+
+**Guard: `OptionalJwtAuthGuard`, not `JwtAuthGuard`** — a new guard
+(`guards/optional-jwt-auth.guard.ts`) that never rejects a request; it
+attaches `request.user` when a valid bearer token is present and leaves
+it `undefined` otherwise. Anonymous views are allowed by design — a view
+is worth recording whether or not the viewer is logged in, and gating it
+behind mandatory auth would undercount exactly the kind of casual,
+logged-out browsing a public-facing video carousel is meant to capture.
+No `GuardianConsentGuard` either: viewing isn't "posting, messaging,
+joining a Banter Room or Community Group" under Section 5.7's own list,
+the same category `like`/`save` already sit in, and a restricted-pending
+minor viewing a post produces no new visible content.
+
+**De-duplication — a disclosed v1 simplification, not an oversight**:
+
+- **Logged-in caller**: idempotent, via the exact insert-then-catch-P2002
+  pattern `likePost`/`savePost` already use, backed by
+  `PostView.@@unique([viewerId, postId])`. A second view call from the
+  same real user is a no-op — `viewCount` never moves past +1 for that
+  person, same guarantee a duplicate like gets.
+- **Anonymous caller**: genuinely NOT deduplicated. Postgres treats every
+  `NULL` in a unique index as distinct from every other `NULL`, so the
+  same unique constraint provides zero protection when `viewerId` is
+  `null` — every anonymous call inserts a new `PostView` row and
+  increments `Post.viewCount`. Building real anonymous-session
+  de-duplication (a cookie- or fingerprint-keyed store, tracking repeat
+  visits from the same browser without an account) is explicitly out of
+  scope here — flagged, not silently accepted.
+
+**No duration/completion tracking** — this endpoint records "was this
+post's media opened," nothing more. No watch-time, no
+partial-vs-complete distinction, a single event per (viewer, post) pair
+(or, for an anonymous caller, per call). A richer view-quality model is
+a real, deferred v2 concern.
+
+**No notification, no points awarded** — a view is neither a
+safety-sensitive action nor new user-generated content, so neither of
+`likePost`'s two side effects (notification, `awardPoints`) applies
+here.
+
+## Baseline leaderboard points (backend/w12-points, B-093)
+
+Likes, comments and their removal now go through the points engine (`modules/points`): a like or a comment
+earns the giver 1 point and the post's creator 0.25, subject to the self-exemption, eligibility and the
+daily caps; an unlike, the removal or hiding of the account's last visible comment, and the removal of a
+post revoke the rows, and a re-like or an unhide restores them (earned once). `createPost` and follows earn
+nothing (B-094). `FeedService` takes an optional `PointsConfig` (the two daily caps) as its third constructor
+argument. Views earn points through `POST /posts/:id/view-heartbeat` (`modules/view-qualification`), not
+`POST /posts/:id/view`, which stays the anonymous display-count tally.
+
+## Post media (backend/w14-post-media-pipeline; Decision Log #419)
+
+`POST /posts` no longer takes `mediaUrls`. It takes `mediaIds`: the ids of files the caller uploaded through
+`POST /media/uploads` (see `../post-media/README.md`). A request that still carries `mediaUrls` is a 400 (the DTO does not
+have the field and the global pipe forbids unknown ones). `FeedService.createPost` (the single post-creation path, also used by
+`POST /banter-rooms/:id/posts` and `POST /contest/final-entry`) loads the caller's media, refuses anything not theirs /
+already attached / rejected / not yet verified with one indistinguishable 400 `media_not_attachable`, copies the files'
+public URLs into `Post.mediaUrls` and attaches the rows inside the post's own transaction (a race for the same file rolls the
+losing post back whole).
+
+**Visibility.** A post with ANY attached media that is not `approved` is visible to its author only. The fragment lives in
+`../post-media/post-media-visibility.util.ts` and is ANDed into `visibleToViewer()`, so every read path that already used it
+(feed pages, club and Banter feeds, `GET /posts/:id`, saved posts, comments, like/save/view, view heartbeats) inherits it;
+search and the anonymous view path apply the same fragment. Others get the plain 404 of a post that does not exist.
+
+**Deleting.** `DELETE /posts/:id` reads the post's media keys first, deletes the post (the `PostMedia` rows cascade), then removes
+the stored objects best effort (a storage failure never fails the deletion; the key is logged).

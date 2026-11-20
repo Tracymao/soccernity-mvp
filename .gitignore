@@ -3,7 +3,11 @@ dist/
 build/
 .env
 .env.local
+.env.test
 *.log
 .DS_Store
 coverage/
 .turbo/
+
+# B-024: MaxMind GeoLite2 database -- fetched at build time, never committed (licence)
+services/api/geoip/

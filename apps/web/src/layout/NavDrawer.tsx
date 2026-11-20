@@ -1,0 +1,163 @@
+// Mobile Navigation Drawer -- the canonical mobile-web primary nav
+// (Decision Log #162). Opened by the header avatar on mobile viewports.
+// Figma source: "Navigation Drawer -- Mobile" COMPONENT (node
+// 5870:10689, "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6).
+//
+// A left slide-in panel over a scrim; tapping the scrim (or pressing
+// Escape) closes it, matching the Figma component's own ON_CLICK ->
+// CLOSE on the scrim.
+//
+// Identity block (Decision Log #168): the signed-in user's real
+// displayName + an initials avatar, fetched once by Header via
+// getUser(accessToken, sub) and passed in as `profile`.
+//   - No @handle / username row: there is no such field on UserProfile
+//     and no backend column for it (Decision Log #58) -- the "@christine001"
+//     in the Figma frame is decorative. Name is rendered as a single line.
+//   - `profile` is null while Header's fetch is in flight, and stays null
+//     if that fetch fails -- either way this falls back to the generic
+//     "Signed in" row, so the drawer's navigation always works.
+//   - DECISION LOG #287/#288: the identity block IS the profile entry
+//     point -- there is no separate "Nav -- Profile" row anymore. Wrapped
+//     in a NavLink to /profile, same onClick={onClose} convention every
+//     other drawer row uses, whether the fetch succeeded, is pending, or
+//     failed.
+//
+// Groups / Settings have no route in src/app/router.tsx yet (Decision Log
+// #166) -- rendered non-navigating and visibly disabled. Notifications
+// now resolves (sprint-3/notification-centre-to-code, Decision Log #291)
+// and carries the same real unread-count badge AccountDropdown shows,
+// from the same Header-owned fetch.
+import { useEffect } from "react";
+import { NavLink } from "react-router";
+import logoMark from "../assets/icons/soccernity-logo-mark.svg";
+import type { UserProfile } from "../api/users";
+import { initialsFor } from "../lib/initials";
+import { drawerNavItems, loggedOutDrawerNavItems } from "./navigation";
+import "./NavDrawer.css";
+
+interface NavDrawerProps {
+  /** Close the drawer (scrim tap / Escape / item chosen). */
+  onClose: () => void;
+  /** Clears the session and redirects -- owned by Header. */
+  onLogout: () => void;
+  /**
+   * The signed-in user's profile, or null while Header's fetch is
+   * pending / if it failed. Null => the generic "Signed in" fallback.
+   */
+  profile?: UserProfile | null;
+  /** From Header's GET /notifications/unread-count fetch. */
+  unreadCount?: number;
+  /**
+   * "logged-out" (FC4, B-178): the visitor drawer drawn in Figma pass K4 -- Login and Sign up
+   * buttons instead of the identity block, only the sections a logged-out visitor can open,
+   * no Log out. Defaults to the signed-in drawer.
+   */
+  variant?: "signed-in" | "logged-out";
+}
+
+export default function NavDrawer({
+  onClose,
+  onLogout,
+  profile,
+  unreadCount = 0,
+  variant = "signed-in",
+}: NavDrawerProps) {
+  const loggedOut = variant === "logged-out";
+  const navItems = loggedOut ? loggedOutDrawerNavItems : drawerNavItems;
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className={loggedOut ? "sn-drawer sn-drawer--logged-out" : "sn-drawer"}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navigation"
+    >
+      <button
+        type="button"
+        className="sn-drawer__scrim"
+        aria-label="Close navigation"
+        onClick={onClose}
+      />
+      <div className="sn-drawer__panel">
+        <div className="sn-drawer__brand">
+          <img src={logoMark} alt="" width={22} height={22} />
+          <span className="sn-drawer__wordmark">Soccernity</span>
+        </div>
+
+        {loggedOut ? (
+          <div className="sn-drawer__auth">
+            <NavLink to="/login" className="sn-drawer__auth-button sn-drawer__auth-button--primary" onClick={onClose}>
+              Login
+            </NavLink>
+            <NavLink to="/signup" className="sn-drawer__auth-button sn-drawer__auth-button--outline" onClick={onClose}>
+              Sign up
+            </NavLink>
+          </div>
+        ) : (
+          <NavLink to="/profile" className="sn-drawer__identity" onClick={onClose}>
+            {profile ? (
+              <>
+                <span className="sn-drawer__avatar" aria-hidden="true">
+                  {initialsFor(profile.publicName)}
+                </span>
+                <span className="sn-drawer__name">{profile.publicName}</span>
+              </>
+            ) : (
+              <>
+                <span className="sn-drawer__avatar" aria-hidden="true" />
+                <span className="sn-drawer__signed-in">Signed in</span>
+              </>
+            )}
+          </NavLink>
+        )}
+
+        <nav className="sn-drawer__nav" aria-label="Primary">
+          {navItems.map((item) =>
+            item.available === false ? (
+              <span
+                key={item.to}
+                className="sn-drawer__link sn-drawer__link--disabled"
+                aria-disabled="true"
+                title="Not available yet"
+              >
+                {item.label}
+              </span>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) =>
+                  isActive ? "sn-drawer__link sn-drawer__link--active" : "sn-drawer__link"
+                }
+                onClick={onClose}
+              >
+                <span>{item.label}</span>
+                {item.to === "/notifications" && unreadCount > 0 && (
+                  <span className="sn-drawer__badge">{unreadCount}</span>
+                )}
+              </NavLink>
+            ),
+          )}
+        </nav>
+
+        {loggedOut ? null : (
+          <>
+            <div className="sn-drawer__divider" />
+
+            <button type="button" className="sn-drawer__logout" onClick={onLogout}>
+              Log out
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

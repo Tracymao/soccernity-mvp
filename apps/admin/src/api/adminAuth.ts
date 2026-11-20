@@ -1,0 +1,166 @@
+// Admin auth + profile client — services/api `/admin/auth/*` and
+// `/admin/profile` (Decision Log #54,
+// services/api/src/modules/admin/README.md).
+//
+// Response shapes mirror services/api's admin-response.mapper.ts
+// (AdminAuthResponse / AdminTokenPairResponse / AdminSummary) exactly.
+// Read that file, not this comment, if a shape changes.
+import { adminFetch } from "./adminClient";
+import { ADMIN_COOKIE_MODE_HEADERS } from "../lib/adminRefresh";
+
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export type AdminRole = string; // services/api: "editor" | "moderator" | "superadmin"
+
+export interface AdminSummary {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: AdminRole;
+  accountStatus: string; // "active" | "deactivated"
+  // B-280 / B-282: the admin's OWN child-safety-vetting state (GET /admin/profile and the login answer; never about
+  // another admin). The Guardian notices section shows only when this is true. Typed optional so an answer that
+  // lacks it reads as NOT vetted (the section stays hidden); the server's own fresh check is the real gate.
+  childSafetyVetted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// B-247 / B-248: in cookie mode (the X-Auth-Mode: cookie header, or an allowlisted Origin) the API sets the refresh token as an
+// httpOnly cookie and leaves it OUT of the response body, so there is no
+// `refreshToken` here for JavaScript to hold. `refreshTokenExpiresAt` is still sent.
+export interface AdminTokenPair {
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  refreshTokenExpiresAt: string;
+}
+
+export interface AdminAuthResult extends AdminTokenPair {
+  admin: AdminSummary;
+}
+
+// B-270 / B-271: with two-factor on, the password step does NOT return a session. The
+// login answer is a union (services/api two-factor.service.ts TwoFactorChallenge /
+// AdminEnrolmentRequired); callers tell the three apart by the discriminating key.
+export interface AdminTwoFactorChallenge {
+  twoFactorRequired: true;
+  challengeToken: string;
+  challengeExpiresInSeconds: number;
+}
+
+export interface AdminEnrolmentRequired {
+  twoFactorEnrolmentRequired: true;
+  enrolmentToken: string;
+  expiresInSeconds: number;
+}
+
+export type AdminLoginResult = AdminAuthResult | AdminTwoFactorChallenge | AdminEnrolmentRequired;
+
+export class AdminAuthError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "AdminAuthError";
+    this.status = status;
+  }
+}
+
+// POST /admin/auth/login — { email, password } → 200 AdminAuthResponse.
+// Same non-enumerating posture as POST /auth/login: a wrong email and a
+// wrong password both return the same generic 401. This client surfaces
+// that as a single "Invalid email or password" message regardless.
+//
+// B-247: cookie mode. The admin session cookie is NON-PERSISTENT by founder
+// decision 2026-10-29: `staySignedIn` is deliberately omitted, so the API issues
+// a session cookie (no Max-Age / Expires) and the session ends when the browser
+// quits. The login screen has no "stay signed in" choice and none is to be added.
+export async function adminLogin(email: string, password: string): Promise<AdminLoginResult> {
+  const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...ADMIN_COOKIE_MODE_HEADERS },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (res.status === 401) {
+    throw new AdminAuthError(401, "Invalid email or password.");
+  }
+  if (res.status === 429) {
+    throw new AdminAuthError(429, "Too many attempts. Please wait a minute and try again.");
+  }
+  if (!res.ok) {
+    throw new AdminAuthError(res.status, `Sign in failed (${res.status}). Please try again.`);
+  }
+  return (await res.json()) as AdminLoginResult;
+}
+
+// POST /admin/auth/logout — best-effort. The API clears the admin refresh
+// cookie and revokes the session from the cookie. A network failure must not trap
+// the operator in a session they asked to end; the caller clears the in-memory
+// session regardless of the outcome here.
+export async function adminLogout(accessToken: string | null): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/admin/auth/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...ADMIN_COOKIE_MODE_HEADERS,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      credentials: "include",
+      body: JSON.stringify({}),
+    });
+  } catch {
+    /* ignore — local session is cleared by the caller either way */
+  }
+}
+
+// GET /admin/profile — AdminJwtAuthGuard. Used on app boot to hydrate the
+// signed-in admin's identity (the shell's name/role block). Goes through
+// adminFetch so a boot-time expired access token is transparently
+// refreshed before the session is treated as invalid.
+export function getAdminProfile(): Promise<AdminSummary> {
+  return adminFetch<AdminSummary>("/admin/profile");
+}
+
+// PATCH /admin/profile — AdminJwtAuthGuard. Only `fullName` / `phone` are
+// self-editable; `role` / `email` / `accountStatus` are rejected outright
+// by the server's ValidationPipe (services/api update-admin-profile.dto.ts)
+// AND its service allowlist — this client never sends them.
+export interface UpdateAdminProfileInput {
+  fullName?: string;
+  phone?: string;
+}
+
+export function updateAdminProfile(input: UpdateAdminProfileInput): Promise<AdminSummary> {
+  return adminFetch<AdminSummary>("/admin/profile", { method: "PATCH", body: input });
+}
+
+// POST /admin/auth/change-password — AdminJwtAuthGuard. Requires the current password. B-310: a successful change
+// revokes EVERY session of this account, the caller's own included, and the API answers 200 with a FRESH session for
+// this device (cookie mode: the new refresh token is the sn_admin_rt cookie, the body carries only the access token).
+// The caller must hand `accessToken` to `replaceAdminAccessToken` (lib/adminSession.ts) -- that is what keeps the
+// operator signed in here. The one exception is 204 with no body: ADMIN_2FA_ENFORCED is on and this admin has no
+// two-factor, so the server issued nothing; this function then returns null and the caller must end the session
+// locally (clearAdminSession). The cookie-mode header and credentials let the API read the CURRENT cookie (for
+// "Stay signed in") and set the NEW one.
+export interface ChangeAdminPasswordResult {
+  accessToken: string;
+}
+
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangeAdminPasswordResult | null> {
+  const result = await adminFetch<{ accessToken?: unknown } | undefined>("/admin/auth/change-password", {
+    method: "POST",
+    headers: { ...ADMIN_COOKIE_MODE_HEADERS },
+    credentials: "include",
+    body: { currentPassword, newPassword },
+  });
+  if (result && typeof result.accessToken === "string" && result.accessToken !== "") {
+    return { accessToken: result.accessToken };
+  }
+  return null;
+}
