@@ -232,8 +232,8 @@ No two may be the same.
      (`services/api/Dockerfile`, `runtime: docker` in `render.yaml`; Decision
      Log #527) that installs them (Debian ffmpeg 5.1.9). Were they ever missing,
      every video upload would be refused with a 503 and store nothing; photos
-     are unaffected. Not yet proven on Render: whether the free plan accepts
-     the Docker runtime for staging, and a real video upload on staging
+     are unaffected. Staging is on the Starter plan (Decision Log #537). Not yet proven on
+     Render: a real video upload on staging
      (runbook step 6.15); (4) an **AWS
      account and an IAM user** allowed `rekognition:DetectModerationLabels`,
      whose keys go in `REKOGNITION_ACCESS_KEY_ID` and
@@ -305,19 +305,18 @@ No two may be the same.
    build; Decision Log #527), then runs the pre-deploy command (database
    migration, then the date-of-birth encryption backfill), then starts the
    container (`services/api/docker-start.sh`) and polls `/health`. To read the
-   Docker build log see runbook step 4.5. Whether Render's free plan accepts the
-   Docker runtime for staging is UNKNOWN (Render documentation).
+   Docker build log see runbook step 4.5.
 
 ### Staging and the pre-deploy command
 
 Render documents its pre-deploy command as available for **paid** services
-only (https://render.com/docs/deploys). Staging is on the Free plan, so its
-migration step may not run, which would leave the staging database without
-tables. Do not assume it works: after the first staging deploy, check the
-deploy log for migration output. If it did not run, tell the engineer; the fix
-is to move those two commands to the start of the build command, which works on
-every plan. (`render.yaml` is deliberately unchanged on this point until that
-is decided.)
+only (https://render.com/docs/deploys), and on 2026-11-20 refused it on the
+free plan when `render.yaml` was imported ("pre-deploy command is not
+supported for free tier services"). Staging is therefore on the Starter plan,
+the same as production, so the migration and the date-of-birth backfill run
+identically on both (Decision Log #537). After the first staging deploy, still
+check the deploy log for the migration lines and `DOB encryption backfill:
+scanned=`.
 
 ### Why Starter, not Free, for production
 
@@ -326,8 +325,9 @@ introducing a real cold-start delay on the next request. For most of this
 MVP that's an acceptable tradeoff pre-launch — but the guardian-consent
 email flow (Build Plan Section 8.3) is a safety-critical path a parent
 needs to complete promptly; a slow first response there is worse than
-$7/month. Staging has no such requirement, so it stays on Render's Free
-tier in `render.yaml` to control cost.
+$7/month. UPDATED 2026-11-20 (Decision Log #537): staging is also Starter,
+not for cold starts but because Render refuses the pre-deploy command on the
+free plan (see "Staging and the pre-deploy command" above).
 
 ### Country derivation (GeoLite2) — Decision Log #368
 

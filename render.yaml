@@ -19,12 +19,12 @@
 # deprecated `env` field; `preDeployCommand` runs after build and before
 # start. NOT verified live (no Render account): that this file imports cleanly.
 #
-# PRE-DEPLOY ON THE FREE PLAN: https://render.com/docs/deploys says "The
-# pre-deploy command is available for paid web services, private services,
-# and background workers." Staging below is `plan: free`, so its
-# preDeployCommand (migrations + DOB backfill) will probably NOT run. See
-# docs/deployment.md and the PR description for the proposed fix; the plan and
-# commands are deliberately unchanged here pending a decision.
+# PRE-DEPLOY AND THE STAGING PLAN (2026-11-20): Render refuses a
+# preDeployCommand on a free service (importing this file as a Blueprint
+# failed with "services[0]: pre-deploy command is not supported for free tier
+# services"). Staging is therefore `plan: starter`, the same as production, so
+# the migrations and the DOB backfill run identically on both (Decision Log
+# #537; founder decision 2026-11-20). preDeployCommand is unchanged.
 #
 # NODE_ENV is deliberately NOT set below. Render sets NODE_ENV=production for
 # Node services at runtime only (https://render.com/docs/environment-variables).
@@ -49,8 +49,8 @@ services:
     name: soccernity-api-staging
     runtime: docker
     branch: staging
-    plan: free
-    # Free for staging: no guardian-consent traffic depends on its cold start.
+    plan: starter
+    # Starter for staging (Decision Log #537): Render rejects preDeployCommand on the free plan; same plan as production.
     region: frankfurt
     # DOCKER (infra/api-docker-ffmpeg): the image carries ffmpeg/ffprobe, which Render's native Node runtime lacks.
     # buildCommand and startCommand are gone on purpose (Render: "You can't set a build command for services that use
