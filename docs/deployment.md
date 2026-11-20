@@ -1,4 +1,4 @@
-# Deployment setup (Render + Neon + Upstash, all in the EU)
+# Deployment setup (Render in Frankfurt; Neon and Upstash in London)
 
 **`docs/launch-gate-runbook.md` is the launch procedure; this file is the Render setup reference.** Follow the runbook
 for the order of the whole launch, the checks, the switches and the rollback; use this file for the detail of what each
@@ -8,7 +8,7 @@ Decision Log #26 (Build Plan Section 9 / CLAUDE.md) resolves Decision Log
 #9 (hosting): **Render** runs `services/api` and the two static sites (`apps/web`, `apps/admin`), **Neon** is the managed
 Postgres, **Upstash** is the managed Redis — three separate, unbundled
 providers rather than one all-in-one platform. Everything is hosted in the
-**EU**: Render's Frankfurt region, with Neon and Upstash created in EU regions.
+**Europe**: Render's Frankfurt region (the EU), with Neon and Upstash in London (`eu-west-2`, NOT the EU: the founder's choice of 2026-11-19, because Render has only Frankfurt; Decision Log #536, which amends the wording of #391). Media buckets are in the Cloudflare R2 EU jurisdiction (Decision Log #535).
 This document is a step-by-step walkthrough for the one-time human setup none
 of this repo's code or CI/CD can do on its own: creating real accounts,
 obtaining real connection strings, and setting real secret values. Nothing in
@@ -29,16 +29,14 @@ You'll need:
 
 **Region matters and cannot be fixed later.** `render.yaml` puts both API services
 in **Frankfurt** (`region: frankfurt`; the static sites have no region). Render cannot change a service's region
-after it is created, so check it on the import screen. Neon and Upstash must
-also be created in an **EU region**, in or near the same area as Render's
-Frankfurt region. Nothing in this repo can check that for you; pick the region
+after it is created, so check it on the import screen. Neon and Upstash are in the **London region (`eu-west-2`)**, the closest to Render's
+Frankfurt region that the founder chose (Decision Log #536). Nothing in this repo can check that for you; pick the region
 on each provider's "create" screen.
 
 ## 1. Neon (Postgres)
 
 1. Sign in at https://neon.tech: the Neon account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a project already exists; if not, create one (create an account only if you cannot sign in).
-2. Create a new **Project**, choosing an **EU region** when asked. Name it
-   something recognizable, e.g. `soccernity`.
+2. Create TWO separate **Projects**, `soccernity-staging` and `soccernity-production`, each in the **London region (`eu-west-2`)** (not the EU; Decision Log #536). Separate projects give separate credentials, backups and blast radius.
 3. Within that project, Neon gives you a default database and branch
    already. For the staging/production split this repo uses, create a
    second **branch** (Neon's dashboard has a "Branches" tab) named
@@ -57,8 +55,7 @@ on each provider's "create" screen.
 ## 2. Upstash (Redis)
 
 1. Sign in at https://upstash.com: the Upstash account already exists (corrected 2026-11-14 from the founder's own record). Confirm whether a database already exists before creating one.
-2. Create a new **Redis database**, choosing an **EU region** close to
-   Render's Frankfurt region.
+2. Create a new **Redis database**, in the **London region (`eu-west-2`)** (Decision Log #536).
 3. Create two databases, one for staging and one for production, so a
    staging bug cannot touch production's refresh-token store.
 4. For each database, Upstash shows a connection string starting with
@@ -191,8 +188,8 @@ No two may be the same.
      token.** `S3_BUCKET` is the **public** bucket: the only one that
      `S3_PUBLIC_BASE_URL` serves. `S3_PRIVATE_BUCKET` is the **private** bucket
      and has no public address of any kind. They must be two different
-     buckets. `S3_ENDPOINT` is `https://<account-id>.r2.cloudflarestorage.com`
-     and the same for both, and one API token (with Object Read & Write and
+     buckets. `S3_ENDPOINT` is `https://<account-id>.eu.r2.cloudflarestorage.com`
+     (the buckets are in the EU jurisdiction) and the same for both, and one API token PER ENVIRONMENT, scoped to that environment's two buckets only, (with Object Read & Write and
      the right to list objects) covers both buckets. The API sends a file to
      the bucket its folder says: `post-media/`, `profile-media/` and `media/`
      go to the public bucket, everything else (`private-media/`,
@@ -205,7 +202,7 @@ No two may be the same.
      bucket configured at all, uploads return a clear "storage not
      configured" error (503) and everything else keeps working.
    - `S3_PUBLIC_BASE_URL` — the public address of the **public** bucket only:
-     use a custom domain on that bucket, `https://media.soccernity.com`. The
+     use a custom domain on that bucket: `https://media.staging.soccernity.com` on staging (bucket `soccernity-staging-public`), `https://media.soccernity.com` on production (bucket `soccernity-media-public`; private buckets are `soccernity-staging-private` and `soccernity-media-private`; Decision Log #535). The
      R2 endpoint above is not publicly readable, so until this is set stored
      files get a URL nobody can open. Never point it at the private bucket.
    - **Post and contest-entry media** (backend/w14-post-media-pipeline,
@@ -222,7 +219,7 @@ No two may be the same.
      approved. That only works if the private bucket has **no public access of
      any kind**: do not enable its `r2.dev` address, do not attach a custom
      domain to it, add no public rule. The public bucket gets the custom domain
-     `media.soccernity.com` (`S3_PUBLIC_BASE_URL`). Then prove it: request an
+     `media.soccernity.com` on production and `media.staging.soccernity.com` on staging (`S3_PUBLIC_BASE_URL`). Then prove it: request an
      object that lives in the private bucket through the public address and
      check you are refused (not served), and that a `post-media/` and a
      `profile-media/` object are served. This has not been verified against a
@@ -469,19 +466,19 @@ described in step 4. If a final domain differs from this layout, change the API'
   `base-uri 'none'`, `object-src 'none'`, `form-action 'self'`, `frame-ancestors 'none'` (this one only works as a header,
   not a meta tag). React's inline `style` props are allowed because React writes them through the style object model, not as
   an attribute. The rest is per app:
-  - **web:** `connect-src` the API origin, `https://*.r2.cloudflarestorage.com` (the browser PUTs uploads to a signed link on
-    the S3 endpoint) and `https://api.stripe.com`; `img-src` `data:`, `blob:` (cover-crop and upload previews) and
-    `https://media.soccernity.com` (the public media bucket); `media-src` the same host; `script-src` and `frame-src` Stripe
+  - **web:** `connect-src` the API origin, `https://*.r2.cloudflarestorage.com` and `https://*.eu.r2.cloudflarestorage.com` (the browser PUTs uploads to a signed link on
+    the S3 endpoint; the `.eu.` form is the EU-jurisdiction host) and `https://api.stripe.com`; `img-src` `data:`, `blob:` (cover-crop and upload previews) and
+    `https://media.soccernity.com` on the production site and `https://media.staging.soccernity.com` on the staging site (that environment's public media bucket); `media-src` the same host; `script-src` and `frame-src` Stripe
     (`js.stripe.com`, `*.js.stripe.com`, `hooks.stripe.com`), which loads **only on the guardian card step**;
     `worker-src 'self'` for the push service worker. `/sw.js` is also sent with `Cache-Control: no-cache` so browsers always
     re-check it.
-  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` `https://media.soccernity.com` **and**
-    `https://*.r2.cloudflarestorage.com` (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
+  - **admin:** `connect-src` the API origin only; `img-src` and `media-src` that environment's media host (as above) **and**
+    both R2 wildcards (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
     frames, no service worker.
-  - The public media host is `https://media.soccernity.com` (the custom domain on the public bucket, B-265). The one R2
-    wildcard that remains, `https://*.r2.cloudflarestorage.com`, stands in for `S3_ENDPOINT` (the API's own S3 endpoint,
+  - The public media host is `https://media.soccernity.com` on production and `https://media.staging.soccernity.com` on staging (the custom domain on that environment's public bucket, B-265). The two R2
+    wildcards that remain, `https://*.r2.cloudflarestorage.com` and `https://*.eu.r2.cloudflarestorage.com` (the second added because CSP matching of the first against an `.eu.` host was not verified), stand in for `S3_ENDPOINT` (the API's own S3 endpoint,
     used for browser uploads and the admin review link) because the account id does not exist yet. **At the launch gate,
-    tighten it to your exact `<account-id>.r2.cloudflarestorage.com`.**
+    tighten them to your exact `<account-id>.eu.r2.cloudflarestorage.com`.**
 
 ### Pending-copy gate (B-124) — which build runs where
 
@@ -526,7 +523,7 @@ Staging and production never share an origin.
    Blueprint so Render adds the four static sites. Render prompts for `sync: false` values only at first import; the four
    static sites have none (their only variable, `VITE_API_BASE_URL`, is a plain value).
 2. **Domains and DNS** (B-249, B-251; Decision Log #437, #449): add each custom domain on its service in Render's dashboard,
-   then create the DNS records at the registrar (GoDaddy) exactly as Render shows. Keep the records **"DNS only"** (not
+   then create the DNS records in Cloudflare DNS (GoDaddy is only the registrar; the nameservers are at Cloudflare) exactly as Render shows. Keep the records **"DNS only"** (not
    proxied) until the edge-protection step. The registrar and DNS records are not in the repo. Render's custom-domain and
    verification steps change; write them into the launch-gate runbook (B-180) from Render's documentation on the day.
 3. **Bucket CORS rule for browser uploads.** The browser PUTs a file straight to the **private** bucket through a signed
@@ -534,11 +531,11 @@ Staging and production never share an origin.
    `https://staging.soccernity.com`). The public bucket needs none. See the post-media paragraph in step 4. Without it,
    uploads fail in the browser even though the API side works.
 4. **Two buckets, the private one with no public address** (B-265): `S3_BUCKET` is the public bucket (custom domain
-   `media.soccernity.com` = `S3_PUBLIC_BASE_URL`), `S3_PRIVATE_BUCKET` the private one with no public access of any kind.
+   `media.soccernity.com` on production, `media.staging.soccernity.com` on staging = `S3_PUBLIC_BASE_URL`), `S3_PRIVATE_BUCKET` the private one with no public access of any kind.
    **Prove it, in three parts** (runbook step 6.8): (a) through the public address, ask for one object from each PRIVATE
    prefix (`private-media/`, `private-profile/`, `quarantine/`, `data-export/`); each must be REFUSED; (b) through the
    same address, ask for one object from each PUBLIC prefix (`post-media/`, `profile-media/`, `media/`); each must be
-   SERVED from `media.soccernity.com`; (c) in the Cloudflare dashboard check that the private bucket has public access off
+   SERVED from that environment's media host; (c) in the Cloudflare dashboard check that the private bucket has public access off
    (the screen: UNKNOWN, Cloudflare documentation). Stop and do not turn uploads on if any part fails. R2's copy of a
    file from the private bucket to the public one on approval is UNPROVEN (the API falls back to copying through itself
    and logs a warning); the first real approval on staging is the test. The host in `S3_PUBLIC_BASE_URL` is the same one
