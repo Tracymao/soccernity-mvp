@@ -172,7 +172,7 @@ test.describe.serial('guardian notices: the vetted-admin section on a minor', ()
     await setDialog.getByRole('button', { name: 'Withhold notices' }).click();
 
     const restricted = page.getByRole('dialog', { name: 'Withhold guardian notices' });
-    await expect(restricted).toContainText('Restricted — child-safety vetting required');
+    await expect(restricted).toContainText('Restricted: child-safety vetting required');
     await shot(page, '06-restricted');
     // The admin's profile is re-read, so the stale section goes away.
     await expect(page.getByRole('region', { name: 'Guardian notices' })).toHaveCount(0);

@@ -159,7 +159,7 @@ describe("Media review item", () => {
     expect(await screen.findByAltText("The picture under review")).not.toBeNull();
     expect(screen.getByText("Suggestive")).not.toBeNull();
     expect(screen.getByText("ada_player")).not.toBeNull();
-    expect(screen.getByText("Labels come from the automatic check. They are a guide — the decision is yours.")).not.toBeNull();
+    expect(screen.getByText("Labels come from the automatic check. They are a guide. The decision is yours.")).not.toBeNull();
     expect((screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Reject" }) as HTMLButtonElement).disabled).toBe(false);
   });

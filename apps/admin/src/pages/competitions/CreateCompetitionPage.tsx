@@ -33,12 +33,12 @@ export default function CreateCompetitionPage() {
       </StubSection>
       <StubField label="Entries allowed per player" value="" />
       <StubSection title="Leaderboard visibility">
-        <p className="admin-stub__note">Show on the public Competition leaderboard — Public.</p>
+        <p className="admin-stub__note">Show on the public Competition leaderboard: Public.</p>
       </StubSection>
       <div className="admin-stub__actions">
         <StubButton>Create Competition</StubButton>
         <Link to="/competitions/created" className="admin-stub__note">
-          Success screen (also a stub) →
+          Success screen (also a stub)
         </Link>
       </div>
     </AdminStubScreen>

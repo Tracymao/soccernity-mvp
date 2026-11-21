@@ -224,8 +224,8 @@ export default function UsersPage() {
         </div>
 
         <p className="us-note">
-          Blocking a user sets a real, admin-only status (not the self-service "deactivated" state) —
-          only an admin can undo it. Deleting a user is immediate; there is no 30-day grace period for
+          Blocking a user sets a real, admin-only status (not the self-service "deactivated" state).
+          Only an admin can undo it. Deleting a user is immediate; there is no 30-day grace period for
           an admin-triggered delete, unlike a user's own delete-account request.
         </p>
 

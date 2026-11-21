@@ -337,7 +337,7 @@ describe("ReportDetailPage", () => {
 
     renderAt(<ReportDetailPage />, "/moderation/reports/:id", "/moderation/reports/minor-report-id");
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByText("Report not found")).toBeNull();
   });
 
@@ -367,7 +367,7 @@ describe("ReportDetailPage", () => {
       { pathname: `/moderation/reports/${report.id}`, state: { report } },
     );
 
-    expect(await screen.findByText(/Public report — parent@example.com/)).not.toBeNull();
+    expect(await screen.findByText(/Public report: parent@example.com/)).not.toBeNull();
   });
 
   it("shows the restricted state (not a generic error) when actioning 403s as vetting-required", async () => {
@@ -382,7 +382,7 @@ describe("ReportDetailPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Dismiss Report" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss Report" })).toBeNull();
   });
 
@@ -435,7 +435,7 @@ describe("ReportDetailPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Record escalation" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     // The report doesn't concern a minor, so Take action is unaffected.
     expect(screen.getByRole("button", { name: "Dismiss Report" })).not.toBeNull();
   });
@@ -531,7 +531,7 @@ describe("AppealReviewPage", () => {
 
     renderAt(<AppealReviewPage />, "/moderation/appeals/:id", "/moderation/appeals/minor-report-id");
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByText("Appeal not found")).toBeNull();
   });
 
@@ -562,7 +562,7 @@ describe("AppealReviewPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Uphold Original Decision" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Overturn Decision" })).toBeNull();
   });
 

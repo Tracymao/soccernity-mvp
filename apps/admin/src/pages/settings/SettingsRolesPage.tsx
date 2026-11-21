@@ -151,7 +151,7 @@ export default function SettingsRolesPage() {
         </div>
 
         <p className="rl-note">
-          Reassigning a role takes effect the next time that admin signs in — an already-active
+          Reassigning a role takes effect the next time that admin signs in. An already-active
           session keeps its current permissions until it refreshes. Demoting the last active
           superadmin is rejected, since there would then be no way to promote anyone back.
         </p>
