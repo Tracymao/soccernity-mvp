@@ -17,6 +17,7 @@
 // against the same count (a cell that would not fit is disabled and ignored), so the limit cannot be passed.
 // The description is sent trimmed and left out when blank (the API stores a blank one as NULL anyway).
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../community/writeRefusal";
 import { BANTER_ROOM_DESCRIPTION_MAX_LENGTH, createRoom, BanterApiError, type BanterRoom, type BanterRoomScopeType } from "../../api/banter";
 import { listJoinedClubs, type ClubSummary } from "../../api/clubs";
 import { useIsMobile } from "../../layout/useIsMobile";
@@ -52,6 +53,7 @@ export default function CreateTopicDialog({ accessToken, displayName, onClose, o
   const [description, setDescription] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<WriteRefusal | null>(null);
   const [clubs, setClubs] = useState<ClubSummary[]>([]);
   const [clubsState, setClubsState] = useState<ClubsState>("loading");
   const [clubId, setClubId] = useState("");
@@ -116,6 +118,7 @@ export default function CreateTopicDialog({ accessToken, displayName, onClose, o
     const isClubScope = scope === "club";
     setPending(true);
     setError(null);
+    setRefusal(null);
     try {
       const room = await createRoom(accessToken, {
         name: trimmedName,
@@ -125,7 +128,9 @@ export default function CreateTopicDialog({ accessToken, displayName, onClose, o
       });
       onCreated(room);
     } catch (err) {
-      setError(err instanceof BanterApiError ? err.message : "Couldn't create that room.");
+      const reason = specificWriteRefusal(err);
+      setRefusal(reason);
+      setError(reason ? null : err instanceof BanterApiError ? err.message : "Couldn't create that room.");
       // The server rejected a club room (the membership may have ended since the list loaded):
       // re-read memberships so the picker stops offering it.
       if (isClubScope) void loadClubs();
@@ -251,6 +256,7 @@ export default function CreateTopicDialog({ accessToken, displayName, onClose, o
           )}
         </div>
 
+        {refusal && <WriteRefusalNotice refusal={refusal} verb="create a room" className="banter-modal__error" />}
         {error && (
           <p className="banter-modal__error" role="alert">
             {error}

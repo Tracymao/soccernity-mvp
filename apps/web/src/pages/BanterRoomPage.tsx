@@ -56,6 +56,7 @@
 // "log in" prompt and never calls the API.
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "./community/writeRefusal";
 import {
   getRoomById,
   getRoomFeed,
@@ -113,6 +114,7 @@ export default function BanterRoomPage() {
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const [postRefusal, setPostRefusal] = useState<WriteRefusal | null>(null);
   // Hooks run before the early returns below; with no session the hook is simply never used.
   const uploads = useMediaUploads({ accessToken: token ?? "" });
 
@@ -174,6 +176,7 @@ export default function BanterRoomPage() {
     if (!contentText || !uploads.canPublish) return;
     setPosting(true);
     setPostError(null);
+    setPostRefusal(null);
     try {
       const created = await postToRoom(token, roomId, {
         contentText,
@@ -189,7 +192,9 @@ export default function BanterRoomPage() {
       setDraft("");
       uploads.clear();
     } catch (err) {
-      setPostError(err instanceof BanterApiError ? err.message : "Couldn't post in this room.");
+      const reason = specificWriteRefusal(err);
+      setPostRefusal(reason);
+      setPostError(reason ? null : err instanceof BanterApiError ? err.message : "Couldn't post in this room.");
     } finally {
       setPosting(false);
     }
@@ -339,6 +344,7 @@ export default function BanterRoomPage() {
             </button>
           </div>
           <MediaUploadStatus uploads={uploads} />
+          {postRefusal && <WriteRefusalNotice refusal={postRefusal} verb="post in this room" className="banter-room-composer__error" />}
           {postError && (
             <p className="banter-room-composer__error" role="alert">
               {postError}

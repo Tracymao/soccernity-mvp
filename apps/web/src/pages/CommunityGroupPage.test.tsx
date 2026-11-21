@@ -131,7 +131,7 @@ describe("CommunityGroupPage", () => {
     vi.mocked(joinCommunityGroup).mockRejectedValueOnce(
       new CommunityGroupsApiError(
         "This account is awaiting guardian consent and cannot access this feature yet.",
-        { status: 403 },
+        { status: 403, code: "guardian_consent_pending" },
       ),
     );
 

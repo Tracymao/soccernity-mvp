@@ -9,17 +9,17 @@
 // (guardian-consent.guard.ts) -- surfaced with a link to /guardian-consent,
 // matching PostComposer.tsx / grassroots/errors.ts.
 //
-// api/community-groups.ts's CommunityGroupsApiError already carries the
-// server's `message` (via errorMessageFrom) and `.status`, so a message
-// match is enough to tell a guardian-consent 403 apart from any other
-// failure (e.g. a "not found" 404, or -- for create -- a duplicate-name
-// 409) without also threading a `code` field through.
+// The error carries the server's machine `code` (guardian_consent_pending),
+// which is what tells a guardian-consent 403 apart from any other failure
+// (e.g. a "not found" 404, a duplicate-name 409). The message text is never
+// read.
 import { CommunityGroupsApiError } from "../../api/community-groups";
+import { GUARDIAN_CONSENT_PENDING_CODE } from "../community/writeRefusal";
 
 export function isAwaitingConsent(err: unknown): boolean {
   return (
     err instanceof CommunityGroupsApiError &&
     err.status === 403 &&
-    /guardian consent/i.test(err.message)
+    err.code === GUARDIAN_CONSENT_PENDING_CODE
   );
 }

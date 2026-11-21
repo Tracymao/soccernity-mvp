@@ -29,7 +29,7 @@
 // The messages are fetched when the window opens and after a send; there is
 // no push or polling, because the API has none.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../writeRefusal";
 import {
   getMessages,
   sendMessage,
@@ -106,6 +106,7 @@ export default function ChatWindow({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendRefusal, setSendRefusal] = useState<WriteRefusal | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
@@ -215,6 +216,7 @@ export default function ChatWindow({
     if (!contentText || sending) return;
     setSending(true);
     setSendError(null);
+    setSendRefusal(null);
     try {
       const message = await sendMessage(accessToken, conversationId, { contentText });
       stickToBottom.current = true;
@@ -222,7 +224,9 @@ export default function ChatWindow({
       setDraft("");
       onSent(conversationId, message);
     } catch (err) {
-      setSendError(err instanceof MessagingApiError ? err.message : "Couldn’t send that message.");
+      const reason = specificWriteRefusal(err);
+      setSendRefusal(reason);
+      setSendError(reason ? null : err instanceof MessagingApiError ? err.message : "Couldn’t send that message.");
     } finally {
       setSending(false);
     }
@@ -241,8 +245,6 @@ export default function ChatWindow({
       </section>
     );
   }
-
-  const isConsentBlocked = sendError !== null && /guardian consent/i.test(sendError);
 
   // B-061: "Seen 08:09 AM" under my latest message, only when the server sent a read time for it.
   const seenId = seenLabelMessageId(messages, currentUserId);
@@ -364,15 +366,10 @@ export default function ChatWindow({
         )}
       </div>
 
+      {sendRefusal && <WriteRefusalNotice refusal={sendRefusal} verb="send messages" className="chat-window__send-error" />}
       {sendError && (
         <p className="chat-window__send-error" role="alert">
           {sendError}
-          {isConsentBlocked && (
-            <>
-              {" "}
-              <Link to="/guardian-consent">Check your status</Link>
-            </>
-          )}
         </p>
       )}
 

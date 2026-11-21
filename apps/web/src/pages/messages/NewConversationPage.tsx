@@ -40,6 +40,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { startConversation, MessagingApiError } from "../../api/messaging";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../community/writeRefusal";
 import { searchUsers, SearchApiError, type SearchUserResult } from "../../api/search";
 import { getStoredAccessToken } from "../../lib/session";
 import "./MessagesPage.css";
@@ -67,6 +68,7 @@ export default function NewConversationPage() {
 
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [startRefusal, setStartRefusal] = useState<WriteRefusal | null>(null);
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
@@ -125,11 +127,14 @@ export default function NewConversationPage() {
     if (!token || startingId) return;
     setStartingId(personId);
     setStartError(null);
+    setStartRefusal(null);
     try {
       const { conversation } = await startConversation(token, personId);
       navigate(`/messages/${conversation.id}`, { state: { otherParticipant: conversation.otherParticipant } });
     } catch (err) {
-      setStartError(err instanceof MessagingApiError ? err.message : "Couldn't start that conversation.");
+      const reason = specificWriteRefusal(err);
+      setStartRefusal(reason);
+      setStartError(reason ? null : err instanceof MessagingApiError ? err.message : "Couldn't start that conversation.");
     } finally {
       setStartingId(null);
     }
@@ -217,6 +222,9 @@ export default function NewConversationPage() {
         </button>
       )}
 
+      {startRefusal && (
+        <WriteRefusalNotice refusal={startRefusal} verb="send messages" className="messages-status messages-status--error" />
+      )}
       {startError && (
         <p className="messages-status messages-status--error" role="alert">
           {startError}

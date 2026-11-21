@@ -19,13 +19,16 @@ import AuthLayout from "../components/auth/AuthLayout";
 import AuthField from "../components/auth/AuthField";
 import AuthButton from "../components/auth/AuthButton";
 import { resetPassword } from "../lib/authApi";
+import { ApiError } from "../lib/apiClient";
 import "../components/auth/Auth.css";
 
 const MIN_PASSWORD_LENGTH = 8;
 const GENERIC_ERROR_MESSAGE =
   "We couldn't reset your password with that link. It may have expired. Request a new one.";
 
-type Status = "idle" | "submitting" | "submitted" | "error";
+const RATE_LIMITED_MESSAGE = "Too many requests. Please wait a little while and try again.";
+
+type Status = "idle" | "submitting" | "submitted" | "error" | "rate-limited";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -57,8 +60,8 @@ export default function ResetPasswordPage() {
     try {
       await resetPassword(token, password);
       setStatus("submitted");
-    } catch {
-      setStatus("error");
+    } catch (err) {
+      setStatus(err instanceof ApiError && err.status === 429 ? "rate-limited" : "error");
     }
   }
 
@@ -78,9 +81,9 @@ export default function ResetPasswordPage() {
         </p>
       ) : (
         <form className="sn-auth-form" onSubmit={handleSubmit} noValidate>
-          {status === "error" ? (
+          {status === "error" || status === "rate-limited" ? (
             <p className="sn-auth-status sn-auth-status--error" role="alert">
-              {GENERIC_ERROR_MESSAGE}
+              {status === "rate-limited" ? RATE_LIMITED_MESSAGE : GENERIC_ERROR_MESSAGE}
             </p>
           ) : null}
           {validationError ? (
