@@ -240,7 +240,7 @@ test.describe('rejection reason and the image-decision notification (B-217, #414
 
     await signIn(page, a.email);
     await page.goto('/notifications');
-    const row = page.getByRole('link', { name: /Your picture wasn’t approved — see why in Edit Profile/ });
+    const row = page.getByRole('link', { name: /Your picture wasn’t approved. See why in Edit Profile/ });
     await expect(row).toBeVisible();
     await row.click();
 
@@ -267,7 +267,7 @@ test.describe('rejection reason and the image-decision notification (B-217, #414
 
     await signIn(page, a.email);
     await page.goto('/notifications');
-    await expect(page.getByText(/Your cover photo wasn’t approved — see why in Edit Profile/)).toBeVisible();
+    await expect(page.getByText(/Your cover photo wasn’t approved. See why in Edit Profile/)).toBeVisible();
     await expect(page.getByText('You have a new notification')).toBeVisible();
 
     await page.getByText(/Your cover photo wasn’t approved/).click();

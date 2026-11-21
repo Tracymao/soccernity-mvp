@@ -566,7 +566,7 @@ function CommentaryTab({ events, onRetry }: { events: Loadable<MatchEvents>; onR
   return (
     <Section title="Live commentary">
       <p className="mc-commentary__disclosure">
-        This is an automated match-event feed, not written commentary — every entry is generated directly
+        This is an automated match-event feed, not written commentary. Every entry is generated directly
         from timestamped match data. There is no commentator and no editorial narration.
       </p>
       {items.length === 0 ? (
@@ -580,7 +580,7 @@ function CommentaryTab({ events, onRetry }: { events: Loadable<MatchEvents>; onR
               <span className="mc-commentary-list__body">
                 {e.player ?? ""}
                 {e.assist ? ` (assist: ${e.assist})` : ""}
-                {e.detail ? ` — ${e.detail}` : ""}
+                {e.detail ? `: ${e.detail}` : ""}
               </span>
             </li>
           ))}
@@ -632,7 +632,7 @@ function HeadToHeadTab({ h2h, onRetry }: { h2h: Loadable<HeadToHead>; onRetry: (
         <div>
           <dt>Goals</dt>
           <dd>
-            {aggregate.homeTeamGoals} – {aggregate.awayTeamGoals}
+            {aggregate.homeTeamGoals} - {aggregate.awayTeamGoals}
           </dd>
         </div>
       </dl>
@@ -906,7 +906,7 @@ export default function MatchCentrePage() {
     if (matchState.status !== "loaded") return;
     const { league } = matchState.data;
     if (!league.id) {
-      setStandings({ status: "error", message: "Standings aren't available for this match — no league information." });
+      setStandings({ status: "error", message: "Standings aren't available for this match: no league information." });
       return;
     }
     setStandings({ status: "loading" });
@@ -926,7 +926,7 @@ export default function MatchCentrePage() {
     if (matchState.status !== "loaded") return;
     const { league } = matchState.data;
     if (!league.id) {
-      setTopScorers({ status: "error", message: "Top scorers aren't available for this match — no league information." });
+      setTopScorers({ status: "error", message: "Top scorers aren't available for this match: no league information." });
       return;
     }
     setTopScorers({ status: "loading" });

@@ -71,6 +71,7 @@ import {
 import RemovedPlaceholder from "../../components/removed/RemovedPlaceholder";
 import { REMOVED_MESSAGE_TEXT } from "../../components/removed/removedContent";
 import { getStoredAccessToken, decodeAccessToken } from "../../lib/session";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../community/writeRefusal";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../../lib/under16";
 import {
   ConversationActions,
@@ -120,6 +121,7 @@ export default function ConversationPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendRefusal, setSendRefusal] = useState<WriteRefusal | null>(null);
 
   const markedReadRef = useRef(false);
 
@@ -202,12 +204,15 @@ export default function ConversationPage() {
     if (!contentText) return;
     setSending(true);
     setSendError(null);
+    setSendRefusal(null);
     try {
       const message = await sendMessage(token, conversationId, { contentText });
       setMessages((prev) => [...prev, message]);
       setDraft("");
     } catch (err) {
-      setSendError(err instanceof MessagingApiError ? err.message : "Couldn't send that message.");
+      const reason = specificWriteRefusal(err);
+      setSendRefusal(reason);
+      setSendError(reason ? null : err instanceof MessagingApiError ? err.message : "Couldn't send that message.");
     } finally {
       setSending(false);
     }
@@ -262,8 +267,6 @@ export default function ConversationPage() {
   // recoverable from this route alone.
   const headerName = passedOther ? passedOther.publicName ?? "Deleted user" : "Conversation";
 
-  const isConsentBlocked = sendError !== null && /guardian consent/i.test(sendError);
-
   // B-061: "Seen 08:09 AM" under my latest message, only when the server sent a read time for it.
   const seenId = seenLabelMessageId(messages, decoded.sub);
 
@@ -296,7 +299,7 @@ export default function ConversationPage() {
 
         {messages.length === 0 && (
           <p className="messages-status" role="status">
-            No messages yet — say hello below.
+            No messages yet. Say hello below.
           </p>
         )}
 
@@ -365,15 +368,12 @@ export default function ConversationPage() {
         </form>
       )}
 
+      {sendRefusal && (
+        <WriteRefusalNotice refusal={sendRefusal} verb="send messages" className="messages-status messages-status--error" />
+      )}
       {sendError && (
         <p className="messages-status messages-status--error" role="alert">
-          {isConsentBlocked ? (
-            <>
-              {sendError} <Link to="/guardian-consent">Check your status</Link>
-            </>
-          ) : (
-            sendError
-          )}
+          {sendError}
         </p>
       )}
 

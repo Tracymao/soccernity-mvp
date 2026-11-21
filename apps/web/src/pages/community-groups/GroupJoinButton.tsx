@@ -21,6 +21,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { joinCommunityGroup, leaveCommunityGroup, CommunityGroupsApiError } from "../../api/community-groups";
 import { isAwaitingConsent } from "./errors";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../community/writeRefusal";
 
 interface GroupJoinButtonProps {
   accessToken: string;
@@ -35,12 +36,14 @@ export default function GroupJoinButton({ accessToken, groupId, joined, onToggle
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConsent, setAwaitingConsent] = useState(false);
+  const [refusal, setRefusal] = useState<WriteRefusal | null>(null);
 
   async function toggle() {
     if (pending) return;
     setPending(true);
     setError(null);
     setAwaitingConsent(false);
+    setRefusal(null);
     try {
       const result = joined
         ? await leaveCommunityGroup(accessToken, groupId)
@@ -49,6 +52,8 @@ export default function GroupJoinButton({ accessToken, groupId, joined, onToggle
     } catch (err) {
       if (isAwaitingConsent(err)) {
         setAwaitingConsent(true);
+      } else if (specificWriteRefusal(err)) {
+        setRefusal(specificWriteRefusal(err));
       } else {
         setError(
           err instanceof CommunityGroupsApiError
@@ -82,6 +87,7 @@ export default function GroupJoinButton({ accessToken, groupId, joined, onToggle
           <Link to="/guardian-consent">Check your consent status</Link>.
         </p>
       )}
+      {refusal && <WriteRefusalNotice refusal={refusal} verb={joined ? "leave groups" : "join groups"} className="groups-join__error" />}
       {error && (
         <p className="groups-join__error" role="alert">
           {error}

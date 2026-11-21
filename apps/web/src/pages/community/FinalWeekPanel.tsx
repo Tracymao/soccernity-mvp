@@ -48,7 +48,7 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
         <div className="composer__banner" role="status">
           <p className="composer__banner-title">WEEK 4 FINAL · FINALISTS ONLY</p>
           <p className="composer__banner-body">
-            Only the finalists can upload to the Contest tab during the Week 4 upload window (days 22&ndash;24).
+            Only the finalists can upload to the Contest tab during the Week 4 upload window (days 22 to 24).
           </p>
         </div>
         <p className="composer__note">This portal is open to finalists only.</p>
@@ -100,7 +100,7 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
       <div className="composer__banner" role="status">
         <p className="composer__banner-title">WEEK 4 FINAL · UPLOAD WINDOW OPEN</p>
         <p className="composer__banner-body">
-          Finalists only. Upload a new video on days 22&ndash;24, deadline 23:59:59 on day 24. Hidden from everyone
+          Finalists only. Upload a new video on days 22 to 24, deadline 23:59:59 on day 24. Hidden from everyone
           but you until the reveal at 00:00 on day 25.
         </p>
       </div>
@@ -155,7 +155,7 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
                   &#127909; Choose a video
                 </button>
                 <p className="composer__note">
-                  MP4, WebM or MOV, up to 100 MB and 120 seconds. Upload on days 22&ndash;24; the deadline is 23:59:59 on
+                  MP4, WebM or MOV, up to 100 MB and 120 seconds. Upload on days 22 to 24; the deadline is 23:59:59 on
                   day 24.
                 </p>
                 <p className="composer__note">

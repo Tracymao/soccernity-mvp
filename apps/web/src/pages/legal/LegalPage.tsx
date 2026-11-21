@@ -17,7 +17,7 @@ function LegalPage({ title, markdown, other }: { title: string; markdown: string
     <main className="legal-page">
       {IS_NOT_APPROVED && (
         <div className="legal-banner" role="note">
-          <strong>Draft — not approved.</strong> This {title} is a first-pass draft
+          <strong>Draft, not approved.</strong> This {title} is a first-pass draft
           {SOURCE_VERSION ? ` (version ${SOURCE_VERSION})` : ""}. It has not been reviewed or signed off by
           legal counsel, is not final, and must not be relied on as Soccernity's binding policy. Bracketed
           [PROPOSAL] and [OPEN] markers show points still to be decided.

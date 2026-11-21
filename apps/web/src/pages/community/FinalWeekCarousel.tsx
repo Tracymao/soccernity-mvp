@@ -156,7 +156,7 @@ export default function FinalWeekCarousel({ accessToken }: Props) {
       </ul>
       <div className="fwc__foot">
         <span className="fwc__count">
-          Showing {first + 1}&ndash;{first + shown.length} of {items.length} finalist{items.length === 1 ? "" : "s"}
+          Showing {first + 1} to {first + shown.length} of {items.length} finalist{items.length === 1 ? "" : "s"}
         </span>
         {!single && (
           <span className="fwc__dots">

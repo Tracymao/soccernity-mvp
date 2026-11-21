@@ -58,7 +58,7 @@ export default function DisplayDensityPage() {
             <p className="display-row__title">Display density</p>
             <p className="display-row__desc">Fit more or less content on each screen.</p>
             <p className="display-row__note">
-              Not adjustable yet — display density isn&rsquo;t available yet. This needs a
+              Not adjustable yet. Display density isn&rsquo;t available yet. This needs a
               client-side preference system first.
             </p>
           </div>

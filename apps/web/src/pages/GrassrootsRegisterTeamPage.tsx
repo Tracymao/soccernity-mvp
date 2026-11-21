@@ -212,7 +212,7 @@ export default function GrassrootsRegisterTeamPage() {
         <p className="grassroots-callout__title">This is a community team, not a licensed club</p>
         <p className="grassroots-callout__body">
           Grassroots teams are self-registered and start unverified. A Verified badge appears only once
-          Soccernity confirms the team — you cannot set it here.
+          Soccernity confirms the team. You cannot set it here.
         </p>
       </div>
 

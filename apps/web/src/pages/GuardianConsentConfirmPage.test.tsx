@@ -103,7 +103,7 @@ describe("GuardianConsentConfirmPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "I consent" }));
 
     // W9 (B-079, Figma 5488:7164): "Thank you -- {name} can continue".
-    expect(await screen.findByRole("heading", { name: /thank you — the account holder can continue/i })).not.toBeNull();
+    expect(await screen.findByRole("heading", { name: /thank you, the account holder can continue/i })).not.toBeNull();
     // QA D-09: the minor still has to verify email and create a profile, so the
     // account is not "now active" at this point.
     expect(document.body.textContent ?? "").not.toMatch(/now active/i);
@@ -194,7 +194,7 @@ describe("GuardianConsentConfirmPage", () => {
 
     it("names the account holder, shows the date it was recorded and the 'What happens next' card", async () => {
       await approve(SUMMARY);
-      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you — Ade can continue");
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you, Ade can continue");
       expect(screen.getByRole("status").textContent).toMatch(
         /^Recorded on \d{1,2} [A-Z][a-z]+ \d{4}\. Ade can now continue registration, with under-18 protections in place\. \[COPY PENDING LEGAL REVIEW\]$/,
       );
@@ -225,7 +225,7 @@ describe("GuardianConsentConfirmPage", () => {
 
     it("without a summary it still reads correctly (no invented name)", async () => {
       await approve(null);
-      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you — the account holder can continue");
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you, the account holder can continue");
       expect(screen.getByText("The account holder continues registration")).not.toBeNull();
     });
   });

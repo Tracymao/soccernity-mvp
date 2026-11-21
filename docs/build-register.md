@@ -565,7 +565,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 - Test suites were not run for this document (docs only).
 - Effort and sequencing inside a wave were not estimated; waves give order and reasons only.
 
-## 7. Decision Log #367-#542 coverage
+## 7. Decision Log #367-#544 coverage
 
 | Decision Log | Referenced by | Build work? |
 |---|---|---|
@@ -741,6 +741,8 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #540 | B-179, B-180 | Yes (2026-11-21); `NODE_VERSION=22.22.0` plain value on the four static sites in `render.yaml`, the same version the API image uses (#527); resolves the Node pin question for the static builds (R101) |
 | #541 | B-088, B-265, B-180 | Yes (2026-11-21); runbook corrections from staging: the media custom domain is always proxied; step 6.8 parts 1 to 3 passed on staging; step 4.6 passed; Postmark pending approval delivers only to same-domain addresses and is a launch gate; step 6.5 note on an unverified adult (R101) |
 | #542 | B-124 | Yes (2026-11-21); write refusals are classified by the server's error code, not by status alone: guardian code shows the existing message, `email_verification_required` shows 'Verify your email to post/comment.', any other 403 shows 'You can't do that right now.'; BUILT in apps/web (R101) |
+| #543 | B-124 | Yes (2026-11-21); a refused post or comment now says why: `profile_incomplete` gives 'Choose a username to post/comment.' linking /create-profile, `under_16_restricted` the shared plain line, unknown 403 the generic line; sign-in 429 gets its own message; BUILT in apps/web (R102) |
+| #544 | B-124 | Yes (2026-11-21); a refused write in Bants, messages and Community Groups is classified by the server code and shows the matching notice and link; guardian consent no longer matched by message text; forgot-password and reset-password 429 has its own line; BUILT in apps/web (R103) |
 
 ## 8. Updates 2026-10-14 (contest spec, decline cap, DOB correction, hosting, Section 6 answers)
 
@@ -5688,3 +5690,21 @@ B-IDs 323 before and after; gap frames 146; Decision Log 535 data rows before, 5
 ### 106f. Verification
 
 - Register compared positionally with `git show origin/main:docs/build-register.md` (append-only except the Section 7 heading and five rows); docx Decision Log checked cell by cell.
+
+## 107. Updates 2026-11-21 (R102 refusal reasons; Decision Log #543; no new B-ID; apps/web only, no legal draft or Figma change)
+
+- **Built:** `writeRefusal.tsx` classifies `profile_incomplete` and `under_16_restricted`; `login()` maps 429 to 'Too many sign-in attempts. Please wait a little while and try again.' New strings are plain facts and not tagged. Full code table and the 429 audit: `docs/r102-refusal-reasons-report.md`.
+- **Found, not fixed:** forgot-password shows a generic error on 429; admin sign-in and guardian-consent 429 say 'a minute'; Bants, messages and groups show server text with no link; grassroots and groups helpers detect guardian consent by message text.
+- **Not run:** admin and API suites (untouched); CI.
+
+## 108. Updates 2026-11-21 (R103 refusal follow-ups; Decision Log #544; no new B-ID; apps/web only)
+
+- **Built:** `classifyWriteRefusal` now reads `code` structurally and `specificWriteRefusal` lets screens keep a specific server message for other 403s; the error `code` is carried by `apiFailure` (Bants, Community Groups, messages) and by the Grassroots write helpers; Bants join, create room and room post, ConversationPage, ChatWindow, NewConversationPage, Community Group join and create show the matching notice and link. Guardian consent is matched by `guardian_consent_pending` only (community-groups and grassroots `errors.ts`; the regexes in ConversationPage and ChatWindow are gone). Forgot-password and reset-password 429: 'Too many requests. Please wait a little while and try again.' Not tagged.
+- **Found, not fixed:** `api/auth.ts` `guardianConsentRejection` compares a 400 message to a fixed string (no code from the server); admin sign-in and guardian-consent 429 wording ('a minute') is copy for the maintenance session; `EditProfileModal` matches `/username/i` on a 409 message as a fallback after the `username_` code check.
+- **Not run:** admin and API suites (untouched); CI.
+
+## 109. Updates 2026-11-21 (R104 last message-text match check; Decision Log #545; no new B-ID; docs only, no code changed)
+
+- **Checked:** the EditProfileModal username fallback stays (two API 409s, "That username is already taken", carry no code); `guardianConsentRejection` unchanged; admin `CorrectDobPage` matches `/provide guardian/i` on a code-less 400. Detail in `docs/r104-last-message-match-report.md`.
+- **Found, not fixed:** add codes to the two username 409s, the admin DOB-correction guardian 400 and the guardian-consent 400s; then drop the three text matches. Copy for the maintenance session: two guardian 400 messages, and "a minute" on the confirm/decline 429 (matches the 60 s default; the withdrawal routes use 15 minutes and have their own state).
+- **Not run:** nothing (no code change).

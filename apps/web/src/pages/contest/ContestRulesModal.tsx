@@ -64,11 +64,11 @@ export default function ContestRulesModal({ onClose }: ContestRulesModalProps) {
         <div className="contest-rules-modal__body">
           <div className="contest-rules-placeholder">
             <p className="contest-rules-placeholder__lead">
-              [PLACEHOLDER &mdash; founder to supply final Contest Rules copy before this ships]
+              [PLACEHOLDER: founder to supply final Contest Rules copy before this ships]
             </p>
             <p className="contest-rules-placeholder__note">
               This modal is a structural shell only. The Contest Rules copy is written and owned
-              by the founder directly &mdash; there is no legal-counsel review track for this
+              by the founder directly. There is no legal-counsel review track for this
               content (unlike the Terms of Service / Privacy Policy).
             </p>
           </div>

@@ -115,7 +115,7 @@ test.describe.serial('Report a message', () => {
     await shot(page, '03-popup-report-chosen');
     await dialog.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('dialog', { name: 'Add messages for context' }).getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     await shot(page, '04-popup-reported');
 
     const rows = await reportsAbout(bMessage);
@@ -142,7 +142,7 @@ test.describe.serial('Report a message', () => {
     await dialog.getByRole('radio', { name: 'Harassment or bullying' }).check();
     await dialog.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('dialog', { name: 'Add messages for context' }).getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     expect(await reportsAbout(bMessage)).toHaveLength(1);
   });
 
@@ -201,7 +201,7 @@ test.describe.serial('Report a message', () => {
     await dialog.getByRole('radio', { name: 'Hate or abusive language' }).check();
     await shot(page, '09-mobile-report-chosen');
     await dialog.getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     await shot(page, '10-mobile-reported');
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);

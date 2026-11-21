@@ -50,7 +50,7 @@ export default function AccessibilityPage() {
             <p className="display-row__title">Reduce motion</p>
             <p className="display-row__desc">Limit animations and motion effects across the app.</p>
             <p className="display-row__note">
-              Not adjustable yet — motion preferences aren&rsquo;t available yet. This needs a
+              Not adjustable yet. Motion preferences aren&rsquo;t available yet. This needs a
               client-side preference system first.
             </p>
           </div>
@@ -62,7 +62,7 @@ export default function AccessibilityPage() {
             <p className="display-row__title">Increase contrast</p>
             <p className="display-row__desc">Boost the contrast between text and backgrounds.</p>
             <p className="display-row__note">
-              Not adjustable yet — contrast preferences aren&rsquo;t available yet. This needs a
+              Not adjustable yet. Contrast preferences aren&rsquo;t available yet. This needs a
               client-side preference system first.
             </p>
           </div>
@@ -74,7 +74,7 @@ export default function AccessibilityPage() {
             <p className="display-row__title">Text size</p>
             <p className="display-row__desc">Make text larger or smaller.</p>
             <p className="display-row__note">
-              Not adjustable yet — text size isn&rsquo;t available yet. This needs a client-side
+              Not adjustable yet. Text size isn&rsquo;t available yet. This needs a client-side
               preference system first.
             </p>
           </div>

@@ -195,21 +195,10 @@ async function authedFetch(path: string, accessToken: string, init?: AuthedFetch
   }
 }
 
-// Pull the server's own message off a NestJS error body ({ message } or
-// { message: string[] }). Used by the write endpoints, where the exact
-// text (a 403 "you may only manage..." vs a 409 "already been recorded")
-// is what tells the caller what happened. Same helper feed.ts uses.
-async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null);
-  if (body && typeof body.message === "string") return body.message;
-  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
-  return fallback;
-}
-
-// Like errorMessageFrom, but also carries the 422 sensitive-content-screen
-// body (code + flaggedFields) so the caller can show the confirm-or-edit
-// step instead of a plain error. Used only by the two endpoints that run
-// the screen (POST /teams, POST /fixtures).
+// Builds the error for a refused write: the server's own message (the exact text -- a 403 "you may only
+// manage..." vs a 409 "already been recorded" -- tells the caller what happened), its status and its
+// machine `code`. A 422 sensitive-content-screen body also carries flaggedFields so the caller can show the
+// confirm-or-edit step (POST /teams, POST /fixtures).
 async function screenAwareError(response: Response, fallback: string): Promise<GrassrootsApiError> {
   const body = await response.json().catch(() => null);
   let message = fallback;
@@ -222,7 +211,8 @@ async function screenAwareError(response: Response, fallback: string): Promise<G
       flaggedFields: Array.isArray(body.flaggedFields) ? (body.flaggedFields as SensitiveFieldFlag[]) : [],
     });
   }
-  return new GrassrootsApiError(message, { status: response.status });
+  const code = body && typeof body.code === "string" ? body.code : undefined;
+  return new GrassrootsApiError(message, { status: response.status, ...(code ? { code } : {}) });
 }
 
 // ---------- Teams ----------
@@ -338,10 +328,7 @@ export async function logResult(
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new GrassrootsApiError(
-      await errorMessageFrom(response, `Couldn't record that result (${response.status}).`),
-      { status: response.status },
-    );
+    throw await screenAwareError(response, `Couldn't record that result (${response.status}).`);
   }
   return (await response.json()) as Fixture;
 }
@@ -361,10 +348,7 @@ export async function updateFixtureStatus(
     body: JSON.stringify({ status }),
   });
   if (!response.ok) {
-    throw new GrassrootsApiError(
-      await errorMessageFrom(response, `Couldn't update the fixture status (${response.status}).`),
-      { status: response.status },
-    );
+    throw await screenAwareError(response, `Couldn't update the fixture status (${response.status}).`);
   }
   return (await response.json()) as Fixture;
 }

@@ -46,5 +46,8 @@ export async function apiFailure<E extends Error>(
     if (typeof body.message === "string") message = body.message;
     else if (Array.isArray(body.message) && typeof body.message[0] === "string") message = body.message[0];
   }
-  return make(message, { status: response.status });
+  // Keep the server's machine code (guardian_consent_pending, email_verification_required,
+  // profile_incomplete, ...) so screens can tell a refusal apart without reading the message text.
+  const code = body && typeof body.code === "string" ? body.code : undefined;
+  return make(message, { status: response.status, ...(code ? { code } : {}) });
 }

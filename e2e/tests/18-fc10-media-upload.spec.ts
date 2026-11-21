@@ -223,7 +223,7 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await page.getByLabel(/Why are you reporting it/).fill('Not about football');
     await expect(page.getByText('18 / 500')).toBeVisible();
     await page.getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks, our team will review it.')).toBeVisible();
+    await expect(page.getByText('Reported. Thanks, our team will review it.')).toBeVisible();
     expect(await db().postMediaReport.count({ where: { reporterId: viewer.userId } })).toBe(1);
     const stored = await db().postMediaReport.findFirst({ where: { reporterId: viewer.userId }, select: { reason: true } });
     expect(stored.reason).toBe('Not about football');
@@ -276,7 +276,7 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await page.getByRole('radio', { name: 'Child safety concern' }).check();
     await page.getByLabel('Details (optional)').fill('Urgent: something involving a child');
     await page.getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     // The general report is a Report row about the post's author (no per-account daily cap on POST /reports); the
     // media-report count did not move.
     const general = await db().report.findMany({ where: { reporterId: reporter.userId }, select: { targetType: true, targetId: true, reason: true } });
@@ -335,7 +335,7 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await signIn(page, uploader.email);
     await page.goto('/notifications');
     await expect(page.getByText(/Your picture was approved/).first()).toBeVisible();
-    await expect(page.getByText(/Your picture wasn’t approved — see why on your post/).first()).toBeVisible();
+    await expect(page.getByText(/Your picture wasn’t approved. See why on your post/).first()).toBeVisible();
 
     await page.goto('/community');
     const card = page.locator('article.post', { hasText: TEXT.clear });

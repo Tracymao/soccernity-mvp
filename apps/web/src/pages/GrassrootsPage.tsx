@@ -178,7 +178,7 @@ export default function GrassrootsPage() {
             <>
               <p className="grassroots-empty__title">No teams registered yet</p>
               <p className="grassroots-empty__body">
-                No grassroots teams have been registered on Soccernity yet. Be the first — register your team to
+                No grassroots teams have been registered on Soccernity yet. Be the first: register your team to
                 start logging fixtures and results.
               </p>
             </>

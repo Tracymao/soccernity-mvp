@@ -11,20 +11,20 @@
 //     organiser (Decision Log #255) -- "You may only create fixtures for
 //     a team you registered", etc. Surfaced as the server's own message.
 //
-// api/grassroots.ts's GrassrootsApiError already carries the server's
-// `message` (via errorMessageFrom) and `.status`, so a message match is
-// enough to tell the two apart without also threading `code` through.
+// api/grassroots.ts's GrassrootsApiError carries the server's `status` and
+// machine `code`; the guardian-consent 403 is told apart by its code, never
+// by the message text.
 import {
   GrassrootsApiError,
   SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
   type SensitiveFieldFlag,
-} from "../../api/grassroots";
+} from "../../api/grassroots";import { GUARDIAN_CONSENT_PENDING_CODE } from "../community/writeRefusal";
 
 export function isAwaitingConsent(err: unknown): boolean {
   return (
     err instanceof GrassrootsApiError &&
     err.status === 403 &&
-    /guardian consent/i.test(err.message)
+    err.code === GUARDIAN_CONSENT_PENDING_CODE
   );
 }
 

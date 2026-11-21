@@ -103,7 +103,7 @@ export function screenSensitiveContent(fields: Record<string, string | null | un
 export const SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE = 'sensitive_content_review_required';
 
 export const SENSITIVE_CONTENT_REVIEW_MESSAGE =
-  'This looks like it may mention something sensitive about someone — are you sure you want to share this publicly?';
+  'This looks like it may mention something sensitive about someone. Are you sure you want to share this publicly?';
 
 // Prefix on the Report.reason of an auto-logged flagged-and-confirmed
 // submission. Report has no `source` column (no schema change was made for

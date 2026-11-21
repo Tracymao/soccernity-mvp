@@ -224,6 +224,9 @@ export async function login(payload: LoginRequest): Promise<LoginResponse | TwoF
     let message = "Something went wrong signing you in.";
     if (response.status === 401) {
       message = "That email and password don't match.";
+    } else if (response.status === 429) {
+      // The per-account / per-IP sign-in lockout. No duration and no promise of an email.
+      message = "Too many sign-in attempts. Please wait a little while and try again.";
     }
     throw new AuthApiError(message, { status: response.status });
   }
@@ -845,7 +848,7 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
     // Expected during Sprint 1 until B2 merges and a server is actually
     // running at API_BASE_URL -- this is not a bug in this request.
     throw new AuthApiError(
-      "Couldn't reach the Soccernity server. The account service may not be available yet -- try again shortly.",
+      "Couldn't reach the Soccernity server. The account service may not be available yet. Try again shortly.",
       { cause: networkError },
     );
   }

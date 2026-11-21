@@ -4,7 +4,7 @@
 // B-284 (Decision Log #465): a report carries a REQUIRED reason category from a fixed list plus an OPTIONAL
 // description (required only for "Other"). Figma: "Report — In-app form" frames 6946:40232 to 6946:40796
 // (docs/figma-report-reason-categories.md) — a dialog over the page with the category radio list, the details
-// field, a send error, and a "Reported — thanks" confirmation. The small target menu that picks post-or-user
+// field, a send error, and a "Reported, thanks" confirmation. The small target menu that picks post-or-user
 // first has no frame and stays as it was.
 //
 // POST /reports (services/api moderation module, JwtAuthGuard only — reachable even for a restricted-pending
@@ -46,7 +46,7 @@ interface ReportActionProps {
   /** Called when the person cancels, and with `startOpen` the caller takes over instead of a "Report"
    *  trigger being shown. */
   onCancel?: () => void;
-  /** Called when the person presses Close on the "Reported — thanks" confirmation. With it, the caller takes over
+  /** Called when the person presses Close on the "Reported, thanks" confirmation. With it, the caller takes over
    *  (and unmounts this) instead of the plain "Reported" note replacing the trigger. Used by the message menu. */
   onFinished?: () => void;
   /** Message reports only (B-286, Decision Log #477): the messages around the reported one, from the chat the
@@ -274,7 +274,7 @@ export default function ReportAction({
         {stage === "done" ? (
           <>
             <h2 className="report-dialog__title" id={titleId}>
-              Reported — thanks
+              Reported, thanks
             </h2>
             <p className="report-dialog__subtitle" id={subtitleId}>
               Our team will review it.

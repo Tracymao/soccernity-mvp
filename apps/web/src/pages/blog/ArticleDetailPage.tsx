@@ -230,7 +230,7 @@ export default function ArticleDetailPage() {
             </li>
           ))}
         </ul>
-        <p className="article-comments__sample-caption">Sample &mdash; not real comments</p>
+        <p className="article-comments__sample-caption">Sample, not real comments</p>
       </section>
 
       {related.length > 0 && (

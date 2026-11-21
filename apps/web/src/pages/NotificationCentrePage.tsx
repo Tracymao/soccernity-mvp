@@ -163,14 +163,14 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       if (fixture?.result) {
         return {
           subject: fixture.teamAName,
-          rest: ` ${fixture.result.scoreA}–${fixture.result.scoreB} — result logged for your fixture`,
+          rest: ` ${fixture.result.scoreA}-${fixture.result.scoreB}, result logged for your fixture`,
         };
       }
       return { subject: "A result", rest: " was logged for your fixture" };
     }
     case "contest_win": {
       const cycle = data && "cycle" in data ? data.cycle : null;
-      return { subject: "Contest", rest: cycle ? ` — you won a round in ${cycle.title}` : " — you won a round" };
+      return { subject: "Contest", rest: cycle ? `, you won a round in ${cycle.title}` : ", you won a round" };
     }
     // Scheduled Contest events (B-123). Plain functional wording; the cycle title comes from the data.
     case "contest_week_opens": {
@@ -206,14 +206,14 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
     case "profile_image_rejected": {
       // ONE row serves both images (Decision Log #414 item 3, B-224); the wording names which.
       const noun = data && "image" in data && data.image === "cover" ? "cover photo" : "picture";
-      return { subject: `Your ${noun}`, rest: " wasn’t approved — see why in Edit Profile" };
+      return { subject: `Your ${noun}`, rest: " wasn’t approved. See why in Edit Profile" };
     }
     case "post_media_approved":
     case "post_media_rejected": {
       const noun = data && "media" in data && data.media.kind === "video" ? "video" : "picture";
       return n.type === "post_media_approved"
         ? { subject: `Your ${noun}`, rest: " was approved" }
-        : { subject: `Your ${noun}`, rest: " wasn’t approved — see why on your post" };
+        : { subject: `Your ${noun}`, rest: " wasn’t approved. See why on your post" };
     }
     case "username_review_decided": {
       const approved = data && "usernameReview" in data && data.usernameReview.outcome === "reinstated";
@@ -520,7 +520,7 @@ export default function NotificationCentrePage() {
             fixture result, or you win a Contest round, you&rsquo;ll see it here.
           </p>
           <p className="notif-empty__soon">
-            More notification types — mentions, deeper Bants and Contest activity — are on the way.
+            More notification types, such as mentions and deeper Bants and Contest activity, are on the way.
           </p>
           <button type="button" className="notif-empty__cta" onClick={() => navigate("/community")}>
             Go to your feed

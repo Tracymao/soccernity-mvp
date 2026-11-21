@@ -37,6 +37,8 @@ import {
 } from "../api/community-groups";
 import { getStoredAccessToken } from "../lib/session";
 import { isAwaitingConsent } from "./community-groups/errors";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "./community/writeRefusal";
+
 import "./community-groups/CommunityGroupsPage.css";
 
 const DIMENSION_OPTIONS: GroupDimension[] = ["city", "positionPlayed", "careerTrack"];
@@ -57,6 +59,7 @@ export default function CreateCommunityGroupPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<WriteRefusal | null>(null);
   const [awaitingConsent, setAwaitingConsent] = useState(false);
 
   if (!token) {
@@ -77,6 +80,7 @@ export default function CreateCommunityGroupPage() {
     setSubmitting(true);
     setError(null);
     setAwaitingConsent(false);
+    setRefusal(null);
     try {
       const created = await createCommunityGroup(token, {
         name: trimmedName,
@@ -86,6 +90,8 @@ export default function CreateCommunityGroupPage() {
     } catch (err) {
       if (isAwaitingConsent(err)) {
         setAwaitingConsent(true);
+      } else if (specificWriteRefusal(err)) {
+        setRefusal(specificWriteRefusal(err));
       } else {
         setError(err instanceof CommunityGroupsApiError ? err.message : "Couldn't create that group.");
       }
@@ -102,7 +108,7 @@ export default function CreateCommunityGroupPage() {
       <div className="groups-form__header">
         <h1 className="groups-form__title">Create a group</h1>
         <p className="groups-form__lede">
-          Every Community Group is organised by exactly one dimension — a city, a position, or a career track. Pick
+          Every Community Group is organised by exactly one dimension: a city, a position, or a career track. Pick
           the one that describes who the group is for.
         </p>
       </div>
@@ -180,6 +186,7 @@ export default function CreateCommunityGroupPage() {
             <Link to="/guardian-consent">Check your consent status</Link>.
           </p>
         )}
+        {refusal && <WriteRefusalNotice refusal={refusal} verb="create a group" className="groups-form__error" />}
         {error && (
           <p className="groups-form__error" role="alert">
             {error}

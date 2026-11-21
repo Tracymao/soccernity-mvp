@@ -52,7 +52,7 @@ describe("dateRangeError", () => {
 
 describe("dateRangeLabel", () => {
   it("labels a two-ended, one-ended and empty range", () => {
-    expect(dateRangeLabel({ dateFrom: "2026-10-01", dateTo: "2026-10-04" })).toBe("1 Oct 2026 – 4 Oct 2026");
+    expect(dateRangeLabel({ dateFrom: "2026-10-01", dateTo: "2026-10-04" })).toBe("1 Oct 2026 to 4 Oct 2026");
     expect(dateRangeLabel({ dateFrom: "2026-10-01", dateTo: "" })).toBe("From 1 Oct 2026");
     expect(dateRangeLabel({ dateFrom: "", dateTo: "2026-10-04" })).toBe("To 4 Oct 2026");
     expect(dateRangeLabel({ dateFrom: "", dateTo: "" })).toBeNull();

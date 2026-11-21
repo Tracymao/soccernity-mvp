@@ -289,7 +289,7 @@ export default function GuardianConsentConfirmPage() {
               ✓
             </div>
             <div>
-              <h1 className="consent-page__heading">Thank you — {name} can continue</h1>
+              <h1 className="consent-page__heading">Thank you, {name} can continue</h1>
               <p className="consent-page__subheading" role="status">
                 Recorded on {recordedOn}. {nameCap} can now continue registration, with under-18 protections in
                 place. [COPY PENDING LEGAL REVIEW]
@@ -363,7 +363,7 @@ export default function GuardianConsentConfirmPage() {
               </h1>
               <p className="consent-page__subheading">
                 {first ? fillName(INTRO_NAMED, first, possessive) : INTRO_UNNAMED}{" "}
-                Please read this before you decide — it explains what the account can do and what we collect. [COPY
+                Please read this before you decide. It explains what the account can do and what we collect. [COPY
                 PENDING LEGAL REVIEW]
               </p>
             </div>

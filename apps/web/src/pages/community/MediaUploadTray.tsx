@@ -135,7 +135,7 @@ function TrayItem({
           <p className="media-item__name">
             {item.name}{" "}
             <span className="media-chip media-chip--ok">
-              {variant === "final" ? "Approved — waiting for the reveal" : "Approved"}
+              {variant === "final" ? "Approved, waiting for the reveal" : "Approved"}
             </span>
           </p>
           <p className="media-item__hint">
