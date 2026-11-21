@@ -1,8 +1,8 @@
-# Soccernity — Draft for counsel: Cloudflare edge proxy — processor list, cross-border assessment and DPIA R11
+# Soccernity: draft for counsel on the Cloudflare edge proxy (processor list, cross-border assessment and DPIA R11)
 
-## DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
+## DRAFT FOR COUNSEL REVIEW: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
+**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]** v0.4 wording pass 2026-11-21: sentences reworded for plain language; obligations, numbers, defined terms and cross-references unchanged; facts corrected under #536 and #541 are marked.
 
 This is a **new, standalone file** in the style of `docs/dpia-addendum-post-media-draft.md` and
 `docs/legal-copy-part-c-post-media-draft.md`. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
@@ -11,15 +11,15 @@ applying it is a separate step for whoever maintains those files.
 
 Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negotiable #2: every output is a draft,
 never approved). Nothing here says Soccernity, Cloudflare or any transfer complies with UK GDPR, EU GDPR, COPPA, the
-Nigeria Data Protection Act 2023 (NDPA) or any other regime. **Every section below is a draft for counsel review — not
-approved, not legal advice.** The sign-off block in Section 12 is empty on purpose.
+Nigeria Data Protection Act 2023 (NDPA) or any other regime. **Every section below is a draft for counsel review, not
+approved and not legal advice.** The sign-off block in Section 12 is empty on purpose.
 
 **Tag convention.** Proposed wording carries `[COPY PENDING LEGAL REVIEW]`. **[PROPOSAL]** = a suggestion for counsel
 to confirm, revise or reject. **[OPEN]** = belongs to the founder or counsel; this draft does not decide it.
 **[UNVERIFIED, FOR COUNSEL]** = a claim about Cloudflare, Render or a law that this draft could not confirm from a
 primary source (the reason is given each time).
 
-- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**.
+- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**; wording pass 2026-11-21 (**v0.4**, still draft, NOT APPROVED) **[v0.4 CHANGED, #536, #541]**. Changelog v0.3 → v0.4 (2026-11-21): wording pass for plain language (dashes and a few phrasings removed); no duty, number, date, reference, marker or disposition changed; facts block applied (media custom domain `media.soccernity.com` proxied by Cloudflare from the start, #541; R2 in the EU jurisdiction, #536).
 - **Decision Log:** #449 (adopted 2026-10-31: free-plan Cloudflare proxy in front of the API and the two static sites,
   with an origin lock; built at the launch gate), #424 (the original recommendation), #437 (DNS records stay
   "DNS only" until then), #429 (re-verify `TRUST_PROXY_HOPS`), #4 (scope: UK, Nigeria, US, EU).
@@ -29,7 +29,7 @@ primary source (the reason is given each time).
 
 ---
 
-## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
 
 **[v0.3 CHANGED — #449, #532, #534]** v0.3 is a **narrow refresh of one disposition and stale references only.** (1) **Q9 (which of Options A, B and C) is now marked B (#449) in every place it appears** (the Q9 entry in Section 11, and the notes near the timing paragraph and the options table in Sections 3 and 7, and the "Result of the check" paragraph above); v0.2 had marked the scope B and the choice of option A. The marking records the founder's decision (the free-plan proxy in front of the API and the two static sites, with an origin lock; building deferred until after launch, #518). **Counsel's view is not recorded, this is not legal clearance, and v0.3 does not choose or apply an option.** The founder's brief extends B to Q9 as a whole; v0.2's A part for the **admin-hostname variant** is therefore also moved to B by that instruction and I flag it for the founder to confirm. **Q1 to Q8, Q10 and Q11 stay A.** (2) **Stale references brought current (marked in place):** the legal draft is **v0.17** and the DPIA **v0.9** (this file said v0.11 and v0.3, and the v0.2 note said v0.16 and v0.8); the row numbers proposed in Section 8 (including "row 47") still must be re-checked against the current Part C before use (legal draft v0.17 already uses rows 1 to 54, **the next free row is 55**), which I did **not** do row by row. It **completes nothing and claims nothing as solved.** The NOT APPROVED banner and the empty sign-off in Section 13 are unchanged. Decision Log #533 and #534 are merged (docs PR #816); they are not relied on for Q9.
 
@@ -37,7 +37,7 @@ primary source (the reason is given each time).
 
 ---
 
-## Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
 
 **[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **each of the 11 questions in Section 11 a disposition marker**; (2) it adds marked notes beside the statements that later Decision Log entries have overtaken (the timing of the proxy, #518, and the dropped image-scanning tool, #526); (3) it adds this changelog. It **chooses no option, completes nothing, applies nothing to the product, the legal draft, the DPIA or any code, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text and every `[OPEN]`, `[PROPOSAL]` and `[UNVERIFIED, FOR COUNSEL]` marker are kept.
 
@@ -60,11 +60,11 @@ primary source (the reason is given each time).
 
 1. **A proxy that terminates TLS is not an "IP address" tool.** Every request and response for the proxied
    hostnames is decrypted at Cloudflare's edge so Cloudflare can apply its services (this follows from Cloudflare's
-   own description of the encryption modes — Section 3.3). For Soccernity that includes sign-in passwords, two-factor
+   own description of the encryption modes, Section 3.3). For Soccernity that includes sign-in passwords, two-factor
    codes, session and refresh cookies, dates of birth at registration, guardian-consent tokens, minors' posts and
    messages, and the admin console's reads of dates of birth. Cloudflare's own DPA says the extent of personal data in
    customer content, including special categories, "is determined and controlled by the Customer" (Section 3.2).
-2. **Cloudflare is already in the legal draft — for storage only.** PP §5 already lists "Cloudflare (R2 object
+2. **Cloudflare is already in the legal draft, for storage only.** PP §5 already lists "Cloudflare (R2 object
    storage)" (Decision Log #307). The proxy is a **second, much wider role** with the same company. The existing
    entry does not cover it, and the existing "which processors" and cross-border rows do not mention Cloudflare at all.
 3. **The draft policy makes statements the proxy would make untrue.** PP §1.7 and §1.8 say the registration IP address
@@ -97,9 +97,9 @@ primary source (the reason is given each time).
 |---|---|
 | Free-plan Cloudflare proxy in front of the API, `apps/web` and `apps/admin` static sites | Adopted (#449); **not built**; built at the launch gate |
 | Origin lock (Render origin accepts only the proxy) | Adopted (#449); **mechanism not designed** (Section 9.2) |
-| DNS records | "DNS only" (not proxied) until the build (#437) |
+| DNS records | "DNS only" (not proxied) until the build (#437). **[v0.4 CHANGED, #541]** The R2 media custom domain (`media.soccernity.com`) is the exception: it is proxied by Cloudflare from the start. |
 | Which traffic Cloudflare sees | Everything sent to the proxied hostnames, in both directions |
-| Cloudflare R2 (stored media) | Already planned (#307); separate role (Section 2.2) |
+| Cloudflare R2 (stored media) | Already planned (#307); separate role (Section 2.2). **[v0.4 CHANGED, #536, #541]** R2 is in the EU jurisdiction, and its public media address is proxied by Cloudflare from the start. |
 | Production domains | `soccernity.com`, `admin.soccernity.com`, `api.soccernity.com` and the staging equivalents (#437) |
 
 ### 1.2 What would pass through the proxy (from the repo)
@@ -117,13 +117,13 @@ hostnames are proxied (option A, Section 7).
 | Avatar and cover uploads, admin media uploads (multipart through the API) | `POST /users/:id/avatar`, `/cover`, `POST /admin/media/upload` | Minors' images, **before** the image check |
 | Admin console reads: user detail, date-of-birth read and correction, held investigations, report details | `/admin/*` | Staff reading children's data; moderation of illegal content |
 | Static sites: page requests, the JS bundle | `apps/web`, `apps/admin` hostnames | IP, user agent, pages visited |
-| Visitors' IP address and request metadata | every request | Persistent identifier (COPPA context — Section 6.3) |
+| Visitors' IP address and request metadata | every request | Persistent identifier (COPPA context, Section 6.3) |
 
 **Not through the proxy even with all three hostnames proxied** (from the code, not from Cloudflare): the browser's
 upload to the media bucket uses a presigned link to the object store directly (the W14 pipeline), and card details go
-from the browser to Stripe directly (`CardVerificationPanel`; the API stores only a PaymentIntent reference). If the
-public media address is later put behind a Cloudflare custom domain (B-265, `S3_PUBLIC_BASE_URL`), media *viewing*
-would pass through the same Cloudflare. **[OPEN]**
+from the browser to Stripe directly (`CardVerificationPanel`; the API stores only a PaymentIntent reference). The
+public media address (B-265, `S3_PUBLIC_BASE_URL`) is a Cloudflare custom domain, proxied from the start, so media *viewing*
+passes through the same Cloudflare. **[v0.4 CHANGED, #541]** **[OPEN]**
 
 ### 1.3 The Render question **[UNVERIFIED, FOR COUNSEL]**
 
@@ -155,7 +155,7 @@ relationship rather than a first. Whoever prepares the processor list should che
 - Cloudflare says it "has no direct relationship with End Users" (privacy policy, Section 8), so Soccernity, as
   controller, would be the party answering a child's or guardian's questions about Cloudflare.
 
-**Questions (Section 11):** Q1 (roles, including the "Network Data" gap — the policy's role for it is not stated),
+**Questions (Section 11):** Q1 (roles, including the "Network Data" gap: the policy's role for it is not stated),
 Q2 (whether Soccernity is controller for the proxied traffic of every user group, and what the guardian is told).
 
 ### 2.2 The existing R2 role
@@ -231,7 +231,7 @@ counsel's view on whether a free plan is acceptable for children's data. No pric
 |---|---|---|
 | How it binds | A preamble says the DPA forms part of "an Enterprise Subscription Agreement, Self-Serve Subscription Agreement or other written or electronic agreement", and "will be effective … from the date on which Customer signed or the parties otherwise agreed to this DPA". | Whether a Free-plan account is bound without an extra step is **not shown on the DPA page**. A Cloudflare community answer and the Cloudflare APPI trust page say the DPA is "incorporated by reference" into the Self-Serve Subscription Agreement and that it can be accepted in the dashboard. The Self-Serve Subscription Agreement (`https://www.cloudflare.com/terms/`) was **not read**. **[UNVERIFIED, FOR COUNSEL]** |
 | Sub-processors | General written authorisation (cl. 4.3); Cloudflare adds new sub-processors to its list "at least thirty (30) days" before they start; an objection must be in writing "within ten (10) days of the notification"; otherwise the customer is "deemed to have consented" (cl. 4.4). The listed sub-processors (page last updated 1 October 2025) include Google, Oracle and AWS for named services; the page gives no location for core CDN/proxy services. | Someone at Soccernity must watch the list and act inside ten days. [PROPOSAL: name an owner in the incident/processor process.] |
-| Breach notice | Cloudflare will "without undue delay notify the Customer upon becoming aware of any breach of security" (cl. 3.1(e)). No hour limit is stated. | Cloudflare's notice has no deadline, while Soccernity's own clocks (UK/EU 72 hours; Nigeria 72 hours under the GAID — see `docs/incident-response-and-breach-notification-plan-draft.md`, where present) start when Soccernity is "aware". |
+| Breach notice | Cloudflare will "without undue delay notify the Customer upon becoming aware of any breach of security" (cl. 3.1(e)). No hour limit is stated. | Cloudflare's notice has no deadline, while Soccernity's own clocks (UK/EU 72 hours; Nigeria 72 hours under the GAID; see `docs/incident-response-and-breach-notification-plan-draft.md`, where present) start when Soccernity is "aware". |
 | Government requests | Cloudflare must "immediately notify Customer of the request unless such notification is legally prohibited" (cl. 8.1(a)). | A child's data requested by a foreign authority would reach Soccernity only if not prohibited. |
 | Deletion | At the customer's choice at the end, "other than to the extent required to comply with applicable law" (cl. 3.1(i)). | No days given. |
 | Audit | Cl. 5 (read in the PDF; not summarised here). | Counsel to read. |
@@ -269,14 +269,14 @@ counsel's view on whether a free plan is acceptable for children's data. No pric
   to whom, and whether a UK user's request reaching a non-UK edge is a transfer by Soccernity or by Cloudflare as its
   processor, is for counsel (Q4).
 
-### 6.2 Nigeria — NDPA 2023 and GAID 2025 (read from the official PDFs)
+### 6.2 Nigeria: NDPA 2023 and GAID 2025 (read from the official PDFs)
 
 Retrieved from the NDPC-hosted GAID PDF (`https://ndpc.gov.ng/wp-content/uploads/2025/07/NDP-ACT-GAID-2025-MARCH-20TH.pdf`)
 and a PDF copy of the Act (`https://www.dataguidance.com/sites/default/files/data_protection_act_2023.pdf`; an unofficial
-copy of the Act, with OCR-type typos in the text — counsel should use the gazetted text).
+copy of the Act, with OCR-type typos in the text; counsel should use the gazetted text).
 
 - **s. 41(1):** a controller or processor "shall not transfer or permit personal data to be transferred from Nigeria to
-  another country, unless — (a) the recipient of the personal data is subject to a law, binding corporate rules,
+  another country, unless (a) the recipient of the personal data is subject to a law, binding corporate rules,
   contractual clauses, code of conduct, or certification mechanism that affords an adequate level of protection with
   respect to the personal data in accordance with this Act; or (b) one of the conditions set out in section 43 of this
   Act applies." **s. 41(2):** the controller or processor "shall record the basis for transfer … and the adequacy of
@@ -302,7 +302,7 @@ copy of the Act, with OCR-type typos in the text — counsel should use the gaze
   Cloudflare's DPA or Data Privacy Framework certification is, or any list of approved instruments. **[UNVERIFIED, FOR
   COUNSEL]** The GAID's date of entry into force (reported as 19 September 2025 in a secondary source) was not verified.
 
-### 6.3 US — COPPA and the other US questions
+### 6.3 US: COPPA and the other US questions
 
 Soccernity already treats under-13 US users with a card-verification control (Part C; Decision Log #4 stays open). The
 proxy receives IP addresses and request content from those children's browsers. Whether an edge proxy is a "service
@@ -341,11 +341,11 @@ COUNSEL]**
 
 ## 8. Proposed wording **[COPY PENDING LEGAL REVIEW]**
 
-### 8.1 Privacy Policy §5 — processor list **[PROPOSAL, not yet built]**
+### 8.1 Privacy Policy §5: processor list **[PROPOSAL, not yet built]**
 
 Replace the existing "Cloudflare (R2 object storage)" bullet with:
 
-> **Cloudflare** — two services. (1) **R2 storage:** stores the photos and videos you upload. (2) **Network protection
+> **Cloudflare**, two services. (1) **R2 storage:** stores the photos and videos you upload. (2) **Network protection
 > [PROPOSAL, not yet built — Decision Log #449]:** the traffic between your device and our website, app and servers
 > passes through Cloudflare's network, which helps protect them against attacks. Cloudflare handles that traffic on our
 > instructions. It can see what is sent, including your IP address, and may handle it in countries outside the one you
@@ -355,7 +355,7 @@ Replace the existing "Cloudflare (R2 object storage)" bullet with:
 
 ### 8.2 Cross-border row (a new Part C row; numbering below)
 
-> **Cross-border transfer — Cloudflare edge proxy and R2:** (a) all traffic to the proxied hostnames is decrypted and
+> **Cross-border transfer: Cloudflare edge proxy and R2:** (a) all traffic to the proxied hostnames is decrypted and
 > processed at Cloudflare's network, which operates in more than 330 cities in over 100 countries; the free plan has no
 > regional controls; (b) Cloudflare's stated mechanisms are the Data Privacy Framework (EU, UK extension and Swiss
 > certifications of Cloudflare, Inc.) with SCCs and the UK Addendum as fallback; (c) for transfers *from Nigeria* the
@@ -383,13 +383,13 @@ may prefer to fold it into row 9 (the existing cross-border assessment) and row 
 | Part C rows 9, 20, 37, 38 | Row 9/20 omit Cloudflare; row 37 says R2 hash-matching coverage is unconfirmed; row 38 says IP is "never stored; no third party" | See above |
 | Guardian consent screen / `CONSENT_SCREEN_VERSION` | Does not mention the proxy | A wording change there bumps the version (Decision Log #348); counsel decides whether guardians must be told |
 
-### 8.4 DPIA R11 — proposed entry **[COPY PENDING LEGAL REVIEW]**
+### 8.4 DPIA R11: proposed entry **[COPY PENDING LEGAL REVIEW]**
 
 R11 in `docs/sprint-1-dpia-outline-draft.md` (v0.3) is "Sub-processor and hosting exposure (cannot be assessed yet)" and
 still lists hosting and email as unselected. **[PROPOSAL]** Add the following to R11, or, if counsel prefers a separate
 risk, record it as R32 (R17–R22 and R23–R31 are used by the view-data and post-media addenda):
 
-> **R11 (addition) — Edge proxy that decrypts all traffic.** From the launch gate, a Cloudflare free-plan proxy sits in
+> **R11 (addition): edge proxy that decrypts all traffic.** From the launch gate, a Cloudflare free-plan proxy sits in
 > front of the API and the two static sites (Decision Log #449). It decrypts and can log every request, including
 > credentials, session tokens, dates of birth, guardian-consent tokens, minors' posts and messages, uploads before
 > moderation, and staff reads of children's data. Location of processing cannot be limited on the free plan; log
@@ -443,8 +443,8 @@ cost more. **[UNVERIFIED, FOR COUNSEL; founder to confirm with Render]**
 - **Admin console.** Putting `admin.soccernity.com` behind the same proxy puts staff reads of children's data
   (including date-of-birth reads, B-109) through it. Option A variant "exclude admin" (Section 7) is a counsel question.
 - **Stripe.** Not affected: card details bypass the API.
-- **R2 and the public media address (B-265).** Whether the stored-media public address becomes a Cloudflare-proxied
-  domain is a separate decision; if so, media viewing joins the same processing.
+- **R2 and the public media address (B-265).** **[v0.4 CHANGED, #541]** The stored-media public address is a Cloudflare-proxied
+  domain from the start, so media viewing is part of the same processing.
 
 ---
 
@@ -457,11 +457,11 @@ The register row B-251, the Counsel column and Decision Log #424 cite "Part C ro
 |---|---|---|
 | 36 | The card-verification step | No |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window | No |
-| **9** | Cross-border data-location/transfer assessment for "Postmark/S3/Sentry/Render/Neon/Upstash" | **Yes — Cloudflare to be added** |
+| **9** | Cross-border data-location/transfer assessment for "Postmark/S3/Sentry/Render/Neon/Upstash" | **Yes, Cloudflare to be added** |
 | **20** | Standalone restatement of row 9 | **Yes** |
 
 **Corrected set (by content):** Part C **rows 9 and 20**, plus **PP §5** (processor list, including the Cloudflare R2 and
-MaxMind bullets), plus **Part C row 38** (IP address processed transiently — the proxy contradicts "never stored; no
+MaxMind bullets), plus **Part C row 38** (IP address processed transiently; the proxy contradicts "never stored; no
 third party"), plus **row 37** (image-check processor; a pattern, and its R2 hash-matching question touches the same
 vendor). In the DPIA: **R11** and **§1.5 "Technical context"** (still says hosting and data location are undecided,
 Decision Log #9) and the R11 line of the §5 mitigations table. The register's Part C cross-reference table (about
