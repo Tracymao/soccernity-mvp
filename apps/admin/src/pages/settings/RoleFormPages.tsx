@@ -188,7 +188,7 @@ export function EditRolePage() {
             <p className="rl-note">
               {loadState === "error"
                 ? "Couldn't load this admin account. Please try again from the Roles list."
-                : "This admin account isn't in the first 250 staff records — open it directly from the Roles list instead of a bookmarked link."}
+                : "This admin account isn't in the first 250 staff records. Open it directly from the Roles list instead of a bookmarked link."}
             </p>
             <div className="rl-action-row">
               <button type="button" className="rl-btn rl-btn--primary" onClick={() => navigate("/settings")}>
@@ -298,7 +298,7 @@ export function EditRolePage() {
             <span className="rl-callout__bar" aria-hidden />
             <p>
               This records that a real-world DBS/background check has been completed for this
-              staff member <strong>outside of Soccernity's systems</strong> — toggling it performs
+              staff member <strong>outside of Soccernity's systems</strong>. Toggling it performs
               no verification of its own. Only a superadmin may set or clear it.
             </p>
           </div>

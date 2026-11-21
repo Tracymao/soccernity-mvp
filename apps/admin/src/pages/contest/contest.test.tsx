@@ -527,7 +527,7 @@ describe("ContestImpressionsPage", () => {
     await screen.findByTestId("ct-impressions-table");
     expect(getContestExposure).toHaveBeenCalledWith("c1");
     expect(screen.getByTestId("ct-imp-mean").textContent).toBe("1,224.44");
-    expect(screen.getByTestId("ct-imp-band").textContent).toBe("1,102 – 1,346.89");
+    expect(screen.getByTestId("ct-imp-band").textContent).toBe("1,102 to 1,346.89");
     expect(screen.getByTestId("ct-imp-outside").textContent).toBe("1");
     expect(screen.getByText("Live from reveal")).toBeTruthy();
     const rows = screen.getAllByTestId("ct-impressions-row");

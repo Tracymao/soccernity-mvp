@@ -86,7 +86,7 @@ const NOW_UNLOCKED = [
   },
   {
     title: "You will be able to post in Banter Rooms & Community Groups",
-    body: "Join the conversation in both, not just read it.",
+    body: "Join the conversation in both and post your own messages.",
   },
 ];
 

@@ -206,7 +206,7 @@ describe("Suspend User on a report", () => {
     fireEvent.click(suspendButton()!);
     fireEvent.click(await screen.findByRole("button", { name: "Suspend account" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).toBeTruthy();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe("Record an appeal on someone's behalf", () => {
     expect(recordAppeal).not.toHaveBeenCalled();
   });
 
-  it("records the appeal with the trimmed reason and shows Pending — recorded by staff", async () => {
+  it("records the appeal with the trimmed reason and shows Pending, recorded by staff", async () => {
     vi.mocked(recordAppeal).mockResolvedValueOnce(
       suspended({
         appealStatus: "pending",
@@ -295,7 +295,7 @@ describe("Record an appeal on someone's behalf", () => {
 
     await waitFor(() => expect(recordAppeal).toHaveBeenCalledWith("report-open-1234", "Sent by mistake."));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByText("Pending — recorded by staff", { selector: ".mod-pill" })).toBeTruthy();
+    expect(screen.getByText("Pending, recorded by staff", { selector: ".mod-pill" })).toBeTruthy();
     expect(screen.getByText(/Appeal recorded for the account\./)).toBeTruthy();
     expect(screen.getByText(/Appeal recorded for the account\./).textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
     // One appeal per report: the button is gone.
@@ -327,7 +327,7 @@ describe("Record an appeal on someone's behalf", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "Please review." } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Record appeal" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).toBeTruthy();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
@@ -343,10 +343,10 @@ describe("Appeal Review for a staff-recorded appeal", () => {
       appealRecordedByStaff: true,
     });
 
-  it("says staff recorded it and shows the Pending — recorded by staff pill", async () => {
+  it("says staff recorded it and shows the Pending, recorded by staff pill", async () => {
     renderAppeal(recorded());
     expect(await screen.findByText("Appeal recorded by staff")).toBeTruthy();
-    expect(screen.getByText("Pending — recorded by staff", { selector: ".mod-pill" })).toBeTruthy();
+    expect(screen.getByText("Pending, recorded by staff", { selector: ".mod-pill" })).toBeTruthy();
     expect(screen.getByText(/The staff member who recorded it cannot decide it\./)).toBeTruthy();
   });
 
@@ -365,7 +365,7 @@ describe("Appeal Review for a staff-recorded appeal", () => {
   it("an appeal the person made themselves does not carry the staff wording", async () => {
     renderAppeal(suspended({ appealStatus: "pending", appealReason: "Mine.", appealedAt: "2026-11-03T09:00:00.000Z" }));
     expect(await screen.findByText("Appeal submitted by the reported user")).toBeTruthy();
-    expect(screen.queryByText("Pending — recorded by staff")).toBeNull();
+    expect(screen.queryByText("Pending, recorded by staff")).toBeNull();
     expect(screen.queryByText(/Staff recorded this appeal/)).toBeNull();
   });
 });

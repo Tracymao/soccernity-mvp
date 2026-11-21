@@ -209,7 +209,7 @@ describe("a message report handed over from the queue (no flag yet)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Legal hold" });
     fireEvent.change(dialog.querySelector("textarea, input")!, { target: { value: "A good enough reason here." } });
     fireEvent.click(screen.getByRole("button", { name: "Place legal hold" }));
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     await waitFor(() => expect(placeLegalHold).toHaveBeenCalled());
   });
 });

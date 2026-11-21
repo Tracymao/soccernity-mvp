@@ -154,7 +154,7 @@ export default function ContestImpressionsPage() {
               <div className="ct-stat">
                 <span className="ct-settings__label">Tolerance band</span>
                 <strong data-testid="ct-imp-band">
-                  {hasMean ? `${count(exposure.lowerBound)} – ${count(exposure.upperBound)}` : "—"}
+                  {hasMean ? `${count(exposure.lowerBound)} to ${count(exposure.upperBound)}` : "—"}
                 </strong>
               </div>
               <div className="ct-stat">

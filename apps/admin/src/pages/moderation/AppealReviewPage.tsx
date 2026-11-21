@@ -166,7 +166,7 @@ export default function AppealReviewPage() {
             <p className="mod-note">
               {loadState === "error"
                 ? "Couldn’t load this appeal. Please try again from the queue."
-                : "No report exists with this id — open it directly from the Moderation Queue’s Appeals tab instead of a bookmarked link."}
+                : "No report exists with this id. Open it directly from the Moderation Queue’s Appeals tab instead of a bookmarked link."}
             </p>
             <div className="mod-action-row">
               <Link className="mod-btn mod-btn--primary" to="/moderation">
@@ -182,7 +182,7 @@ export default function AppealReviewPage() {
   if (report.appealStatus !== "pending") {
     return (
       <>
-        <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} />
+        <AdminPageHeader title={`Appeal: Report #${report.id.slice(0, 8)}`} />
         <div className="mod-page">
           {backLink}
           <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
@@ -216,7 +216,7 @@ export default function AppealReviewPage() {
 
   return (
     <>
-      <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} />
+      <AdminPageHeader title={`Appeal: Report #${report.id.slice(0, 8)}`} />
       <div className="mod-page">
         {backLink}
 
@@ -289,7 +289,7 @@ export default function AppealReviewPage() {
             <div className="mod-field">
               <span className="mod-field__label">Appeal</span>
               <span className="mod-field__value">
-                <span className="mod-pill mod-pill--outline mod-pill--plain">Pending — recorded by staff</span>
+                <span className="mod-pill mod-pill--outline mod-pill--plain">Pending, recorded by staff</span>
               </span>
             </div>
           ) : null}
@@ -310,7 +310,7 @@ export default function AppealReviewPage() {
             <h2 className="mod-card__title">Decide the appeal</h2>
             {report.concernsMinor ? (
               <p className="mod-note">
-                This report concerns a minor — deciding its appeal requires a child-safety-vetted
+                This report concerns a minor. Deciding its appeal requires a child-safety-vetted
                 admin (Settings › Roles).
               </p>
             ) : null}

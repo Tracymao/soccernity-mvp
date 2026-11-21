@@ -350,7 +350,7 @@ describe("CreateArticlePage", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
 
       expect(
-        await screen.findByText(/no images in the media library yet — upload one from the media section first/i),
+        await screen.findByText(/no images in the media library yet. Upload one from the media section first/i),
       ).not.toBeNull();
     });
 

@@ -348,7 +348,7 @@ describe("HeldInvestigationsPage", () => {
     renderLiftable();
     fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
     await confirmLift();
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -890,7 +890,7 @@ describe("ReportDetailPage case-level holds", () => {
       await renderWithHolds([hold()], baseReport({ concernsMinor: true }));
       fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
       await confirmLift();
-      expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+      expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
       expect(screen.queryByRole("dialog")).toBeNull();
       // The hold is still active: nothing was changed.
       expect(screen.getByLabelText("Active holds")).not.toBeNull();
@@ -963,7 +963,7 @@ describe("ReportDetailPage case-level holds", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "A reason that is long enough." } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Place legal hold" }));
 
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -1180,7 +1180,7 @@ describe("AppealReviewPage case-level holds", () => {
     renderAppeal(report);
     fireEvent.click(await screen.findByRole("button", { name: "Lift hold: Legal hold" }));
     await confirmLift();
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -1204,7 +1204,7 @@ describe("AppealReviewPage case-level holds", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "A reason that is long enough." } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm bad faith" }));
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
   });
 
   it("shows an active hold on the no-pending-appeal view as well", async () => {

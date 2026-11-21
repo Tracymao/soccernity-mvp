@@ -110,7 +110,7 @@ function CoverImagePickerPanel({ onPick }: CoverImagePickerPanelProps) {
       ) : null}
       {!loading && !error && items.length === 0 ? (
         <p className="ac-hint">
-          No images in the Media library yet — upload one from the Media section first.
+          No images in the Media library yet. Upload one from the Media section first.
         </p>
       ) : null}
       {items.length > 0 ? (
@@ -194,7 +194,7 @@ export default function CoverImagePicker({ selected, onChange, disabled }: Cover
       )}
       <span className="ac-hint">
         Shown on the public Blog feed and article page. Chosen from images already in the Media
-        library — this doesn't upload a new file.
+        library. This doesn't upload a new file.
       </span>
       {open ? <CoverImagePickerPanel onPick={handlePick} /> : null}
     </div>

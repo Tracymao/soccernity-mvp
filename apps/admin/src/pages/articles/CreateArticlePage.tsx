@@ -146,7 +146,7 @@ export default function CreateArticlePage() {
           {categoryError ? <span className="ac-hint">Couldn't load categories: {categoryError}</span> : null}
           {!loadingCategories && !categoryError && categories.length === 0 ? (
             <span className="ac-hint">
-              No active categories exist yet — <Link to="/categories/new">add one first</Link>.
+              No active categories exist yet. <Link to="/categories/new">add one first</Link>.
             </span>
           ) : null}
         </label>

@@ -256,7 +256,7 @@ test.describe.serial('contact enquiries: the tab, the detail page and escalating
     await dialog.getByLabel('Reason (required)').fill('The sender says the account holder is a child.');
     await dialog.getByRole('button', { name: 'Escalate to a report' }).click();
 
-    await expect(page.getByText('Restricted — child-safety vetting required')).toBeVisible();
+    await expect(page.getByText('Restricted: child-safety vetting required')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Escalate to a report' })).toBeVisible();
     await expect(page.getByLabel('Reason (required)')).toHaveCount(0);
     await shot(page, '07-escalate-restricted');

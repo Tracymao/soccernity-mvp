@@ -46,7 +46,7 @@ export default function MediaUploadPage() {
 
     const files = Array.from(fileList).slice(0, MAX_FILES);
     if (fileList.length > MAX_FILES) {
-      setFormError(`You can select up to ${MAX_FILES} files at a time — the first ${MAX_FILES} were kept.`);
+      setFormError(`You can select up to ${MAX_FILES} files at a time. The first ${MAX_FILES} were kept.`);
     }
 
     setSelected(
