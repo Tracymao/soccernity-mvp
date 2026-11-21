@@ -565,7 +565,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 - Test suites were not run for this document (docs only).
 - Effort and sequencing inside a wave were not estimated; waves give order and reasons only.
 
-## 7. Decision Log #367-#536 coverage
+## 7. Decision Log #367-#542 coverage
 
 | Decision Log | Referenced by | Build work? |
 |---|---|---|
@@ -736,6 +736,11 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #532 | B-206, B-208 | Yes (2026-11-17); founder decision: only unresolved legal questions go to counsel; the legal-duties question stays on the list and does not block launch; NOT YET EXECUTED (later PRs refresh the drafts and build a counsel pack). See Section 102. |
 | #533 | B-206, B-321 | Yes (2026-11-17); founder decision 2026-11-15, recorded now: only vetted, authorised staff may open set-aside files; staff welfare and vetting are the founder's HR duty, not a question for counsel; the founder will cooperate fully if the law requires more; counsel's view not recorded. See Section 103. |
 | #534 | B-206, B-208, B-321 | Yes (2026-11-17); founder decision applying #532: five pack questions removed, the 365-day figure kept out of the public legal copy, ten items recorded as founder or engineering housekeeping (NOT decided, owners named); NOT YET EXECUTED (D6 to D9). See Section 103. |
+| #538 | B-232 | Yes (2026-11-21); founder decision: header navigation icons rest at opacity 0.7 (was 0.55); hover, focus and active stay 1; BUILT in apps/web `Header.css` (R101); the Figma navbar still draws 0.55 and needs the next Figma pass |
+| #539 | B-124, B-208 | Yes (2026-11-21); six plain-fact strings untagged after their claims were checked in code (resend verification, rate limit, Age Gate DOB and country lines, register-step DOB line, upload-checked line); manifest 150 to 144 rows, tagged places 206 to 200; counsel sheet S1 to S144 (R101) |
+| #540 | B-179, B-180 | Yes (2026-11-21); `NODE_VERSION=22.22.0` plain value on the four static sites in `render.yaml`, the same version the API image uses (#527); resolves the Node pin question for the static builds (R101) |
+| #541 | B-088, B-265, B-180 | Yes (2026-11-21); runbook corrections from staging: the media custom domain is always proxied; step 6.8 parts 1 to 3 passed on staging; step 4.6 passed; Postmark pending approval delivers only to same-domain addresses and is a launch gate; step 6.5 note on an unverified adult (R101) |
+| #542 | B-124 | Yes (2026-11-21); write refusals are classified by the server's error code, not by status alone: guardian code shows the existing message, `email_verification_required` shows 'Verify your email to post/comment.', any other 403 shows 'You can't do that right now.'; BUILT in apps/web (R101) |
 
 ## 8. Updates 2026-10-14 (contest spec, decline cap, DOB correction, hosting, Section 6 answers)
 
@@ -5645,3 +5650,41 @@ B-IDs 323 before and after (none added); gap frames 146; Decision Log 536 data r
 
 - Handshake: `origin/main` was `746736e58452b418130457a72d4e9ebed9e58a9f`.
 - Register compared positionally with `git show origin/main:docs/build-register.md`; the docx Decision Log compared cell by cell (result in the PR description); `check_version_consistency.py` does not exist in the repo.
+
+
+## 106. Updates 2026-11-21 (R101 staging findings batch: five items from the first staging run; Decision Log #538 to #542; no new B-ID; this PR changes no legal draft and no Figma file)
+
+This section records what changed in this PR. It decides nothing beyond what the founder stated. The Security session could not be asked (non-interactive session).
+
+### 106a. What changed, one line each
+
+- **Nav icon opacity (#538).** `apps/web/src/layout/Header.css`: resting icon opacity 0.55 to 0.7; hover, focus and active stay 1. Tests updated. **For the next Figma pass:** the navbar components still draw 0.55.
+- **Write refusals (#542).** New `pages/community/writeRefusal.tsx` classifies a refused post or comment by the server's error code (`FeedApiError` now carries `code`): the guardian code shows the existing guardian message with the `/guardian-consent` link; `email_verification_required` shows "Verify your email to post." (comments: "to comment.") linking `/verify-email/prompt`; any other 403 shows "You can't do that right now." Used by `PostComposer` and `PostCard`. The new messages are not tagged. Searched for other bare-403-to-guardian mappings: none left in apps/web (community-groups and grassroots helpers test 403 plus the message text; account information and club picker already read codes; admin 403 handlers are role or vetting specific).
+- **Untagged plain-fact copy (#539).** Six strings on four screens lost the tag after each claim was checked in the code (see the report). Manifest rows 150 to 144 (web 99 to 93, admin 51); tagged places 206 to 200 (web 155 to 149, admin 51); counsel strings sheet S1 to S144, docx rebuilt with `docs/counsel-pack-build.py`; runbook counts updated. `npm run check:pending-copy` still fails by design.
+- **Runbook corrections (#541).** Media custom domain always proxied; 6.8 parts 1 to 3 passed on staging 2026-11-21 (part 4, cross-bucket copy, still unproven); 4.6 passed; Postmark pending approval and the new launch gate; 6.5 unverified-adult note.
+- **Node pin (#540).** `NODE_VERSION=22.22.0` on the four static sites; `docs/deployment.md` dated note.
+- **Build Plan docx:** rows #538 to #542 appended (append only).
+
+### 106b. Adopted defaults (veto-able)
+
+- 0.7 as the resting opacity is the drafter's reading of the founder's request; the neutral 403 wording is new copy not stated by the founder.
+- The contest-entry upload path keeps showing the server's own message for a 403 that is neither guardian nor email verification.
+
+### 106c. Recorded, not decided
+
+- **Proxied media domain and the legal drafts:** the privacy draft and the DPIA / Cloudflare drafts may need a line because the media custom domain is always proxied (images pass through Cloudflare). The drafts were NOT edited; a legal-draft pass owns it.
+- Cross-bucket copy (6.8 part 4), the R2 CSP wildcards and Postmark approval stay open launch-gate items.
+- The older "Set when you signed up and cannot be changed here." strings on Create Profile, Edit Profile and Account Information stay tagged (different claims, not checked here).
+
+### 106d. Statements this makes stale (named, not edited)
+
+- Any text that still says 150 manifest rows, 206 tagged places, or "196" (an older runbook figure that was already out of date); S1 to S150 in older reports.
+- The navbar opacity 0.55 in Figma notes.
+
+### 106e. Reconciliation (arithmetic)
+
+B-IDs 323 before and after; gap frames 146; Decision Log 535 data rows before, 540 after (#538 to #542; #293 and #294 absent). Section 7 gains rows for #538 to #542 (rows for #535 to #537 were never added there; not backfilled).
+
+### 106f. Verification
+
+- Register compared positionally with `git show origin/main:docs/build-register.md` (append-only except the Section 7 heading and five rows); docx Decision Log checked cell by cell.

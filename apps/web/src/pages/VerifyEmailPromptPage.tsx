@@ -11,8 +11,8 @@
 // message is worded conditionally ("If that email belongs to an account that
 // still needs to be verified ..."), exactly as the frame draws it; a 429 from
 // the per-IP throttle shows the "too many requests" line.
-// Wording tagged [COPY PENDING LEGAL REVIEW] in the frame is implemented as
-// drawn and listed in docs/pending-copy-manifest.md.
+// The frame's [COPY PENDING LEGAL REVIEW] tags on this page were cleared by the
+// founder (R101, Decision Log #539): it is plain-fact wording, implemented as drawn.
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { AuthApiError, resendVerificationEmail } from "../api/auth";
@@ -112,7 +112,7 @@ export default function VerifyEmailPromptPage() {
               onClick={handleResend}
               disabled={resendState === "sending"}
             >
-              Resend verification email [COPY PENDING LEGAL REVIEW]
+              Resend verification email
             </button>
             {resendState === "sent" && (
               <p className="verify-resend__message" role="status">
@@ -122,7 +122,7 @@ export default function VerifyEmailPromptPage() {
             )}
             {resendState === "limited" && (
               <p className="verify-resend__message" role="alert">
-                Too many requests. Please try again in a little while. [COPY PENDING LEGAL REVIEW]
+                Too many requests. Please try again in a little while.
               </p>
             )}
             {resendState === "error" && (

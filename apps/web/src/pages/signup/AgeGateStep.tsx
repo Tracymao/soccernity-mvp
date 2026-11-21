@@ -164,12 +164,11 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
       }
     >
       <p className="signup-split__eyebrow">Create your account</p>
-      {/* Heading and subheading are tagged [COPY PENDING LEGAL REVIEW] in
-          Figma (chip 6669:27179) -- implemented as drawn, pending counsel. */}
+      {/* Heading, subheading and country hint: the Figma tag (chip 6669:27179) was cleared by the
+          founder (R101, Decision Log #539) -- plain-fact wording, implemented as drawn. */}
       <h1 className="signup-split__heading">Date of birth and country</h1>
       <p className="signup-split__subheading">
-        We ask everyone this when they join. Your date of birth is never shown on your profile. [COPY PENDING LEGAL
-        REVIEW]
+        We ask everyone this when they join. Your date of birth is never shown on your profile.
       </p>
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
@@ -229,8 +228,7 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
             ))}
           </select>
           <p className="signup-form__hint">
-            Some countries ask for an extra check when a guardian approves an account for a younger child. [COPY
-            PENDING LEGAL REVIEW]
+            Some countries ask for an extra check when a guardian approves an account for a younger child.
           </p>
           {error && (
             <p className="signup-form-error" role="alert">

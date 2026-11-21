@@ -313,7 +313,7 @@ describe("BanterRoomPage", () => {
     expect(screen.queryByRole("button", { name: /attach photo\/video/i })).toBeNull();
     expect(screen.queryByTitle(/isn't available yet/i)).toBeNull();
     expect(
-      screen.getByText("Everything you upload is checked before other people can see it. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Everything you upload is checked before other people can see it."),
     ).not.toBeNull();
   });
 
