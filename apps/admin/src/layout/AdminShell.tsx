@@ -26,6 +26,13 @@ function initialsFor(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// The icon URL must be QUOTED inside url(). In a production build Vite inlines these small SVGs as data: URIs that
+// contain single quotes and parentheses; an unquoted url() with those is invalid CSS, the browser drops the whole
+// declaration and the glyph renders as a solid square (R105). JSON.stringify gives a safely double-quoted string.
+export function maskUrl(icon: string): string {
+  return `url(${JSON.stringify(icon)})`;
+}
+
 function NavItem({ item }: { item: AdminNavItem }) {
   return (
     <NavLink
@@ -41,7 +48,7 @@ function NavItem({ item }: { item: AdminNavItem }) {
       ) : (
         <span
           className="admin-nav__icon admin-nav__icon--mask"
-          style={{ maskImage: `url(${item.icon})`, WebkitMaskImage: `url(${item.icon})` }}
+          style={{ maskImage: maskUrl(item.icon), WebkitMaskImage: maskUrl(item.icon) }}
           aria-hidden
         />
       )}

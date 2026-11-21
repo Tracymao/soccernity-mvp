@@ -5708,3 +5708,7 @@ B-IDs 323 before and after; gap frames 146; Decision Log 535 data rows before, 5
 - **Checked:** the EditProfileModal username fallback stays (two API 409s, "That username is already taken", carry no code); `guardianConsentRejection` unchanged; admin `CorrectDobPage` matches `/provide guardian/i` on a code-less 400. Detail in `docs/r104-last-message-match-report.md`.
 - **Found, not fixed:** add codes to the two username 409s, the admin DOB-correction guardian 400 and the guardian-consent 400s; then drop the three text matches. Copy for the maintenance session: two guardian 400 messages, and "a minute" on the confirm/decline 429 (matches the 60 s default; the withdrawal routes use 15 minutes and have their own state).
 - **Not run:** nothing (no code change).
+
+## 110. Updates 2026-11-21 (R105 admin sidebar icons rendered as solid squares in the production build; Decision Log #546; no new B-ID; apps/admin only)
+
+- Cause: the production build inlines the nav SVGs as data: URIs with quotes and parentheses; the unquoted `url()` in the inline mask-image was invalid CSS and was dropped. Fixed by quoting the URL (`maskUrl` in `AdminShell.tsx`). The CSP and every header in `render.yaml` are unchanged. Report: `docs/r105-admin-nav-icons-report.md`.
