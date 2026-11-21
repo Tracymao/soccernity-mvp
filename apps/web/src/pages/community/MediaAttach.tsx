@@ -5,8 +5,8 @@
 // Decision Log #419; Figma pass Q composer frames 01-11); they were moved here, not changed, so the two
 // composers cannot drift. The state machine itself is useMediaUploads.ts.
 //
-// The one tagged string ([COPY PENDING LEGAL REVIEW], Decision Log #412 item 5) lives in this file now; its row
-// in docs/pending-copy-manifest.md moved with it.
+// The note "Everything you upload is checked before other people can see it." was tagged; the tag was cleared by
+// the founder (R101, Decision Log #539) after the claim was checked in code (nothing is approved by default).
 import { useRef, type ChangeEvent } from "react";
 import MediaUploadTray from "./MediaUploadTray";
 import type { useMediaUploads } from "./useMediaUploads";
@@ -97,7 +97,7 @@ export function MediaUploadStatus({ uploads }: { uploads: MediaUploads }) {
       ) : (
         uploads.items.length === 0 && (
           <p className="composer__note">
-            Everything you upload is checked before other people can see it. [COPY PENDING LEGAL REVIEW]
+            Everything you upload is checked before other people can see it.
           </p>
         )
       )}

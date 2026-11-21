@@ -555,6 +555,9 @@ Staging and production never share an origin.
 - A `Node` pin for the four static sites: the root `package.json` `engines` is `>=22.22.0` with no upper bound; Render's
   documentation says to add an upper bound, and to set `NODE_VERSION` if the platform default is not wanted. Decide this at
   the gate. (The API is different: its Docker image pins Node 22.22.0, Decision Log #527.)
+  Update 2026-11-21 (R101, Decision Log #540): DECIDED. `render.yaml` now sets `NODE_VERSION` to `22.22.0` as a plain value on all four
+  static sites; after a Blueprint sync the founder confirms the staging build logs show Node 22.22.0 before the production sites are
+  built (`docs/launch-gate-runbook.md` step 4.4a). The `engines` upper bound is still not added.
 - Whether the admin site is later restricted by IP.
 
 ### What is NOT verified

@@ -41,6 +41,7 @@ import { submitContestEntry, ContestApiError, type CurrentContestResponse } from
 import FinalWeekPanel from "./FinalWeekPanel";
 import { MediaAttachButtons, MediaUploadStatus } from "./MediaAttach";
 import { useMediaUploads } from "./useMediaUploads";
+import { classifyWriteRefusal, WriteRefusalNotice, type WriteRefusal } from "./writeRefusal";
 
 const MAX_LENGTH = 3000;
 
@@ -91,7 +92,7 @@ export default function PostComposer({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [restricted, setRestricted] = useState(false);
+  const [refusal, setRefusal] = useState<WriteRefusal | null>(null);
   const [contestDone, setContestDone] = useState(false);
 
   // If the contest closes (or wasn't open to begin with), never sit in contest mode.
@@ -108,7 +109,7 @@ export default function PostComposer({
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
-    setRestricted(false);
+    setRefusal(null);
 
     let post: CreatedPost;
     try {
@@ -117,7 +118,8 @@ export default function PostComposer({
         ...(uploads.mediaIds.length > 0 ? { mediaIds: uploads.mediaIds } : {}),
       });
     } catch (err) {
-      if (err instanceof FeedApiError && err.status === 403) setRestricted(true);
+      const refused = classifyWriteRefusal(err);
+      if (refused) setRefusal(refused);
       else setError(err instanceof FeedApiError ? err.message : "Couldn't publish that post.");
       setSubmitting(false);
       return;
@@ -137,8 +139,11 @@ export default function PostComposer({
         onCreated(post);
         setText("");
         uploads.clear();
-        if (err instanceof ContestApiError && err.status === 403) {
-          setRestricted(true);
+        // The post itself went live, so a neutral "you can't do that" would be untrue. Only the two
+        // refusals with their own wording get a notice; any other 403 keeps the server's reason below.
+        const refused = classifyWriteRefusal(err);
+        if (refused === "guardian-consent" || refused === "verify-email") {
+          setRefusal(refused);
         } else {
           const why = err instanceof ContestApiError ? err.message : "the entry couldn't be submitted";
           setError(`Your post was published, but ${why.charAt(0).toLowerCase()}${why.slice(1)}`);
@@ -271,12 +276,7 @@ export default function PostComposer({
                 {error}
               </p>
             )}
-            {restricted && (
-              <p className="composer__error" role="alert">
-                Your account is restricted pending guardian consent, so you can&rsquo;t post yet.{" "}
-                <Link to="/guardian-consent">Check your consent status</Link>.
-              </p>
-            )}
+            {refusal && <WriteRefusalNotice refusal={refusal} verb="post" className="composer__error" />}
           </div>
         </div>
       )}

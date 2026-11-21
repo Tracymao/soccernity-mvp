@@ -181,11 +181,17 @@ export interface SavedPostPage {
 
 export class FeedApiError extends Error {
   readonly status?: number;
+  /**
+   * The server's machine-readable code on a refusal (guardian_consent_pending, email_verification_required,
+   * profile_incomplete, under_16_restricted, ...). Callers branch on this, never on the message text.
+   */
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "FeedApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -209,11 +215,17 @@ async function authedFetch(path: string, accessToken: string, init?: AuthedFetch
   }
 }
 
-async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
+// Builds the error for a refused write: the server's own message (or the fallback), its status and its
+// machine-readable `code` when the body carries one.
+async function failureFrom(response: Response, fallback: string): Promise<FeedApiError> {
   const body = await response.json().catch(() => null);
-  if (body && typeof body.message === "string") return body.message;
-  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
-  return fallback;
+  let message = fallback;
+  if (body && typeof body.message === "string") message = body.message;
+  else if (body && Array.isArray(body.message) && typeof body.message[0] === "string") message = body.message[0];
+  return new FeedApiError(message, {
+    status: response.status,
+    code: body && typeof body.code === "string" ? body.code : undefined,
+  });
 }
 
 // GET /posts/feed -- the caller's own posts plus posts by users they
@@ -249,10 +261,7 @@ export async function createPost(accessToken: string, payload: CreatePostRequest
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new FeedApiError(
-      await errorMessageFrom(response, `Couldn't publish that post (${response.status}).`),
-      { status: response.status },
-    );
+    throw await failureFrom(response, `Couldn't publish that post (${response.status}).`);
   }
   return (await response.json()) as CreatedPost;
 }
@@ -312,10 +321,7 @@ export async function addComment(accessToken: string, postId: string, contentTex
     body: JSON.stringify({ contentText }),
   });
   if (!response.ok) {
-    throw new FeedApiError(
-      await errorMessageFrom(response, `Couldn't add that comment (${response.status}).`),
-      { status: response.status },
-    );
+    throw await failureFrom(response, `Couldn't add that comment (${response.status}).`);
   }
   return (await response.json()) as FeedComment;
 }
@@ -325,9 +331,7 @@ export async function addComment(accessToken: string, postId: string, contentTex
 export async function deletePost(accessToken: string, postId: string): Promise<void> {
   const response = await authedFetch(`/posts/${postId}`, accessToken, { method: "DELETE" });
   if (!response.ok) {
-    throw new FeedApiError(await errorMessageFrom(response, `Couldn't delete that post (${response.status}).`), {
-      status: response.status,
-    });
+    throw await failureFrom(response, `Couldn't delete that post (${response.status}).`);
   }
 }
 
@@ -342,9 +346,7 @@ export async function updateCommentSettings(
     body: JSON.stringify({ commentPermission }),
   });
   if (!response.ok) {
-    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update comment settings (${response.status}).`), {
-      status: response.status,
-    });
+    throw await failureFrom(response, `Couldn't update comment settings (${response.status}).`);
   }
   return (await response.json()) as { id: string; commentPermission: CommentPermission };
 }
@@ -360,9 +362,7 @@ export async function setCommentHidden(
     method: "PATCH",
   });
   if (!response.ok) {
-    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update that comment (${response.status}).`), {
-      status: response.status,
-    });
+    throw await failureFrom(response, `Couldn't update that comment (${response.status}).`);
   }
   return (await response.json()) as { id: string; hidden: boolean };
 }
@@ -389,9 +389,7 @@ export async function recordPostView(accessToken: string, postId: string): Promi
 export async function getPostById(accessToken: string, postId: string): Promise<FeedPost | RemovedPostStub> {
   const response = await authedFetch(`/posts/${encodeURIComponent(postId)}`, accessToken);
   if (!response.ok) {
-    throw new FeedApiError(await errorMessageFrom(response, `Couldn't load that post (${response.status}).`), {
-      status: response.status,
-    });
+    throw await failureFrom(response, `Couldn't load that post (${response.status}).`);
   }
   return (await response.json()) as FeedPost | RemovedPostStub;
 }

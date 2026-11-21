@@ -183,10 +183,9 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
             readOnly
             aria-readonly="true"
           />
-          {/* Tagged [COPY PENDING LEGAL REVIEW] in Figma (6627:22258) --
-              implemented as drawn, pending counsel. */}
+          {/* Figma tag (6627:22258) cleared by the founder (R101, Decision Log #539) -- plain-fact wording. */}
           <p className="signup-form__hint">
-            Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]
+            Set when you signed up and cannot be changed here.
           </p>
         </div>
 
