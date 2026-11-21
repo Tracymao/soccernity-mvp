@@ -89,7 +89,7 @@ describe('RegistrationEmailService', () => {
           `We're writing to let you know that Ada Lovelace's Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
 
 ` +
-          `This means the guardian consent and oversight settings you originally set up no longer apply — Ada Lovelace now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+          `This means the guardian consent and oversight settings you originally set up no longer apply. Ada Lovelace now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
 
 ` +
           `If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
@@ -98,7 +98,7 @@ describe('RegistrationEmailService', () => {
           `Thanks for being part of Ada Lovelace's Soccernity journey so far.
 
 ` +
-          `— The Soccernity team`,
+          `The Soccernity team`,
       );
       expect(sent.HtmlBody).toContain('<p>Hi Grace,</p>');
       expect(sent.HtmlBody).toContain('support@soccernity.com');
