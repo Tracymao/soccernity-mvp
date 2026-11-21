@@ -73,6 +73,26 @@ describe("login()", () => {
     expect(caught!.message).toBe("That email and password don't match.");
   });
 
+  it("maps a 429 (sign-in lockout) to a plain wait message with no duration and no email promise", async () => {
+    mockFetch(429, { statusCode: 429, message: "ThrottlerException: Too Many Requests" });
+
+    let caught: AuthApiError | undefined;
+    try {
+      await login({ email: "a@example.com", password: "x" });
+    } catch (error) {
+      caught = error as AuthApiError;
+    }
+    expect(caught).toBeInstanceOf(AuthApiError);
+    expect(caught!.status).toBe(429);
+    expect(caught!.message).toBe("Too many sign-in attempts. Please wait a little while and try again.");
+    expect(caught!.message).not.toMatch(/email|minute|hour|\d/i);
+  });
+
+  it("keeps the generic sign-in message for any other failure (500)", async () => {
+    mockFetch(500, { statusCode: 500, message: "boom" });
+    await expect(login({ email: "a@example.com", password: "x" })).rejects.toThrow("Something went wrong signing you in.");
+  });
+
   it("maps an ordinary wrong-password 401 (no code) to the generic message", async () => {
     mockFetch(401, { statusCode: 401, error: "Unauthorized", message: "Invalid credentials" });
 

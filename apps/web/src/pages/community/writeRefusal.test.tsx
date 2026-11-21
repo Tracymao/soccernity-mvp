@@ -30,11 +30,14 @@ function refusal(code: string | undefined, message = "Forbidden") {
 }
 
 describe("classifyWriteRefusal", () => {
-  it("maps the two guard codes and calls every other 403 'other'", () => {
+  it("maps the four guard codes and calls every other 403 'other'", () => {
     expect(classifyWriteRefusal(refusal("guardian_consent_pending"))).toBe("guardian-consent");
     expect(classifyWriteRefusal(refusal("email_verification_required"))).toBe("verify-email");
     expect(classifyWriteRefusal(refusal(undefined))).toBe("other");
-    expect(classifyWriteRefusal(refusal("profile_incomplete"))).toBe("other");
+    expect(classifyWriteRefusal(refusal("profile_incomplete"))).toBe("profile-incomplete");
+    expect(classifyWriteRefusal(refusal("under_16_restricted"))).toBe("under-16");
+    expect(classifyWriteRefusal(refusal("some_future_code"))).toBe("other");
+    expect(classifyWriteRefusal(refusal("contest_voting_closed"))).toBe("other");
     expect(classifyWriteRefusal(new ContestApiError("x", { status: 403, code: "email_verification_required" }))).toBe("verify-email");
   });
 
@@ -82,9 +85,30 @@ describe("PostComposer — a 403 on posting", () => {
     expect(screen.queryByRole("link", { name: /consent status/i })).toBeNull();
   });
 
+  it("profile incomplete: 'Choose a username to post.' linking to Create Profile, no guardian or verify wording", async () => {
+    vi.mocked(createPost).mockRejectedValue(refusal("profile_incomplete"));
+    renderComposer();
+    await submitPost();
+    const link = await screen.findByRole("link", { name: "Choose a username" });
+    expect(link.getAttribute("href")).toBe("/create-profile");
+    expect(link.closest("[role=alert]")?.textContent).toBe("Choose a username to post.");
+    expect(screen.queryByText(GUARDIAN)).toBeNull();
+    expect(screen.queryByRole("link", { name: /verify|consent/i })).toBeNull();
+  });
+
+  it("under-16 restriction: the shared plain line, no age threshold, no link", async () => {
+    vi.mocked(createPost).mockRejectedValue(refusal("under_16_restricted", "Accounts under 16 have read-only access."));
+    renderComposer();
+    await submitPost();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("This isn't available for your account yet.");
+    expect(alert.textContent).not.toMatch(/16/);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
   it.each([
     ["no code", undefined],
-    ["an unknown code", "profile_incomplete"],
+    ["an unknown code", "some_future_code"],
   ])("any other 403 (%s): a neutral message, no guardian wording and no link", async (_label, code) => {
     vi.mocked(createPost).mockRejectedValue(refusal(code as string | undefined));
     renderComposer();
@@ -149,6 +173,22 @@ describe("PostCard — a 403 on commenting", () => {
     const link = await screen.findByRole("link", { name: /verify your email/i });
     expect(link.getAttribute("href")).toBe("/verify-email/prompt");
     expect(link.closest("[role=alert]")?.textContent).toBe("Verify your email to comment.");
+    expect(screen.queryByText(GUARDIAN)).toBeNull();
+  });
+
+  it("profile incomplete: 'Choose a username to comment.' linking to Create Profile", async () => {
+    vi.mocked(addComment).mockRejectedValue(refusal("profile_incomplete"));
+    await submitComment();
+    const link = await screen.findByRole("link", { name: "Choose a username" });
+    expect(link.getAttribute("href")).toBe("/create-profile");
+    expect(link.closest("[role=alert]")?.textContent).toBe("Choose a username to comment.");
+    expect(screen.queryByText(GUARDIAN)).toBeNull();
+  });
+
+  it("an unknown 403 code never gives the guardian line", async () => {
+    vi.mocked(addComment).mockRejectedValue(refusal("some_future_code", "This account is awaiting guardian consent"));
+    await submitComment();
+    await waitFor(() => expect(screen.getByText("You can’t do that right now.")).not.toBeNull());
     expect(screen.queryByText(GUARDIAN)).toBeNull();
   });
 
