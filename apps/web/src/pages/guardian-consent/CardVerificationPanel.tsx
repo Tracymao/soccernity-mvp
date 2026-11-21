@@ -134,7 +134,7 @@ export default function CardVerificationPanel({ token, onGateChange }: Props) {
       <h3>One more step: verify with a card</h3>
       <p>
         Because of the age of the account holder, we ask a parent or guardian to verify with a payment card before
-        approval. We make a small charge of $0.50 and refund it straight away &mdash; we keep nothing. Stripe will
+        approval. We make a small charge of $0.50 and refund it straight away. We keep nothing. Stripe will
         email you a receipt for it. Your card details go directly to Stripe; Soccernity never sees or stores them.
       </p>
       {error && (

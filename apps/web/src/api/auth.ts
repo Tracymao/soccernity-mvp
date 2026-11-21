@@ -845,7 +845,7 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
     // Expected during Sprint 1 until B2 merges and a server is actually
     // running at API_BASE_URL -- this is not a bug in this request.
     throw new AuthApiError(
-      "Couldn't reach the Soccernity server. The account service may not be available yet -- try again shortly.",
+      "Couldn't reach the Soccernity server. The account service may not be available yet. Try again shortly.",
       { cause: networkError },
     );
   }

@@ -218,7 +218,7 @@ export default function PostComposer({
       ) : effectiveMode === "contest" && alreadyEntered ? (
         <p className="composer__contest-done" role="status">
           You&rsquo;ve entered this week&rsquo;s contest (week {contest?.callerEntry?.weekNumber}). Your entry is locked in
-          &mdash; you can enter again when next week&rsquo;s round opens.{" "}
+          You can enter again when next week&rsquo;s round opens.{" "}
           <Link to="/contest">See the contest</Link>.
         </p>
       ) : effectiveMode === "contest" && contest && !contest.callerCanEnter ? (

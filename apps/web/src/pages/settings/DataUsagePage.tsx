@@ -61,7 +61,7 @@ export default function DataUsagePage() {
             <p className="display-row__title">Data saver</p>
             <p className="display-row__desc">Reduce data use across the app.</p>
             <p className="display-row__note">
-              Not adjustable yet — data saver isn&rsquo;t available yet.
+              Not adjustable yet. Data saver isn&rsquo;t available yet.
             </p>
           </div>
           <DisabledToggle label="Data saver" on={false} />
@@ -72,7 +72,7 @@ export default function DataUsagePage() {
             <p className="display-row__title">Autoplay videos</p>
             <p className="display-row__desc">Play videos automatically in your feed.</p>
             <p className="display-row__note">
-              Not adjustable yet — autoplay preferences aren&rsquo;t available yet. This needs a
+              Not adjustable yet. Autoplay preferences aren&rsquo;t available yet. This needs a
               client-side preference system first.
             </p>
           </div>
@@ -84,7 +84,7 @@ export default function DataUsagePage() {
             <p className="display-row__title">Image quality</p>
             <p className="display-row__desc">Load higher or lower quality images.</p>
             <p className="display-row__note">
-              Not adjustable yet — image quality isn&rsquo;t available yet.
+              Not adjustable yet. Image quality isn&rsquo;t available yet.
             </p>
           </div>
           <span className="display-row__value">

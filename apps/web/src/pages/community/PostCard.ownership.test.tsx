@@ -115,7 +115,7 @@ describe("PostCard — author controls", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Hide" }));
     await waitFor(() => expect(setCommentHidden).toHaveBeenCalledWith("tok", "post-1", "c1", true));
     expect(await screen.findByRole("button", { name: "Unhide" })).not.toBeNull();
-    expect(screen.getByText(/Hidden — only you and the commenter/)).not.toBeNull();
+    expect(screen.getByText(/Hidden. Only you and the commenter/)).not.toBeNull();
     expect(screen.getByRole("button", { name: /1 comment$/ })).not.toBeNull();
   });
 

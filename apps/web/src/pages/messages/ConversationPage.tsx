@@ -296,7 +296,7 @@ export default function ConversationPage() {
 
         {messages.length === 0 && (
           <p className="messages-status" role="status">
-            No messages yet — say hello below.
+            No messages yet. Say hello below.
           </p>
         )}
 

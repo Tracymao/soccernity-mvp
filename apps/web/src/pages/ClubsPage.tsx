@@ -112,7 +112,7 @@ export default function ClubsPage() {
       <header className="clubs-page__header">
         <h1 className="clubs-page__title">Clubs</h1>
         <p className="clubs-page__subtitle">
-          Browse clubs on Soccernity and follow the ones you support — join or leave at any time.
+          Browse clubs on Soccernity and follow the ones you support. Join or leave at any time.
         </p>
       </header>
 

@@ -110,7 +110,7 @@ function MediaReport({
     }
   }
 
-  if (stage === "done") return <span className="media-report__done">Reported — thanks, our team will review it.</span>;
+  if (stage === "done") return <span className="media-report__done">Reported. Thanks, our team will review it.</span>;
   if (stage === "limit") {
     return (
       <div className="media-report">

@@ -440,7 +440,7 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
 
     const seen: string[] = [];
     await expect(tiles).toHaveCount(3);
-    await expect(carousel.getByText('Showing 1–3 of 9 finalists')).toBeVisible();
+    await expect(carousel.getByText('Showing 1 to 3 of 9 finalists')).toBeVisible();
     await expect(carousel.getByRole('button', { name: /^Page \d of 3$/ })).toHaveCount(3);
     await expect(carousel.getByRole('button', { name: 'Page 1 of 3' })).toHaveAttribute('aria-current', 'true');
     await expect(carousel.getByRole('button', { name: 'Previous finalists' })).toBeDisabled();
@@ -452,12 +452,12 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
     expect(sent!.ok()).toBe(true);
 
     await carousel.getByRole('button', { name: 'Next finalists' }).click();
-    await expect(carousel.getByText('Showing 4–6 of 9 finalists')).toBeVisible();
+    await expect(carousel.getByText('Showing 4 to 6 of 9 finalists')).toBeVisible();
     await expect(tiles).toHaveCount(3);
     seen.push(...(await names.allTextContents()));
 
     await carousel.getByRole('button', { name: 'Page 3 of 3' }).click();
-    await expect(carousel.getByText('Showing 7–9 of 9 finalists')).toBeVisible();
+    await expect(carousel.getByText('Showing 7 to 9 of 9 finalists')).toBeVisible();
     await expect(tiles).toHaveCount(3);
     await expect(carousel.getByRole('button', { name: 'Next finalists' })).toBeDisabled();
     seen.push(...(await names.allTextContents()));
@@ -482,7 +482,7 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/community');
     const mobile = page.getByTestId('final-week-carousel');
-    await expect(mobile.getByText('Showing 1–3 of 9 finalists')).toBeVisible();
+    await expect(mobile.getByText('Showing 1 to 3 of 9 finalists')).toBeVisible();
     await expect(mobile.getByRole('button', { name: /^Page \d of 3$/ })).toHaveCount(3);
     const box = (await mobile.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(390 + 1);

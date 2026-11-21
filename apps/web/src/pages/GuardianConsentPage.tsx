@@ -454,7 +454,7 @@ export default function GuardianConsentPage() {
               ))}
             </div>
             <p className="consent-footnote">
-              Not sure why they declined? Ask your parent or guardian directly &mdash; Soccernity can&rsquo;t share
+              Not sure why they declined? Ask your parent or guardian directly. Soccernity can&rsquo;t share
               the reason.
             </p>
             {/* Static sentence from the frame (Decision Log #403 item 2): it
