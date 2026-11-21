@@ -79,7 +79,7 @@ export default function MediaPreviewPage() {
             <p className="med-note">
               {loadState === "error"
                 ? "Couldn’t load this file. Please try again from the library."
-                : "No file exists with this id — open it directly from the Media library instead of a bookmarked link."}
+                : "No file exists with this id. Open it directly from the Media library instead of a bookmarked link."}
             </p>
             <div className="med-action-row">
               <button type="button" className="med-btn med-btn--primary" onClick={() => navigate("/media")}>
