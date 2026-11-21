@@ -114,7 +114,7 @@ describe("FinalWeekCarousel: what is shown", () => {
     expect(links.map((l) => l.textContent)).toEqual(["Finalist 1", "Finalist 2", "Finalist 3"]);
     expect(screen.getByText("Every finalist is shown to everyone equally.")).not.toBeNull();
     expect(screen.getByText(/The order is never based on likes, comments, ranking, follower count or when a video was uploaded\./)).not.toBeNull();
-    expect(screen.getByText(/Showing 1.3 of 6 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 1 to 3 of 6 finalists/)).not.toBeNull();
     // two pages: the dots show, and the first page has no previous
     expect(screen.getByRole("button", { name: "Page 1 of 2" }).getAttribute("aria-current")).toBe("true");
     expect((screen.getByRole("button", { name: "Previous finalists" }) as HTMLButtonElement).disabled).toBe(true);
@@ -129,16 +129,16 @@ describe("FinalWeekCarousel: what is shown", () => {
 
     const pageNames = () => screen.getAllByRole("link").map((l) => l.textContent);
     expect(pageNames()).toEqual(["Finalist 1", "Finalist 2", "Finalist 3"]);
-    expect(screen.getByText(/Showing 1.3 of 9 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 1 to 3 of 9 finalists/)).not.toBeNull();
     expect(screen.getAllByRole("button", { name: /^Page \d of 3$/ })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Next finalists" }));
     expect(pageNames()).toEqual(["Finalist 4", "Finalist 5", "Finalist 6"]);
-    expect(screen.getByText(/Showing 4.6 of 9 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 4 to 6 of 9 finalists/)).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Page 3 of 3" }));
     expect(pageNames()).toEqual(["Finalist 7", "Finalist 8", "Finalist 9"]);
-    expect(screen.getByText(/Showing 7.9 of 9 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 7 to 9 of 9 finalists/)).not.toBeNull();
     expect((screen.getByRole("button", { name: "Next finalists" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Previous finalists" }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -149,7 +149,7 @@ describe("FinalWeekCarousel: what is shown", () => {
     const section = await screen.findByTestId("final-week-carousel");
     const text = section.textContent ?? "";
     // The only digits in the module are the pager footer ("Showing 1-3 of 6") and the sample names.
-    expect(text.replace(/Showing \d.\d of \d finalists/, "").replace(/Finalist \d/g, "")).not.toMatch(/\d/);
+    expect(text.replace(/Showing \d to \d of \d finalists/, "").replace(/Finalist \d/g, "")).not.toMatch(/\d/);
     expect(text).not.toMatch(/views?|impressions?|likes?\b(?!,)/i.test(text) ? /$^/ : /$^/);
   });
 
@@ -160,7 +160,7 @@ describe("FinalWeekCarousel: what is shown", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next finalists" }));
     expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Finalist 4", "Finalist 5"]);
-    expect(screen.getByText(/Showing 4.5 of 5 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 4 to 5 of 5 finalists/)).not.toBeNull();
     expect((screen.getByRole("button", { name: "Next finalists" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Page 2 of 2" }).getAttribute("aria-current")).toBe("true");
 
@@ -172,7 +172,7 @@ describe("FinalWeekCarousel: what is shown", () => {
     vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: true, items: items(2) });
     renderCarousel();
     await screen.findByText("Final week");
-    expect(screen.getByText(/Showing 1.2 of 2 finalists/)).not.toBeNull();
+    expect(screen.getByText(/Showing 1 to 2 of 2 finalists/)).not.toBeNull();
     expect((screen.getByRole("button", { name: "Previous finalists" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Next finalists" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("button", { name: /^Page / })).toBeNull();

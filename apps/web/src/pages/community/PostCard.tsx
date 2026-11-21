@@ -394,7 +394,7 @@ export default function PostCard({
               <p className="comment__body">{c.contentText}</p>
               {c.hidden && (
                 <p className="composer__note">
-                  {isOwnPost ? "Hidden — only you and the commenter can see this." : "Hidden by the post author — only you can see this."}
+                  {isOwnPost ? "Hidden. Only you and the commenter can see this." : "Hidden by the post author. Only you can see this."}
                 </p>
               )}
               {isOwnPost && (

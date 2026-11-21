@@ -74,7 +74,7 @@ test.describe.serial('B-284: report categories on the web forms', () => {
     await expect(submit).toBeEnabled();
     await submit.click();
 
-    await expect(dialog.getByText('Reported — thanks')).toBeVisible();
+    await expect(dialog.getByText('Reported, thanks')).toBeVisible();
     await expect(dialog.getByText('Our team will review it.')).toBeVisible();
     const row = await db().report.findFirst({ where: { reporterId: viewer.userId, targetType: 'post', targetId: postA } });
     expect(row).toBeTruthy();
@@ -108,7 +108,7 @@ test.describe.serial('B-284: report categories on the web forms', () => {
     await expect(dialog.getByText('29 / 500')).toBeVisible();
     await expect(submit).toBeEnabled();
     await submit.click();
-    await expect(dialog.getByText('Reported — thanks')).toBeVisible();
+    await expect(dialog.getByText('Reported, thanks')).toBeVisible();
 
     const row = await db().report.findFirst({ where: { reporterId: viewer.userId, targetType: 'user', targetId: author.userId } });
     expect(row).toBeTruthy();

@@ -98,7 +98,7 @@ export default function VerifyEmailPromptPage() {
         </div>
         <div className="verify-actions">
           <Link to={ONBOARDING_ROUTES.resolve} className="verify-button verify-button--primary">
-            I&rsquo;ve verified &mdash; continue
+            I&rsquo;ve verified, continue
           </Link>
           <a href={SUPPORT_MAILTO_HREF} className="verify-button verify-button--secondary">
             Contact support

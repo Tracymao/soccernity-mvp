@@ -76,7 +76,7 @@ export default function AccountOverviewPage() {
               <div className="settings-link settings-link--disabled" aria-disabled="true">
                 <span>
                   <span className="settings-link__label">{r.label}</span>
-                  <span className="settings-link__desc">{r.desc} — not built yet.</span>
+                  <span className="settings-link__desc">{r.desc} Not built yet.</span>
                 </span>
               </div>
             )}

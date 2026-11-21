@@ -184,7 +184,7 @@ test.describe.serial('Final week: carousel, entry page, impressions, pinned entr
     await expect(carousel.getByText('Every finalist is shown to everyone equally.')).toBeVisible();
     await expect(carousel.getByText(/The order is never based on likes, comments, ranking, follower count or when a video was uploaded\./)).toBeVisible();
     await expect(carousel.getByRole('link')).toHaveCount(3);
-    await expect(carousel.getByText(/Showing 1.3 of 4 finalists/)).toBeVisible();
+    await expect(carousel.getByText(/Showing 1 to 3 of 4 finalists/)).toBeVisible();
     await expect(carousel.getByRole('button', { name: 'Previous finalists' })).toBeDisabled();
 
     // The order is the server's: the same finalists the carousel endpoint returns, in that order.
@@ -204,7 +204,7 @@ test.describe.serial('Final week: carousel, entry page, impressions, pinned entr
     await carousel.getByRole('button', { name: 'Next finalists' }).click();
     await expect(carousel.getByRole('link')).toHaveCount(1);
     await expect(carousel.getByRole('link').first()).toHaveText(names[3]);
-    await expect(carousel.getByText(/Showing 4.4 of 4 finalists/)).toBeVisible();
+    await expect(carousel.getByText(/Showing 4 to 4 of 4 finalists/)).toBeVisible();
     await expect(carousel.getByRole('button', { name: 'Next finalists' })).toBeDisabled();
   });
 

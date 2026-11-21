@@ -203,7 +203,7 @@ export default function CommunityGroupsPage() {
         <div className="groups-page__intro">
           <h1 className="groups-page__title">Community Groups</h1>
           <p className="groups-page__subtitle">
-            Find people beyond your club — by the city you play in, the position you play, or the career you are
+            Find people beyond your club, by the city you play in, the position you play, or the career you are
             building in the game.
           </p>
         </div>
@@ -302,7 +302,7 @@ export default function CommunityGroupsPage() {
           </span>
           <p className="groups-empty__title">No groups match those filters</p>
           <p className="groups-empty__body">
-            Community Groups can only be filtered on one dimension at a time in practice — a group belongs to City,
+            Community Groups can only be filtered on one dimension at a time in practice. A group belongs to City,
             Position played or Career track, never more than one. Try clearing a filter, or search by name instead.
           </p>
           <button type="button" className="groups-empty__action groups-empty__action--secondary" onClick={resetFilters}>
@@ -321,7 +321,7 @@ export default function CommunityGroupsPage() {
           </p>
           <p className="groups-empty__body">
             Nobody has started a Community Group for this yet. Groups are created by players and fans, not by
-            Soccernity — so this fills up as people arrive.
+            Soccernity, so this fills up as people arrive.
           </p>
           <Link to="/groups/new" className="groups-empty__action groups-empty__action--primary">
             Create the first group

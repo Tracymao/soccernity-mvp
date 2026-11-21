@@ -342,7 +342,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                 aria-describedby={usernameError ? "edit-profile-username-error" : undefined}
               />
               <p className="edit-profile-field__hint">
-                {username.trim() ? `Shown as @${username.trim().toLowerCase()}. ` : ""}3–30 letters, numbers or
+                {username.trim() ? `Shown as @${username.trim().toLowerCase()}. ` : ""}3 to 30 letters, numbers or
                 underscores. You can change it once every 30 days (one free correction). It can&rsquo;t be removed.
               </p>
               {usernameError && (

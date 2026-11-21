@@ -384,7 +384,7 @@ export default function GrassrootsFixturePage() {
             </span>
             {r ? (
               <span className="grassroots-fixcard__bigscore">
-                {r.scoreA} – {r.scoreB}
+                {r.scoreA} - {r.scoreB}
               </span>
             ) : (
               <span className="grassroots-fixcard__vs">ended</span>
@@ -512,7 +512,7 @@ export default function GrassrootsFixturePage() {
               }}
               disabled={busy}
             >
-              The match has already been played — log the result
+              The match has already been played. Log the result
             </button>
           </>
         ))}

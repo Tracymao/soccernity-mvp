@@ -252,10 +252,10 @@ export default function LeaderboardPage() {
             {tab === "competition"
               ? "Competition board shows sample data for now"
               : tab === "contest"
-                ? "Contest board — live data"
+                ? "Contest board, live data"
                 : timePeriod === "all-time"
-                  ? "Overall board — live data, all-time"
-                  : "Overall board — live data, current week"}
+                  ? "Overall board, live data, all-time"
+                  : "Overall board, live data, current week"}
           </p>
         </div>
       </header>
@@ -375,7 +375,7 @@ export default function LeaderboardPage() {
       {!overall && scope === "club" && myClubs.length === 0 && (
         <p className="lb-status lb-status--inline" role="status">
           {clubsError
-            ? "Couldn't load your clubs — showing Global instead."
+            ? "Couldn't load your clubs. Showing Global instead."
             : "You haven't joined a club yet, so club scope has nothing to show. "}
           <Link to="/clubs">Browse clubs</Link>
         </p>
@@ -402,7 +402,7 @@ export default function LeaderboardPage() {
               <p className="lb-empty-card__title">No ranked players here yet</p>
               <p className="lb-empty-card__body">
                 {scope === "club" ? "Nobody in this club" : "Nobody"} has earned points for the selected time
-                period yet. Points update every 15 minutes &mdash; check back, or widen the filters.
+                period yet. Points update every 15 minutes. Check back, or widen the filters.
               </p>
               {!filtersAreDefault && (
                 <button type="button" className="lb-empty-card__reset" onClick={resetFilters}>
@@ -522,7 +522,7 @@ export default function LeaderboardPage() {
 
       {tab === "competition" && (
         <p className="lb-note">
-          The Competition board (Prediction / Commentary) isn&rsquo;t live yet &mdash; this table shows sample
+          The Competition board (Prediction / Commentary) isn&rsquo;t live yet. This table shows sample
           data.
         </p>
       )}

@@ -49,7 +49,7 @@ function nameFor(conversation: Conversation): string {
 
 function previewFor(conversation: Conversation): string {
   const last = conversation.lastMessage;
-  if (!last) return "No messages yet — say hello.";
+  if (!last) return "No messages yet. Say hello.";
   // B-289: a last message a moderator removed carries no text.
   if (isRemovedPreview(last)) return REMOVED_MESSAGE_TEXT;
   return last.contentText ?? "This message was deleted";

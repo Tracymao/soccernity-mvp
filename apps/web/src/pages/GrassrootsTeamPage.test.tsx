@@ -174,8 +174,8 @@ describe("GrassrootsTeamPage", () => {
     expect(screen.getByRole("heading", { name: "Results" })).not.toBeNull();
     // Opponent is Ikorodu Rangers in both rows (the not-this-team side).
     expect(screen.getAllByText(/Ikorodu Rangers/).length).toBe(2);
-    // Score is "our – theirs" → 2 – 1, outcome "Won".
-    expect(screen.getByText(/2\s*–\s*1/)).not.toBeNull();
+    // Score is "our – theirs" → 2 - 1, outcome "Won".
+    expect(screen.getByText(/2\s*-\s*1/)).not.toBeNull();
     expect(screen.getByText("Won")).not.toBeNull();
   });
 

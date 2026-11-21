@@ -23,7 +23,7 @@ import "../components/auth/Auth.css";
 
 const MIN_PASSWORD_LENGTH = 8;
 const GENERIC_ERROR_MESSAGE =
-  "We couldn't reset your password with that link. It may have expired -- request a new one.";
+  "We couldn't reset your password with that link. It may have expired. Request a new one.";
 
 type Status = "idle" | "submitting" | "submitted" | "error";
 

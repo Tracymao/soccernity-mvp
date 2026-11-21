@@ -122,7 +122,7 @@ export default function ReportPage() {
       <div className="report-page__header">
         <h1 className="report-page__title">Report a concern</h1>
         <p className="report-page__lede">
-          Use this form to flag a post, comment, or account on Soccernity — including anything that concerns
+          Use this form to flag a post, comment, or account on Soccernity, including anything that concerns
           the safety of a child. You don&rsquo;t need a Soccernity account to submit a report.
         </p>
       </div>

@@ -154,7 +154,7 @@ export default function ClubRepresentationPage() {
           </p>
         ) : (
           <p className="club-rep__lead">
-            You’ve joined more than one club page. Pick the one club you represent — its leaderboard is the one you
+            You’ve joined more than one club page. Pick the one club you represent. Its leaderboard is the one you
             appear on and earn points for. You can change this any time from Settings.
           </p>
         )}
@@ -169,7 +169,7 @@ export default function ClubRepresentationPage() {
           <div className="club-rep__note" role="note">
             <span className="club-rep__note-dot" aria-hidden="true" />
             <span>
-              Only one represented club counts for points. Joining or leaving other club pages doesn’t change this — only
+              Only one represented club counts for points. Joining or leaving other club pages doesn’t change this. Only
               this choice does.
             </span>
           </div>

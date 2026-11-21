@@ -131,7 +131,7 @@ test.describe.serial('Report a message: add messages for context', () => {
     await expect(dialog.getByText('3 of 20 selected')).toBeVisible();
     await shot(page, '02-popup-context-step-some-selected');
     await dialog.getByRole('button', { name: 'Submit with 3 messages' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     await expect(page.getByText('3 messages from the chat were included with your report.')).toBeVisible();
     await shot(page, '03-popup-context-sent');
 
@@ -221,7 +221,7 @@ test.describe.serial('Report a message: add messages for context', () => {
     await second.getByRole('radio', { name: 'Spam or scam' }).check();
     await second.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('dialog', { name: 'Add messages for context' }).getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks')).toBeVisible();
+    await expect(page.getByText('Reported, thanks')).toBeVisible();
     await expect(page.getByText(/included with your report/)).toHaveCount(0);
     const rows = await reportsAbout(freshId);
     expect(rows).toHaveLength(1);

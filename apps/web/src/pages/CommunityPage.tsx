@@ -138,7 +138,7 @@ export default function CommunityPage() {
     <div className="community__left">
       <div className="community-aside">
         <p className="community-aside__title">Trends for you</p>
-        <p className="community-aside__note">Sample &mdash; not yet personalised</p>
+        <p className="community-aside__note">Sample, not yet personalised</p>
         {SAMPLE_TRENDS.map((t) => (
           <div key={t.topic} className="community-trend">
             <span className="community-trend__topic">{t.topic}</span>
