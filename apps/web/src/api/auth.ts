@@ -224,6 +224,9 @@ export async function login(payload: LoginRequest): Promise<LoginResponse | TwoF
     let message = "Something went wrong signing you in.";
     if (response.status === 401) {
       message = "That email and password don't match.";
+    } else if (response.status === 429) {
+      // The per-account / per-IP sign-in lockout. No duration and no promise of an email.
+      message = "Too many sign-in attempts. Please wait a little while and try again.";
     }
     throw new AuthApiError(message, { status: response.status });
   }
