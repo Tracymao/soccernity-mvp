@@ -1022,7 +1022,7 @@ ${data.link}
         `Confirming will close the account and schedule it for deletion.
 
 ` +
-        `If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.`
+        `If you did not request this, you can ignore this email. Nothing changes unless the code above is used.`
       );
     case 'guardian-approved-minor':
       return (
@@ -1112,7 +1112,7 @@ ${data.link}
         `We're writing to let you know that ${data.minorDisplayName}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
 
 ` +
-        `This means the guardian consent and oversight settings you originally set up no longer apply — ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+        `This means the guardian consent and oversight settings you originally set up no longer apply. ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
 
 ` +
         `If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
@@ -1121,7 +1121,7 @@ ${data.link}
         `Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.
 
 ` +
-        `— The Soccernity team`
+        `The Soccernity team`
       );
     case 'guardian-email-replaced':
       return (
@@ -1359,7 +1359,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
         `<p>Or enter this withdrawal code on the page: <strong>${data.withdrawalToken}</strong></p>` +
         `<p>Confirming will close the account and schedule it for deletion.</p>` +
-        `<p>If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.</p>`
+        `<p>If you did not request this, you can ignore this email. Nothing changes unless the code above is used.</p>`
       );
     case 'guardian-approved-minor':
       return (
@@ -1409,10 +1409,10 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
       return (
         `<p>Hi ${data.guardianFirstName},</p>` +
         `<p>We're writing to let you know that ${data.minorDisplayName}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.</p>` +
-        `<p>This means the guardian consent and oversight settings you originally set up no longer apply — ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.</p>` +
+        `<p>This means the guardian consent and oversight settings you originally set up no longer apply. ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.</p>` +
         `<p>If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.</p>` +
         `<p>Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.</p>` +
-        `<p>— The Soccernity team</p>`
+        `<p>The Soccernity team</p>`
       );
     case 'guardian-email-replaced':
       return (
