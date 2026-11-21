@@ -38,6 +38,7 @@ import PostMedia from "./PostMedia";
 import { useViewHeartbeat } from "../../lib/useViewHeartbeat";
 import OwnPostMenu from "./OwnPostMenu";
 import ReportAction from "./ReportAction";
+import { classifyWriteRefusal, WriteRefusalNotice, type WriteRefusal } from "./writeRefusal";
 import RemovedPlaceholder from "../../components/removed/RemovedPlaceholder";
 import { REMOVED_COMMENT_TEXT } from "../../components/removed/removedContent";
 
@@ -112,7 +113,7 @@ export default function PostCard({
   const [commentText, setCommentText] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [commentRestricted, setCommentRestricted] = useState(false);
+  const [commentRefusal, setCommentRefusal] = useState<WriteRefusal | null>(null);
 
   // The post author hides/unhides individual comments. A hidden comment
   // stays in their list (dimmed) and stops counting toward the total.
@@ -209,7 +210,7 @@ export default function PostCard({
     if (!body || commentSubmitting) return;
     setCommentSubmitting(true);
     setCommentError(null);
-    setCommentRestricted(false);
+    setCommentRefusal(null);
     try {
       const created = await addComment(accessToken, post.id, body);
       // GET /posts/:id/comments is oldest-first, so a new comment appends.
@@ -217,8 +218,9 @@ export default function PostCard({
       setCommentCount((n) => n + 1);
       setCommentText("");
     } catch (err) {
-      if (err instanceof FeedApiError && err.status === 403 && /guardian consent/i.test(err.message)) {
-        setCommentRestricted(true);
+      const refused = classifyWriteRefusal(err);
+      if (refused) {
+        setCommentRefusal(refused);
       } else {
         setCommentError(err instanceof FeedApiError ? err.message : "Couldn't add that comment.");
       }
@@ -441,12 +443,7 @@ export default function PostCard({
           {commentPermission === "off" && (
             <p className="composer__note">Comments are turned off for this post.</p>
           )}
-          {commentRestricted && (
-            <p className="post__error" role="alert">
-              Your account is restricted pending guardian consent, so you can&rsquo;t comment yet.{" "}
-              <Link to="/guardian-consent">Check your consent status</Link>.
-            </p>
-          )}
+          {commentRefusal && <WriteRefusalNotice refusal={commentRefusal} verb="comment" className="post__error" />}
         </div>
       )}
     </article>

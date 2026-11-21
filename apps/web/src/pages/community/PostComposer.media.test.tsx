@@ -99,7 +99,7 @@ describe("composer — attach controls", () => {
     expect((screen.getByRole("button", { name: /picture/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /video/i }) as HTMLButtonElement).disabled).toBe(false);
     expect(
-      screen.getByText("Everything you upload is checked before other people can see it. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Everything you upload is checked before other people can see it."),
     ).not.toBeNull();
     // The poll affordance is gone and so is the old "arrive with a later media release" note.
     expect(screen.queryByText(/later media release/i)).toBeNull();
