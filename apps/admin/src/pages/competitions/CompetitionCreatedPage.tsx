@@ -18,7 +18,7 @@ export default function CompetitionCreatedPage() {
       }
     >
       <p className="admin-stub__note">
-        “Matchday Predictions — August” would be live and appear on the Leaderboard’s Competition
+        “Matchday Predictions, August” would be live and appear on the Leaderboard’s Competition
         board <em>(sample)</em>.
       </p>
       <div className="admin-stub__actions">

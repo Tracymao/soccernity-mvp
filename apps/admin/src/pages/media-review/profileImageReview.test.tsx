@@ -457,7 +457,7 @@ describe("Post media is unchanged by B-037", () => {
     renderItem(post, post.id);
     await screen.findByAltText("The picture under review");
     expect(screen.getByText("Suggestive")).not.toBeNull();
-    expect(screen.getByText("Labels come from the automatic check. They are a guide — the decision is yours.")).not.toBeNull();
+    expect(screen.getByText("Labels come from the automatic check. They are a guide. The decision is yours.")).not.toBeNull();
     expect(screen.queryByTestId("profile-decided")).toBeNull();
   });
 });

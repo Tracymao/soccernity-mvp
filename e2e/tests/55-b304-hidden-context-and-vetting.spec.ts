@@ -15,7 +15,7 @@ import { URLS } from '../support/stack';
 test.use({ viewport: { width: 1440, height: 1300 } });
 
 const RUN = Date.now().toString(36);
-const RESTRICTED = 'Restricted — child-safety vetting required';
+const RESTRICTED = 'Restricted: child-safety vetting required';
 const REASON = 'A reason that is long enough for the audit record.';
 
 test.describe.serial('hidden message context and the vetting rule', () => {
@@ -120,7 +120,7 @@ test.describe.serial('hidden message context and the vetting rule', () => {
     await page.goto(`${URLS.admin}/moderation/reports/${childReport}`);
     await page.getByRole('button', { name: 'Dismiss Report', exact: true }).click();
     await expect(page.getByRole('heading', { name: RESTRICTED })).toBeVisible();
-    await expect(page.getByText('The server rejected it — nothing was changed.', { exact: false })).toBeVisible();
+    await expect(page.getByText('The server rejected it. Nothing was changed.', { exact: false })).toBeVisible();
 
     const res = await api('PATCH', `/admin/moderation/reports/${childReport}`, { token: unvetted.token, body: { action: 'dismissed' } });
     expect(res.status).toBe(403);

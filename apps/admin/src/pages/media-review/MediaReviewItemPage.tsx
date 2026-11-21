@@ -575,7 +575,7 @@ export default function MediaReviewItemPage() {
               )}
             </span>
           </div>
-          <p className="mod-note">Labels come from the automatic check. They are a guide — the decision is yours.</p>
+          <p className="mod-note">Labels come from the automatic check. They are a guide. The decision is yours.</p>
         </section>
 
         {actionError ? (
