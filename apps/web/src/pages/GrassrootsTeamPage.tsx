@@ -402,7 +402,7 @@ export default function GrassrootsTeamPage() {
                     <span className="grassroots-fixture__name">{opponentRowLabel(fixture, team.id)}</span>
                   </span>
                   <span className="grassroots-fixture__score">
-                    {score.ours} – {score.theirs}
+                    {score.ours} - {score.theirs}
                   </span>
                   <StatusPill status={fixture.status} />
                 </li>

@@ -307,7 +307,7 @@ export default function ChatWindow({
 
             {messages.length === 0 && (
               <p className="chat-window__status" role="status">
-                No messages yet — say hello below.
+                No messages yet. Say hello below.
               </p>
             )}
 

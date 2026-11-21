@@ -89,7 +89,7 @@ describe("PostCard — report affordances", () => {
     fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "Spam" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(await screen.findByText("Reported, thanks")).not.toBeNull();
     expect(screen.getByText("Our team will review it.")).not.toBeNull();
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "post",
@@ -116,7 +116,7 @@ describe("PostCard — report affordances", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Impersonation or fake account" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(await screen.findByText("Reported, thanks")).not.toBeNull();
     // The description is optional: nothing is sent for it.
     expect(vi.mocked(createReport).mock.calls[0][1]).toEqual({
       targetType: "user",
@@ -155,7 +155,7 @@ describe("PostCard — report affordances", () => {
     fireEvent.change(screen.getByLabelText("Details (required)"), { target: { value: "Off-topic" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(await screen.findByText("Reported, thanks")).not.toBeNull();
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "comment",
       targetId: "c1",

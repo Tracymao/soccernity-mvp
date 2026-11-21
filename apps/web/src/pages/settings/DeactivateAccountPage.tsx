@@ -62,7 +62,7 @@ export default function DeactivateAccountPage() {
     return (
       <div className="acct-flow">
         <p className="acct-success" role="status">
-          Your account has been deactivated. Sign back in any time to reactivate it — there&rsquo;s no
+          Your account has been deactivated. Sign back in any time to reactivate it. There&rsquo;s no
           time limit. Taking you to the login page…
         </p>
       </div>
@@ -115,7 +115,7 @@ export default function DeactivateAccountPage() {
             <p className="acct-note__title">What to know</p>
             <p className="acct-note__body">
               Deactivating hides your profile and posts. Your account stays recoverable with no time
-              limit — just sign back in to reactivate. Permanently deleting your account is a separate
+              limit. Just sign back in to reactivate. Permanently deleting your account is a separate
               choice.
             </p>
           </div>
@@ -138,7 +138,7 @@ export default function DeactivateAccountPage() {
             <p className="acct-note__title">What happens</p>
             <p className="acct-note__body">
               Your profile and posts stay hidden while your account is deactivated. It stays this way
-              with no time limit — sign back in any time to reactivate. Deleting your account is a
+              with no time limit. Sign back in any time to reactivate. Deleting your account is a
               separate choice.
             </p>
           </div>

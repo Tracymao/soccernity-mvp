@@ -102,7 +102,7 @@ export default function CreateCommunityGroupPage() {
       <div className="groups-form__header">
         <h1 className="groups-form__title">Create a group</h1>
         <p className="groups-form__lede">
-          Every Community Group is organised by exactly one dimension — a city, a position, or a career track. Pick
+          Every Community Group is organised by exactly one dimension: a city, a position, or a career track. Pick
           the one that describes who the group is for.
         </p>
       </div>

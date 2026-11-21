@@ -242,7 +242,7 @@ export default function HomePage() {
             nobody keeps records for.
           </h2>
           <p className="home-section__sub">
-            Soccernity is built for the players outside the academy system &mdash; and for the fans, coaches and
+            Soccernity is built for the players outside the academy system, and for the fans, coaches and
             communities who already show up for them every weekend.
           </p>
         </div>

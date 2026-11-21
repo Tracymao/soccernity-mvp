@@ -34,7 +34,7 @@ export default function SensitiveContentWarning({ flags, busy, onEdit, onConfirm
   return (
     <div className="grassroots-callout" role="alertdialog" aria-labelledby="gr-sensitive-title">
       <p className="grassroots-callout__title" id="gr-sensitive-title">
-        This looks like it may mention something sensitive about someone — are you sure you want to share this
+        This looks like it may mention something sensitive about someone. Are you sure you want to share this
         publicly?
       </p>
       <p className="grassroots-callout__body">

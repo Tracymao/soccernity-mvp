@@ -114,7 +114,7 @@ describe("ReportAction — the category step", () => {
       openDialog();
       choose(REPORT_REASON_LABELS[category]);
       fireEvent.click(submitButton());
-      await screen.findByText("Reported — thanks");
+      await screen.findByText("Reported, thanks");
       const payload = vi.mocked(createReport).mock.calls[0][1];
       expect(payload).toEqual({ targetType: "post", targetId: "p1", reasonCategory: category, reason: undefined });
       // Nothing is sent for the description: JSON drops an undefined key, and the server rejects an explicit "".
@@ -145,7 +145,7 @@ describe("ReportAction — the description", () => {
     choose("Harassment or bullying");
     fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "  keeps messaging me  " } });
     fireEvent.click(submitButton());
-    await screen.findByText("Reported — thanks");
+    await screen.findByText("Reported, thanks");
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "post",
       targetId: "p1",
@@ -160,7 +160,7 @@ describe("ReportAction — the description", () => {
     choose("Spam or scam");
     fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "    " } });
     fireEvent.click(submitButton());
-    await screen.findByText("Reported — thanks");
+    await screen.findByText("Reported, thanks");
     expect(vi.mocked(createReport).mock.calls[0][1].reason).toBeUndefined();
   });
 
@@ -185,7 +185,7 @@ describe("ReportAction — the description", () => {
     choose("Other");
     fireEvent.change(screen.getByLabelText("Details (required)"), { target: { value: "Something else" } });
     fireEvent.click(submitButton());
-    await screen.findByText("Reported — thanks");
+    await screen.findByText("Reported, thanks");
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "post",
       targetId: "p1",
@@ -218,7 +218,7 @@ describe("ReportAction — sending", () => {
     expect(screen.getByRole("radio", { name: "Spam or scam" }).matches(":disabled")).toBe(true);
 
     await act(async () => resolve(CREATED));
-    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(await screen.findByText("Reported, thanks")).not.toBeNull();
     expect(screen.getByText("Our team will review it.")).not.toBeNull();
   });
 
@@ -236,7 +236,7 @@ describe("ReportAction — sending", () => {
     openDialog();
     choose("Spam or scam");
     fireEvent.click(submitButton());
-    await screen.findByText("Reported — thanks");
+    await screen.findByText("Reported, thanks");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -322,7 +322,7 @@ describe("ReportAction — errors the server can return", () => {
     expect(submitButton().disabled).toBe(false);
 
     fireEvent.click(submitButton());
-    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(await screen.findByText("Reported, thanks")).not.toBeNull();
     expect(createReport).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).toBeNull();
   });

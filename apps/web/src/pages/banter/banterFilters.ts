@@ -65,7 +65,7 @@ function formatIsoDate(iso: string): string {
 }
 
 export function dateRangeLabel(f: Pick<BanterFilters, "dateFrom" | "dateTo">): string | null {
-  if (f.dateFrom && f.dateTo) return `${formatIsoDate(f.dateFrom)} – ${formatIsoDate(f.dateTo)}`;
+  if (f.dateFrom && f.dateTo) return `${formatIsoDate(f.dateFrom)} to ${formatIsoDate(f.dateTo)}`;
   if (f.dateFrom) return `From ${formatIsoDate(f.dateFrom)}`;
   if (f.dateTo) return `To ${formatIsoDate(f.dateTo)}`;
   return null;

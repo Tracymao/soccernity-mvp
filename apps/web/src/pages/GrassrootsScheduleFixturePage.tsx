@@ -381,7 +381,7 @@ export default function GrassrootsScheduleFixturePage() {
                 </>
               )}
               <p className="grassroots-field__hint">
-                Only teams already registered on Soccernity. There is no team-name search — filter by
+                Only teams already registered on Soccernity. There is no team-name search. Filter by
                 city.
               </p>
             </div>

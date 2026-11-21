@@ -119,7 +119,7 @@ const LINK_INVALID_STEPS = [
 const MISSING_TOKEN_STEPS = [
   {
     title: "The address was typed by hand",
-    body: "The token is too long to retype accurately -- always open the link itself.",
+    body: "The token is too long to retype accurately. Always open the link itself.",
   },
   {
     title: "Only part of the link was copied",
@@ -234,7 +234,7 @@ export default function VerifyEmailPage() {
               ✓
             </div>
             <div className="verify-header">
-              <h1 className="verify-heading">Email verified — approval still pending</h1>
+              <h1 className="verify-heading">Email verified, approval still pending</h1>
               <p className="verify-subheading">
                 Your email address is confirmed, but your account is still waiting on your guardian&rsquo;s
                 approval. It stays restricted until they approve it.

@@ -228,7 +228,7 @@ describe("chat pop-up", () => {
 
   it("shows 'No messages yet' for an empty thread", async () => {
     const chat = await openFirstChat();
-    expect(await within(chat).findByText("No messages yet — say hello below.")).toBeTruthy();
+    expect(await within(chat).findByText("No messages yet. Say hello below.")).toBeTruthy();
   });
 
   it("sends a message, shows it, and moves the conversation to the top with the new preview", async () => {
@@ -241,7 +241,7 @@ describe("chat pop-up", () => {
     const row = (await screen.findByText("Kingsley Chukwudi")).closest("button") as HTMLElement;
     fireEvent.click(row);
     const chat = await screen.findByRole("region", { name: "Chat with Kingsley Chukwudi" });
-    await within(chat).findByText("No messages yet — say hello below.");
+    await within(chat).findByText("No messages yet. Say hello below.");
 
     const input = within(chat).getByLabelText("Write a message to Kingsley Chukwudi");
     fireEvent.change(input, { target: { value: "  See you there  " } });
@@ -258,7 +258,7 @@ describe("chat pop-up", () => {
 
   it("does not send a blank message", async () => {
     const chat = await openFirstChat();
-    await within(chat).findByText("No messages yet — say hello below.");
+    await within(chat).findByText("No messages yet. Say hello below.");
     const send = within(chat).getByRole("button", { name: "Send" }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
     fireEvent.change(within(chat).getByLabelText("Write a message to Kingsley Chukwudi"), { target: { value: "   " } });
@@ -269,7 +269,7 @@ describe("chat pop-up", () => {
   it("shows the server's refusal as it came, and keeps the draft", async () => {
     vi.mocked(sendMessage).mockRejectedValue(new MessagingApiError("You can't message this person.", { status: 403 }));
     const chat = await openFirstChat();
-    await within(chat).findByText("No messages yet — say hello below.");
+    await within(chat).findByText("No messages yet. Say hello below.");
     const input = within(chat).getByLabelText("Write a message to Kingsley Chukwudi") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "hello" } });
     fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
@@ -282,7 +282,7 @@ describe("chat pop-up", () => {
       new MessagingApiError("Guardian consent is required to message other people.", { status: 403 }),
     );
     const chat = await openFirstChat();
-    await within(chat).findByText("No messages yet — say hello below.");
+    await within(chat).findByText("No messages yet. Say hello below.");
     fireEvent.change(within(chat).getByLabelText("Write a message to Kingsley Chukwudi"), { target: { value: "hi" } });
     fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
     const link = await within(chat).findByRole("link", { name: "Check your status" });
@@ -314,7 +314,7 @@ describe("chat pop-up", () => {
     const chat = await openFirstChat();
     expect(await within(chat).findByText(/Couldn’t load this conversation/)).toBeTruthy();
     fireEvent.click(within(chat).getByRole("button", { name: "Try again" }));
-    expect(await within(chat).findByText("No messages yet — say hello below.")).toBeTruthy();
+    expect(await within(chat).findByText("No messages yet. Say hello below.")).toBeTruthy();
 
     cleanup();
     vi.mocked(getMessages).mockRejectedValueOnce(
@@ -327,7 +327,7 @@ describe("chat pop-up", () => {
 
   it("minimises to a bar, expands again, and closes", async () => {
     const chat = await openFirstChat();
-    await within(chat).findByText("No messages yet — say hello below.");
+    await within(chat).findByText("No messages yet. Say hello below.");
 
     fireEvent.click(within(chat).getByRole("button", { name: "Minimise chat" }));
     const bar = await screen.findByRole("region", { name: "Chat with Kingsley Chukwudi (minimised)" });

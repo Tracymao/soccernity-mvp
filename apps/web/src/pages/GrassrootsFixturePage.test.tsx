@@ -175,7 +175,7 @@ describe("GrassrootsFixturePage", () => {
       expect(logResult).toHaveBeenCalledWith(TOKEN, "fx-1", { scoreA: 2, scoreB: 1 }),
     );
     expect(await screen.findByRole("heading", { name: "Result saved" })).not.toBeNull();
-    expect(screen.getByText(/2 – 1/)).not.toBeNull();
+    expect(screen.getByText(/2 - 1/)).not.toBeNull();
   });
 
   it("treats a 'first write is final' 409 on save as an expected outcome, not a generic error", async () => {
@@ -203,7 +203,7 @@ describe("GrassrootsFixturePage", () => {
     expect(await screen.findByText(/already been recorded/i)).not.toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
     await waitFor(() => expect(getFixtureById).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/3 – 0/)).not.toBeNull();
+    expect(await screen.findByText(/3 - 0/)).not.toBeNull();
   });
 
   it("full_time: renders the read-only result with no success framing on a plain revisit", async () => {
@@ -219,7 +219,7 @@ describe("GrassrootsFixturePage", () => {
 
     expect(await screen.findByRole("heading", { name: "Full time" })).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Result saved" })).toBeNull();
-    expect(screen.getByText(/2 – 1/)).not.toBeNull();
+    expect(screen.getByText(/2 - 1/)).not.toBeNull();
     expect(screen.getByRole("link", { name: "View on team page" }).getAttribute("href")).toBe(
       "/grassroots/team-s",
     );

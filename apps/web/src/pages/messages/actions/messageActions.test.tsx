@@ -606,7 +606,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
-      expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+      expect(await screen.findByText("Reported, thanks")).toBeTruthy();
       expect(vi.mocked(createReport)).toHaveBeenCalledWith(TOKEN, {
         targetType: "message",
         targetId: "m-theirs",
@@ -643,7 +643,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
         fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
         fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
         fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
-        expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+        expect(await screen.findByText("Reported, thanks")).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "Close" }));
       }
       expect(vi.mocked(createReport)).toHaveBeenCalledTimes(2);
@@ -768,7 +768,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       expect(within(dialog).getByText("2 of 20 selected")).toBeTruthy();
       expect(within(dialog).getByRole("button", { name: "Clear selection" })).toBeTruthy();
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 2 messages" }));
-      expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+      expect(await screen.findByText("Reported, thanks")).toBeTruthy();
       expect(vi.mocked(createReport)).toHaveBeenCalledTimes(1);
       expect(vi.mocked(createReport).mock.calls[0][1]).toEqual({
         targetType: "message",
@@ -799,7 +799,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
         (within(dialog).getByRole("button", { name: "All shown messages included" }) as HTMLButtonElement).disabled,
       ).toBe(true);
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 20 messages" }));
-      await screen.findByText("Reported — thanks");
+      await screen.findByText("Reported, thanks");
       const sent = vi.mocked(createReport).mock.calls[0][1].contextMessageIds ?? [];
       expect(sent).toHaveLength(20);
       expect([...sent].sort()).toEqual([...WINDOW_IDS].sort());
@@ -813,7 +813,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       fireEvent.click(within(dialog).getByRole("button", { name: "Clear selection" }));
       expect(within(dialog).getByText("0 of 20 selected")).toBeTruthy();
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
-      await screen.findByText("Reported — thanks");
+      await screen.findByText("Reported, thanks");
       expect(vi.mocked(createReport).mock.calls[0][1].contextMessageIds).toBeUndefined();
       expect(screen.queryByText(/included with your report/)).toBeNull();
     });

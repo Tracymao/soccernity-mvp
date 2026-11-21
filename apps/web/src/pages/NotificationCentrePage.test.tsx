@@ -114,7 +114,7 @@ describe("NotificationCentrePage", () => {
 
     expect(await screen.findByText("No notifications yet")).not.toBeNull();
     expect(
-      screen.getByText(/more notification types — mentions, deeper bants and contest activity/i),
+      screen.getByText(/more notification types, such as mentions and deeper bants and contest activity/i),
     ).not.toBeNull();
     expect(screen.getByRole("button", { name: "Go to your feed" })).not.toBeNull();
   });
@@ -445,7 +445,7 @@ describe("NotificationCentrePage", () => {
       seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("avatar")], nextCursor: null, unreadCount: 1 });
       renderPage();
-      const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
+      const row = (await screen.findByText(/wasn’t approved. See why in Edit Profile/)).closest("a");
       expect(row?.textContent).toMatch(/^Your picture wasn’t approved/);
       expect(row?.getAttribute("href")).toBe("/profile?edit=1");
     });
@@ -454,7 +454,7 @@ describe("NotificationCentrePage", () => {
       seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("cover")], nextCursor: null, unreadCount: 1 });
       renderPage();
-      const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
+      const row = (await screen.findByText(/wasn’t approved. See why in Edit Profile/)).closest("a");
       expect(row?.textContent).toMatch(/^Your cover photo wasn’t approved/);
       expect(row?.getAttribute("href")).toBe("/profile?edit=1");
     });
@@ -563,7 +563,7 @@ describe("NotificationCentrePage", () => {
       seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_rejected", "video")], nextCursor: null, unreadCount: 1 });
       renderPage();
-      const row = (await screen.findByText(/wasn’t approved — see why on your post/)).closest("a");
+      const row = (await screen.findByText(/wasn’t approved. See why on your post/)).closest("a");
       expect(row?.textContent).toMatch(/^Your video wasn’t approved/);
       expect(row?.textContent).not.toMatch(/COPY PENDING/);
       expect(row?.getAttribute("href")).toBe("/community");

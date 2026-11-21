@@ -105,7 +105,7 @@ test.describe.serial('guardian confirm page and approved screen', () => {
     await page.getByLabel(/I confirm I am this account holder/).check();
     await page.getByRole('button', { name: 'I consent' }).click();
 
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thank you — Quinn can continue');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thank you, Quinn can continue');
     await expect(page.getByRole('status')).toContainText(
       /Recorded on \d{1,2} [A-Z][a-z]+ \d{4}\. Quinn can now continue registration, with under-18 protections in place\./,
     );

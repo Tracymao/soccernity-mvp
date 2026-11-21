@@ -155,7 +155,7 @@ describe("PostMedia — as another viewer", () => {
     expect(getUpload).not.toHaveBeenCalled(); // only the author reads the upload status
     fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
-    await screen.findByText("Reported — thanks, our team will review it.");
+    await screen.findByText("Reported. Thanks, our team will review it.");
     // No reason typed: the third argument is the empty string, which the client sends as no body.
     expect(reportMedia).toHaveBeenCalledWith("tok", ID, "");
   });
@@ -173,7 +173,7 @@ describe("PostMedia — as another viewer", () => {
     fireEvent.change(box, { target: { value: "This is not football" } });
     expect(screen.getByText("20 / 500")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
-    await screen.findByText("Reported — thanks, our team will review it.");
+    await screen.findByText("Reported. Thanks, our team will review it.");
     expect(reportMedia).toHaveBeenCalledWith("tok", ID, "This is not football");
   });
 
@@ -236,7 +236,7 @@ describe("PostMedia — as another viewer", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Child safety concern" }));
     fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "Something involving a child" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
-    await screen.findByText("Reported — thanks");
+    await screen.findByText("Reported, thanks");
     expect(createReport).toHaveBeenCalledTimes(1);
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "user",

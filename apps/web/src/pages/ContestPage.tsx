@@ -104,7 +104,7 @@ function StateSection({ data }: { data: CurrentContestResponse }) {
           </p>
           {data.callerEntry ? (
             <p className="contest-entry contest-entry--done" role="status">
-              Your entry for week {data.callerEntry.weekNumber} is in. It&rsquo;s locked for this round &mdash; you can
+              Your entry for week {data.callerEntry.weekNumber} is in. It&rsquo;s locked for this round. You can
               enter again when next week&rsquo;s challenge opens.
             </p>
           ) : data.callerCanEnter ? (
@@ -182,7 +182,7 @@ function StateSection({ data }: { data: CurrentContestResponse }) {
         <section className="contest-section">
           <h2 className="contest-section__title">Week 4 final: finalists are uploading</h2>
           <p className="contest-section__body">
-            Finalists upload a new video on days 22&ndash;24. Entries stay hidden from everyone but their owner until
+            Finalists upload a new video on days 22 to 24. Entries stay hidden from everyone but their owner until
             the reveal at {londonClock(state.revealsAt)} on {londonLongDate(state.revealsAt)}.
           </p>
           {data.callerFinalEntry ? (
@@ -299,8 +299,8 @@ export default function ContestPage() {
       <section className="contest-section">
         <h2 className="contest-section__title">How Contest works</h2>
         <p className="contest-section__body">
-          Contest runs monthly, in four rounds. In weeks 1&ndash;3, a new weekly skill challenge opens: post your video
-          entry, and the community votes. Each week produces a top 3 &mdash; nine weekly winners across the month
+          Contest runs monthly, in four rounds. In weeks 1 to 3, a new weekly skill challenge opens: post your video
+          entry, and the community votes. Each week produces a top 3: nine weekly winners across the month
           (fewer if a week is forfeited). In week 4, every weekly winner competes head-to-head in the Week 4 final for
           the month&rsquo;s overall top 3, tracked live on the Leaderboard&rsquo;s Contest tab.
         </p>
