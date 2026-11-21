@@ -53,6 +53,7 @@
 // — the same fix the mobile build session for this page already applied
 // to its own copy of this node (see CLAUDE.md's Decision Log #132 entry:
 // "composer row → search field").
+import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -313,8 +314,8 @@ export default function SearchTrendingPage() {
                     {results.clubs.items.map((c) => (
                       <li key={c.id}>
                         <Link to={`/clubs/${c.id}`} className="search-page__club-row">
-                          {c.logoUrl ? (
-                            <img src={c.logoUrl} alt="" className="search-page__club-badge" width={40} height={40} />
+                          {safeImageUrl(c.logoUrl) ? (
+                            <img src={safeImageUrl(c.logoUrl) as string} alt="" className="search-page__club-badge" width={40} height={40} />
                           ) : (
                             <span className="search-page__club-badge search-page__club-badge--initial" aria-hidden="true">
                               {c.name.trim()[0]?.toUpperCase() ?? "?"}
