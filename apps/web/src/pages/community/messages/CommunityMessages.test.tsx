@@ -279,13 +279,13 @@ describe("chat pop-up", () => {
 
   it("links to the guardian-consent page when the refusal is the consent block", async () => {
     vi.mocked(sendMessage).mockRejectedValue(
-      new MessagingApiError("Guardian consent is required to message other people.", { status: 403 }),
+      new MessagingApiError("Guardian consent is required to message other people.", { status: 403, code: "guardian_consent_pending" }),
     );
     const chat = await openFirstChat();
     await within(chat).findByText("No messages yet. Say hello below.");
     fireEvent.change(within(chat).getByLabelText("Write a message to Kingsley Chukwudi"), { target: { value: "hi" } });
     fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
-    const link = await within(chat).findByRole("link", { name: "Check your status" });
+    const link = await within(chat).findByRole("link", { name: "Check your consent status" });
     expect(link.getAttribute("href")).toBe("/guardian-consent");
   });
 

@@ -21,6 +21,7 @@
 // room LIST keeps "Join" / "Leave" so nothing else changes.
 import { useState } from "react";
 import { joinRoom, leaveRoom, BanterApiError } from "../../api/banter";
+import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../community/writeRefusal";
 
 interface BanterJoinButtonProps {
   accessToken: string;
@@ -41,16 +42,23 @@ export default function BanterJoinButton({
 }: BanterJoinButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<WriteRefusal | null>(null);
   const bookmark = variant === "bookmark";
 
   async function toggle() {
     if (pending) return;
     setPending(true);
     setError(null);
+    setRefusal(null);
     try {
       const result = joined ? await leaveRoom(accessToken, roomId) : await joinRoom(accessToken, roomId);
       onToggled({ joined: result.joined, memberCount: result.memberCount });
     } catch (err) {
+      const reason = specificWriteRefusal(err);
+      if (reason) {
+        setRefusal(reason);
+        return;
+      }
       setError(
         err instanceof BanterApiError
           ? err.message
@@ -107,6 +115,13 @@ export default function BanterJoinButton({
         )}
         {label}
       </button>
+      {refusal && (
+        <WriteRefusalNotice
+          refusal={refusal}
+          verb={bookmark ? "add rooms to My Bants" : "join rooms"}
+          className="banter-join__error"
+        />
+      )}
       {error && (
         <p className="banter-join__error" role="alert">
           {error}

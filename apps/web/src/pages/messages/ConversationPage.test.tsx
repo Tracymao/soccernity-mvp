@@ -138,7 +138,7 @@ describe("ConversationPage", () => {
     seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(sendMessage).mockRejectedValueOnce(
-      new MessagingApiError("Your account is awaiting guardian consent", { status: 403 }),
+      new MessagingApiError("Your account is awaiting guardian consent", { status: 403, code: "guardian_consent_pending" }),
     );
 
     renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
@@ -147,8 +147,8 @@ describe("ConversationPage", () => {
     fireEvent.change(screen.getByLabelText("Write a message"), { target: { value: "Hi" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(await screen.findByText(/awaiting guardian consent/i)).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Check your status" }).getAttribute("href")).toBe("/guardian-consent");
+    expect(await screen.findByText(/guardian consent, so you can/i)).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Check your consent status" }).getAttribute("href")).toBe("/guardian-consent");
   });
 
   it("loads earlier messages and prepends them, keeping ascending order", async () => {

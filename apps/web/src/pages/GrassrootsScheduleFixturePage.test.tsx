@@ -194,6 +194,7 @@ describe("GrassrootsScheduleFixturePage", () => {
     vi.mocked(createFixture).mockRejectedValueOnce(
       new GrassrootsApiError("This account is awaiting guardian consent and cannot access this feature yet.", {
         status: 403,
+        code: "guardian_consent_pending",
       }),
     );
 

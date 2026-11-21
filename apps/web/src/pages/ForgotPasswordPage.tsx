@@ -22,13 +22,16 @@ import AuthLayout from "../components/auth/AuthLayout";
 import AuthField from "../components/auth/AuthField";
 import AuthButton from "../components/auth/AuthButton";
 import { forgotPassword } from "../lib/authApi";
+import { ApiError } from "../lib/apiClient";
 import "../components/auth/Auth.css";
 
 const GENERIC_SUBMITTED_MESSAGE =
   "If an account exists for that email, we've sent instructions to reset your password.";
 const GENERIC_ERROR_MESSAGE = "Something went wrong sending that. Please try again in a moment.";
 
-type Status = "idle" | "submitting" | "submitted" | "error";
+const RATE_LIMITED_MESSAGE = "Too many requests. Please wait a little while and try again.";
+
+type Status = "idle" | "submitting" | "submitted" | "error" | "rate-limited";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -45,8 +48,8 @@ export default function ForgotPasswordPage() {
       // Generic success state regardless of whether the email matched an
       // account -- do not branch on the response body here.
       setStatus("submitted");
-    } catch {
-      setStatus("error");
+    } catch (err) {
+      setStatus(err instanceof ApiError && err.status === 429 ? "rate-limited" : "error");
     }
   }
 
@@ -63,9 +66,9 @@ export default function ForgotPasswordPage() {
         </p>
       ) : (
         <form className="sn-auth-form" onSubmit={handleSubmit} noValidate>
-          {status === "error" ? (
+          {status === "error" || status === "rate-limited" ? (
             <p className="sn-auth-status sn-auth-status--error" role="alert">
-              {GENERIC_ERROR_MESSAGE}
+              {status === "rate-limited" ? RATE_LIMITED_MESSAGE : GENERIC_ERROR_MESSAGE}
             </p>
           ) : null}
 
