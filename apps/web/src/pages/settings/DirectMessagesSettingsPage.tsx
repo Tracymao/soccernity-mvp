@@ -40,10 +40,10 @@ export const MESSAGES = {
   loadFailed: "Couldn’t load your settings. Please try again shortly.",
   // The one sentence the frames tag; the literal tag is shown to the person on purpose (B-124).
   stricterOnly:
-    "This can only make messaging stricter. Our safety rules for under-18s still apply. [COPY PENDING LEGAL REVIEW]",
+    "This can only make messaging stricter. Our safety rules for under-18s still apply.",
   // The frames tag this sentence too (S1 to S4, S6 to S9).
   readReceiptsDescription:
-    "When this is on, people you message can see when you’ve read their messages. “Seen” only shows when you and the other person both have read receipts on. [COPY PENDING LEGAL REVIEW]",
+    "When this is on, people you message can see when you’ve read their messages. “Seen” only shows when you and the other person both have read receipts on.",
   saving: "Saving…",
 } as const;
 

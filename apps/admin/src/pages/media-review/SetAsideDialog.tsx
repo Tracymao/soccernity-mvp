@@ -7,9 +7,8 @@
 //  * 409 suspected_illegal_already_recorded -> a fixed line.
 //  * any other 4xx -> the server's message; anything else a fixed line. The typed reason is kept after an error.
 //
-// WORDING is DEFAULT, founder-veto-able. Each sentence that says what happens to the file, to the uploader or to
-// retention carries the literal tag [COPY PENDING LEGAL REVIEW] in the rendered text, with a row in
-// docs/pending-copy-manifest.md (Decision Log #412 item 5, #497).
+// WORDING is DEFAULT, founder-veto-able. The sentences that say what happens to the file, to the uploader or to
+// retention were cleared by the founder's review of 2026-11-22 (R108), no counsel review needed (Decision Log #412 item 5, #497).
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import { isChildSafetyVettingRequiredError } from "../../api/moderation";
@@ -95,15 +94,14 @@ export default function SetAsideDialog({
           <ul className="si-consequences">
             <li>
               The {noun} is withdrawn from public view and rejected. The uploader sees the standard rejection message.
-              [COPY PENDING LEGAL REVIEW]
+
             </li>
             <li>
-              The {noun} is kept for the set-aside period and is not deleted with the uploader’s account. [COPY PENDING
-              LEGAL REVIEW]
+              The {noun} is kept for the set-aside period and is not deleted with the uploader’s account.
             </li>
             <li>
               Nothing is reported to anyone. A report to a receiving body is made outside Soccernity, and you record it
-              afterwards. [COPY PENDING LEGAL REVIEW]
+              afterwards.
             </li>
           </ul>
           <div className="mod-field">
@@ -129,8 +127,7 @@ export default function SetAsideDialog({
             ) : null}
           </div>
           <p className="mod-note" id={helpId}>
-            10 to 500 characters. The reason is saved with the record and is never shown to the uploader. [COPY PENDING
-            LEGAL REVIEW]
+            10 to 500 characters. The reason is saved with the record and is never shown to the uploader.
           </p>
         </div>
         <div className="mod-dialog__actions">

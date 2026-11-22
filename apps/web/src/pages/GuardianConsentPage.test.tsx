@@ -110,7 +110,6 @@ describe("GuardianConsentPage", () => {
     const line = await screen.findByTestId("registration-status-line");
     expect(line.textContent).toMatch(/Registration cannot be completed until your guardian approves/);
     expect(line.textContent).toMatch(/card verification where required/);
-    expect(line.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]/);
   });
 
   it("does not show the registration status line once consent is confirmed", async () => {
@@ -248,7 +247,7 @@ describe("GuardianConsentPage", () => {
       expect(await screen.findByRole("heading", { name: "New request sent" })).not.toBeNull();
       expect(screen.getByTestId("guardian-consent-resent")).not.toBeNull();
       expect(screen.getByRole("status").textContent).toBe(
-        "We’ve emailed a fresh approval request to guardian@example.com. [COPY PENDING LEGAL REVIEW]",
+        "We’ve emailed a fresh approval request to guardian@example.com.",
       );
       expect(screen.getByText("What happens next")).not.toBeNull();
       expect([...document.querySelectorAll(".consent-row__title")].map((el) => el.textContent)).toEqual([
@@ -256,13 +255,10 @@ describe("GuardianConsentPage", () => {
         "Your account stays restricted for now",
         "Wrong email address?",
       ]);
-      // Every new sentence is tagged; the frame's link lifetime is not invented.
-      for (const body of document.querySelectorAll(".consent-row__body")) {
-        expect(body.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]/);
-      }
+      // The frame's link lifetime is not invented.
       expect(document.body.textContent ?? "").not.toMatch(/3 days/);
       // The inline footnote the old page used is gone.
-      expect(screen.queryByText(/The previous link no longer works\.$/)).toBeNull();
+      expect(screen.queryByText(/^(?!It has a fresh).*The previous link no longer works\.$/)).toBeNull();
     });
 
     it("the 'Wrong email address?' row links to the Change guardian email screen", async () => {

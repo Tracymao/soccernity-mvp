@@ -7,8 +7,7 @@
 // Wording: plain, short, addressed to a guardian, says WHAT happened and WHEN (the "when" is added by the
 // template, from the time the notice is made). It carries no IP address, device, location or other account data,
 // and the `summary` functions receive only the minor's display name, so they cannot leak anything else.
-// ALL of it is [COPY PENDING LEGAL REVIEW] (standing convention; listed in docs/pending-copy-manifest.md). The tag
-// does not hold the build.
+// ALL of it was once tagged (listed in docs/pending-copy-manifest.md as history). Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 
 export type GuardianSecurityOnlyEventKey =
   | 'two_factor_enabled'
@@ -79,7 +78,7 @@ export interface GuardianSecurityEventDefinition {
 // Repeats of the same kind for the same account are throttled to one per hour so a burst of actions cannot
 // flood a guardian (the extra ones are dropped, not queued).
 //
-// ALL wording is [COPY PENDING LEGAL REVIEW] (standing convention; docs/pending-copy-manifest.md).
+// ALL wording was once tagged (docs/pending-copy-manifest.md, as history). Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 // ---------------------------------------------------------------------------------------------------------------
 
 const SAFETY_THROTTLE_SECONDS = 60 * 60;
@@ -123,7 +122,7 @@ const GUARDIAN_SAFETY_EVENTS: Record<GuardianSafetyEventKey, GuardianSecurityEve
     throttleSeconds: SAFETY_THROTTLE_SECONDS,
   },
   // backend/b139-username-review (B-139 part (c), Decision Log #467): the outcome of a review of a username removal.
-  // Kind of action only: never the reason, never the handle, never who decided. [COPY PENDING LEGAL REVIEW]
+  // Kind of action only: never the reason, never the handle, never who decided. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   username_restored: {
     kind: 'safety',
     subject: safetySubject,
@@ -190,7 +189,7 @@ const GUARDIAN_SECURITY_ONLY_EVENTS: Record<GuardianSecurityOnlyEventKey, Guardi
   },
   // backend/email-change (B-059; Decision Log #472 default (f)). The sign-in email of a minor's account was changed
   // (after the new address was verified). Says that it changed, never what to; the guardian is told, not asked.
-  // [COPY PENDING LEGAL REVIEW]: listed in docs/pending-copy-manifest.md.
+  // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   email_changed: {
     subject: (name) => `Security change on ${name}'s Soccernity account`,
     summary: (name) => `The email address on ${name}'s Soccernity account was changed.`,

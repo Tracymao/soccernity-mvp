@@ -50,7 +50,6 @@ import {
   TWO_FACTOR_NO_PENDING_ENROLMENT,
 } from "../../api/twoFactorCodes";
 import { getStoredAccessToken } from "../../lib/session";
-import CopyTag from "../twoFactor/CopyTag";
 import TwoFactorCodeInput from "../twoFactor/TwoFactorCodeInput";
 import "./SettingsSecurityPage.css";
 import "../twoFactor/twoFactor.css";
@@ -316,7 +315,6 @@ export default function TwoFactorAuthPage() {
     const { status, notice } = view;
     body = (
       <div className="tf-block">
-        <CopyTag />
         <AppRow on={status.enabled} />
         {notice && (
           <p className="tf-note" role="status">
@@ -374,7 +372,6 @@ export default function TwoFactorAuthPage() {
   } else if (view.kind === "scan" && enrolment) {
     body = (
       <div className="tf-block">
-        <CopyTag />
         <p className="tf-step">Step 1 of 2</p>
         <h3 className="tf-subheading">Scan the QR code</h3>
         <p className="tf-lead">Open your authenticator app and scan this code to add Soccernity.</p>
@@ -404,7 +401,6 @@ export default function TwoFactorAuthPage() {
   } else if (view.kind === "key" && enrolment) {
     body = (
       <div className="tf-block">
-        <CopyTag />
         <p className="tf-step">Step 1 of 2</p>
         <h3 className="tf-subheading">Enter the setup key</h3>
         <p className="tf-lead">
@@ -441,7 +437,6 @@ export default function TwoFactorAuthPage() {
   } else if (view.kind === "enter-code") {
     body = (
       <form className="tf-block" onSubmit={confirmSetup} noValidate>
-        <CopyTag />
         <p className="tf-step">Step 2 of 2</p>
         <h3 className="tf-subheading">Enter the 6-digit code</h3>
         <p className="tf-lead">Enter the code shown in your authenticator app for Soccernity.</p>
@@ -480,7 +475,6 @@ export default function TwoFactorAuthPage() {
     const after = view.after;
     body = (
       <div className="tf-block">
-        <CopyTag />
         <h3 className="tf-subheading">Save your backup codes</h3>
         <p className="tf-lead">
           These {backupCodes.length} codes are shown once. Each code can be used one time if you cannot use your
@@ -520,7 +514,6 @@ export default function TwoFactorAuthPage() {
   } else if (view.kind === "success") {
     body = (
       <div className="tf-block">
-        <CopyTag />
         <h3 className="tf-subheading">Two-factor authentication is on</h3>
         <p className="tf-lead">You will be asked for a code from your authenticator app when you log in.</p>
         <div className="tf-actions">
@@ -535,7 +528,6 @@ export default function TwoFactorAuthPage() {
     const label = turningOff ? "Turn off two-factor authentication" : "Get new backup codes";
     body = (
       <form className="tf-block" onSubmit={turningOff ? submitTurnOff : submitRegenerate} noValidate>
-        <CopyTag />
         <h3 className="tf-subheading">{label}</h3>
         <p className="tf-lead">
           {turningOff

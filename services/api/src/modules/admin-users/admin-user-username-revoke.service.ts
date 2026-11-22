@@ -36,8 +36,8 @@ export interface UsernameRevokeResult {
 //      permanent bar on THIS user re-picking that handle (#402 item 3).
 //   3. writes the audit row (admin, target, handle, hold end and the REASON),
 //      so a revoke can never exist without its audit entry.
-// AFTER the commit, best effort: the user is emailed (wording [COPY PENDING
-// LEGAL REVIEW]); a mail failure never undoes the revoke.
+// AFTER the commit, best effort: the user is emailed (wording cleared by the
+// founder's review of 2026-11-22, R108); a mail failure never undoes the revoke.
 //
 // The revoke only removes the handle. It does not suspend the account, touch
 // its content, or send anything to the reporter -- those are separate moderation

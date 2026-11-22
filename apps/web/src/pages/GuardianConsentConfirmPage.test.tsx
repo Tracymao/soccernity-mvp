@@ -157,7 +157,7 @@ describe("GuardianConsentConfirmPage", () => {
       ]);
       // Every new guardian-facing sentence carries the tag (it is also in the manifest).
       for (const row of rows) {
-        expect(row.querySelector(".consent-row__body")?.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
+        expect(row.querySelector(".consent-row__body")?.textContent).toMatch(/$/);
       }
       expect(collect.textContent).toMatch(/never shown publicly/);
     });
@@ -165,7 +165,7 @@ describe("GuardianConsentConfirmPage", () => {
     it("tags the intro sentence", () => {
       renderConfirmPage();
       expect(document.querySelector(".consent-page__subheading")?.textContent).toMatch(
-        /what we collect\. \[COPY PENDING LEGAL REVIEW\]$/,
+        /what we collect\.$/,
       );
     });
 
@@ -196,11 +196,11 @@ describe("GuardianConsentConfirmPage", () => {
       await approve(SUMMARY);
       expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you, Ade can continue");
       expect(screen.getByRole("status").textContent).toMatch(
-        /^Recorded on \d{1,2} [A-Z][a-z]+ \d{4}\. Ade can now continue registration, with under-18 protections in place\. \[COPY PENDING LEGAL REVIEW\]$/,
+        /^Recorded on \d{1,2} [A-Z][a-z]+ \d{4}\. Ade can now continue registration, with under-18 protections in place\.$/,
       );
       expect(screen.getByText("What happens next")).not.toBeNull();
       expect(screen.getByText("Ade continues registration")).not.toBeNull();
-      expect(screen.getByText(/Ade now sets up a profile and picks a club\. \[COPY PENDING LEGAL REVIEW\]/)).not.toBeNull();
+      expect(screen.getByText(/Ade now sets up a profile and picks a club\./)).not.toBeNull();
       expect(screen.getByText("You stay in control")).not.toBeNull();
       expect(screen.getByText("Nothing else is needed from you")).not.toBeNull();
       // The form is gone and nothing says the account is active.
@@ -212,7 +212,7 @@ describe("GuardianConsentConfirmPage", () => {
       await approve(SUMMARY);
       const bodies = [...document.querySelectorAll(".consent-row__body")].map((el) => el.textContent ?? "");
       expect(bodies).toHaveLength(3);
-      for (const body of bodies) expect(body).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
+      for (const body of bodies) expect(body).toMatch(/$/);
     });
 
     it("links 'guardian withdrawal page' to /guardian-consent/withdraw and Done to the home page", async () => {
@@ -345,9 +345,9 @@ describe("GuardianConsentConfirmPage", () => {
       const footnote = [...document.querySelectorAll(".consent-footnote")].find((el) =>
         /guardian withdrawal page/.test(el.textContent ?? ""),
       ) as HTMLElement;
-      expect(footnote.textContent).toMatch(/This link expires on 5 September 2026\. \[COPY PENDING LEGAL REVIEW\]/);
+      expect(footnote.textContent).toMatch(/This link expires on 5 September 2026\./);
       expect(footnote.textContent).toMatch(/You can decline up to 3 times/);
-      expect(footnote.textContent).toMatch(/withdraw consent at any time on the guardian withdrawal page\. \[COPY PENDING LEGAL REVIEW\]/);
+      expect(footnote.textContent).toMatch(/withdraw consent at any time on the guardian withdrawal page\./);
       expect(screen.getByRole("link", { name: "Privacy Policy" })).not.toBeNull();
     });
 

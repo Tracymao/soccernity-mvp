@@ -89,7 +89,7 @@ test.describe.serial('admin: suspected illegal imagery', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('withdrawn from public view');
     await expect(dialog).toContainText('not deleted with the uploader’s account');
-    await expect(dialog).toContainText(COPY_TAG);
+    await expect(dialog).not.toContainText(COPY_TAG);
 
     // Nothing is sent without a reason, and a too-short one is refused with its own message.
     await dialog.getByRole('button', { name: 'Confirm' }).click();

@@ -47,7 +47,7 @@ afterEach(() => {
 describe("1.2a email and password", () => {
   it("shows the drawn copy, the Copy Tag chip and a prefilled email, and calls nothing yet", () => {
     open();
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
     expect(screen.getByRole("heading", { name: "Confirm it’s you" })).not.toBeNull();
     expect(
       screen.getByText("Enter the email and password for your Soccernity account. We’ll email you a link to continue."),

@@ -16,7 +16,7 @@
 // The hero's photo overlay (Figma node "Intersect") sits UNDER a fully opaque navy rectangle in the frame,
 // so it is not visible in any frame and is not shipped.
 //
-// The notice under the form is tagged [COPY PENDING LEGAL REVIEW] (docs/pending-copy-manifest.md). The
+// The notice under the form was once tagged. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. The
 // Privacy Policy link goes to /privacy.
 import {
   useCallback,
@@ -57,14 +57,14 @@ const CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: "Suggestions",
   enquiries: "Enquiries",
   feedback: "Feedback",
-  suspension_appeal: "Appeal a suspension [COPY PENDING LEGAL REVIEW]",
+  suspension_appeal: "Appeal a suspension",
 };
 
 // The helper line under the message box, shown ONLY while "Appeal a suspension" is chosen (Figma pass V,
 // docs/figma-pass-v-report.md section 3, frames 7050:63556 / 7050:63739 / 7050:64028 / 7050:64123).
-// New user-facing wording about how a suspension is looked up, so it is tagged [COPY PENDING LEGAL REVIEW]
+// New user-facing wording about how a suspension is looked up. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 // (Decision Log #497, B-301): the page draws the same "Copy Tag" chip the frames draw beside it (the
-// contact-page__tag span the form notice also uses), and docs/pending-copy-manifest.md has a row for the pair.
+// contact-page__tag span the form notice also uses).
 // The sentence is JSX text (not a constant) so the manifest scanner reads the sentence itself.
 
 const ERROR_NAME = "Enter your name.";
@@ -316,7 +316,6 @@ export default function ContactPage() {
 
             {category === "suspension_appeal" && (
               <div className="contact-page__helper-block">
-                <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
                 <p className="contact-page__helper">
                   Use the email address your Soccernity account is registered with so we can find it.
                 </p>
@@ -334,7 +333,6 @@ export default function ContactPage() {
             </button>
 
             <div className="contact-page__notice">
-              <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
               <p className="contact-page__notice-text">
                 Our support team reads the messages sent through this form. We keep your message for 12 months after
                 the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern

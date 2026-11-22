@@ -34,7 +34,7 @@ import "./users.css";
 import AdminSearchBar from "../../components/search/AdminSearchBar";
 
 const EXPLAINER =
-  "A guardian has said the details on a consent request are wrong. While a report is open the guardian cannot approve or start the card payment; they can still decline or withdraw. Resolving a report lets the guardian approve again. No date of birth is shown here. [COPY PENDING LEGAL REVIEW]";
+  "A guardian has said the details on a consent request are wrong. While a report is open the guardian cannot approve or start the card payment; they can still decline or withdraw. Resolving a report lets the guardian approve again. No date of birth is shown here.";
 const LOAD_FAILED = "The incorrect-details reports could not be loaded. Check the connection and try again.";
 const TRUNCATED = "Showing the first 200 open reports. More open reports exist than this list returns.";
 const ALREADY_RESOLVED =
@@ -81,7 +81,7 @@ function ResolveDialog({
           </p>
           <p className="ud-field__help">
             Resolving clears the report, and the guardian can approve the request again. The action is recorded in the
-            audit log. [COPY PENDING LEGAL REVIEW]
+            audit log.
           </p>
           <div className="ud-dialog__buttons">
             <button type="button" className="us-btn us-btn--outline us-btn--lg" onClick={onCancel} disabled={submitting}>

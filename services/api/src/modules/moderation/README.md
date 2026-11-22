@@ -933,7 +933,7 @@ author of the post / comment, or the sender of the message).
   `account_reinstated` and the reinstatement email. If the account is no longer suspended by this report (deleted,
   reinstated by hand, suspended by another report) nothing is changed except clearing a link that still points here.
   An upheld appeal changes nothing. Points are not restored. The second-reviewer rule (Decision Log #138) is unchanged.
-- **Emails** (`RegistrationEmailService`, queued in the background, tagged `[COPY PENDING LEGAL REVIEW]` in code): the
+- **Emails** (`RegistrationEmailService`, queued in the background; wording cleared by the founder's review of 2026-11-22 (R108), no counsel review needed): the
   suspension email states a reason line from a single fixed map in code (`suspensionReasonLine`; `child_safety_concern`,
   `other` and a missing category all give "breaching our community rules"), never free text, the reporter or a
   duration, and says the person can appeal through the Contact Us page. The reinstatement email says only that the

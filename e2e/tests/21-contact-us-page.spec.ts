@@ -42,7 +42,7 @@ test('a guest sends a message: success state, and the row is in Postgres', async
   const email = uniqueEmail('contact');
   await page.goto('/contact');
   await expect(page.getByRole('heading', { level: 1, name: 'Contact Us' })).toBeVisible();
-  await expect(page.getByText('[COPY PENDING LEGAL REVIEW]')).toBeVisible();
+  await expect(page.getByText('[COPY PENDING LEGAL REVIEW]')).toHaveCount(0);
   await shot(page, '01-desktop-empty');
 
   await fillForm(page, email);

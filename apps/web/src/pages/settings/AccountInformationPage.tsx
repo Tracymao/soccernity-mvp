@@ -32,7 +32,7 @@ export const MESSAGES = {
 } as const;
 
 // The frame tags this sentence; the tag is shown on purpose (Decision Log #412 item 5).
-export const DOB_NOTE = "Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]";
+export const DOB_NOTE = "Set when you signed up and cannot be changed here.";
 
 // "1998-09-04" or "1998-09-04T00:00:00.000Z" -> "04 / 09 / 1998" (the frame's format).
 export function formatDateOfBirth(value: string): string {

@@ -106,7 +106,7 @@ export const WORDING = {
   blocked: "Blocked.",
   deleted: "This message was deleted",
   // The one line the frames tag for legal review (Figma B4, B6, D6, D7).
-  retention: "We may keep a copy of the original for safety and legal reasons. [COPY PENDING LEGAL REVIEW]",
+  retention: "We may keep a copy of the original for safety and legal reasons.",
 } as const;
 
 export type EditFailureStatus = "error" | "window-closed" | "not-editable";

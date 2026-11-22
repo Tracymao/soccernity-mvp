@@ -8,7 +8,7 @@ import { MINIMUM_ENTRIES_FOR_A_WEEK, Phase1Ranked } from './contest-ranking.util
 // state from the data, diff it against what is stored, write the difference", so a repeat is a no-op and the
 // lifecycle (which derives the same way, with removed entries filtered out) agrees with it.
 
-/** A short, factual reason, shown with the forfeit pop-up (spec section 7). [COPY PENDING LEGAL REVIEW: reaches minors.] */
+/** A short, factual reason, shown with the forfeit pop-up (spec section 7). Reaches minors. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. */
 export const FORFEIT_REASON_TOO_FEW_ENTRIES = 'Fewer than 3 entries were submitted for this week.';
 
 // ---- Phase 1 slate -------------------------------------------------------------------------------

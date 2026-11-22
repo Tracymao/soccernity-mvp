@@ -53,12 +53,12 @@ test.describe.serial('guardian confirm page and approved screen', () => {
       'What stays switched off for under-18 accounts',
       'Your email on their profile',
     ]);
-    // The new "What we collect" list: four rows, each tagged.
+    // The new "What we collect" list: four rows, each plain (tag cleared, R108).
     const collect = page.locator('section', { has: page.getByRole('heading', { name: 'What we collect' }) });
     await expect(collect.locator('.consent-row')).toHaveCount(4);
     await expect(collect.getByText('Anything Quinn chooses to post')).toBeVisible();
     for (const body of await collect.locator('.consent-row__body').allTextContents()) {
-      expect(body).toContain('[COPY PENDING LEGAL REVIEW]');
+      expect(body).not.toContain('[COPY PENDING LEGAL REVIEW]');
     }
     await expect(page.getByText('Only accounts Quinn follows can start a direct message.')).toBeVisible();
     // Footnote: expiry, cap, withdrawal link, privacy policy.

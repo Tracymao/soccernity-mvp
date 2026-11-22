@@ -500,7 +500,7 @@ describe("NotificationCentrePage", () => {
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [reviewRow("reinstated")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText("Your username review was approved.")).closest("a");
-      expect(row?.textContent).toContain("Your username review was approved. Your username is back on your account. [COPY PENDING LEGAL REVIEW]");
+      expect(row?.textContent).toContain("Your username review was approved. Your username is back on your account.");
       expect(row?.textContent).not.toContain("@");
       expect(row?.getAttribute("href")).toBe("/create-profile");
     });
@@ -510,7 +510,7 @@ describe("NotificationCentrePage", () => {
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [reviewRow("declined")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText("Your username review was decided.")).closest("a");
-      expect(row?.textContent).toContain("Your username review was decided. The username stays removed. [COPY PENDING LEGAL REVIEW]");
+      expect(row?.textContent).toContain("Your username review was decided. The username stays removed.");
       expect(row?.getAttribute("href")).toBe("/create-profile");
     });
 

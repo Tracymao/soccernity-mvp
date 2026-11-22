@@ -274,7 +274,7 @@ export default function CreateProfilePage() {
             readOnly
             aria-readonly="true"
           />
-          <p className="signup-form__hint">Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]</p>
+          <p className="signup-form__hint">Set when you signed up and cannot be changed here.</p>
         </div>
 
         <div className="signup-form__group">

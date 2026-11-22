@@ -1499,8 +1499,8 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
   - **Decline 3** (any time, three in one day included) goes through
     `refuseConsentAndScheduleDeletion` unchanged: login blocked at once, sessions
     revoked, `pending_deletion` with the existing 30-day grace, and the existing
-    `sendConsentDeclinedEmail` (wording rewritten for the cap,
-    **[COPY PENDING LEGAL REVIEW]**) is the only message. Expiry, the second lapse
+    `sendConsentDeclinedEmail` (wording rewritten for the cap;
+    cleared by the founder's review of 2026-11-22 (R108), no counsel review needed) is the only message. Expiry, the second lapse
     and post-approval withdrawal go through the same primitive but never increment.
   - **Open:** a row declined at 1 or 2 that the minor never resends has no expiry;
     nothing sends a reminder. Frontend (GuardianConsentPage rendering, frames
@@ -1519,8 +1519,8 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
     `GUARDIAN_DECLINE_LAPSE_DAYS` (default 14) of `consentDeclinedAt` is reopened as
     `pending` through `reissueConsentToken({ reopenDeclined, markAutoResent })`
     (fresh token and expiry, `consentAutoResentAt` stamped) and the minor gets a
-    warning email (`guardian-consent-decline-lapse-reminder`,
-    **[COPY PENDING LEGAL REVIEW]**). That is stage 1 of the unanswered-request path:
+    warning email (`guardian-consent-decline-lapse-reminder`;
+    cleared by the founder's review of 2026-11-22 (R108), no counsel review needed). That is stage 1 of the unanswered-request path:
     when the new request lapses the existing `GuardianConsentExpirySweepService`
     sees `consentAutoResentAt` set and closes the account (`pending_deletion`,
     30-day grace). `declineCount` is never touched: an expiry is not a decline.
@@ -1676,7 +1676,7 @@ was you; otherwise reset your password (link to `/forgot-password` via `buildWeb
 account exists (unknown addresses create no claim and send nothing); fire-and-forget in the background, so
 the response and its timing never depend on it; at most ONE per account per 24 hours, an atomic Redis
 `SET NX EX` (`AuthLimitsStore.claim`), given back if nothing could be sent (unusable `WEB_APP_BASE_URL`); it
-carries no IP, times or counts. **No string is tagged `[COPY PENDING LEGAL REVIEW]`**: it makes no legal or
+carries no IP, times or counts. **No string is tagged**: it makes no legal or
 safety promise (Decision Log #412 item 5). **Open question for the founder:** for a minor's account the
 notice goes to the account's own email only; guardian notification is NOT built.
 

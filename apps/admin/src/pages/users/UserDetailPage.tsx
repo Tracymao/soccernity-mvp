@@ -108,7 +108,7 @@ function RevokeUsernameDialog({
             </p>
           ) : null}
           <p className="ud-dialog__text">
-            This removes @{user.username} from {user.displayName}&rsquo;s account. [COPY PENDING LEGAL REVIEW]
+            This removes @{user.username} from {user.displayName}&rsquo;s account.
           </p>
           {/* B-168 (Decision Log #408 item 5): the hold line as K4 drew it on frames 6647:25789 and
               6649:24714. Admin-facing; the frames carry no tag on it and no held-until date. */}
@@ -276,7 +276,7 @@ export default function UserDetailPage() {
 
         {suspended ? (
           <p className="ud-callout" role="status">
-            Account suspended. The account can no longer sign in and has been emailed. [COPY PENDING LEGAL REVIEW]
+            Account suspended. The account can no longer sign in and has been emailed.
           </p>
         ) : null}
 

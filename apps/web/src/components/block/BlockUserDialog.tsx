@@ -59,7 +59,7 @@ export default function BlockUserDialog({ accessToken, userId, name, onClose, on
         </ul>
         <p className="other-profile__dialog-body">
           You can undo it at any time in Settings; unblocking does not restore follows. They are not told.
-          [COPY PENDING LEGAL REVIEW]
+
         </p>
         <label className="other-profile__dialog-label" htmlFor="block-reason">
           Reason (optional)

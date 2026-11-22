@@ -62,7 +62,7 @@ const COPY = {
     chooseAnother: "Choose another picture",
     removeTitle: "Remove this picture?",
     removeBody: "Your profile will show a placeholder instead.",
-    underReviewNote: "Only you can see this picture until it has been checked. [COPY PENDING LEGAL REVIEW]",
+    underReviewNote: "Only you can see this picture until it has been checked.",
     rejectedTitle: "This picture wasn’t approved.",
     approvedNote: "This picture is visible on your profile.",
   },
@@ -76,7 +76,7 @@ const COPY = {
     chooseAnother: "Choose another cover photo",
     removeTitle: "Remove this cover photo?",
     removeBody: "Your profile will show the default cover instead.",
-    underReviewNote: "Only you can see this cover photo until it has been checked. [COPY PENDING LEGAL REVIEW]",
+    underReviewNote: "Only you can see this cover photo until it has been checked.",
     rejectedTitle: "This cover photo wasn’t approved.",
     approvedNote: "This cover photo is visible on your profile.",
   },
@@ -85,8 +85,8 @@ const COPY = {
 // Shown under the picture on Create Profile (Figma 6672:29233) and repeated in
 // every avatar state frame; the cover has its own sentence.
 const CHECKED_NOTE = {
-  avatar: "Pictures are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW]",
-  cover: "Cover photos are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW]",
+  avatar: "Pictures are checked automatically before they appear on your profile.",
+  cover: "Cover photos are checked automatically before they appear on your profile.",
 } as const;
 
 type Phase = "idle" | "uploading" | "error" | "confirm-remove";

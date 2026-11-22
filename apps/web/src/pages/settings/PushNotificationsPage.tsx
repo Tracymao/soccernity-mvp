@@ -45,7 +45,7 @@ const ROW_TITLE_ID = "push-row-title";
 
 // Tagged exactly as the Figma frame tags it (Push On and Off): a promise about what a lock screen shows.
 const PUSH_CONTENT_NOTE =
-  "Push notifications only say “You have a new notification”. Open Soccernity to see what it is. [COPY PENDING LEGAL REVIEW]";
+  "Push notifications only say “You have a new notification”. Open Soccernity to see what it is.";
 
 export default function PushNotificationsPage() {
   const accessToken = getStoredAccessToken();

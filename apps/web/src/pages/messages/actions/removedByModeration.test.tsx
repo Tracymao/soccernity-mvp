@@ -48,7 +48,6 @@ import { seedSession, clearSession } from "../../../test/session";
 const ME = "user-me";
 const OTHER = "u2";
 const MINUTE = 60_000;
-const TAG = "[COPY PENDING LEGAL REVIEW]";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -147,7 +146,7 @@ afterEach(() => {
 });
 
 // The words of the placeholder without the tag, which the component prints at a smaller size in its own span.
-const REMOVED_LABEL = REMOVED_MESSAGE_TEXT.replace(TAG, "").trim();
+const REMOVED_LABEL = REMOVED_MESSAGE_TEXT;
 
 function removedPlaceholders(): HTMLElement[] {
   return screen.queryAllByTestId("removed-placeholder");
@@ -161,7 +160,7 @@ describe.each([mobilePage, popUp])("a message removed by a moderator on the $nam
     const placeholders = removedPlaceholders();
     expect(placeholders).toHaveLength(1);
     expect(placeholders[0].textContent).toContain(REMOVED_LABEL);
-    expect(placeholders[0].textContent).toContain(TAG);
+    expect(placeholders[0].textContent).not.toContain("COPY PENDING");
     // It sits between the messages around it, in order.
     const order = Array.from(document.body.querySelectorAll("p, .removed-placeholder")).map((n) => n.textContent ?? "");
     const iBefore = order.findIndex((t) => t.includes("Before the removed one"));

@@ -120,7 +120,7 @@ export default function EscalateEnquiryDialog({
           </label>
         </>
       }
-      reasonHelp="The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]"
+      reasonHelp="The reason is saved to the audit record."
       confirmLabel="Escalate to a report"
       submittingLabel="Escalating…"
       onSubmit={submit}

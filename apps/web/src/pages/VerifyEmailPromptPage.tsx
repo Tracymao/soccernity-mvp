@@ -11,7 +11,7 @@
 // message is worded conditionally ("If that email belongs to an account that
 // still needs to be verified ..."), exactly as the frame draws it; a 429 from
 // the per-IP throttle shows the "too many requests" line.
-// The frame's [COPY PENDING LEGAL REVIEW] tags on this page were cleared by the
+// The frame's pending-review tags on this page were cleared by the
 // founder (R101, Decision Log #539): it is plain-fact wording, implemented as drawn.
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";

@@ -27,7 +27,6 @@ import {
   TWO_FACTOR_INVALID_CHALLENGE,
   TWO_FACTOR_INVALID_CODE,
 } from "../../api/twoFactorCodes";
-import CopyTag from "./CopyTag";
 import TwoFactorCodeInput from "./TwoFactorCodeInput";
 import TwoFactorRecoveryRequest from "./TwoFactorRecoveryRequest";
 import "./twoFactor.css";
@@ -121,7 +120,6 @@ export default function TwoFactorCodePrompt({
   return (
     <div className="tf-prompt">
       <form className="tf-prompt__inner" onSubmit={submit} noValidate>
-        <CopyTag />
         {recoveryPending && (
           <div className="tf-banner" role="status" data-testid="recovery-pending-banner">
             <p className="tf-banner__title">A recovery request is waiting</p>

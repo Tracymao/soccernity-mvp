@@ -20,8 +20,8 @@
 // the post card offers it); POST /reports has no per-account daily cap and stays open to a restricted-pending
 // account, so it is the way out for someone at the media-report limit. It makes no request of its own.
 //
-// Strings that say who can see a file, or who sees a reporter's reason, are tagged [COPY PENDING LEGAL REVIEW] (Decision Log #412 item 5) and
-// have rows in docs/pending-copy-manifest.md.
+// Strings that say who can see a file, or who sees a reporter's reason, were once tagged (Decision Log #412 item 5).
+// Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MEDIA_REPORT_REASON_MAX_LENGTH,
@@ -172,7 +172,7 @@ function MediaReport({
           disabled={submitting}
         />
         <p className="media-report__hint">
-          Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW]
+          Only our moderators see your reason, not the person who posted this.
         </p>
         <p className="media-report__counter" aria-live="polite">
           {reason.length} / {MEDIA_REPORT_REASON_MAX_LENGTH}
@@ -283,8 +283,8 @@ function OwnMedia({
             </p>
             <p className="media-item__hint">
               {noun === "video"
-                ? "Only you can see this post until its video has been checked. [COPY PENDING LEGAL REVIEW]"
-                : "Only you can see this post until its pictures have been checked. [COPY PENDING LEGAL REVIEW]"}
+                ? "Only you can see this post until its video has been checked."
+                : "Only you can see this post until its pictures have been checked."}
             </p>
           </div>
         </div>
@@ -301,8 +301,8 @@ function OwnMedia({
             {view?.rejectionReason && <p className="media-item__reason">{view.rejectionReason}</p>}
             <p className="media-item__hint">
               {noun === "video"
-                ? "Your post stays hidden from other people until every video has been approved. Remove this video or choose another. [COPY PENDING LEGAL REVIEW]"
-                : "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another. [COPY PENDING LEGAL REVIEW]"}
+                ? "Your post stays hidden from other people until every video has been approved. Remove this video or choose another."
+                : "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another."}
             </p>
             {error && (
               <p className="media-item__error" role="alert">
