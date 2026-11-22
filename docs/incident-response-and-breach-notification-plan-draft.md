@@ -315,7 +315,7 @@ system.** Where a tool does not exist, §4.9 says so.
   superadmin), and `POST /auth/logout` with `allSessions`. **[v0.2 CHANGED — `email-change/README.md`, `two-factor/README.md`: a
   confirmed email change (`POST /auth/email-change/confirm`) and a completed two-factor recovery (guardian approval, or the
   hourly sweep after the 24-hour adult wait) also end every session of the account.]**
-- **[v0.3 CHANGED — Decision Log #485]** Suspending an account, from the user page or by recording *Suspend User* on a report —
+- **[v0.3 CHANGED — Decision Log #485]** Suspending an account, from the user page or by recording *Suspend User* on a report,
   runs the same code (`AccountSuspensionService`): the status write, then session revocation, **revocation of earned engagement
   points (not restored on reinstatement)**, one guardian notice for a minor (unless the withhold flag is on) and an email to the
   person. §4.10 sets out what that means when a suspension is used as containment.
@@ -388,11 +388,11 @@ opened.
 | Processor | Holds | Contact route |
 |---|---|---|
 | Render (API host, Frankfurt) | Runtime, env vars (all secrets), logs | `[PLACEHOLDER: dashboard support / security contact; plan]` |
-| Neon (Postgres, London eu-west-2, not the EU) **[v0.9 CHANGED, #536]** | The whole database, backups, branches | `[PLACEHOLDER: support route; point-in-time restore window]` |
-| Upstash (Redis, London eu-west-2, not the EU, free plan) **[v0.9 CHANGED, #536]** | Refresh tokens (hashed), reset / verification tokens, counters | `[PLACEHOLDER]`, free plan has no SLA (Decision Log #439) |
+| Neon (Postgres, London eu-west-2, not the EU) **[v0.9 CHANGED, #536, #541]** | The whole database, backups, branches | `[PLACEHOLDER: support route; point-in-time restore window]` |
+| Upstash (Redis, London eu-west-2, not the EU, free plan) **[v0.9 CHANGED, #536, #541]** | Refresh tokens (hashed), reset / verification tokens, counters | `[PLACEHOLDER]`, free plan has no SLA (Decision Log #439) |
 | Postmark (email) | Recipient addresses and message bodies in transit / activity logs | `[PLACEHOLDER]` |
-| Sentry (EU region) | Error events (today: none) | `[PLACEHOLDER]`. DSN not real; scrubbing of request bodies is a DPIA R11 proposal, not done |
-| Cloudflare R2 (media, EU jurisdiction buckets; public address media.soccernity.com, proxied by Cloudflare from the start, Decision Log #541; also edge if added, Decision Log #424) | Images and videos of children | `[PLACEHOLDER]` |
+| Sentry (EU region) **[v0.9 CHANGED, #536, #541]** | Error events (today: none) | `[PLACEHOLDER]`. DSN not real; scrubbing of request bodies is a DPIA R11 proposal, not done |
+| Cloudflare R2 (media, EU jurisdiction buckets; public address media.soccernity.com, proxied by Cloudflare from the start, Decision Log #541; also edge if added, Decision Log #424) **[v0.9 CHANGED, #536, #541]** | Images and videos of children | `[PLACEHOLDER]` |
 | Amazon Web Services (Rekognition image check) | Frames / images sent for classification | `[PLACEHOLDER]`, opt-out of AI-services data use is a founder launch step |
 | Stripe (card verification) | Card data and the PaymentIntent for under-13 US guardians | `[PLACEHOLDER]` |
 | MaxMind (GeoLite2 download only) | No user data (local database) | n/a |
@@ -572,7 +572,7 @@ any statement here as an answer.**
 - **Q-EU1.** If EU users are targeted or monitored, **EU GDPR Art. 27** (representative) and Art. 33 apply in parallel. Which
   EU supervisory authority is the one to notify when there is **no EU establishment** (no one-stop-shop)? Possibly each
   authority where affected users live, counsel to confirm.
-- **Q-EU2.** The API is hosted on Render in **Frankfurt**; the database and Redis are in **London (eu-west-2), not the EU** (Decision Log #391, amended by #536); the R2 buckets are in the EU jurisdiction **[v0.9 CHANGED, #536]**. Does hosting alone
+- **Q-EU2.** The API is hosted on Render in **Frankfurt**; the database and Redis are in **London (eu-west-2), not the EU** (Decision Log #391, amended by #536); the R2 buckets are in the EU jurisdiction **[v0.9 CHANGED, #536, #541]**. Does hosting alone
   create any EU notification duty for UK/Nigerian users' data? Do the processors' own EU obligations (a processor's duty to tell
   the controller "without undue delay") change what we learn and when?
 - **Q-EU3.** Are the 72-hour and "high-risk-to-individuals" tests the same in the EU as in UK GDPR for a **child's** data, and
@@ -715,7 +715,7 @@ account hold (#459).
 - **Rejected media and CSAM:** **[v0.6 CHANGED — B-283, PR #608]** (v0.5: "rejected files are kept private and never deleted") a rejected file's private object is deleted on every path that removes its database row (a post deleted by a live account, a deleted upload, the quarantine and unattached purges, account anonymisation and the account purge), unless the uploader is under an active admin hold or the post has a report that is not yet closed; a moderator's Reject itself deletes nothing. A daily sweep for stray objects with no row exists but needs a list permission on the storage key (B-207), so it may find none until that is granted. What counts as evidence, and any statutory duty, is **not decided and open under counsel (B-206)**; user uploads are off by default in production until it is answered (§4.7). The handling of material that may
   be illegal is **undecided and open under counsel**. **[v0.7 CHANGED — #524, #525, #526, #529, #530]** (v0.6 text kept above) **Uploads go on at launch** with `MEDIA_UPLOADS_ENABLED` as the off switch, and **a suspected-illegal-imagery path is built** (next bullet). The legal side stays open for counsel and is non-blocking: whether the law requires proactive detection, per-country duties, receiving bodies and deadlines, evidence retention beyond 365 days, and platform duties to children (Q11, Q22). **Detection (IWF Image Intercept first, Hive as the fallback) is built after launch and is NOT BUILT**; the founder accepts launching before hash-matching exists as his own risk, not a view of counsel. A responder who finds possible CSAM must not copy, forward or view it
   further and goes to counsel at once.
-- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel rather than expecting a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
+- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel and should not expect a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
 
 ### 8.4 Old evidence and the retention clocks **[v0.3 CHANGED — new section]**
 
@@ -919,11 +919,11 @@ a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition an
 
 | Disposition | Items |
 |---|---|
-| **A — open for counsel** | Q2, Q3, Q4, Q5 (now with the Q18 sub-point), Q6, Q7, Q8, Q11 (now with the suspected-illegal-imagery duties; non-blocking), Q12, Q13, Q14, Q16, Q17, Q21 (narrowed), Q22 (rewritten), Q-US1 to Q-US4, Q-EU1 to Q-EU4 |
-| **B — decided by the founder** | Q10 (#456), Q24 part (c) (#503); counsel's view is not recorded for either **[v0.8 CHANGED — Q19 and Q20 moved to D]** |
-| **C — resolved, counsel signed off** | Q1 (Decision Log #4) |
-| **D — founder or engineering housekeeping** | Q9, Q15, Q18 (folded into Q5), Q19, Q20, Q23, Q24 parts (a) and (b) **[v0.8 CHANGED — Q18, Q19, Q20, Q23, Q24 (a) (b) added]** |
-| **NOT ASSIGNED — founder to say** | none **[v0.8 CHANGED — v0.7 listed Q18, Q23, Q24; all now assigned]** |
+| **A: open for counsel** | Q2, Q3, Q4, Q5 (now with the Q18 sub-point), Q6, Q7, Q8, Q11 (now with the suspected-illegal-imagery duties; non-blocking), Q12, Q13, Q14, Q16, Q17, Q21 (narrowed), Q22 (rewritten), Q-US1 to Q-US4, Q-EU1 to Q-EU4 |
+| **B: decided by the founder** | Q10 (#456), Q24 part (c) (#503); counsel's view is not recorded for either **[v0.8 CHANGED — Q19 and Q20 moved to D]** |
+| **C: resolved, counsel signed off** | Q1 (Decision Log #4) |
+| **D: founder or engineering housekeeping** | Q9, Q15, Q18 (folded into Q5), Q19, Q20, Q23, Q24 parts (a) and (b) **[v0.8 CHANGED — Q18, Q19, Q20, Q23, Q24 (a) (b) added]** |
+| **NOT ASSIGNED: founder to say** | none **[v0.8 CHANGED — v0.7 listed Q18, Q23, Q24; all now assigned]** |
 
 
 | # | Question |
