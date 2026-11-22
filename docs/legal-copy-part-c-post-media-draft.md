@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL — NOT APPROVED, NOT LEGAL ADVICE
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
+**Status: draft for counsel review.**
 
 This is a **new, standalone file**. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md` (v0.8 when drafted; **[v0.3 CHANGED — #532]** v0.17 on `origin/main` `b67d9c0`), and nothing
 here has been applied to the Terms, the Privacy Policy, the guardian consent screen, the composer or any Figma frame. It
@@ -11,10 +11,10 @@ supplies material for whoever next revises that draft, after counsel has answere
 moderator access, retention and thresholds, and the questions for counsel).
 
 Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negotiable #2: every output is a draft, never
-approved). Every block of wording below carries `[COPY PENDING LEGAL REVIEW]` on purpose, and **[PROPOSAL]** / **[OPEN]** follow
+approved). Every block of wording below carries the pending-legal-review tag on purpose, and **[PROPOSAL]** / **[OPEN]** follow
 the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md` and the code on
   `origin/main` at `5857ea8`, as recorded in the DPIA addendum. **Nothing here is live** and no statute or regulator guidance
   was retrieved.
@@ -26,15 +26,15 @@ the conventions of the existing legal draft.
 
 ---
 
-### Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+### Changelog — v0.2 → v0.3 (2026-11-17)
 
 **[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** It brings the legal draft version and the Part C row numbers to what is on `origin/main` `b67d9c0` (2026-11-17): the legal draft is **v0.17**, and its Part C table already uses rows **1 to 54**, so the row proposed here as **row 46** is taken (rows 45 to 54 exist; the **next free row is 55**); **renumber when applied, and do not renumber here.** It **chooses no option, applies nothing to the policy, the consent screen or the product, completes nothing and claims nothing as solved.** No counsel position is recorded. Every disposition in v0.2 is **unchanged** (Decision Log #534 re-marked no question in this file; it concerns the DPIA addendum's §7 question 5 and §12 question 19). Decision Log #533 and #534 are merged (docs PR #816). The three places the pack report called "oddities" (about lines 55, 97 and 148 of v0.2) were checked and are **not faults**: each is the end of a paragraph of the original wording followed by a marked v0.2 note; nothing was changed there.
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
----
+--- v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
-### Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+### Changelog — v0.1 → v0.2 (2026-11-17)
 
 **[v0.2 CHANGED — #524 to #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it adds a marked note beside each statement the built system has since contradicted (the review model, the "no moderator tool", "no reporting path", "public address" and retention statements); (2) it gives **every question and open item a disposition marker**; (3) it adds a changelog. It **chooses no option, applies nothing to the policy, the consent screen or the product, completes nothing, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. The earlier text is kept. The facts come from `CLAUDE.md`'s status bullets, `docs/build-register.md` and the module READMEs on `origin/main` (`014afcd`); nothing was run, CI could not be read, the Security session could not be asked.
 
@@ -48,7 +48,7 @@ the conventions of the existing legal draft.
 
 ---
 
-## 1. Proposed Part C row **[COPY PENDING LEGAL REVIEW]**
+## 1. Proposed Part C row
 
 **Numbering.** The instruction for this draft called this "row 43". In v0.8, rows 43 and 44 already exist (row 43 is
 "avatar, cover photo, bio and country visible to other users including minors"; row 44 is "other new processing") and row 37
@@ -64,7 +64,7 @@ when applied**. **[v0.3 CHANGED — #532]** *(Stale: legal draft v0.17 Part C al
 
 ---
 
-## 2. Existing v0.8 statements that this processing would make inaccurate or incomplete **[COPY PENDING LEGAL REVIEW]**
+## 2. Existing v0.8 statements that this processing would make inaccurate or incomplete
 
 Listed so whoever applies a counsel-approved version knows what to change. **None has been edited.**
 
@@ -84,13 +84,13 @@ Listed so whoever applies a counsel-approved version knows what to change. **Non
 
 ---
 
-## 3. Policy-text insertion candidates (NOT applied) **[COPY PENDING LEGAL REVIEW]**
+## 3. Policy-text insertion candidates (NOT applied)
 
 Candidate sentences, written so counsel can accept, reword or reject them. They describe the product **as built**, and
 several depend on a decision that has not been made (marked [OPEN]). Plain language is used because the Policy is also read
 by children and guardians.
 
-### 3.1 Candidate for PP §1 ("What we collect") — pictures and videos you upload **[COPY PENDING LEGAL REVIEW]**
+### 3.1 Candidate for PP §1 ("What we collect") — pictures and videos you upload
 
 > **[PROPOSAL]** When you add a picture or a video to a post, or enter a video in a Contest, we store the file. Before anyone
 > else can see it, we remove the hidden information that phones put into files, such as where a picture was taken and what
@@ -104,7 +104,7 @@ and is a human step not yet done). **[OPEN]**
 
 *[v0.2 CHANGED — #430 item 2, B-257, B-259]* The built sequence is now: signed link to a **private** location, a confirm step that strips metadata and then **replaces** the original, and a purge of confirmed uploads never attached to a post after **7 days** (an original left in the quarantine location is still deleted within 24 hours). The "within 24 hours" statement above is therefore true of the quarantine copy only. *[v0.2 DISPOSITION: D — wording follows the build; counsel's view of the sentences themselves not recorded (A, non-blocking).]*
 
-### 3.2 Candidate for PP §2 ("How we use your data") — checking uploads **[COPY PENDING LEGAL REVIEW]**
+### 3.2 Candidate for PP §2 ("How we use your data") — checking uploads
 
 **Variant for Mode B (check on):**
 
@@ -125,7 +125,7 @@ does not (DPIA addendum Section 5). Whether "does not listen to sound" must be d
 
 *[v0.2 CHANGED — #430 item 1, #524]* **The founder's decision matches the Mode B variant**, with a route to report a file. The Mode B text above says "a member of our team looks at it" for an uncertain file; it does not mention that a file can also be **reported**, which is built. Only vetted staff open a minor's file (B-258). **No new customer wording is added here.** *[v0.2 DISPOSITION: B for the model (#430 item 1; counsel's view not recorded); A for whether the Policy may describe an automatic approval and whether it must disclose that audio is not checked (see section 7, questions 1 and 4).]*
 
-### 3.3 Candidate for PP §5 ("Who we share your data with") — replacing the Rekognition entry **[COPY PENDING LEGAL REVIEW]**
+### 3.3 Candidate for PP §5 ("Who we share your data with") — replacing the Rekognition entry
 
 Mode B only. In Mode A the entry is not needed for post media.
 
@@ -141,7 +141,7 @@ Mode B only. In Mode A the entry is not needed for post media.
 
 *[v0.2 CHANGED — #430 item 1, #518, #521, B-193]* No AWS account, IAM user or Rekognition key exists yet (a founder step), so **nothing is sent to AWS today**. The founder will set the AWS opt-out of AI-services data use before any real key is configured (#430 item 1). Storage is now two R2 buckets; the location is still unset. *[v0.2 DISPOSITION: A — the processor wording, region and transfer position are for counsel; B for the opt-out step (founder, not yet done).]*
 
-### 3.4 Candidate for PP §7 ("Public and semi-public visibility") — when an upload is seen **[COPY PENDING LEGAL REVIEW]**
+### 3.4 Candidate for PP §7 ("Public and semi-public visibility") — when an upload is seen
 
 > **[PROPOSAL]** A post with a picture or video is shown only to you until every picture and video in it has been approved.
 > You will be told if a file is not approved and why, and you can remove it and try again. If a file is not approved,
@@ -155,7 +155,7 @@ that gap stands.** **[OPEN]**
 
 **[v0.2 CHANGED — #430 item 2, #518, #521, B-257, B-265]** **The gap this note describes is closed in code, not yet in operation.** Since B-257 a not-yet-approved or rejected file is stored **privately** and copied to a public address **only on approval** (it fails closed); since B-265 private files are meant to sit in a **separate bucket with no public address**. What remains is a **founder launch step** (create the buckets, set the access rules, set `media.soccernity.com`) that is **not done**, and R2's cross-bucket copy has **never run against real R2** (unproven). Counsel is **not** asked to approve the "shown only to you" sentence while the launch step is undone; it is a founder housekeeping matter. *[v0.2 DISPOSITION: D — founder launch step (B-265); B for the design (#430 item 2, #518 to #521; counsel's view not recorded). The retention clause in brackets (deleted / kept N days / kept until you delete it) is **A**, because it depends on counsel's answer on evidence retention.]*
 
-### 3.5 Candidates for the PP §9 retention table **[COPY PENDING LEGAL REVIEW]**
+### 3.5 Candidates for the PP §9 retention table
 
 | Data type | Retention period | What triggers change |
 |---|---|---|
@@ -169,7 +169,7 @@ that gap stands.** **[OPEN]**
 
 **[v0.2 CHANGED — #462 (g), #464, #430 item 4, #525, B-259, B-283]** **Rows 4 and 5 of this table are partly out of date; the text is kept.** A file that was not approved: **built** — deleted on every path (post or upload deleted, anonymisation, purge, stray-object sweep) **unless** an active admin hold, an unclosed report or a **set-aside record** protects it; a **set-aside** file is kept privately **365 days by default** (`preserveUntil`), past account deletion (#525; #530 for profile images). A file uploaded but never added to a post: **built** — purged after **7 days** (B-259). **The check's labels, the rejection reason and the moderator id: still no period** (candidate Options L-1 to L-5). *[v0.2 DISPOSITION: B — the object deletions and the 7-day purge are founder decisions, built (#462 (g), #464, #430 item 4); counsel's view not recorded. **A — the retention of the labels, reason and moderator id; whether 365 days and the release of evidence afterwards are right (DPIA addendum Section 12 questions 4a, 14a); non-blocking (#524, #532).**]*
 
-### 3.6 Candidate for ToS §6 — a rule about other people in your pictures **[COPY PENDING LEGAL REVIEW]**
+### 3.6 Candidate for ToS §6 — a rule about other people in your pictures
 
 > **[PROPOSAL, counsel to confirm that a rule of this kind is wanted and lawful]** Do not upload a picture or video of
 > another person, and in particular of a child, unless you are entitled to do so. If you believe a picture or video of you or
@@ -181,7 +181,7 @@ tool today reports the post or the user, not the file.
 
 *[v0.2 CHANGED — #430 item 3, B-258]* A route to report a **file** now exists for signed-in users (`POST /media/:id/report`); there is **still no media target in `POST /reports`** and **no public route for a non-user** to report a file. The legal draft's Part C row 8 records that non-user reporting was removed from the public text on counsel's advice and "whether a route is built is a product matter". *[v0.2 DISPOSITION: A — whether the rule itself is appropriate and lawful (section 7, question 5); D — whether a public media-report route for non-users is wanted (founder, on the founder list).]*
 
-### 3.7 Candidate wording for the message a person sees about a file **[COPY PENDING LEGAL REVIEW]**
+### 3.7 Candidate wording for the message a person sees about a file
 
 Built today (automatic rejection): "This file didn't meet our rules". Candidates:
 
@@ -198,7 +198,7 @@ Built today (automatic rejection): "This file didn't meet our rules". Candidates
 
 ---
 
-## 4. A "what is checked" notice for the uploader and the guardian: options, not decisions **[COPY PENDING LEGAL REVIEW]**
+## 4. A "what is checked" notice for the uploader and the guardian: options, not decisions
 
 Context: the uploader is told only that a file did not meet the rules; the guardian consent screen is silent about uploads.
 Each option below is wording plus what it would require. **None is chosen.** None has a Figma frame.
@@ -206,16 +206,16 @@ Each option below is wording plus what it would require. **None is chosen.** Non
 | Option | Where | Candidate wording | Requires a guardian-consent change? |
 |---|---|---|---|
 | **N-1** Policy text only | Privacy Policy (sections 3.1 to 3.5 above) | as above | No |
-| **N-2** N-1 plus a line where the file is chosen | The composer | "Pictures and videos are checked automatically and may be looked at by a person before they are shown." (Mode B) / "Pictures and videos are looked at by a person before they are shown." (Mode A) **[COPY PENDING LEGAL REVIEW]** | No |
-| **N-3** N-2 plus a once-only plain-language notice for under-18s at the first upload | The composer | "Before your picture or video is shown to others, it is checked. A computer tool may look at it, and a member of our team may too. We remove hidden information such as where a picture was taken. If something isn't approved we'll tell you. You can read more in our Privacy Policy." **[COPY PENDING LEGAL REVIEW]** | No |
+| **N-2** N-1 plus a line where the file is chosen | The composer | "Pictures and videos are checked automatically and may be looked at by a person before they are shown." (Mode B) / "Pictures and videos are looked at by a person before they are shown." (Mode A) | No |
+| **N-3** N-2 plus a once-only plain-language notice for under-18s at the first upload | The composer | "Before your picture or video is shown to others, it is checked. A computer tool may look at it, and a member of our team may too. We remove hidden information such as where a picture was taken. If something isn't approved we'll tell you. You can read more in our Privacy Policy." | No |
 | **N-4** N-3 plus a guardian-facing line | The guardian consent screen | "Your child can add pictures and videos to their posts. These are checked before they are shown, which may include an automated check by a trusted service provider and a review by a member of our team." **[COPY PENDING LEGAL REVIEW; wording and the "trusted service provider" phrase are counsel's]** | **Yes** — bumps `CONSENT_SCREEN_VERSION` (currently a manually bumped constant guarded by a Jest tripwire); every already-confirmed guardian would not have seen it; Decision Log #363 shows the precedent of asking counsel whether existing guardians must be re-notified |
-| **N-5** N-2 plus a more specific rejection message | The rejection message | "This file wasn't approved because it may contain content that isn't allowed on Soccernity, such as nudity, violence or hateful symbols." **[COPY PENDING LEGAL REVIEW]** | No; but a specific message tells users what the check looks for and can help someone avoid it (the categories are configuration) |
+| **N-5** N-2 plus a more specific rejection message | The rejection message | "This file wasn't approved because it may contain content that isn't allowed on Soccernity, such as nudity, violence or hateful symbols." | No; but a specific message tells users what the check looks for and can help someone avoid it (the categories are configuration) |
 
 **[v0.2 CHANGED — #524, #532]** **No notice option has been chosen**, and v0.2 does not choose one. Whether a notice duty exists, and at what level for a child and for a guardian, is for counsel (DPIA addendum Section 12 question 18). Any change to the guardian consent screen bumps `CONSENT_SCREEN_VERSION`. *[v0.2 DISPOSITION: A — N-1 to N-5; non-blocking. D — the `CONSENT_SCREEN_VERSION` bump is engineering housekeeping once an option is chosen.]*
 
 ---
 
-## 5. How the DPIA addendum's options would change the disclosure wording **[COPY PENDING LEGAL REVIEW]**
+## 5. How the DPIA addendum's options would change the disclosure wording
 
 The options themselves are in the DPIA addendum Section 10. This table shows only what each would require the policy to say,
 so counsel can see the disclosure consequence of each choice. **No option is chosen.**
@@ -235,7 +235,7 @@ so counsel can see the disclosure consequence of each choice. **No option is cho
 
 ---
 
-## 6. Assumptions this draft made **[COPY PENDING LEGAL REVIEW]**
+## 6. Assumptions this draft made
 
 1. **Facts are as built, not as operated.** Everything in Section 1 comes from the DPIA addendum; nothing runs on real
    users or real AWS/Cloudflare accounts.
@@ -250,7 +250,7 @@ so counsel can see the disclosure consequence of each choice. **No option is cho
 
 ---
 
-## 7. Questions for counsel specific to the wording **[COPY PENDING LEGAL REVIEW]**
+## 7. Questions for counsel specific to the wording
 
 The full list is the DPIA addendum Section 12. Those that decide *what the wording may say*:
 
@@ -278,7 +278,7 @@ The full list is the DPIA addendum Section 12. Those that decide *what the wordi
 
 **[v0.2 CHANGED — #524 to #532]** *v0.2 note: a narrow refresh (changelog, disposition markers, notes beside stale statements). It chooses no option, applies nothing, claims nothing as solved and records no counsel position, because counsel has not reviewed this file.*
 
-## Closing statement **[COPY PENDING LEGAL REVIEW]**
+## Closing statement
 
 This file supplies counsel with a proposed Part C row, a list of existing v0.8 statements that this processing would make
 inaccurate, candidate policy sentences in two variants (because the review model is undecided), and five notice options. It

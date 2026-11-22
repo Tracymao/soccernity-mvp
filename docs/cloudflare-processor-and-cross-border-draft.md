@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL REVIEW: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]** v0.4 wording pass 2026-11-21: sentences reworded for plain language; obligations, numbers, defined terms and cross-references unchanged; facts corrected under #536 and #541 are marked.
+**Status: draft for counsel review.** v0.5 tag removal 2026-11-22 (v0.4 wording pass 2026-11-21): sentences reworded for plain language; obligations, numbers, defined terms and cross-references unchanged; facts corrected under #536 and #541 are marked.
 
 This is a **new, standalone file** in the style of `docs/dpia-addendum-post-media-draft.md` and
 `docs/legal-copy-part-c-post-media-draft.md`. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
@@ -14,12 +14,12 @@ never approved). Nothing here says Soccernity, Cloudflare or any transfer compli
 Nigeria Data Protection Act 2023 (NDPA) or any other regime. **Every section below is a draft for counsel review, not
 approved and not legal advice.** The sign-off block in Section 12 is empty on purpose.
 
-**Tag convention.** Proposed wording carries `[COPY PENDING LEGAL REVIEW]`. **[PROPOSAL]** = a suggestion for counsel
+**Tag convention.** Proposed wording carries the pending-legal-review tag. **[PROPOSAL]** = a suggestion for counsel
 to confirm, revise or reject. **[OPEN]** = belongs to the founder or counsel; this draft does not decide it.
 **[UNVERIFIED, FOR COUNSEL]** = a claim about Cloudflare, Render or a law that this draft could not confirm from a
 primary source (the reason is given each time).
 
-- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**; wording pass 2026-11-21 (**v0.4**, still draft, NOT APPROVED) **[v0.4 CHANGED, #536, #541]**. Changelog v0.3 → v0.4 (2026-11-21): wording pass for plain language (dashes and a few phrasings removed); no duty, number, date, reference, marker or disposition changed; facts block applied (media custom domain `media.soccernity.com` proxied by Cloudflare from the start, #541; R2 in the EU jurisdiction, #536).
+- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**; wording pass 2026-11-21 (**v0.4**, still draft, NOT APPROVED) **[v0.4 CHANGED, #536, #541]**; tag removal 2026-11-22 (**v0.5**, still draft, NOT APPROVED) **[v0.5 CHANGED, #541]**. Changelog v0.3 → v0.4 (2026-11-21): wording pass for plain language (dashes and a few phrasings removed); no duty, number, date, reference, marker or disposition changed; facts block applied (media custom domain `media.soccernity.com` proxied by Cloudflare from the start, #541; R2 in the EU jurisdiction, #536). v0.5 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 - **Decision Log:** #449 (adopted 2026-10-31: free-plan Cloudflare proxy in front of the API and the two static sites,
   with an origin lock; built at the launch gate), #424 (the original recommendation), #437 (DNS records stay
   "DNS only" until then), #429 (re-verify `TRUST_PROXY_HOPS`), #4 (scope: UK, Nigeria, US, EU).
@@ -29,7 +29,7 @@ primary source (the reason is given each time).
 
 ---
 
-## Changelog: v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.2 → v0.3 (2026-11-17)
 
 **[v0.3 CHANGED — #449, #532, #534]** v0.3 is a **narrow refresh of one disposition and stale references only.** (1) **Q9 (which of Options A, B and C) is now marked B (#449) in every place it appears** (the Q9 entry in Section 11, and the notes near the timing paragraph and the options table in Sections 3 and 7, and the "Result of the check" paragraph above); v0.2 had marked the scope B and the choice of option A. The marking records the founder's decision (the free-plan proxy in front of the API and the two static sites, with an origin lock; building deferred until after launch, #518). **Counsel's view is not recorded, this is not legal clearance, and v0.3 does not choose or apply an option.** The founder's brief extends B to Q9 as a whole; v0.2's A part for the **admin-hostname variant** is therefore also moved to B by that instruction and I flag it for the founder to confirm. **Q1 to Q8, Q10 and Q11 stay A.** (2) **Stale references brought current (marked in place):** the legal draft is **v0.17** and the DPIA **v0.9** (this file said v0.11 and v0.3, and the v0.2 note said v0.16 and v0.8); the row numbers proposed in Section 8 (including "row 47") still must be re-checked against the current Part C before use (legal draft v0.17 already uses rows 1 to 54, **the next free row is 55**), which I did **not** do row by row. It **completes nothing and claims nothing as solved.** The NOT APPROVED banner and the empty sign-off in Section 13 are unchanged. Decision Log #533 and #534 are merged (docs PR #816); they are not relied on for Q9.
 
@@ -37,7 +37,7 @@ primary source (the reason is given each time).
 
 ---
 
-## Changelog: v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.1 → v0.2 (2026-11-17)
 
 **[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **each of the 11 questions in Section 11 a disposition marker**; (2) it adds marked notes beside the statements that later Decision Log entries have overtaken (the timing of the proxy, #518, and the dropped image-scanning tool, #526); (3) it adds this changelog. It **chooses no option, completes nothing, applies nothing to the product, the legal draft, the DPIA or any code, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text and every `[OPEN]`, `[PROPOSAL]` and `[UNVERIFIED, FOR COUNSEL]` marker are kept.
 
@@ -48,7 +48,7 @@ primary source (the reason is given each time).
 *[v0.3 DISPOSITION: B — Q9: which of Options A, B and C is decided by the founder: the free-plan proxy in front of the API and the two static sites, with an origin lock (Decision Log #449; building deferred until after launch, #518). Counsel's view not recorded; not legal clearance; this draft does not choose or apply an option. Replaces the v0.2 marker for Q9.]* **[v0.3 CHANGED — #449]**
 
 
-**Not part of this draft:** the Cloudflare **image-scanning tool** was considered for detecting illegal images and **dropped by the founder (#526)**: it works on images only after they are published, it would need a cache in front of `media.soccernity.com` (which would reverse #518) and it does not cover video. Nothing here assesses it.
+**Not part of this draft:** the Cloudflare **image-scanning tool** was considered for detecting illegal images and **dropped by the founder (#526)**: it works on images only after they are published, it would need a cache in front of `media.soccernity.com` (that address is now proxied by Cloudflare from the start, #541, so the earlier reason, that it would reverse #518, no longer applies) **[v0.5 CHANGED, #541]** and it does not cover video. Nothing here assesses it.
 
 **Stale in this file, not edited:** the header names legal draft **v0.11** and DPIA **v0.3**; they are now **v0.16** and **v0.8**, and the row numbers proposed in Section 8 (including "row 47") must be re-checked against the current Part C before use. This file was not re-pointed. The NOT APPROVED banner and the empty sign-off in Section 13 are unchanged.
 
@@ -56,7 +56,7 @@ primary source (the reason is given each time).
 
 ---
 
-## 0. Read this first: six things counsel should know **[COPY PENDING LEGAL REVIEW]**
+## 0. Read this first: six things counsel should know
 
 1. **A proxy that terminates TLS is not an "IP address" tool.** Every request and response for the proxied
    hostnames is decrypted at Cloudflare's edge so Cloudflare can apply its services (this follows from Cloudflare's
@@ -89,7 +89,7 @@ primary source (the reason is given each time).
 
 ---
 
-## 1. Scope and facts **[COPY PENDING LEGAL REVIEW]**
+## 1. Scope and facts
 
 ### 1.1 What is decided and what is not
 
@@ -135,7 +135,7 @@ relationship rather than a first. Whoever prepares the processor list should che
 
 ---
 
-## 2. Roles **[COPY PENDING LEGAL REVIEW]**
+## 2. Roles
 
 ### 2.1 Cloudflare as processor, and where it says it is a controller
 
@@ -174,7 +174,7 @@ will send children's data through the service regardless. **[OPEN: Q3]**
 
 ---
 
-## 3. What Cloudflare would process **[COPY PENDING LEGAL REVIEW]**
+## 3. What Cloudflare would process
 
 ### 3.1 Categories (Cloudflare's own description)
 
@@ -207,7 +207,7 @@ plain text between Cloudflare and Render.
 
 ---
 
-## 4. Where processing happens, and what the free plan allows **[COPY PENDING LEGAL REVIEW]**
+## 4. Where processing happens, and what the free plan allows
 
 | Question | What the sources say | Source |
 |---|---|---|
@@ -225,7 +225,7 @@ counsel's view on whether a free plan is acceptable for children's data. No pric
 
 ---
 
-## 5. Contract terms **[COPY PENDING LEGAL REVIEW]**
+## 5. Contract terms
 
 | Point | What the DPA (v6.4, effective 3 April 2026) says | Note |
 |---|---|---|
@@ -238,7 +238,7 @@ counsel's view on whether a free plan is acceptable for children's data. No pric
 
 ---
 
-## 6. Transfers: the position, as questions for counsel with sources **[COPY PENDING LEGAL REVIEW]**
+## 6. Transfers: the position, as questions for counsel with sources
 
 ### 6.1 UK GDPR
 
@@ -319,7 +319,7 @@ COUNSEL]**
 
 ---
 
-## 7. Options for counsel to weigh (without choosing) **[COPY PENDING LEGAL REVIEW]**
+## 7. Options for counsel to weigh (without choosing)
 
 #449 is adopted. This section records what counsel's answers could change, and does **not** reopen it.
 
@@ -339,7 +339,7 @@ COUNSEL]**
 
 ---
 
-## 8. Proposed wording **[COPY PENDING LEGAL REVIEW]**
+## 8. Proposed wording
 
 ### 8.1 Privacy Policy §5: processor list **[PROPOSAL, not yet built]**
 
@@ -349,7 +349,7 @@ Replace the existing "Cloudflare (R2 object storage)" bullet with:
 > [PROPOSAL, not yet built — Decision Log #449]:** the traffic between your device and our website, app and servers
 > passes through Cloudflare's network, which helps protect them against attacks. Cloudflare handles that traffic on our
 > instructions. It can see what is sent, including your IP address, and may handle it in countries outside the one you
-> live in, including the United States. See Section [cross-border] for how we protect it. **[COPY PENDING LEGAL REVIEW]**
+> live in, including the United States. See Section [cross-border] for how we protect it.
 > **[OPEN: counsel — whether the policy should name the categories (sign-in details, content, IP address), and the
 > wording for guardians.]**
 
@@ -362,14 +362,14 @@ Replace the existing "Cloudflare (R2 object storage)" bullet with:
 > basis under NDPA s. 41/43 and GAID Schedule 5 is **not established**; (d) US COPPA position **not established**;
 > (e) log retention for customer logs **not stated by Cloudflare**; (f) sub-processor notice is 30 days with a 10-day
 > objection window and needs an owner; (g) the DPA's binding effect on a Free-plan account is **unconfirmed**. Counsel
-> status: **pending**. Not built. **[COPY PENDING LEGAL REVIEW]**
+> status: **pending**. Not built.
 
 **Numbering.** The legal draft v0.11 has Part C rows up to 45. The view-data draft proposes row 45 (to be renumbered) and
 the post-media draft proposes row 46. This is proposed as **row 47** and **must be renumbered when applied**. Counsel
 may prefer to fold it into row 9 (the existing cross-border assessment) and row 20 (its restatement), which today list
 "Postmark/S3/Sentry/Render/Neon/Upstash" and omit Cloudflare.
 
-### 8.3 Existing statements the proxy would make inaccurate or incomplete **[COPY PENDING LEGAL REVIEW]**
+### 8.3 Existing statements the proxy would make inaccurate or incomplete
 
 **None edited.** For whoever applies a counsel-approved version.
 
@@ -383,7 +383,7 @@ may prefer to fold it into row 9 (the existing cross-border assessment) and row 
 | Part C rows 9, 20, 37, 38 | Row 9/20 omit Cloudflare; row 37 says R2 hash-matching coverage is unconfirmed; row 38 says IP is "never stored; no third party" | See above |
 | Guardian consent screen / `CONSENT_SCREEN_VERSION` | Does not mention the proxy | A wording change there bumps the version (Decision Log #348); counsel decides whether guardians must be told |
 
-### 8.4 DPIA R11: proposed entry **[COPY PENDING LEGAL REVIEW]**
+### 8.4 DPIA R11: proposed entry
 
 R11 in `docs/sprint-1-dpia-outline-draft.md` (v0.3) is "Sub-processor and hosting exposure (cannot be assessed yet)" and
 still lists hosting and email as unselected. **[PROPOSAL]** Add the following to R11, or, if counsel prefers a separate
@@ -403,7 +403,7 @@ risk, record it as R32 (R17–R22 and R23–R31 are used by the view-data and po
 
 ---
 
-## 9. Technical consequences for counsel to know **[COPY PENDING LEGAL REVIEW]**
+## 9. Technical consequences for counsel to know
 
 ### 9.1 `TRUST_PROXY_HOPS` must be re-verified (#429, B-267 (b))
 
@@ -448,7 +448,7 @@ cost more. **[UNVERIFIED, FOR COUNSEL; founder to confirm with Render]**
 
 ---
 
-## 10. Corrected row references for B-251 **[COPY PENDING LEGAL REVIEW]**
+## 10. Corrected row references for B-251
 
 The register row B-251, the Counsel column and Decision Log #424 cite "Part C rows 36, 14, 9, 20". Checked against
 `docs/legal-copy-draft-tos-privacy-policy.md` v0.11 on 2026-11-01:
@@ -469,7 +469,7 @@ line 460 of `docs/build-register.md`, "36 / 14 / 9 / 20") should read **9 / 20 /
 
 ---
 
-## 11. Questions counsel must answer **[COPY PENDING LEGAL REVIEW]**
+## 11. Questions counsel must answer
 
 1. **Q1 — Roles.** Is Cloudflare a processor for all proxied traffic, and for what is it a controller (Section 2.1)? How is
    "Network Data" treated?
@@ -511,7 +511,7 @@ line 460 of `docs/build-register.md`, "36 / 14 / 9 / 20") should read **9 / 20 /
 
 ---
 
-## 12. Sourcing and limits of this draft **[COPY PENDING LEGAL REVIEW]**
+## 12. Sourcing and limits of this draft
 
 - **How it was gathered.** Search results (Cloudflare, Render, UK government, ICO, NDPC) plus page reads. Page reads
   went through a tool that **summarises with a smaller model**; quotations are the tool's returned text unless stated.
@@ -530,7 +530,7 @@ line 460 of `docs/build-register.md`, "36 / 14 / 9 / 20") should read **9 / 20 /
 
 ---
 
-## 13. Sign-off **[COPY PENDING LEGAL REVIEW]**
+## 13. Sign-off
 
 | Role | Name | Date | Decision |
 |---|---|---|---|

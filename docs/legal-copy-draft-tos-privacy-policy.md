@@ -1,6 +1,6 @@
 # Soccernity: Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.19): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.20): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,7 +33,7 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.19 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.20 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
   counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice; v0.13 (2026-11-09) wrote the direct-message retention wording and the report-a-message disclosure; v0.14 (2026-11-10) wrote the removed-content wording; v0.15 (2026-11-11) wrote the suspension, appeal, message-report visibility and report-retention wording; v0.16 (2026-11-11) restored the counsel-approved report-retention range, narrowed Terms 7.3 and brought the Contact Us description up to the built feature. Their
@@ -41,7 +41,7 @@ Do not fill either from this file. The sign-off block at the end of this documen
 
 ### v0.18 changelog (2026-11-17)
 
-A stale-statement fix on v0.17. **Still a draft: NOT APPROVED, NOT LEGAL ADVICE, sign-off empty; counsel has not seen v0.16, v0.17 or v0.18.** Founder decisions of 2026-11-15 to 2026-11-17 (Decision Log #479, #524 to #534; #533 and #534 are merged (docs PR #816); the founder's decisions, **not counsel's**). **No new rule and no new figure.** (1) Google and Facebook sign-in removed from ToS 4.3, PP 1.9, PP 5 (#479). (2) Markers for built features (#368 to #373) and two-factor removed; PP 6 describes the httpOnly cookie token model (B-246). (3) ToS 7.3 and 7.9 state the built appeal screens and Contact Us category. (4) The 365-day figure for set-aside files is no longer stated in public text (Decision Log #534); it stays configuration. (5) Part C rows 18 (B), 22 (A), 33 (D), 35 (D), 41 (D) re-marked per #534. Every change is marked `[v0.18 CHANGED ...]`; stale items not verified are listed in `docs/legal-copy-v0.18-report.md`. v0.19 (2026-11-22): wording pass and hosting-location facts; no change of meaning, no change to any counsel disposition.
+A stale-statement fix on v0.17. **Still a draft: NOT APPROVED, NOT LEGAL ADVICE, sign-off empty; counsel has not seen v0.16, v0.17 or v0.18.** Founder decisions of 2026-11-15 to 2026-11-17 (Decision Log #479, #524 to #534; #533 and #534 are merged (docs PR #816); the founder's decisions, **not counsel's**). **No new rule and no new figure.** (1) Google and Facebook sign-in removed from ToS 4.3, PP 1.9, PP 5 (#479). (2) Markers for built features (#368 to #373) and two-factor removed; PP 6 describes the httpOnly cookie token model (B-246). (3) ToS 7.3 and 7.9 state the built appeal screens and Contact Us category. (4) The 365-day figure for set-aside files is no longer stated in public text (Decision Log #534); it stays configuration. (5) Part C rows 18 (B), 22 (A), 33 (D), 35 (D), 41 (D) re-marked per #534. Every change is marked `[v0.18 CHANGED ...]`; stale items not verified are listed in `docs/legal-copy-v0.18-report.md`. v0.19 (2026-11-22): wording pass and hosting-location facts; no change of meaning, no change to any counsel disposition. v0.20 (2026-11-22): the pending-legal-review tag was removed from the Terms of Service and Privacy Policy text (Parts A and B); the mentions in this changelog and in Part C are kept; no wording was changed, and no counsel disposition changed (one sentence on consent pending at 18 was reworded; see docs/copy-clear-draft-tags-report.md).
 
 ### v0.17 changelog (2026-11-17)
 
@@ -386,7 +386,7 @@ under your account. Tell us promptly if you believe your account has been compro
 4.2. You may only maintain one personal account. Club fan pages, Banter Rooms, and community
 groups are shared spaces within the platform, not separate accounts.
 
-4.3. Soccernity supports registering with an email address and password. **[v0.18 CHANGED — #479]** Sign-in with Google or Facebook was planned and has been removed; it is not offered. You can turn on two-factor authentication with an authenticator app (not text messages); it is optional for users. **[v0.18 CHANGED — built state]** **[COPY PENDING LEGAL REVIEW]**
+4.3. Soccernity supports registering with an email address and password. **[v0.18 CHANGED — #479]** Sign-in with Google or Facebook was planned and has been removed; it is not offered. You can turn on two-factor authentication with an authenticator app (not text messages); it is optional for users. **[v0.18 CHANGED — built state]**
 
 4.4. **Completing your profile.** ****[v0.18 CHANGED — #369: built; "not yet built" marker removed]**** After you register
 (and, for a minor, after a guardian approves) you must complete your profile, including choosing a
@@ -433,7 +433,7 @@ Location and device information embedded in an image is removed. **[OPEN: counse
 
 6.3. If you delete one of your posts, it is **permanently deleted**, together with every comment,
 like and save other users have made on it (Decision Log #360). If you delete a comment, it is
-removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]** If you delete your account,
+removed. A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]** If you delete your account,
 Section 8 explains what happens to your content: it is not removed, but stays visible without
 your identity attached, because other users' replies, likes, and saves on it are not yours to
 take down with you.
@@ -458,34 +458,34 @@ appeal it. **An appeal against a decision recorded on a report is reviewed by a 
 moderation team who did not take or record that decision** (Decision Log #138). **An appeal against
 a suspension that a moderator made directly from the user page, without a report, is reviewed by a
 moderator.** **[v0.18 CHANGED — built state]** The staff screens for deciding an appeal are built in the Admin Console. If your account is suspended
-and you cannot sign in, see Section 7.9. **[COPY PENDING LEGAL REVIEW]**
+and you cannot sign in, see Section 7.9.
 
 7.4. You may report content or behaviour that violates these Terms using the reporting tools
 provided.
 
-7.5. **When a moderator removes content.** **[COPY PENDING LEGAL REVIEW]** If a moderator removes a post, a comment or a
+7.5. **When a moderator removes content.** If a moderator removes a post, a comment or a
 message, it is hidden from other people. A removed comment or message is replaced by a notice that
 Soccernity removed it. A removed post no longer appears anywhere, and its author is shown a notice
 that it was removed. We do not erase the removed item at that moment: we keep it, hidden, as
 evidence, for as long as the report it belongs to is kept (Privacy Policy, Section 9). If an appeal
 against the removal succeeds, the content is restored. When the report is deleted (Privacy Policy,
-Section 9), the removed item is deleted with it. **[COPY PENDING LEGAL REVIEW]** **[PROPOSAL, not yet built — the notices
+Section 9), the removed item is deleted with it. **[PROPOSAL, not yet built — the notices
 described here are designed but not yet in the app]**
 
-7.6. **Pictures and videos of a removed post.** **[COPY PENDING LEGAL REVIEW]** When a post is removed, its pictures and
+7.6. **Pictures and videos of a removed post.** When a post is removed, its pictures and
 videos are made unavailable at once, so that no link to them works. We keep a private copy only
 while the removal could still be appealed, so that the files can be put back if the appeal
 succeeds. The stored file is deleted when the removal is confirmed, that is, when the time allowed
 for an appeal has passed or an appeal has been decided and the removal stands. The exception is a
 file that is kept as evidence under a hold (Section 8.4), which is kept for as long as the hold
-lasts. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+lasts. A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 
-7.7. **Guardians.** **[COPY PENDING LEGAL REVIEW]** If the account that posted the removed content belongs to a minor, we
+7.7. **Guardians.** If the account that posted the removed content belongs to a minor, we
 normally email the guardian who has confirmed consent to say that Soccernity removed content
 posted from the account. The email states only the kind of action and when it happened. It does
 not say why, does not say that a report was made or who made it, and does not include the content.
 
-7.8. **Suspending an account.** **[COPY PENDING LEGAL REVIEW]** If we suspend your account, you cannot sign in until the
+7.8. **Suspending an account.** If we suspend your account, you cannot sign in until the
 suspension is lifted. We email you straight away, at the email address on the account. The email gives
 a short reason in plain words (for some reasons only a general one) and says how to contact us to
 appeal. It does not say who made a report and does not quote any content. We do not promise how long
@@ -495,7 +495,7 @@ lifted, we email you again. If the account belongs to a minor, we normally also 
 has confirmed consent to say that the account was suspended, or that the suspension was lifted, giving
 only the kind of action and when it happened (Section 7.7).
 
-7.9. **Appealing a suspension when you cannot sign in.** **[COPY PENDING LEGAL REVIEW]** **[v0.18 CHANGED — #492, built state: the "Appeal a suspension" category is on the Contact Us form and staff can record an appeal in the Admin Console]** If your account is suspended you
+7.9. **Appealing a suspension when you cannot sign in.** **[v0.18 CHANGED — #492, built state: the "Appeal a suspension" category is on the Contact Us form and staff can record an appeal in the Admin Console]** If your account is suspended you
 cannot sign in, so you cannot use an in-app appeal. Instead, contact us through the Contact Us page (the
 suspension email links to it), choose the category "Appeal a suspension" and say that you want to appeal. Our staff will record the appeal on your
 behalf. An appeal has to be made within the time allowed for appeals, which applies to the decision in
@@ -503,7 +503,7 @@ the same way as in Section 7.3. Where the suspension followed a report, the appe
 described in Section 7.3. Where a moderator suspended the account without a report, a moderator reviews
 your message and may lift the suspension.
 
-7.10. **Reporting a message.** **[COPY PENDING LEGAL REVIEW]** If you report a message in a chat, you can choose to attach a
+7.10. **Reporting a message.** If you report a message in a chat, you can choose to attach a
 limited number of the messages just before and just after it, so that we can see what was said around
 it. Only Soccernity staff who review the report see the reported message and the messages you attach;
 filing a report does not by itself tell anyone. Where the person who sent the reported message, or
@@ -534,14 +534,14 @@ made unusable, and the account is marked permanently deleted. Specifically:
   visible, attributed to "[deleted user]," because other users' replies, likes, and saves on that
   content are not yours to take down with you. **Direct messages are different:** they stay visible
   in the conversation, attributed to "[deleted user]," only until they reach 12 months after they
-  were sent, and are then deleted (Privacy Policy, Section 9). **[COPY PENDING LEGAL REVIEW]**
+  were sent, and are then deleted (Privacy Policy, Section 9).
 - **Signals that are yours alone are removed:** your follows, likes, saves, notifications, and
   your memberships of groups, Banter Rooms, and club pages.
 - **If you organised a Grassroots team, the team survives, deliberately.** It goes dormant and
   stays visible read-only, and can later be reassigned to a new user who registers the same team
   name and city.
 - **Guardian-consent records** are handled separately; see the Privacy Policy, Section 9.
-- **Pictures and videos set aside as possibly illegal imagery.** **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+- **Pictures and videos set aside as possibly illegal imagery.** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 - **Anonymised accounts with nothing left in them are removed.** **[PROPOSAL, not yet built — Decision
   Log #375]** 30 days after anonymisation, the anonymised record is permanently deleted if it
   belonged to a minor whose guardian never approved the account, or if the account has no content.
@@ -571,7 +571,7 @@ their guardian's decision.
 8.6. Soccernity may suspend or terminate your account for a breach of these Terms, in particular
 a breach of Section 5, or where we reasonably believe an account was created in breach of the
 age or guardian-consent requirements in Sections 2 to 3. What happens when we suspend an account is in
-Section 7.8. **[COPY PENDING LEGAL REVIEW]**
+Section 7.8.
 
 ### 9. Club pages, the Leaderboard, and public visibility
 
@@ -626,11 +626,11 @@ live.
 
 Questions about these Terms, or about your account, can be sent to
 **support@soccernity.com** (Decision Log #37), or through the Contact Us page in the app.
-**[COPY PENDING LEGAL REVIEW]** The Contact Us page asks for your name, your email address, a category, a
+The Contact Us page asks for your name, your email address, a category, a
 subject and your message, and our support team reads what is sent. If your account has been suspended
 and you cannot sign in, choose the category "Appeal a suspension" to ask for the decision to be looked at
 again (Section 7.9). What we keep, and for how long, is in the Privacy Policy, Sections 1.9 and 9.
-**[COPY PENDING LEGAL REVIEW]**
+
 
 ---
 
@@ -695,7 +695,7 @@ messages you send through the platform's direct-messaging feature. ****[v0.18 CH
 **including minors** (and which minors can also see on each other's profiles), and your country,
 which is shown in place of a location. Images are checked automatically when uploaded (Section 5),
 then reviewed by a person if flagged, and the location and device information embedded in an image
-is removed. **[COPY PENDING LEGAL REVIEW]** A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
+is removed. A picture or video that a child-safety reviewer has set aside because it may be illegal imagery is not deleted when the post, your account, or a moderator's removal would otherwise delete it. It is kept privately, away from other users, for a limited period set by Soccernity, so that it can be reported to the proper authority if that is needed, and for longer if the law requires it. **[v0.17 CHANGED — #525, #530]**
 
 #### 1.4 Grassroots record-keeping data
 
@@ -715,7 +715,7 @@ If a report is made against you, or if you make one, the report's content, inclu
 free-text description of the reason for the report. Reports are among the most sensitive records
 Soccernity holds, because a report can contain an allegation about, or written by, a child. If we suspend an account,
 we also record the suspension, the reason category the moderator chose and, where the suspension
-followed a report, which report led to it. **[COPY PENDING LEGAL REVIEW]**
+followed a report, which report led to it.
 
 #### 1.7 Data we do not collect
 
@@ -747,13 +747,13 @@ different country, and we do not claim to detect that.
 
 *Contact Us form:* if you use it we collect your name, email address, the
 category you choose (one of seven, including "Appeal a suspension"), a subject and your message, to answer you.
-If you are signed in we also record which account the message came from. **[COPY PENDING LEGAL REVIEW]** We keep the
-enquiry for 12 months after the last message in it and then delete it automatically. **[COPY PENDING LEGAL REVIEW]**
+If you are signed in we also record which account the message came from. We keep the
+enquiry for 12 months after the last message in it and then delete it automatically.
 If a message is a safeguarding concern or a complaint, a moderator may turn it into a report or case
 record; it is then kept for as long as that record is kept (Section 9), which can be longer than 12
 months, and if that record is later deleted the enquiry goes back to the 12-month rule. When your account is
 deleted, the enquiries it sent are deleted too, unless one was turned into a report or case record.
-**[COPY PENDING LEGAL REVIEW]** *Google and Facebook sign-in:* **[v0.18 CHANGED — #479]** this was planned and has been removed; we do not offer it and do not receive data from those providers. *Two-factor authentication:* **[v0.18 CHANGED — built state]** if you turn it on, uses an authenticator app; we hold the secret needed to check the codes it generates, encrypted at rest, and single-use backup codes stored only as hashes. **[COPY PENDING LEGAL REVIEW]** **[OPEN: counsel to read what is stored (Part C row 44)]** *Email verification:* every user must verify their email address, which is
+*Google and Facebook sign-in:* **[v0.18 CHANGED — #479]** this was planned and has been removed; we do not offer it and do not receive data from those providers. *Two-factor authentication:* **[v0.18 CHANGED — built state]** if you turn it on, uses an authenticator app; we hold the secret needed to check the codes it generates, encrypted at rest, and single-use backup codes stored only as hashes. **[OPEN: counsel to read what is stored (Part C row 44)]** *Email verification:* every user must verify their email address, which is
 processed by our email provider (Section 5).
 
 ### 2. How we use your data
@@ -865,7 +865,7 @@ account's next request, including on a session that is already signed in. When a
 access to more of Soccernity"). When an account turns **18**, guardian consent stops gating the
 account, and the guardian on file receives one informational email that asks nothing of them. The
 guardian's record is **kept**, not deleted, as consent history, and a consent request that was
-still pending at 18 is left inert so it cannot auto-decline an adult into deletion.
+still pending at 18 is left inert, so it does not auto-decline an adult into deletion.
 **[OPEN — disclosed limitations]** (a) Because the job runs daily, an account can keep its old
 classification for up to about 24 hours after a birthday; we accept this. (b) Reclassification
 relies on the declared date of birth, which we do not verify. (c) If a date of birth is later
@@ -907,7 +907,7 @@ acting on Soccernity's instructions as a data processor unless stated otherwise:
   for the younger-child US group. Card details go directly to Stripe and never reach Soccernity.
 - **Amazon Web Services (Amazon Rekognition)**: ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]****
   automated safety check on uploaded pictures and videos (for a video, on still frames taken from it), including avatars and cover photos, in an EU/UK region where
-  available. Files the check is unsure about, and files that users report, go to a Soccernity reviewer, and a file is not shown to other users until it has passed. No hash-matching against known abuse imagery is in place. **[COPY PENDING LEGAL REVIEW]** **[v0.17 CHANGED — #524, #525]**
+  available. Files the check is unsure about, and files that users report, go to a Soccernity reviewer, and a file is not shown to other users until it has passed. No hash-matching against known abuse imagery is in place. **[v0.17 CHANGED — #524, #525]**
   **[OPEN: counsel — cross-border transfer, and any duties that apply to hosting images of
   minors, including hash-matching for child sexual abuse material, whose availability on our
   storage provider is unconfirmed.]**
@@ -940,7 +940,7 @@ This is flagged as an open item for counsel, not assessed as low-risk by default
 
 ### 6. Cookies and similar technologies
 
-**[v0.18 CHANGED — built state (B-246); OPEN: no engineering audit of what the web app stores is recorded, Part C row 15]** Soccernity's web application keeps a short-lived access token only in the page's memory, and your refresh token in a cookie that scripts on the page cannot read (httpOnly), sent only to Soccernity's own servers and used solely to keep you signed in, not for advertising or cross-site tracking. If you choose "stay signed in" the cookie is kept across browser sessions; otherwise it ends when the browser is closed. This section should be revisited and expanded once a formal cookie and storage audit is done, particularly if any analytics or advertising technology is added in future. **[COPY PENDING LEGAL REVIEW]**
+**[v0.18 CHANGED — built state (B-246); OPEN: no engineering audit of what the web app stores is recorded, Part C row 15]** Soccernity's web application keeps a short-lived access token only in the page's memory, and your refresh token in a cookie that scripts on the page cannot read (httpOnly), sent only to Soccernity's own servers and used solely to keep you signed in, not for advertising or cross-site tracking. If you choose "stay signed in" the cookie is kept across browser sessions; otherwise it ends when the browser is closed. This section should be revisited and expanded once a formal cookie and storage audit is done, particularly if any analytics or advertising technology is added in future.
 
 ### 7. Public and semi-public visibility of your information
 
@@ -994,16 +994,16 @@ posts follow the same visibility rules as other community content.
 
 **If a message is reported.** **[PROPOSAL, not yet built]** When a person reports a message, our
 safeguarding team sees that message and any messages around it that the reporter chooses to include
-with the report, and nothing else of the conversation. **[COPY PENDING LEGAL REVIEW]** If the person who
+with the report, and nothing else of the conversation. If the person who
 sent the reported message, or anyone else in the conversation, is under 18, only staff who have been
 specifically vetted for child-safety work see the messages the reporter included and the original
 wording of any message that was edited; other staff see the reported message and a note that further
-messages are hidden because a child is involved. **[COPY PENDING LEGAL REVIEW]**
+messages are hidden because a child is involved.
 
 **How long messages are kept.** A direct message is deleted 12 months after it was sent, for
 everyone, including people under 18. A message that is the subject of a report, or that the
 reporter chose to include as context, is kept with that report, under the retention that applies
-to reports (Section 9). **[COPY PENDING LEGAL REVIEW]**
+to reports (Section 9).
 
 **Who can message whom: summary.** A restricted-pending minor cannot send messages and cannot be
 found as a recipient. An account under 16 can neither send nor receive direct messages, even after
@@ -1054,16 +1054,16 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
 | **Investigation hold** **[PROPOSAL, not yet built — Decision Log #376; counsel review pending]** | If you are the reporter, the reported party, or the author of reported content in a moderation report, erasure is paused while the report is open, then until any appeal period has ended or the appeal is decided, then for **6 months** after the matter is closed, whatever the outcome. During the hold we keep the report, the reported content and messages, and identifiers (user ID, name, email, date of birth) and clear data that is not evidence (such as the password hash). A reported person, and the author of reported content, is then deleted in the ordinary way. A reporter whose report was upheld, or where neither party was found at fault, follows the ordinary deletion path and only the report record is kept for the 6 months; a reporter found to have acted in bad faith is held in full for the 6 months. A moderator may also place a **legal hold** on both accounts, which lasts until it is lifted | Closure of the report or appeal, plus 6 months, or lifting of a legal hold. While a report is open no maximum duration is set **[OPEN]** |
 | **A reporter's data held in full** **[PROPOSAL, not yet built — counsel review pending]** | Held in full only so that records exist if the reported person takes legal action against the reporter. It is not used for any other purpose | As above |
-| **Contact Us form submissions** | Name, email address, category, subject and message (and the account it came from, if you were signed in), kept to answer the enquiry. Deleted automatically 12 months after the last message in the enquiry **[COPY PENDING LEGAL REVIEW]**. A message that is a safeguarding concern or a complaint may be turned into a report or case record by a moderator; it is then kept with the retention that applies to those records (see "Moderation reports and actions" below), and the 12-month deletion no longer applies to it; if that record is later deleted, the enquiry goes back to the 12-month rule. When your account is deleted, the enquiries it sent are deleted unless one was turned into such a record **[COPY PENDING LEGAL REVIEW]** | 12 months after the last message in the enquiry, automatic; or the retention of the report or case record it became part of |
+| **Contact Us form submissions** | Name, email address, category, subject and message (and the account it came from, if you were signed in), kept to answer the enquiry. Deleted automatically 12 months after the last message in the enquiry. A message that is a safeguarding concern or a complaint may be turned into a report or case record by a moderator; it is then kept with the retention that applies to those records (see "Moderation reports and actions" below), and the 12-month deletion no longer applies to it; if that record is later deleted, the enquiry goes back to the 12-month rule. When your account is deleted, the enquiries it sent are deleted unless one was turned into such a record | 12 months after the last message in the enquiry, automatic; or the retention of the report or case record it became part of |
 | **Country information** ****[v0.18 CHANGED — #368: built; "not yet built" marker removed]**** | Declared country code, derived country code, method and time are kept with the account. The IP address used for the lookup is never stored. **[OPEN: retention period.]** | To be set |
 | **Guardian-consent records: separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and, where captured, the consent-screen version and coarse device type; not the full guardian record, the guardian's name, email and relationship to the minor are **not** retained past anonymisation: and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). While the account is a minor account it follows the same retention as the rest of a minor's account data; once the account is promoted to adult, the ordinary adult retention rules apply | Promotion to adult |
 | **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. When you later delete your account, guardian data is handled on the normal guardian-data deletion timeframe, snapshotted into the consent record above, then deleted | Account deletion |
-| **Messages between users** **[PROPOSAL, not yet built — Decision Log #478]** | Deleted automatically **12 months after the message was sent**, for every user, including under-18s. After an account is anonymised its messages stay visible in the conversation, attributed to "[deleted user]," until they reach that age. A message that is the subject of a report, or that the reporter chose to include as context, is not deleted at 12 months: it is kept with that report, under the retention that applies to reports (see "Moderation reports and actions" below) **[COPY PENDING LEGAL REVIEW]**. A conversation left with no messages is deleted with its last message **[COPY PENDING LEGAL REVIEW]** | 12 months after each message was sent, automatic; or the retention of the report the message is attached to |
-| **Content a moderator has removed** (a post, a comment or a message) **[PROPOSAL, not yet built — Decision Log #483]** | Hidden from other people as soon as the moderator removes it. The item itself is not erased: it is kept, hidden, with the report it belongs to, under the retention for "Moderation reports and actions" below. A removed message is therefore not deleted at 12 months, and a removed item is not made visible again by account anonymisation. When that report is deleted, the removed item is deleted with it. If an appeal succeeds, the item is restored [COPY PENDING LEGAL REVIEW] | Deletion of the report (see "Moderation reports and actions" below); restored if the appeal succeeds |
-| **Pictures and videos of a post a moderator removed** **[PROPOSAL, not yet built — Decision Log #484]** | Made unavailable at once. A private copy is kept only while the removal can still be appealed, then the stored file is deleted when the removal is confirmed (the time allowed for an appeal has passed, or an appeal has been decided and the removal stands). A file kept as evidence under a hold (see "Investigation hold" above) is kept for as long as the hold lasts. The record of the file stays with the post; the file does not [COPY PENDING LEGAL REVIEW] | Confirmation of the removal; or the end of a hold. **[OPEN: statutory reporting and evidence set-aside, Part C row 37]** |
-| **Pictures and videos set aside as possibly illegal imagery** **[COPY PENDING LEGAL REVIEW]** **[v0.17 CHANGED — #525, #530]** | A picture or video (including a profile picture or cover photo) that a child-safety reviewer set aside as possibly illegal imagery is kept privately, away from other users, and is not deleted with the post, the account or a removal. A record of who set it aside and when is kept. | A limited period set by Soccernity from the set-aside, and longer if the law requires it. **[v0.18 CHANGED — #534: the figure is configuration and is not stated in the public text]** **[OPEN: counsel, the period and any release of the file, Part C row 37]** |
-| Moderation reports and actions | Data tied to a concluded investigation or moderation case is held for **6–7 years**, for accountability, legal claims and pattern detection. A report is concluded when it is dismissed, or when the time allowed for an appeal has passed, or when an appeal has been decided and the decision stands; it is not concluded while it is open or while an appeal is pending **[COPY PENDING LEGAL REVIEW]**. At the end of the period we delete the content the report removed first, with its stored pictures and videos, and then the report. The link between the report and any messages a reporter attached as context is deleted with the report; those messages are then deleted by the ordinary message rule above **[COPY PENDING LEGAL REVIEW]**. A report is kept longer, and not deleted, while a legal hold is in place, while an active hold covers an account involved in it, when the matter has been escalated for statutory reporting, or where deleting it would break another record that depends on it **[COPY PENDING LEGAL REVIEW]**. Our staff action log, which records that an action was taken and by whom (not the content), is not deleted when a report is deleted **[OPEN: retention period for that log]** [COPY PENDING LEGAL REVIEW] | End of the retention period; or the end of a hold |
+| **Messages between users** **[PROPOSAL, not yet built — Decision Log #478]** | Deleted automatically **12 months after the message was sent**, for every user, including under-18s. After an account is anonymised its messages stay visible in the conversation, attributed to "[deleted user]," until they reach that age. A message that is the subject of a report, or that the reporter chose to include as context, is not deleted at 12 months: it is kept with that report, under the retention that applies to reports (see "Moderation reports and actions" below). A conversation left with no messages is deleted with its last message | 12 months after each message was sent, automatic; or the retention of the report the message is attached to |
+| **Content a moderator has removed** (a post, a comment or a message) **[PROPOSAL, not yet built — Decision Log #483]** | Hidden from other people as soon as the moderator removes it. The item itself is not erased: it is kept, hidden, with the report it belongs to, under the retention for "Moderation reports and actions" below. A removed message is therefore not deleted at 12 months, and a removed item is not made visible again by account anonymisation. When that report is deleted, the removed item is deleted with it. If an appeal succeeds, the item is restored | Deletion of the report (see "Moderation reports and actions" below); restored if the appeal succeeds |
+| **Pictures and videos of a post a moderator removed** **[PROPOSAL, not yet built — Decision Log #484]** | Made unavailable at once. A private copy is kept only while the removal can still be appealed, then the stored file is deleted when the removal is confirmed (the time allowed for an appeal has passed, or an appeal has been decided and the removal stands). A file kept as evidence under a hold (see "Investigation hold" above) is kept for as long as the hold lasts. The record of the file stays with the post; the file does not | Confirmation of the removal; or the end of a hold. **[OPEN: statutory reporting and evidence set-aside, Part C row 37]** |
+| **Pictures and videos set aside as possibly illegal imagery** **[v0.17 CHANGED — #525, #530]** | A picture or video (including a profile picture or cover photo) that a child-safety reviewer set aside as possibly illegal imagery is kept privately, away from other users, and is not deleted with the post, the account or a removal. A record of who set it aside and when is kept. | A limited period set by Soccernity from the set-aside, and longer if the law requires it. **[v0.18 CHANGED — #534: the figure is configuration and is not stated in the public text]** **[OPEN: counsel, the period and any release of the file, Part C row 37]** |
+| Moderation reports and actions | Data tied to a concluded investigation or moderation case is held for **6–7 years**, for accountability, legal claims and pattern detection. A report is concluded when it is dismissed, or when the time allowed for an appeal has passed, or when an appeal has been decided and the decision stands; it is not concluded while it is open or while an appeal is pending. At the end of the period we delete the content the report removed first, with its stored pictures and videos, and then the report. The link between the report and any messages a reporter attached as context is deleted with the report; those messages are then deleted by the ordinary message rule above. A report is kept longer, and not deleted, while a legal hold is in place, while an active hold covers an account involved in it, when the matter has been escalated for statutory reporting, or where deleting it would break another record that depends on it. Our staff action log, which records that an action was taken and by whom (not the content), is not deleted when a report is deleted **[OPEN: retention period for that log]** | End of the retention period; or the end of a hold |
 | Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted, or when a moderator's removal of the post is confirmed (see "Pictures and videos of a post a moderator removed" and "Pictures and videos set aside as possibly illegal imagery") |
 
 **On account deletion specifically, stated plainly:** after the 30-day window your account is
@@ -1085,13 +1085,13 @@ reported person takes legal action against the reporter; it is not held for any 
 Where a report is upheld, or neither party is found at fault, the reporter's account follows the
 ordinary deletion path and only the report record is kept for the 6 months.
 
-**Content a moderator removes, stated plainly.** **[COPY PENDING LEGAL REVIEW]** A post, comment or message that a moderator
+**Content a moderator removes, stated plainly.** A post, comment or message that a moderator
 removes is hidden from other people at once but kept, hidden, as evidence for as long as the report
 it belongs to is kept; the stored pictures and videos of a removed post are deleted when the removal
 is confirmed, unless a hold applies. If the account belongs to a minor, we normally email the guardian
 who has confirmed consent to say that content was removed, giving the kind of action and the time only
 (Terms, Section 7.7). The removed item is deleted when its report is deleted; the stored picture or video of
-a removed post is deleted earlier, when the removal is confirmed. **[COPY PENDING LEGAL REVIEW]**
+a removed post is deleted earlier, when the removal is confirmed.
 
 **Guardians and minors.** A guardian's request to delete a minor's account supersedes the
 minor's own wishes. A minor cannot independently consent to keep, or delete, their own account.
