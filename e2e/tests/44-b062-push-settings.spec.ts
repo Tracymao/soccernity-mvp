@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { db, loginViaUi, registerViaApi, verifyEmailViaApi, type Account, userByEmail } from '../support/helpers';
+import { db, loginViaUi, registerViaApi, verifyEmailViaApi, type Account, userByEmail, textMatching } from '../support/helpers';
 
 // B-062 / B-285 (Decision Log #472 (e)): the Push leaf of Settings and the browser side of web push,
 // in real Chrome against the real API, Postgres and Redis. Scoped to this work only.
@@ -19,7 +19,7 @@ const shot = (page: Page, name: string) => page.screenshot({ path: path.join(OUT
 
 const PAGE = '/settings/notifications/push';
 const SWITCH = 'Turn on push notifications';
-const TAGGED = 'Push notifications only say “You have a new notification”. Open Soccernity to see what it is. [COPY PENDING LEGAL REVIEW]';
+const PUSH_NOTE = 'Push notifications only say “You have a new notification”. Open Soccernity to see what it is.';
 
 // Replaces the push service. The "subscription" lives in localStorage under a key the test can read.
 const FAKE_PUSH = `
@@ -102,7 +102,7 @@ test.describe.serial('Settings > Notification Preferences > Push', () => {
     await expect(page.getByText('Manage push notifications on this browser.')).toBeVisible();
     const toggle = page.getByRole('switch', { name: SWITCH });
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
-    await expect(page.getByText(TAGGED)).toBeVisible();
+    await expect(page.getByText(textMatching(PUSH_NOTE))).toBeVisible();
     await expect(page.getByText('This setting applies to this browser only. Turn it on separately on each browser or device you use.')).toBeVisible();
     await shot(page, '01-push-off-desktop');
     expect(await rowsFor(owner.email)).toHaveLength(0);

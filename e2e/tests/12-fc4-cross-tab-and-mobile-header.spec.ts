@@ -11,7 +11,7 @@ import {
   registerViaApi,
   uniqueUsername,
   verifyEmailViaApi,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 import { URLS, USER_PASSWORD } from '../support/stack';
 
@@ -28,8 +28,7 @@ async function verifiedAccount(label: string): Promise<Account> {
   const a = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const res = await api('PATCH', `/users/${a.userId}`, { token, body: { username: uniqueUsername(label) } });
-  expect(res.status).toBe(200);
+  await assignUsername(a, token, label);
   return a;
 }
 

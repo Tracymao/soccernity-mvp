@@ -12,7 +12,7 @@ import {
   registerViaApi,
   uniqueUsername,
   verifyEmailViaApi,
-  type Account,
+  type Account, textMatching,
 } from '../support/helpers';
 import { REPO } from '../support/stack';
 
@@ -29,7 +29,6 @@ const shot = (page: Page, name: string) => page.screenshot({ path: path.join(OUT
 
 const RUN = Date.now().toString(36);
 const PASSWORD = 'QaAdmin#2026-pass';
-const TAG = '[COPY PENDING LEGAL REVIEW]';
 
 async function createModerator(): Promise<string> {
   const argon2 = requireFromApi('argon2');
@@ -81,7 +80,7 @@ test.describe.serial('username review on Create Profile', () => {
     await expect(page).toHaveURL(/\/create-profile/);
     const card = page.getByRole('region', { name: 'Your username was removed' });
     await expect(card).toBeVisible();
-    await expect(card).toContainText(`Your username was removed by Soccernity. ${TAG}`);
+    await expect(card).toContainText(textMatching(`Your username was removed by Soccernity.`));
     await expect(card).not.toContainText('@');
     await expect(card.getByRole('button', { name: 'Ask for a review' })).toBeVisible();
     // The username form is still there: they can choose a new username instead.
@@ -109,7 +108,7 @@ test.describe.serial('username review on Create Profile', () => {
 
     const sent = page.getByRole('status');
     await expect(sent).toContainText('Request sent');
-    await expect(sent).toContainText(`We’ll show the result here and send you a notification when it’s decided. ${TAG}`);
+    await expect(sent).toContainText(textMatching(`We’ll show the result here and send you a notification when it’s decided.`));
     await shot(page, '04-sent');
 
     const row = await db().usernameReviewRequest.findFirst({ where: { userId: asked.userId } });
@@ -121,7 +120,7 @@ test.describe.serial('username review on Create Profile', () => {
     await loginViaUi(page, asked.email);
     const card = page.getByRole('region', { name: 'Your review request' });
     await expect(card).toContainText('Pending');
-    await expect(card).toContainText(`You asked for a review. Our team is looking at it. ${TAG}`);
+    await expect(card).toContainText(textMatching(`You asked for a review. Our team is looking at it.`));
     await expect(page.getByRole('button', { name: 'Ask for a review' })).toHaveCount(0);
     await shot(page, '05-pending');
   });
@@ -140,7 +139,7 @@ test.describe.serial('username review on Create Profile', () => {
     const card = page.getByRole('region', { name: 'Review decided' });
     await expect(card).toContainText('Declined');
     await expect(card).toContainText('The decision is final and cannot be reviewed again.');
-    await expect(card).toContainText(`Choose a new username below to continue. ${TAG}`);
+    await expect(card).toContainText(textMatching(`Choose a new username below to continue.`));
     // The admin's reason never reaches the person.
     await expect(page.locator('body')).not.toContainText('impersonates an official');
     await expect(page.getByRole('button', { name: 'Ask for a review' })).toHaveCount(0);
@@ -153,7 +152,7 @@ test.describe.serial('username review on Create Profile', () => {
     await expect(page).toHaveURL(/\/create-profile/);
     await page.goto('/notifications');
     const row = page.getByRole('link', { name: /Your username review was decided\./ });
-    await expect(row).toContainText(`The username stays removed. ${TAG}`);
+    await expect(row).toContainText(textMatching(`The username stays removed.`));
     await expect(row).not.toContainText('@');
     await expect(row).toHaveAttribute('href', '/create-profile');
     await shot(page, '10-notification-declined');
@@ -176,7 +175,7 @@ test.describe.serial('username review on Create Profile', () => {
 
     await page.goto('/notifications');
     const row = page.getByRole('link', { name: /Your username review was approved\./ });
-    await expect(row).toContainText(`Your username is back on your account. ${TAG}`);
+    await expect(row).toContainText(textMatching(`Your username is back on your account.`));
     await expect(row).not.toContainText('@');
     await shot(page, '11-notification-approved');
     // Opening the row goes to Create Profile, which hands a complete profile on.
@@ -196,7 +195,7 @@ test.describe.serial('username review on Create Profile', () => {
     await page.getByRole('button', { name: 'Ask for a review' }).click();
     await page.getByRole('button', { name: 'Send request' }).click();
     const card = page.getByRole('region', { name: 'Your username was removed' });
-    await expect(card).toContainText(`The time to ask for a review has passed. ${TAG}`);
+    await expect(card).toContainText(textMatching(`The time to ask for a review has passed.`));
     await expect(card.getByRole('button')).toHaveCount(0);
     expect(await db().usernameReviewRequest.count({ where: { userId: late.userId } })).toBe(0);
     await shot(page, '08-window-passed');
@@ -211,7 +210,7 @@ test.describe.serial('username review on Create Profile', () => {
     expect((await api('POST', '/users/me/username-review', { token, body: {} })).status).toBe(201);
     await page.getByRole('button', { name: 'Send request' }).click();
     const alert = page.getByRole('alert');
-    await expect(alert).toContainText(`You’ve already asked for a review of this removal. The result will appear here. ${TAG}`);
+    await expect(alert).toContainText(textMatching(`You’ve already asked for a review of this removal. The result will appear here.`));
     await shot(page, '10-already-asked');
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('region', { name: 'Your review request' })).toContainText('Pending');

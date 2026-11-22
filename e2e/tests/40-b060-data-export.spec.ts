@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { loginViaUi, registerViaApi, verifyEmailViaApi, type Account } from '../support/helpers';
+import { loginViaUi, registerViaApi, verifyEmailViaApi, type Account, textMatching } from '../support/helpers';
 import { USER_PASSWORD } from '../support/stack';
 
 // B-060 (Decision Log #472 (g)): the Privacy page variants and the Download my data flow, in real Chrome against
@@ -87,7 +87,7 @@ test.describe.serial('Privacy page and Download my data', () => {
     await expect(page.getByRole('heading', { name: 'Your file is ready' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Your data is ready to download as a JSON file.')).toBeVisible();
     await expect(
-      page.getByText('The file contains your personal data. Keep it somewhere safe and don’t share it. [COPY PENDING LEGAL REVIEW]'),
+      page.getByText(textMatching('The file contains your personal data. Keep it somewhere safe and don’t share it.')),
     ).toBeVisible();
     await expect(page.getByText(/Available until /)).toBeVisible();
     await shot(page, '05-ready-desktop');

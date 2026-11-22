@@ -15,13 +15,28 @@ export function uniqueEmail(label: string): string {
   counter += 1;
   return `${label}.${RUN_ID}.${counter}@qa.soccernity.test`;
 }
-export function uniqueUsername(label: string): string {
-  counter += 1;
-  // <= 30 chars, letters/digits/underscore. Built so it can never contain the
-  // account's own email local-part (label + RUN_ID + counter), which the
-  // personal-data rule would reject.
-  const rev = RUN_ID.split('').reverse().join('');
-  return `u${rev}${counter}x${label}`.replace(/[^A-Za-z0-9_]/g, '').slice(0, 30);
+export { SAFE_LETTERS, uniqueUsername } from './username';
+import { uniqueUsername } from './username';
+
+/**
+ * Sets a username for a freshly registered account. A handle from `uniqueUsername` should never be refused; if the API
+ * still answers 400 it retries once with a fresh handle and, if that fails too, throws with the 400 body so the cause
+ * is visible in the failure message.
+ */
+export async function assignUsername(
+  account: { userId: string },
+  token: string,
+  label?: string,
+): Promise<string> {
+  const failures: string[] = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const username = uniqueUsername(label);
+    const res = await api('PATCH', `/users/${account.userId}`, { token, body: { username } });
+    if (res.status === 200) return username;
+    failures.push(`${username} -> ${res.status} ${JSON.stringify(res.body)}`);
+    if (res.status !== 400) break;
+  }
+  throw new Error(`assignUsername failed: ${failures.join(' | ')}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +431,20 @@ export const COPY_TAG = '[COPY PENDING LEGAL REVIEW]';
 /** `text` followed by the tag, the way the apps render a tagged sentence. */
 export function tagged(text: string): string {
   return COPY_TAG ? `${text} ${COPY_TAG}` : text;
+}
+
+/**
+ * A RegExp for a visible string that is, or has been, tagged: it matches the
+ * plain text with or without a trailing " [COPY PENDING LEGAL REVIEW]", so a
+ * spec survives counsel clearing (or re-adding) the tag. Regex characters in
+ * `text` are escaped. By default the match may sit inside a longer text node
+ * (use with getByText / toContainText); `exact` anchors it to the whole text
+ * (use for getByRole name and exact getByText).
+ */
+export function textMatching(text: string, opts: { exact?: boolean } = {}): RegExp {
+  const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\/-]/g, '\$&');
+  const body = `${escape(text)}(?: ${escape(COPY_TAG)})?`;
+  return new RegExp(opts.exact ? `^${body}$` : body);
 }
 
 function adminJwtSecret(): string {

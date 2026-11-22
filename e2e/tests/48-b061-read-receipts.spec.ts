@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
+import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account, assignUsername } from '../support/helpers';
 
 // B-061 read receipts, the web leg (backend: PR #686): the Read receipts switch on Settings > Privacy > Direct
 // Messages and the "Seen 08:09 AM" label under my latest message, in real Chrome against the real API, Postgres
@@ -21,8 +21,7 @@ async function verifiedAdult(label: string): Promise<Verified> {
   const acct = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(acct);
   const { token } = await me(acct);
-  const username = uniqueUsername(label);
-  expect((await api('PATCH', `/users/${acct.userId}`, { token, body: { username } })).status).toBe(200);
+  const username = await assignUsername(acct, token, label);
   return { ...acct, token, username };
 }
 

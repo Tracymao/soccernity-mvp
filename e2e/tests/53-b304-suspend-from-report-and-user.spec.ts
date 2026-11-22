@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { COPY_TAG, adminPageAs, api, createQaAdmin, db, tagged, userLogin, verifiedAccount, type QaAdmin, type Verified } from '../support/helpers';
+import { COPY_TAG, adminPageAs, api, createQaAdmin, db, tagged, userLogin, verifiedAccount, type QaAdmin, type Verified, textMatching } from '../support/helpers';
 import { URLS } from '../support/stack';
 
 // B-304 (b): suspending an account from a report and from the user page (B-291, B-295, Decision Log #485, #492,
@@ -68,7 +68,7 @@ test.describe.serial('suspend an account: from a report and from the user page',
       'If they are under 18, their guardian is told once.',
       'If an appeal against this report is overturned, the account is reinstated automatically.',
     ]) {
-      await expect(dialog.getByText(tagged(text), { exact: true })).toBeVisible();
+      await expect(dialog.getByText(textMatching(text, { exact: true }))).toBeVisible();
     }
     await expect(dialog.getByText('based on this report’s category', { exact: false })).toBeVisible();
     // Report mode asks for no category: the report supplies it.
@@ -95,7 +95,7 @@ test.describe.serial('suspend an account: from a report and from the user page',
     // The page stays on the report and shows the suspended state (callout + pill), both with the tag where drawn.
     await expect(page).toHaveURL(new RegExp(`/moderation/reports/${reportA}$`));
     await expect(
-      page.getByText(tagged('Account suspended. The account can no longer sign in and has been emailed.'), { exact: true }),
+      page.getByText(textMatching('Account suspended. The account can no longer sign in and has been emailed.', { exact: true })),
     ).toBeVisible();
     await expect(page.locator('.mod-pill', { hasText: 'Account suspended' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Record an appeal' })).toBeVisible();
@@ -138,7 +138,7 @@ test.describe.serial('suspend an account: from a report and from the user page',
     await expect(dialog.getByRole('radio', { name: 'Spam or scam' })).toBeVisible();
     await expect(dialog.getByText('based on the category you choose', { exact: false })).toBeVisible();
     await expect(
-      dialog.getByText(tagged('A moderator reviews appeals sent through Contact Us and can reinstate the account from this page.'), { exact: true }),
+      dialog.getByText(textMatching('A moderator reviews appeals sent through Contact Us and can reinstate the account from this page.', { exact: true })),
     ).toBeVisible();
 
     // Confirming with no category sends nothing and says why.
@@ -152,7 +152,7 @@ test.describe.serial('suspend an account: from a report and from the user page',
     await dialog.getByRole('button', { name: 'Suspend account' }).click();
     await expect(dialog).toHaveCount(0);
     await expect(
-      page.getByText(tagged('Account suspended. The account can no longer sign in and has been emailed.'), { exact: true }),
+      page.getByText(textMatching('Account suspended. The account can no longer sign in and has been emailed.', { exact: true })),
     ).toBeVisible();
     // The row now says it is suspended and the button is gone.
     await expect(support.getByText('This account is suspended.')).toBeVisible();

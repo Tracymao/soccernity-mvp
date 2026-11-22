@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { buildContestSchedule } from '../../services/api/src/modules/contest/contest-schedule.util';
-import { api, db, me, registerViaApi, uniqueUsername, verifyEmailViaApi } from './helpers';
+import { api, db, assignUsername, me, registerViaApi, uniqueUsername, verifyEmailViaApi } from './helpers';
 import { USER_PASSWORD } from './stack';
 
 // backend/test-clock-qa. Drive the live Contest phases in a real browser.
@@ -161,9 +161,7 @@ export async function makeMember(label: string, displayName: string): Promise<Co
   const a = await registerViaApi({ age: 30, label, displayName });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  const res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
-  expect(res.status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { userId: a.userId, email: a.email, password: USER_PASSWORD, username, token };
 }
 

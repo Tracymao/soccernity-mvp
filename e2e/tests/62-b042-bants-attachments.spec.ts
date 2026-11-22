@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, verifiedAccount, type Verified } from '../support/helpers';
+import { api, db, loginViaUi, verifiedAccount, type Verified, textMatching } from '../support/helpers';
 import { restartApi } from '../support/api-process';
 import { WIDTH_CLEAR } from '../support/fake-media-services';
 import { pngOfWidth } from '../support/media-fixtures';
@@ -72,7 +72,7 @@ test.describe.serial('B-042: Bants room composer takes pictures and video', () =
     await expect(page.getByRole('button', { name: /attach photo\/video/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Picture/ })).toBeEnabled();
     await expect(page.getByRole('button', { name: /Video/ })).toBeEnabled();
-    await expect(page.getByText('Everything you upload is checked before other people can see it. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toBeVisible();
 
     const text = `Bants picture ${RUN}`;
     await page.getByPlaceholder(/say something to/i).fill(text);

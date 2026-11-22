@@ -9,7 +9,7 @@ import {
   registerViaApi,
   uniqueUsername,
   verifyEmailViaApi,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 
 // B-289 (Decision Log #483): content a moderator removed, on the web, in real Chrome against the real API,
@@ -34,8 +34,7 @@ async function verifiedAdult(label: string): Promise<Verified> {
   const a = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  expect((await api('PATCH', `/users/${a.userId}`, { token, body: { username } })).status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { ...a, token, username };
 }
 
