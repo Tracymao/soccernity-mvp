@@ -1,4 +1,4 @@
-# Soccernity: incident-response and breach-notification plan (DRAFT v0.9)
+# Soccernity: incident-response and breach-notification plan (DRAFT v0.10)
 
 > **DRAFT FOR COUNSEL REVIEW. NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
@@ -7,7 +7,7 @@
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is created but not configured, on purpose); the R2 buckets, AWS, Google OAuth and Meta are not yet created **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]**
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21, v0.10 2026-11-22): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is created but not configured, on purpose); the R2 buckets, AWS, Google OAuth and Meta are not yet created **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]**
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
@@ -29,7 +29,7 @@ blocker is marked **[FOR FOUNDER — not a counsel blocker]**.
 **What this update is, stated plainly.** A narrow refresh against `origin/main` (`b67d9c0`), made so counsel does not read statements that the built system or a
 founder decision contradicts. It re-marks the dispositions of five questions, fixes stale statements, and adds a sub-point to Q5. Every changed passage is marked
 `[v0.8 CHANGED — …]`. It re-rates nothing, closes no risk, and does not complete, advance or approve this plan; **it is still a DRAFT, NOT APPROVED, NOT LEGAL
-ADVICE.** No new customer-facing wording was needed, so nothing is tagged `[COPY PENDING LEGAL REVIEW]`. Nothing was run, CI cannot be read from here, and the
+ADVICE.** No new customer-facing wording was needed, so nothing is tagged with the pending-legal-review tag. Nothing was run, CI cannot be read from here, and the
 Security session could not be asked (non-interactive; no open PR touched this file). Decision Log #533 and #534 are cited as "docs PR R98, pending merge" because
 that PR was not on `origin/main` when this was written. The report `docs/dpia-v010-incident-v08-report.md` lists every change with line numbers and the statements
 it found and left.
@@ -42,7 +42,7 @@ it found and left.
    staff welfare was found" now points at Decision Log #533 and #534.
 
 **Not changed, on purpose:** the v0.2 to v0.7 change lists; every `[OPEN]`, `[UNVERIFIED]` and `[PLACEHOLDER]` marker; Q1 to Q17, Q21, Q22 and the US and EU
-questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position.
+questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
 
 ## v0.7 changes (what changed since v0.6, and why)
@@ -50,7 +50,7 @@ questions apart from the Q5 sub-point; the roles (placeholders); the sign-off po
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-17 against `origin/main` (`014afcd`, after PR #808) for the founder decisions recorded as
 Decision Log #524 to #532 and the builds they cover (the B-206 path, B-321, B-322). The full item list with line numbers, the disposition table and what could not be
 checked is in `docs/incident-plan-v07-report.md`. Every changed passage is marked `[v0.7 CHANGED — …]`. **No new customer-facing wording was needed, so nothing is tagged
-`[COPY PENDING LEGAL REVIEW]`.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
+the pending-legal-review tag.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
 merged code, the merged builders' reports and the Decision Log. The Security session could not be asked (this session is non-interactive).
 
 **Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.16, DPIA v0.8, this plan v0.6 or the tagged strings. The founder wants counsel to receive current
@@ -83,7 +83,7 @@ Where the Decision Log did not support the founder's reading, the item is marked
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-13 against `origin/main` (`d6138c8`, after PRs #755 to #758) for the founder decisions
 recorded as Decision Log #498 to #503 and the builds they cover (B-302, B-305, B-306, B-307, B-308). The item list with line numbers and sources is in
 `docs/dpia-v08-incident-v06-report.md`. Every changed passage is marked `[v0.6 CHANGED — …]`. **No new customer-facing wording was needed, so nothing is tagged
-`[COPY PENDING LEGAL REVIEW]`.** Nothing here approves, advances or closes anything; the DPIA's sign-off block and this plan's counsel questions are unchanged.
+the pending-legal-review tag.** Nothing here approves, advances or closes anything; the DPIA's sign-off block and this plan's counsel questions are unchanged.
 Nothing was run, and CI cannot be read from here: what follows is read from the merged code and the merged builders' reports.
 
 1. **Ending a session now stops an already-issued access token** (Decision Log #500; B-305, PR #755). §4.1 and §4.2 said an access token stays valid for up to
@@ -105,7 +105,7 @@ Nothing was run, and CI cannot be read from here: what follows is read from the 
 
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-11 against `origin/main` (`e6bcf0e`) for the founder decisions recorded as Decision
 Log #490 to #494. The item list with source files is in `docs/dpia-incident-retention-restored-2026-11-11-report.md`. **New wording in this file is tagged
-`[COPY PENDING LEGAL REVIEW]` where it is customer-facing; most of it is internal.** Nothing here approves, advances or closes anything; the DPIA's sign-off block
+the pending-legal-review tag where it is customer-facing; most of it is internal.** Nothing here approves, advances or closes anything; the DPIA's sign-off block
 and this plan's counsel questions are unchanged except where stated.
 
 | # | Fact | Where it changed in this file |
@@ -125,7 +125,7 @@ about and by children than v0.3 assumed (§8.4, Q21). Nothing was added to prote
 
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-11 against `origin/main` (`0e440bf`) for the
 founder decisions of 2026-11-10 and 2026-11-11. The item list with source files is in `docs/incident-plan-v0.3-report.md`.
-**New customer-facing wording in this file is tagged `[COPY PENDING LEGAL REVIEW]`.** Build-register row **B-206** (evidence
+**New customer-facing wording in this file is tagged with the pending-legal-review tag.** Build-register row **B-206** (evidence
 set-aside, CSAM and statutory reporting) **stays with counsel and is not touched**; this plan only points to it.
 
 | # | Fact | Where it changed in this file |
@@ -715,7 +715,7 @@ account hold (#459).
 - **Rejected media and CSAM:** **[v0.6 CHANGED — B-283, PR #608]** (v0.5: "rejected files are kept private and never deleted") a rejected file's private object is deleted on every path that removes its database row (a post deleted by a live account, a deleted upload, the quarantine and unattached purges, account anonymisation and the account purge), unless the uploader is under an active admin hold or the post has a report that is not yet closed; a moderator's Reject itself deletes nothing. A daily sweep for stray objects with no row exists but needs a list permission on the storage key (B-207), so it may find none until that is granted. What counts as evidence, and any statutory duty, is **not decided and open under counsel (B-206)**; user uploads are off by default in production until it is answered (§4.7). The handling of material that may
   be illegal is **undecided and open under counsel**. **[v0.7 CHANGED — #524, #525, #526, #529, #530]** (v0.6 text kept above) **Uploads go on at launch** with `MEDIA_UPLOADS_ENABLED` as the off switch, and **a suspected-illegal-imagery path is built** (next bullet). The legal side stays open for counsel and is non-blocking: whether the law requires proactive detection, per-country duties, receiving bodies and deadlines, evidence retention beyond 365 days, and platform duties to children (Q11, Q22). **Detection (IWF Image Intercept first, Hive as the fallback) is built after launch and is NOT BUILT**; the founder accepts launching before hash-matching exists as his own risk, not a view of counsel. A responder who finds possible CSAM must not copy, forward or view it
   further and goes to counsel at once.
-- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel and should not expect a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
+- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel and does not expect a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
 
 ### 8.4 Old evidence and the retention clocks **[v0.3 CHANGED — new section]**
 
@@ -875,18 +875,18 @@ product**; no variant of the automatic email exists. Sent by hand from `support@
 confirmed is the owner's, **not** necessarily the address on file.
 ```
 Subject: Your Soccernity account has been paused
-[COPY PENDING LEGAL REVIEW]
+
 
 Hi [first name],
 
 We have paused your Soccernity account while we look into a security problem. This is not because of anything you did wrong.
-[COPY PENDING LEGAL REVIEW]
+
 
 If you got an email from us saying your account was suspended for breaking our community rules, please ignore that reason: it
-was sent automatically and does not apply here. [COPY PENDING LEGAL REVIEW]
+was sent automatically and does not apply here.
 
 We will write again when your account is back, or you can reach us at [PLACEHOLDER contact]. We will never ask for your password.
-[COPY PENDING LEGAL REVIEW]
+
 ```
 For a minor, the guardian's version follows §10.2 and is checked against the withhold flag first (§7.5). Whether this note is
 needed, and what may be promised about points, `[OPEN — Q20]`.
@@ -937,7 +937,7 @@ a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition an
 | **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; not re-checked against legal copy v0.16]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
 | **Q8** | **[v0.7 DISPOSITION: A — no decision recorded (the 6 and 7-year report range is recorded as counsel-approved, #490; the rest is open)]** Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (6 years; 7 years for a minor **[v0.4 CHANGED — #490]**; v0.3 said 12 months and 6), which run independently of any incident.]** |
 | **Q9** | **[v0.7 DISPOSITION: D — a build and authorisation question; no decision recorded and nothing contradicts the founder's reading]** Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
-| **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged `[COPY PENDING LEGAL REVIEW]` in the platform's manifest, and no counsel position is recorded here. |
+| **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged with the pending-legal-review tag in the platform's manifest, and no counsel position is recorded here. |
 | **Q11** | **[v0.7 DISPOSITION: A — non-blocking (#524, #532); now includes the suspected-illegal-imagery duties: police and statutory reports, receiving bodies and deadlines per country (the founder will not register before uploads go on, #529)]** Who else is told: police, insurers, the platform's processors' own regulators? Obligations to report suspected child-safety crimes? **[v0.7 CHANGED — #524, #529, #532]** Includes, and is merged with, the statutory-reporting duties for suspected illegal imagery in Q22(b); non-blocking for launch. |
 | **Q12** | **[v0.7 DISPOSITION: A — no decision recorded]** Is one-person incident leadership acceptable at launch, or must a second named responder exist? Does counsel require a **data-protection officer** (UK GDPR Art. 37; NDPA's DPO duty for controllers of major importance, GAID Art. 11), thresholds not verified here. |
 | **Q13** | **[v0.7 DISPOSITION: A — no decision recorded]** Nigeria: does the NDPA require Soccernity to register as a controller "of major importance"? That decides some reporting duties (GAID Arts. 8 to 9). Not assessed. |

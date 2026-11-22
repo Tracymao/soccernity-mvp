@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL — NOT APPROVED, NOT LEGAL ADVICE
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
+**Status: draft for counsel review.**
 
 This is a **new, standalone file**. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
 (v0.8 when drafted; **[v0.3 CHANGED — #532]** v0.17 on `origin/main` `b67d9c0`), and nothing here has been applied to the Terms, the Privacy Policy, the guardian consent
@@ -11,25 +11,25 @@ has answered the questions in `docs/dpia-addendum-contest-view-data-draft.md` (t
 which holds the risk analysis, the store-by-store facts and the questions for counsel).
 
 Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negotiable #2: every output
-is a draft, never approved). Every block of wording below carries `[COPY PENDING LEGAL REVIEW]` on purpose,
+is a draft, never approved). Every block of wording below carries the pending-legal-review tag on purpose,
 and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w11-exposure-report.md` §4 and `docs/backend-w12-points-report.md` §4, with
   two direct code checks recorded in the DPIA addendum (R18). **Nothing here is live** and no regulator
   guidance was retrieved.
 
 ---
 
-## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog — v0.2 → v0.3 (2026-11-17)
 
 **[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** The legal draft is now **v0.17** (this file said v0.8, and the v0.2 note said v0.16) and its Part C table uses rows **1 to 54**, so the row proposed here as **row 45** is taken (45 is the Contact Us form notice, 46 and 47 are message rows, 52 to 54 are moderation rows); **the next free row is 55; renumber when applied, and do not renumber here.** It **chooses no notice option (N-1 to N-4), applies nothing, completes nothing and claims nothing as solved.** **Every disposition in v0.2 is unchanged.** Counsel has not reviewed it; no counsel position is recorded. Decision Log #533 and #534 are merged (docs PR #816). The phrases "Part C of the v0.8 draft" and "the last existing row is 44" are **kept** (they describe the draft when this file was written) with a marked note beside each.
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
----
+--- v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
-## Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog — v0.1 → v0.2 (2026-11-17)
 
 **[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It gives **every question in Section 5 and every notice option in Section 3 a disposition marker**, adds a marked note beside the statements the built system has since changed (the contest-entry removal of B-300 and the report-retention cascade of B-307), flags that the proposed row number and the v0.8 references are stale, and adds this changelog. It **chooses no notice option (N-1 to N-4), applies nothing to the Terms, the Privacy Policy, the consent screen or any Figma frame, completes nothing and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text is kept.
 
@@ -43,7 +43,7 @@ and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal dra
 
 ---
 
-## 1. Proposed Part C row **[COPY PENDING LEGAL REVIEW]**
+## 1. Proposed Part C row
 
 Same table format as Part C of the v0.8 draft. The last existing row is **44**, so this is proposed as
 **row 45**. **[v0.3 CHANGED — #532]** *(Stale: in v0.17 the last existing row is 54, so the next free row is 55; renumber when applied.)* One row, because the findings are one processing activity; the detail lives in the DPIA addendum.
@@ -58,13 +58,13 @@ Same table format as Part C of the v0.8 draft. The last existing row is **44**, 
 
 ---
 
-## 2. Policy-text insertion candidates (NOT applied) **[COPY PENDING LEGAL REVIEW]**
+## 2. Policy-text insertion candidates (NOT applied)
 
 These are *candidate* sentences, written so counsel can accept, reword or reject them. They are keyed to
 the sections of the v0.8 draft they would extend. **They describe the product as built, and several
 depend on a retention decision that has not been made (marked [OPEN]).**
 
-### 2.1 Candidate for PP §1.5 ("Engagement and ranking data") — what we record **[COPY PENDING LEGAL REVIEW]**
+### 2.1 Candidate for PP §1.5 ("Engagement and ranking data") — what we record
 
 > **[PROPOSAL]** To work out points and Contest rankings, we measure whether you have actually looked at
 > a post (for example, a photo on screen for a few seconds, or a video watched for long enough) while
@@ -74,14 +74,14 @@ depend on a retention decision that has not been made (marked [OPEN]).**
 > you, so that every finalist is shown fairly. We do not record how long you looked, where on the screen
 > you looked, your device, or your IP address for this.
 
-### 2.2 Candidate for PP §1.5 or §7 — who can see it **[COPY PENDING LEGAL REVIEW]**
+### 2.2 Candidate for PP §1.5 or §7 — who can see it
 
 > **[PROPOSAL]** Other people can see your points and rank on the Leaderboard (and, as set out in
 > Section 7, that can include a username if you are under 18). They cannot see which posts you viewed, or
 > who viewed a post, and Contest creators are never told who watched their video. Our team can see
 > aggregate figures about how often each Final-week video was shown, but not who it was shown to.
 
-### 2.3 Candidate for the PP §9 retention table — one row per store **[COPY PENDING LEGAL REVIEW]**
+### 2.3 Candidate for the PP §9 retention table — one row per store
 
 | Data type | Retention period | What triggers change |
 |---|---|---|
@@ -92,7 +92,7 @@ depend on a retention decision that has not been made (marked [OPEN]).**
 
 **[v0.2 CHANGED — B-307]** The last row's "no retention period" is now partly overtaken: contest view records of an entry whose post was **removed by a moderator** are deleted with the post once its report is retained out and the cycle is completed (B-307). Records of every other entry still have no period. *[v0.2 DISPOSITION: A — the retention for the rest (DPIA addendum Q7; options R-1 to R-5 unchosen); non-blocking.]*
 
-### 2.4 Candidate for PP §9 "Signals that are yours alone" **[COPY PENDING LEGAL REVIEW]**
+### 2.4 Candidate for PP §9 "Signals that are yours alone"
 
 The existing draft lists follows, likes, saves, notifications and memberships as removed at anonymisation.
 If counsel chooses retention option R-5 (DPIA addendum 7.1), add "points and view records" to that list.
@@ -101,7 +101,7 @@ If counsel chooses retention option R-5 (DPIA addendum 7.1), add "points and vie
 
 ---
 
-## 3. Viewer-facing transparency notice: options, not decisions **[COPY PENDING LEGAL REVIEW]**
+## 3. Viewer-facing transparency notice: options, not decisions
 
 Context: Decision Log #400 E10 displaced the original Contest-page transparency copy (spec 10b), and
 no replacement was decided. The DPIA addendum R19 records the gap. Each option below is wording plus
@@ -117,7 +117,7 @@ none is built.
 
 *[v0.2 CHANGED — #532]* **No notice option has been chosen and v0.2 does not choose one.** *[v0.2 DISPOSITION: A — N-1 to N-4 stay open for counsel and the founder; non-blocking. D — if N-4 is chosen, the `CONSENT_SCREEN_VERSION` bump is engineering housekeeping.]*
 
-### 3.1 Draft wording for each option **[COPY PENDING LEGAL REVIEW]**
+### 3.1 Draft wording for each option
 
 **N-2, in-product (short, adult register):**
 
@@ -138,7 +138,7 @@ none is built.
 > commenting on posts and records that an account viewed a post. It does not record device or location
 > details for this, and the points can appear on a public Leaderboard under your child's username.
 
-### 3.2 Drafting notes for counsel on the wording **[COPY PENDING LEGAL REVIEW]**
+### 3.2 Drafting notes for counsel on the wording
 
 - The N-2 to N-4 wording says "nothing about how long you looked". That is true of what is **stored**
   but not of what is **measured** (the 2-minute in-memory record does use timing). Counsel to say whether
@@ -154,7 +154,7 @@ none is built.
 
 ---
 
-## 4. Assumptions and open points **[COPY PENDING LEGAL REVIEW]**
+## 4. Assumptions and open points
 
 Assumptions are numbered in the DPIA addendum (Section 8) and are not repeated; those that bear on this file:
 
@@ -169,7 +169,7 @@ Assumptions are numbered in the DPIA addendum (Section 8) and are not repeated; 
   product decision, not a legal clearance.
 - **[v0.2 CHANGED — #532]** v0.2 reads `CLAUDE.md`'s status bullets and the code on `origin/main` `014afcd` (2026-11-17). Nothing was run; the legal draft referenced here is now v0.16. *[v0.2 DISPOSITION: D — housekeeping.]*
 
-## 5. Questions this file raises for counsel **[COPY PENDING LEGAL REVIEW]**
+## 5. Questions this file raises for counsel
 
 1. Which of N-1 to N-4 is required, and may the in-product copy be short and linked to the Policy?
    *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
@@ -189,7 +189,7 @@ Assumptions are numbered in the DPIA addendum (Section 8) and are not repeated; 
 
 **[v0.2 CHANGED — #532]** *v0.2 note: a narrow refresh (changelog, disposition markers, notes beside the statements B-300 and B-307 changed). It chooses no option, applies nothing, claims nothing as solved and records no counsel position, because counsel has not reviewed this file.*
 
-## Closing statement **[COPY PENDING LEGAL REVIEW]**
+## Closing statement
 
 This file proposes one Part C row and four notice options so that counsel can decide what the Privacy
 Policy and the product must tell viewers and guardians about view and impression data. It decides

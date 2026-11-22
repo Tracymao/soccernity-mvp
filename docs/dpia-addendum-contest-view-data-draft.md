@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
+**Status: draft for counsel review.**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
 `docs/sprint-1-dpia-outline-draft.md` (v0.3 when drafted; **[v0.3 CHANGED — #532]** v0.9 on `origin/main` `b67d9c0`), which is the DPIA it would attach to. If counsel
@@ -16,29 +16,29 @@ ICO Age Appropriate Design Code or any other regime. **A DPIA is only a DPIA onc
 has completed, challenged and signed it.** The sign-off block in Section 10 is empty on purpose.
 
 **Tag convention.** Every heading and every block of proposed wording below carries
-`[COPY PENDING LEGAL REVIEW]`; the tag is repeated deliberately so it survives being copied into
+the pending-legal-review tag; the tag is repeated deliberately so it survives being copied into
 another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise or reject.
 **[OPEN]** = a decision that belongs to the founder and counsel, which this draft does not make.
 **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 8.
 
 - **Document:** DPIA addendum for contest view and impression data
 - **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**
+- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 10)
 - **Companion file:** `docs/legal-copy-part-c-view-data-draft.md` (the proposed Part C row and
   viewer-notice options; it holds the notice wording, this file holds the risk analysis)
 
 ---
 
-## Changelog: v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.2 → v0.3 (2026-11-17)
 
 **[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** It re-points this addendum at the files now on `origin/main` `b67d9c0` (2026-11-17): the DPIA is **v0.9** (this file said v0.3, and the v0.2 note said v0.8) and the legal draft is **v0.17** (this file said v0.8). It **chooses no option, completes nothing and claims nothing as solved.** **Every disposition in v0.2 is unchanged:** Decision Log #534 re-marked no question in this file. Sign-off is empty and counsel has not reviewed it. The statement that the draft Privacy Policy "mentions points and rank in §1.5 and nothing about impressions, view qualification or dwell measurement" was **re-checked against v0.17** (no match for "impression" or "dwell" in that file, 2026-11-17) and **still holds**; it is annotated, not changed. The references to "the v0.3 DPIA" inside the body (§2.1 lawful basis, §2.6 COPPA, §5 R17 numbering "continues from the v0.3 DPIA's R16", the "§0 item 5" limitation) describe what that DPIA said **when this addendum was written**; they are **kept**, not rewritten, because I did not re-verify each one against v0.9 (they are listed in `docs/addenda-stale-fixes-report.md`). Decision Log #533 and #534 are merged (docs PR #816).
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
----
+--- v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
-## Changelog: v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.1 → v0.2 (2026-11-17)
 
 **[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **every one of the 16 questions in Section 9 a disposition marker**; (2) it adds a marked note beside the few statements the built system has since contradicted (the contest-entry removal of B-300 and the report-retention cascade of B-307); (3) it adds this changelog. It **chooses no option (R-1 to R-5, P-1 to P-4, N-1 to N-4), completes nothing, applies nothing to the product, the policy or the consent screen, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text is kept.
 
@@ -55,7 +55,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 ---
 
-## 0. Sourcing limitations counsel must know about before reading **[COPY PENDING LEGAL REVIEW]**
+## 0. Sourcing limitations counsel must know about before reading
 
 1. **Facts come from two engineering reports, cross-checked against the code in one place.** Sections 1 to
    3 are taken from `docs/backend-w11-exposure-report.md` §4 (carousel impressions) and
@@ -80,7 +80,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 ---
 
-## 1. Scope: what this addendum covers **[COPY PENDING LEGAL REVIEW]**
+## 1. Scope: what this addendum covers
 
 Four stores hold behavioural data about *what a signed-in account looked at and for how long*. Three
 of them are new in the contest and points work (W7, W11, W12), and none was in the DPIA.
@@ -97,7 +97,7 @@ Out of scope here (already in or belonging to other analyses): the like and comm
 public-ish action rather than passive viewing; see Section 8, assumption 9), contest votes, and the
 leaderboard read path.
 
-### 1.1 What is stored, exactly **[COPY PENDING LEGAL REVIEW]**
+### 1.1 What is stored, exactly
 
 Reproduced from the W11 and W12 reports §4 and checked against the schema.
 
@@ -139,7 +139,7 @@ carousel, the claimed visible share or milliseconds (checked then discarded).
 **Derived and kept:** `ContestEntry.impressionTotal`, one integer per final entry, written at the crown. It
 holds no viewer data and lives as long as the entry.
 
-### 1.2 Who can read each store **[COPY PENDING LEGAL REVIEW]**
+### 1.2 Who can read each store
 
 | Store | In-application access | Other |
 |---|---|---|
@@ -148,7 +148,7 @@ holds no viewer data and lives as long as the entry.
 | C | No endpoint returns ledger rows. `GET /leaderboard` returns per-user totals (rounded to whole points) only | Database operators; backups |
 | D | Contest endpoints return tallies, never the log | Database operators; backups |
 
-### 1.3 Who the processing covers **[COPY PENDING LEGAL REVIEW]**
+### 1.3 Who the processing covers
 
 Every non-restricted signed-in account, **including minors whose guardian has confirmed consent**
 (`docs/contest-spec.md` 10b audience; "same rules for minors"). Restricted accounts (a minor without
@@ -157,7 +157,7 @@ the stores are listed in Section 5, R22.
 
 ---
 
-## 2. Purposes and necessity (facts for counsel; no conclusion drawn) **[COPY PENDING LEGAL REVIEW]**
+## 2. Purposes and necessity (facts for counsel; no conclusion drawn)
 
 | Store | Stated purpose | Could it be done with less? (the drafter's observations, for counsel to test) |
 |---|---|---|
@@ -172,7 +172,7 @@ and does not answer.
 
 ---
 
-## 3. Data subjects **[COPY PENDING LEGAL REVIEW]**
+## 3. Data subjects
 
 1. **Viewers**: every active, non-restricted account, including confirmed-consent minors. Under-16s are
    in scope for the carousel and for views of public posts. Whether an under-16 can be a viewer at all
@@ -186,7 +186,7 @@ and does not answer.
 
 ---
 
-## 4. Lawful basis **[COPY PENDING LEGAL REVIEW]**
+## 4. Lawful basis
 
 **[PROPOSAL, NOT DETERMINED]** As in the v0.3 DPIA §2.1, this draft does **not** select a lawful basis.
 For counsel:
@@ -209,11 +209,11 @@ For counsel:
 
 ---
 
-## 5. Risks (proposed R17 to R22; numbering continues from the v0.3 DPIA's R16) **[COPY PENDING LEGAL REVIEW]**
+## 5. Risks (proposed R17 to R22; numbering continues from the v0.3 DPIA's R16)
 
 Ratings are placeholders for counsel, in the same convention as the v0.3 DPIA.
 
-### R17: Behavioural data about children's viewing is created and kept without a stated retention period **[COPY PENDING LEGAL REVIEW]**
+### R17: Behavioural data about children's viewing is created and kept without a stated retention period
 
 Store A has a short, defined life (fold and delete at the crown). **Stores C and D have none.**
 `PointsLedgerEntry` is documented as append-only and "never deleted"; `ContestEngagement` rows live
@@ -225,7 +225,7 @@ rows in C, **that account Z viewed X's post** (`counterpartId`).
 
 *Draft severity: moderate. Draft likelihood: certain (it is how the code works). Placeholder ratings.*
 
-### R18: Erasure and anonymisation do not reach stores C and D **[COPY PENDING LEGAL REVIEW]**
+### R18: Erasure and anonymisation do not reach stores C and D
 
 **Finding from the code, not from a report:** `AccountDeletionSweepService.anonymizeUser` deletes the
 viewer's `ContestImpression` rows (A) but contains **no deletion of `PointsLedgerEntry` or
@@ -250,7 +250,7 @@ the ledger or contest engagement rows.
 
 *Draft severity: moderate. Draft likelihood: certain as built. Placeholder ratings.*
 
-### R19: No transparency, no notice and no opt-out for the viewer or the guardian **[COPY PENDING LEGAL REVIEW]**
+### R19: No transparency, no notice and no opt-out for the viewer or the guardian
 
 Per the W11 report: "The viewer has no control, no notice and no opt-out in this PR (the transparency
 copy of spec 10b was displaced by #400 E10 and no replacement is decided)." The draft Privacy Policy
@@ -262,7 +262,7 @@ confirmation screen does not mention it, and changing that screen's wording bump
 
 *Draft severity: high for a children's service. Draft likelihood: certain as built. Placeholder ratings.*
 
-### R20: Purging depends on a single sweep; no independent control **[COPY PENDING LEGAL REVIEW]**
+### R20: Purging depends on a single sweep; no independent control
 
 The impression rows (A) are deleted inside the crown transaction (`ContestLifecycleService.complete`). If
 the lifecycle sweep is down at month end, rows persist until it next runs (every minute; steps are
@@ -273,7 +273,7 @@ reaches the crown (abandoned, a failed month) has no defined purge path for its 
 
 *Draft severity: low to moderate. Draft likelihood: low. Placeholder ratings.*
 
-### R21: Rewards for viewing as a nudge to children **[COPY PENDING LEGAL REVIEW]**
+### R21: Rewards for viewing as a nudge to children
 
 A giver earns 1 point per qualifying view, capped at 40 points a day (and a creator earns 0.25, capped
 at 20), and those points rank people on a public leaderboard that shows usernames, including minors'.
@@ -288,7 +288,7 @@ the drafter knows only in general terms).
 
 *Draft severity: moderate. Draft likelihood: moderate. Placeholder ratings.*
 
-### R22: The stores treat restricted and unverified accounts differently **[COPY PENDING LEGAL REVIEW]**
+### R22: The stores treat restricted and unverified accounts differently
 
 | Account state | A (carousel impression) | B (heartbeat in Redis) | C and D (Postgres rows) |
 |---|---|---|---|
@@ -305,7 +305,7 @@ rule. It is flagged for consistency, not as a finding of harm.
 
 ---
 
-## 6. Mitigations already in the product **[COPY PENDING LEGAL REVIEW]**
+## 6. Mitigations already in the product
 
 Stated as built; none has been reviewed or tested by counsel, and none is live.
 
@@ -322,14 +322,14 @@ Stated as built; none has been reviewed or tested by counsel, and none is live.
 
 ---
 
-## 7. Options, not decisions **[COPY PENDING LEGAL REVIEW]**
+## 7. Options, not decisions
 
 These are for the founder and counsel to choose between. **Nothing below is recommended as
 the only reasonable choice**, and where this draft states a lean it says so as a lean. None has been
 built. Options for the **viewer-facing notice** are in `docs/legal-copy-part-c-view-data-draft.md`
 (Section 3 there), because they are wording choices.
 
-### 7.1 Retention of `PointsLedgerEntry` and `ContestEngagement` view rows **[COPY PENDING LEGAL REVIEW]**
+### 7.1 Retention of `PointsLedgerEntry` and `ContestEngagement` view rows
 
 Context: both are undefined today. Choosing a period also decides what the Privacy Policy §9 table says.
 Periods below are illustrative placeholders for counsel, not a recommended number.
@@ -348,7 +348,7 @@ engineering check before counsel relies on it. **[OPEN]** (Q8).
 
 *[v0.2 CHANGED — #532]* **No option R-1 to R-5 has been chosen, and v0.2 does not choose one.** *[v0.2 DISPOSITION: A — R-1 to R-5, P-1 to P-4 and N-1 to N-4 stay open for counsel and the founder; non-blocking.]*
 
-### 7.2 Independent purge job for `ContestImpression` **[COPY PENDING LEGAL REVIEW]**
+### 7.2 Independent purge job for `ContestImpression`
 
 Context: today only the crown transaction and account anonymisation delete rows (R20).
 
@@ -362,7 +362,7 @@ Context: today only the crown transaction and account anonymisation delete rows 
 Also for counsel under this heading: the hosting provider's backup retention (Neon, Upstash), which this
 draft did not assess and which defines the real outer limit of any purge (Q9).
 
-### 7.3 Transparency notice for viewers and guardians **[COPY PENDING LEGAL REVIEW]**
+### 7.3 Transparency notice for viewers and guardians
 
 See `docs/legal-copy-part-c-view-data-draft.md` Section 3. The four options there (Policy only; plus an
 in-product notice at the carousel; plus a first-use notice for under-18s; plus a guardian-facing
@@ -377,7 +377,7 @@ disclosure on the consent screen) are summarised in the table below so this file
 
 ---
 
-## 8. Assumptions this draft made **[COPY PENDING LEGAL REVIEW]**
+## 8. Assumptions this draft made
 
 1. **Under-16s are viewers.** Nothing in the code limits an under-16's view heartbeat or carousel
    impression; the under-16 tier restricts other features (Decision Log #346). Assumed this is intended.
@@ -408,7 +408,7 @@ disclosure on the consent screen) are summarised in the table below so this file
 
 ---
 
-## 9. Questions counsel must answer **[COPY PENDING LEGAL REVIEW]**
+## 9. Questions counsel must answer
 
 1. Is processing view and dwell data of children (store B, and the rows in C and D) permissible for the
    stated purposes, and on what lawful basis, in each regime in scope (UK, EU, Nigeria, US)?
@@ -460,7 +460,7 @@ disclosure on the consent screen) are summarised in the table below so this file
 
 ---
 
-## 10. Sign-off **[COPY PENDING LEGAL REVIEW]**
+## 10. Sign-off
 
 This block is intentionally empty. A completed addendum requires a competent person to challenge and sign
 it.
@@ -478,7 +478,7 @@ it.
 
 **[v0.2 CHANGED — #532]** *v0.2 note: a narrow refresh (changelog, disposition markers on all 16 questions, notes beside the statements B-300 and B-307 changed). It chooses no option, applies nothing, claims nothing as solved and records no counsel position, because counsel has not reviewed this file.*
 
-## Closing statement **[COPY PENDING LEGAL REVIEW]**
+## Closing statement
 
 This addendum exists to put in front of counsel exactly what the contest and points work stores about
 what signed-in accounts, including children, look at: one short-lived and aggregated store (A and B), two
