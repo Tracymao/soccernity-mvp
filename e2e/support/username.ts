@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 // R107: a username that the username rules can never refuse.
 // The generator only uses the ten letters in SAFE_LETTERS and never a digit or an underscore, so by construction:
 //  - no profane, reserved, brand or contact term can appear (every one of them contains a letter outside
@@ -8,7 +9,7 @@
 export const SAFE_LETTERS = 'bdgjpqvwxz';
 let usernameCounter = 0;
 const RUN_START_MS = Date.now();
-const RUN_RANDOM = Array.from({ length: 4 }, () => SAFE_LETTERS[Math.floor(Math.random() * SAFE_LETTERS.length)]).join('');
+const RUN_RANDOM = Array.from({ length: 4 }, () => SAFE_LETTERS[randomInt(SAFE_LETTERS.length)]).join('');
 function digitsToLetters(digits: string): string {
   return digits
     .split('')

@@ -442,7 +442,7 @@ export function tagged(text: string): string {
  * (use for getByRole name and exact getByText).
  */
 export function textMatching(text: string, opts: { exact?: boolean } = {}): RegExp {
-  const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\/-]/g, '\$&');
+  const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
   const body = `${escape(text)}(?: ${escape(COPY_TAG)})?`;
   return new RegExp(opts.exact ? `^${body}$` : body);
 }
