@@ -22,8 +22,8 @@ counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to th
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6)
-- **Version:** 0.6 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6); revised 2026-11-21 (v0.7)
+- **Version:** 0.7 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
@@ -729,7 +729,7 @@ anonymised.
 | F-5 Hash-and-delete: keep only a one-way hash, not the file | A hash step; counsel decides whether a hash alone is enough | Helps detect re-uploads; not evidence of content |
 
 **[CHANGED v0.2 — 2026-11-10]** For the files of a **removed post** a rule resembling F-3 is built: the public copy is withdrawn, a private copy is kept, and
-"N" is not a number of days but the closure of the removing report (§1.5). It is a product decision (Decision Log #484), not a
+"N" means the closure of the removing report (§1.5), not a count of days. It is a product decision (Decision Log #484), not a
 counsel-approved retention period.
 
 **[v0.5 CHANGED — #462 (g), #464, #525, B-283]** **The paragraph "Built today: rejected files stay in the object store until …" is superseded.** A rejected file's private object is now **deleted on every path unless protected** (B-283), which resembles F-2 with an exception; a vetted admin can additionally **set a file aside** and it is kept for `preserveUntil` (365 days by default) past account deletion (F-4 in effect for those files, #525). *Disposition: B, #462 (g), #464, #525; counsel's view not recorded; the period beyond 365 days is A (question 4a).*
