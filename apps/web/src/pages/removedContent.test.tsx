@@ -39,7 +39,6 @@ import { getComments, getPostById, setCommentHidden } from "../api/feed";
 import { getCurrentContest, getPinnedEntry } from "../api/contest";
 import { seedSession, clearSession } from "../test/session";
 
-const TAG = "[COPY PENDING LEGAL REVIEW]";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -121,8 +120,8 @@ describe("a removed comment in the thread (M4, D3)", () => {
     await screen.findByText("Safe travels! Post the result when you can.");
     const placeholders = screen.getAllByTestId("removed-placeholder");
     expect(placeholders).toHaveLength(1);
-    expect(placeholders[0].textContent).toContain(REMOVED_COMMENT_TEXT.replace(TAG, "").trim());
-    expect(placeholders[0].textContent).toContain(TAG);
+    expect(placeholders[0].textContent).toContain(REMOVED_COMMENT_TEXT);
+    expect(placeholders[0].textContent).not.toContain("COPY PENDING");
     // In order: the placeholder comes first.
     const everything = Array.from(document.querySelectorAll(".removed-placeholder, .comment"));
     expect(everything[0]).toBe(placeholders[0]);
@@ -188,8 +187,8 @@ describe("the post page for a removed post (M5, D4)", () => {
     vi.mocked(getPostById).mockResolvedValue({ id: "post-1", removedByModeration: true });
     renderAt();
     const notice = await screen.findByTestId("removed-placeholder");
-    expect(notice.textContent).toContain(REMOVED_POST_TEXT.replace(TAG, "").trim());
-    expect(notice.textContent).toContain(TAG);
+    expect(notice.textContent).toContain(REMOVED_POST_TEXT);
+    expect(notice.textContent).not.toContain("COPY PENDING");
     expect(screen.getByRole("heading", { name: "Post" })).toBeTruthy();
     // No post card, no actions, no comment thread, and the comments are never requested.
     expect(screen.queryByRole("button", { name: /comment/i })).toBeNull();

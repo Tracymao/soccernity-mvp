@@ -325,7 +325,7 @@ describe("Reject a profile picture (6972:46863 / 6972:47057)", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Reject this profile picture?" })).not.toBeNull();
     expect(
-      within(dialog).getByText("Say why this profile picture is being rejected. The uploader sees this reason. [COPY PENDING LEGAL REVIEW]"),
+      within(dialog).getByText("Say why this profile picture is being rejected. The uploader sees this reason."),
     ).not.toBeNull();
     // Focus goes to the reason field.
     expect(document.activeElement).toBe(within(dialog).getByLabelText("Reason (required)"));
@@ -356,7 +356,7 @@ describe("Reject a profile picture (6972:46863 / 6972:47057)", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Reject this cover photo?" })).not.toBeNull();
     expect(
-      within(dialog).getByText("Say why this cover photo is being rejected. The uploader sees this reason. [COPY PENDING LEGAL REVIEW]"),
+      within(dialog).getByText("Say why this cover photo is being rejected. The uploader sees this reason."),
     ).not.toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "Not appropriate." } });
     vi.mocked(rejectMedia).mockResolvedValue({ id: COVER_ID, outcome: "rejected" });

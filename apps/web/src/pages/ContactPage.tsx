@@ -57,7 +57,7 @@ const CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: "Suggestions",
   enquiries: "Enquiries",
   feedback: "Feedback",
-  suspension_appeal: "Appeal a suspension [COPY PENDING LEGAL REVIEW]",
+  suspension_appeal: "Appeal a suspension",
 };
 
 // The helper line under the message box, shown ONLY while "Appeal a suspension" is chosen (Figma pass V,
@@ -316,7 +316,6 @@ export default function ContactPage() {
 
             {category === "suspension_appeal" && (
               <div className="contact-page__helper-block">
-                <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
                 <p className="contact-page__helper">
                   Use the email address your Soccernity account is registered with so we can find it.
                 </p>
@@ -334,7 +333,6 @@ export default function ContactPage() {
             </button>
 
             <div className="contact-page__notice">
-              <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
               <p className="contact-page__notice-text">
                 Our support team reads the messages sent through this form. We keep your message for 12 months after
                 the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern

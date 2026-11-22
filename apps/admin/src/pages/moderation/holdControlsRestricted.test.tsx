@@ -117,14 +117,14 @@ describe("hold controls on a message report that involves a child (admin not vet
     expect(holdButtons()).toEqual([null, null]);
     expect(restrictedLine()?.textContent).toBe(HOLD_CONTROLS_RESTRICTED_MESSAGE);
     expect(HOLD_CONTROLS_RESTRICTED_MESSAGE).toBe(
-      "Holds on this report need a child-safety-vetted admin (Settings › Roles). [COPY PENDING LEGAL REVIEW]",
+      "Holds on this report need a child-safety-vetted admin (Settings › Roles).",
     );
     expect(screen.queryByText(/Both ask for confirmation first/)).toBeNull();
     // Not this change's concern: the report actions are drawn as before.
     expect(screen.getByRole("button", { name: "Dismiss Report" })).not.toBeNull();
     // Viewing is unchanged (Decision Log #486): the message and the hidden-context line are still there.
     expect(screen.getByText("Training is at 7am.")).not.toBeNull();
-    expect(screen.getByText("Context hidden: this involves a child. [COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.getByText("Context hidden: this involves a child.")).not.toBeNull();
   });
 
   it("an already-actioned report: no hold buttons in Case-level actions, the line instead", async () => {

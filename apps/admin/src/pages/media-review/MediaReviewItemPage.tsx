@@ -105,7 +105,7 @@ function RejectDialog({
             ×
           </button>
         </div>
-        <p className="mod-note">Say why this {noun} is being rejected. The uploader sees this reason. [COPY PENDING LEGAL REVIEW]</p>
+        <p className="mod-note">Say why this {noun} is being rejected. The uploader sees this reason.</p>
         <label className="mod-field">
           <span className="mod-field__label">Reason (required)</span>
           <textarea

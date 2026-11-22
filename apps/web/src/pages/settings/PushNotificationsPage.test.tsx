@@ -91,7 +91,7 @@ describe("PushNotificationsPage: states", () => {
     expect(sw.getAttribute("aria-checked")).toBe("false");
     expect((sw as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText("Manage push notifications on this browser.")).toBeTruthy();
-    expect(screen.getByText("Push notifications only say “You have a new notification”. Open Soccernity to see what it is. [COPY PENDING LEGAL REVIEW]")).toBeTruthy();
+    expect(screen.getByText("Push notifications only say “You have a new notification”. Open Soccernity to see what it is.")).toBeTruthy();
     expect(
       screen.getByText("This setting applies to this browser only. Turn it on separately on each browser or device you use."),
     ).toBeTruthy();

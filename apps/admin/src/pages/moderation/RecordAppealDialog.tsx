@@ -95,11 +95,11 @@ export default function RecordAppealDialog({
           ) : null}
           <p className="mod-dialog__text">
             Record an appeal for the suspended person against the decision on Report #{reportNumber}. They can’t sign
-            in, so staff record it for them. [COPY PENDING LEGAL REVIEW]
+            in, so staff record it for them.
           </p>
           <p className="mod-dialog__text">
             This is only possible inside the appeal window, counted from the decision. Recording it pauses closure of
-            this report until the appeal is decided. [COPY PENDING LEGAL REVIEW]
+            this report until the appeal is decided.
           </p>
           <div className="mod-field">
             <label className="mod-dialog__label" htmlFor={`${titleId}-reason`}>
@@ -123,7 +123,7 @@ export default function RecordAppealDialog({
             ) : null}
           </div>
           <p className="mod-note" id={helpId}>
-            The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]
+            The reason is saved to the audit record.
           </p>
         </div>
         <div className="mod-dialog__actions">

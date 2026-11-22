@@ -144,7 +144,7 @@ describe("visibility: the section exists only for a vetted admin on a minor's li
     const card = await notices();
     expect(getGuardianNotices).toHaveBeenCalledTimes(1);
     expect(getGuardianNotices).toHaveBeenCalledWith("user-1");
-    expect(within(card).getByText("[COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(within(card).queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
     await within(card).findByText("Sending normally");
     expect(within(card).getByText(/Only child-safety-vetted staff can see this section/)).not.toBeNull();
     expect(within(card).getByText("Guardian security and safety notices for this account are sent as normal.")).not.toBeNull();
@@ -278,8 +278,8 @@ describe("set dialog (frames 2 and 3)", () => {
     const dialog = await openSetDialog();
     expect(within(dialog).getByText("Tolu Adeyemi is under 18 and has a confirmed guardian. While this is on:")).not.toBeNull();
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(dialog).getByText(/not affected\. \[COPY PENDING LEGAL REVIEW\]$/)).not.toBeNull();
-    expect(within(dialog).getByText("The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(within(dialog).getByText(/not affected\.$/)).not.toBeNull();
+    expect(within(dialog).getByText("The reason is saved to the audit record.")).not.toBeNull();
   });
 
   it("frame 3: an empty (or blank) reason is refused on the page and nothing is sent", async () => {
@@ -325,7 +325,7 @@ describe("set dialog (frames 2 and 3)", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "too short" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Withhold notices" }));
     expect(
-      (await within(dialog).findByText("Enter between 10 and 1000 characters. [COPY PENDING LEGAL REVIEW]")).textContent,
+      (await within(dialog).findByText("Enter between 10 and 1000 characters.")).textContent,
     ).toContain("10 and 1000");
     expect(screen.getByRole("dialog", { name: "Withhold guardian notices?" })).not.toBeNull();
   });
@@ -351,7 +351,7 @@ describe("record review dialog (frame 6)", () => {
     const dialog = screen.getByRole("dialog", { name: "Record a review" });
     expect(
       within(dialog).getByText(
-        "Confirm that withholding guardian notices for Tolu Adeyemi should continue. Your note is saved to the audit record. [COPY PENDING LEGAL REVIEW]",
+        "Confirm that withholding guardian notices for Tolu Adeyemi should continue. Your note is saved to the audit record.",
       ),
     ).not.toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Record review" }));
@@ -377,7 +377,7 @@ describe("clear dialog and banner (frames 7 and 8)", () => {
     const dialog = screen.getByRole("dialog", { name: "Clear guardian-notice withholding?" });
     expect(
       within(dialog).getByText(
-        "Guardian notices for Tolu Adeyemi will be sent as normal from now on. Notices that were skipped while this was on will not be sent. [COPY PENDING LEGAL REVIEW]",
+        "Guardian notices for Tolu Adeyemi will be sent as normal from now on. Notices that were skipped while this was on will not be sent.",
       ),
     ).not.toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear" }));
@@ -389,7 +389,7 @@ describe("clear dialog and banner (frames 7 and 8)", () => {
     expect(within(banner).getByText("Guardian notices cleared")).not.toBeNull();
     expect(
       within(banner).getByText(
-        "Guardian notices for Tolu Adeyemi are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded. [COPY PENDING LEGAL REVIEW]",
+        "Guardian notices for Tolu Adeyemi are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded.",
       ),
     ).not.toBeNull();
     const card = await notices();

@@ -18,12 +18,10 @@ import { reportContextRows, seenLabelMessageId } from "../../pages/messages/acti
 
 afterEach(cleanup);
 
-const TAG = "[COPY PENDING LEGAL REVIEW]";
-
 describe("the three sentences", () => {
-  it("each carries the legal-review tag at its end, exactly as the frames print it", () => {
+  it("carry no legal-review tag (cleared by founder review, R108)", () => {
     for (const text of [REMOVED_MESSAGE_TEXT, REMOVED_COMMENT_TEXT, REMOVED_POST_TEXT]) {
-      expect(text.endsWith(TAG)).toBe(true);
+      expect(text).not.toContain("COPY PENDING");
       expect(text).toContain("Soccernity");
     }
     expect(REMOVED_MESSAGE_TEXT).toMatch(/^This message was removed by Soccernity/);
@@ -33,12 +31,11 @@ describe("the three sentences", () => {
 });
 
 describe("RemovedPlaceholder", () => {
-  it.each(["bubble", "row", "heading"] as const)("the %s variant prints the label and the tag, in separate spans", (variant) => {
+  it.each(["bubble", "row", "heading"] as const)("the %s variant prints the label", (variant) => {
     render(<RemovedPlaceholder text={REMOVED_MESSAGE_TEXT} variant={variant} />);
     const el = screen.getByTestId("removed-placeholder");
     expect(el.classList.contains(`removed-placeholder--${variant}`)).toBe(true);
     expect(el.querySelector(".removed-placeholder__label")?.textContent).toBe("This message was removed by Soccernity");
-    expect(el.querySelector(".removed-placeholder__tag")?.textContent).toBe(TAG);
   });
 
   it("is not interactive and not italic, and hides its icon from assistive technology", () => {

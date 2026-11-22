@@ -201,7 +201,7 @@ describe("Media review item", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     expect(screen.getByRole("dialog")).not.toBeNull();
     expect(
-      screen.getByText("Say why this picture is being rejected. The uploader sees this reason. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Say why this picture is being rejected. The uploader sees this reason."),
     ).not.toBeNull();
     const submit = screen.getByRole("button", { name: "Reject picture" }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);

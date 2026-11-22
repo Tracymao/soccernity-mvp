@@ -311,7 +311,7 @@ describe("ready", () => {
     await openReady();
     expect(screen.getByText("Your data is ready to download as a JSON file.")).not.toBeNull();
     expect(screen.getByText(MESSAGES.personalData)).not.toBeNull();
-    expect(MESSAGES.personalData).toContain("[COPY PENDING LEGAL REVIEW]");
+    expect(MESSAGES.personalData).not.toContain("COPY PENDING");
     expect(screen.getByText(/The download only works for a limited time\. Available until /)).not.toBeNull();
     expect(screen.getByRole("link", { name: "Back to Privacy" }).getAttribute("href")).toBe("/settings/privacy");
   });

@@ -172,7 +172,7 @@ function MediaReport({
           disabled={submitting}
         />
         <p className="media-report__hint">
-          Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW]
+          Only our moderators see your reason, not the person who posted this.
         </p>
         <p className="media-report__counter" aria-live="polite">
           {reason.length} / {MEDIA_REPORT_REASON_MAX_LENGTH}
@@ -283,8 +283,8 @@ function OwnMedia({
             </p>
             <p className="media-item__hint">
               {noun === "video"
-                ? "Only you can see this post until its video has been checked. [COPY PENDING LEGAL REVIEW]"
-                : "Only you can see this post until its pictures have been checked. [COPY PENDING LEGAL REVIEW]"}
+                ? "Only you can see this post until its video has been checked."
+                : "Only you can see this post until its pictures have been checked."}
             </p>
           </div>
         </div>
@@ -301,8 +301,8 @@ function OwnMedia({
             {view?.rejectionReason && <p className="media-item__reason">{view.rejectionReason}</p>}
             <p className="media-item__hint">
               {noun === "video"
-                ? "Your post stays hidden from other people until every video has been approved. Remove this video or choose another. [COPY PENDING LEGAL REVIEW]"
-                : "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another. [COPY PENDING LEGAL REVIEW]"}
+                ? "Your post stays hidden from other people until every video has been approved. Remove this video or choose another."
+                : "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another."}
             </p>
             {error && (
               <p className="media-item__error" role="alert">

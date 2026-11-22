@@ -328,7 +328,7 @@ export default function PostCard({
       {engagementLocked ? (
         <>
           <p className="post__locked" role="status" data-testid="engagement-locked">
-            Engagement is locked until the reveal. Only you can see this entry until then. [COPY PENDING LEGAL REVIEW]
+            Engagement is locked until the reveal. Only you can see this entry until then.
           </p>
           <div className="post__actions post__actions--locked">
             <button type="button" className="post__action" disabled aria-label="Comments (locked until the reveal)">

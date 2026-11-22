@@ -86,7 +86,7 @@ describe("Direct Messages leaf", () => {
     expect(screen.getByText("Who can message me")).not.toBeNull();
     expect(screen.getByText("Choose who can start a new conversation with you.")).not.toBeNull();
     expect(screen.getByText(DM_MESSAGES.stricterOnly)).not.toBeNull();
-    expect(DM_MESSAGES.stricterOnly).toContain("[COPY PENDING LEGAL REVIEW]");
+    expect(DM_MESSAGES.stricterOnly).not.toContain("COPY PENDING");
   });
 
   it("saves on change: the new choice shows at once and the options dim while saving (E2 / E6)", async () => {
@@ -183,7 +183,7 @@ describe("Direct Messages leaf: Read receipts row", () => {
     expect(receiptsSwitch().getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText(READ_RECEIPTS_LABEL)).not.toBeNull();
     expect(screen.getByText(DM_MESSAGES.readReceiptsDescription)).not.toBeNull();
-    expect(DM_MESSAGES.readReceiptsDescription).toContain("[COPY PENDING LEGAL REVIEW]");
+    expect(DM_MESSAGES.readReceiptsDescription).not.toContain("COPY PENDING");
     expect(DM_MESSAGES.readReceiptsDescription).toContain("Seen");
     expect(screen.queryByText(/not adjustable yet/i)).toBeNull();
     expect(screen.queryByRole("img", { name: /read receipts/i })).toBeNull();

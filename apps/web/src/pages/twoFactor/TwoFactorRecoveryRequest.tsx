@@ -29,7 +29,6 @@ import {
   requestRecovery,
   type RecoveryAudience,
 } from "../../api/twoFactorRecovery";
-import CopyTag from "./CopyTag";
 import "./twoFactor.css";
 
 type Stage = "form" | "sent" | "guardian" | "no_guardian";
@@ -156,7 +155,6 @@ export default function TwoFactorRecoveryRequest({ email: initialEmail = "", onB
   return (
     <div className="tf-prompt" data-testid="two-factor-recovery-request" data-stage={stage}>
       <div className="tf-prompt__inner">
-        <CopyTag />
 
         {stage === "form" && (
           <form className="tf-recovery-form" onSubmit={submit} noValidate>

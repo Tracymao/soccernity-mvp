@@ -399,7 +399,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
               </select>
               <p className="edit-profile-field__hint">
                 Shown on your profile only if you fill it in. It does not change the country used for safeguarding.
-                [COPY PENDING LEGAL REVIEW]
+
               </p>
             </div>
 
@@ -430,7 +430,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
               </label>
               <input id="edit-profile-dob" readOnly aria-readonly="true" value={formatDobField(user.dateOfBirth)} />
               <p className="edit-profile-field__hint">
-                Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]
+                Set when you signed up and cannot be changed here.
               </p>
             </div>
 

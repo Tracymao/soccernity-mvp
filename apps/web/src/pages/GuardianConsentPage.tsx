@@ -135,7 +135,7 @@ const DECLINED_CAN_DO = [
     // QA D-13 (#407 item 4): following is refused for a restricted-pending
     // minor (uniform write block, #370), so it is not promised here. The
     // Figma frame 5491:8241 still says "follow teams" (register B-154).
-    body: "You can still browse the Sports Hub and check scores. [COPY PENDING LEGAL REVIEW]",
+    body: "You can still browse the Sports Hub and check scores.",
   },
 ];
 
@@ -144,17 +144,17 @@ const DECLINED_CAN_DO = [
 const RESENT_NEXT = [
   {
     title: "Your guardian gets a new email",
-    body: "It has a fresh, single-use approval link. The previous link no longer works. [COPY PENDING LEGAL REVIEW]",
+    body: "It has a fresh, single-use approval link. The previous link no longer works.",
     changeEmailLink: false,
   },
   {
     title: "Your account stays restricted for now",
-    body: "Profile, direct messages and posting stay switched off until they approve. [COPY PENDING LEGAL REVIEW]",
+    body: "Profile, direct messages and posting stay switched off until they approve.",
     changeEmailLink: false,
   },
   {
     title: "Wrong email address?",
-    body: "You can change your guardian’s email address from your account. [COPY PENDING LEGAL REVIEW]",
+    body: "You can change your guardian’s email address from your account.",
     changeEmailLink: true,
   },
 ];
@@ -340,7 +340,7 @@ export default function GuardianConsentPage() {
             </h1>
             <p className="consent-page__subheading">
               {approvedSentence(status)}
-              Continue registration to finish setting up your profile. [COPY PENDING LEGAL REVIEW]
+              Continue registration to finish setting up your profile.
             </p>
           </div>
 
@@ -461,7 +461,7 @@ export default function GuardianConsentPage() {
                 states the cap but never a running count. */}
             <p className="consent-footnote" data-testid="decline-cap-sentence">
               A guardian can decline up to 3 times. Changing your guardian&rsquo;s email does not reset the count.
-              After the third decline your account is scheduled for deletion. [COPY PENDING LEGAL REVIEW]
+              After the third decline your account is scheduled for deletion.
             </p>
           </div>
 
@@ -509,7 +509,7 @@ export default function GuardianConsentPage() {
           <div>
             <h1 className="consent-page__heading">New request sent</h1>
             <p className="consent-page__subheading" role="status">
-              We&rsquo;ve emailed a fresh approval request to {status.guardianEmail}. [COPY PENDING LEGAL REVIEW]
+              We&rsquo;ve emailed a fresh approval request to {status.guardianEmail}.
             </p>
           </div>
           <div className="consent-card">
@@ -595,7 +595,7 @@ export default function GuardianConsentPage() {
                     guardian approves (#370). */}
                 <span className="consent-row__body">
                   Look around the Sports Hub, the Blog and Banter Rooms. Following and posting switch on once your
-                  guardian approves. [COPY PENDING LEGAL REVIEW]
+                  guardian approves.
                 </span>
               </div>
             </div>
@@ -618,7 +618,7 @@ export default function GuardianConsentPage() {
             (the B-026 write block, proven by services/api's grassroots e2e). */}
         <p className="consent-footnote" data-testid="registration-status-line">
           Registration cannot be completed until your guardian approves, including card verification where
-          required. [COPY PENDING LEGAL REVIEW]
+          required.
         </p>
 
         {/* sprint-1/f5-f6-bugfixes -- Bug 1 fix, option (a): the dead

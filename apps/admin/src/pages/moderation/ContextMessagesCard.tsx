@@ -88,7 +88,7 @@ interface Props {
 
 // Figma 7045:62777. Tagged: the literal [COPY PENDING LEGAL REVIEW] ends the rendered string and the sentence has a
 // row in docs/pending-copy-manifest.md (Decision Log #497, B-301).
-export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child. [COPY PENDING LEGAL REVIEW]";
+export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child.";
 
 export default function ContextMessagesCard({ reportedMessage, contextMessages, contextHidden = false }: Props) {
   // B-293: an admin who is not child-safety vetted, on a report whose chat involves a child. The server returned no

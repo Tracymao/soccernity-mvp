@@ -34,31 +34,31 @@ export const withholdIntro = (name: string, hasConfirmedGuardian: boolean) =>
   hasConfirmedGuardian
     ? `${name} is under 18 and has a confirmed guardian. While this is on:`
     : // Not drawn: the frame's intro is for an account with a confirmed guardian.
-      `${name} is under 18 and has no confirmed guardian yet. While this is on: [COPY PENDING LEGAL REVIEW]`;
+      `${name} is under 18 and has no confirmed guardian yet. While this is on:`;
 export const WITHHOLD_BULLET_NOTICES =
   "Guardian security notices and safety-action notices for this account are skipped silently.";
 export const WITHHOLD_BULLET_RECOVERY =
   "Guardian-assisted two-factor recovery is switched off. The child can still recover through the adult route: a link to their own email, their password and a 24-hour wait.";
 export const WITHHOLD_BULLET_CONSENT =
-  "Consent emails (consent request, withdrawal, expiry, turned-18 notice, guardian-email-replaced) are not affected. [COPY PENDING LEGAL REVIEW]";
-export const AUDIT_HELP = "The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]";
+  "Consent emails (consent request, withdrawal, expiry, turned-18 notice, guardian-email-replaced) are not affected.";
+export const AUDIT_HELP = "The reason is saved to the audit record.";
 export const REASON_REQUIRED = "A reason is required.";
 
 // ---- Record review dialog (6921:35655) ----
 export const REVIEW_DIALOG_TITLE = "Record a review";
 export const reviewIntro = (name: string) =>
-  `Confirm that withholding guardian notices for ${name} should continue. Your note is saved to the audit record. [COPY PENDING LEGAL REVIEW]`;
+  `Confirm that withholding guardian notices for ${name} should continue. Your note is saved to the audit record.`;
 export const NOTE_REQUIRED = "A note is required.";
 
 // ---- Clear dialog (6921:35894) ----
 export const CLEAR_DIALOG_TITLE = "Clear guardian-notice withholding?";
 export const clearIntro = (name: string) =>
-  `Guardian notices for ${name} will be sent as normal from now on. Notices that were skipped while this was on will not be sent. [COPY PENDING LEGAL REVIEW]`;
+  `Guardian notices for ${name} will be sent as normal from now on. Notices that were skipped while this was on will not be sent.`;
 
 // ---- Banner after a clear (6921:36121) ----
 export const CLEARED_BANNER_TITLE = "Guardian notices cleared";
 export const clearedBannerBody = (name: string) =>
-  `Guardian notices for ${name} are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded. [COPY PENDING LEGAL REVIEW]`;
+  `Guardian notices for ${name} are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded.`;
 
 // Title of the restricted dialog for each action (frame 6921:36445 draws the first).
 export const RESTRICTED_TITLES = {
@@ -69,9 +69,9 @@ export const RESTRICTED_TITLES = {
 
 // ---- Not drawn: plain lines for refusals ----
 // 400 guardian_notices_text_invalid (the server wants 10 to 1000 characters after trimming).
-export const TEXT_INVALID = "Enter between 10 and 1000 characters. [COPY PENDING LEGAL REVIEW]";
+export const TEXT_INVALID = "Enter between 10 and 1000 characters.";
 // 409 already_withheld / not_withheld: the page was out of date.
 export const STALE_CHANGED =
-  "Another admin changed guardian notices for this account while this page was open. It now shows the current state. [COPY PENDING LEGAL REVIEW]";
+  "Another admin changed guardian notices for this account while this page was open. It now shows the current state.";
 // Any other failure of an action. Functional, not a legal or safety promise, so untagged.
 export const ACTION_FAILED = "Couldn’t save that. Nothing was changed. Try again.";

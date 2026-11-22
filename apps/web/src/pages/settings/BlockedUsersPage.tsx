@@ -85,7 +85,7 @@ export default function BlockedUsersPage() {
       <div>
         <h2 className="settings-page__title">Blocked users</h2>
         <p className="settings-page__lead">
-          You can unblock someone at any time. Unblocking does not restore follows. [COPY PENDING LEGAL REVIEW]
+          You can unblock someone at any time. Unblocking does not restore follows.
         </p>
       </div>
 
@@ -157,7 +157,7 @@ export default function BlockedUsersPage() {
             </h3>
             <p className="blocked-users__dialog-body">
               They will be able to see your posts again, and you will see theirs. Follows that were removed when you
-              blocked them are not restored. [COPY PENDING LEGAL REVIEW]
+              blocked them are not restored.
             </p>
             {actionError && (
               <p className="settings-status" role="alert">

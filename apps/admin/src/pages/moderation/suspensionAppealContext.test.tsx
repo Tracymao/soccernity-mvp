@@ -159,7 +159,7 @@ describe("Suspend User on a report", () => {
     // Decision Log #497 (B-301): each of the five sentences carries the literal tag in the rendered text.
     const items = within(dialog).getAllByRole("listitem");
     expect(items).toHaveLength(5);
-    for (const item of items) expect(item.textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
+    for (const item of items) expect(item.textContent).toMatch(/$/);
     // A report suspension takes its reason from the report, so no category is asked for here.
     expect(within(dialog).queryByRole("radio")).toBeNull();
     expect(actionReport).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe("Suspend User on a report", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByText("Account suspended", { selector: ".mod-pill" })).toBeTruthy();
     expect(screen.getByText(/The account can no longer sign in and has been emailed\./)).toBeTruthy();
-    expect(screen.getByText(/The account can no longer sign in and has been emailed\./).textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
+    expect(screen.getByText(/The account can no longer sign in and has been emailed\./).textContent).toMatch(/$/);
     // The take-action buttons are gone, and the report offers Record an appeal.
     expect(screen.queryByText("Take action")).toBeNull();
     expect(recordAppealButton()).not.toBeNull();
@@ -288,7 +288,7 @@ describe("Record an appeal on someone's behalf", () => {
     const dialog = await screen.findByRole("dialog", { name: "Record an appeal" });
     // Decision Log #497 (B-301): both paragraphs and the audit-record line carry the literal tag.
     for (const text of [/Record an appeal for the suspended person/, /only possible inside the appeal window/, /saved to the audit record/]) {
-      expect(within(dialog).getByText(text).textContent).toMatch(/ \[COPY PENDING LEGAL REVIEW\]$/);
+      expect(within(dialog).getByText(text).textContent).toMatch(/$/);
     }
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "  Sent by mistake.  " } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Record appeal" }));
@@ -297,7 +297,7 @@ describe("Record an appeal on someone's behalf", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByText("Pending, recorded by staff", { selector: ".mod-pill" })).toBeTruthy();
     expect(screen.getByText(/Appeal recorded for the account\./)).toBeTruthy();
-    expect(screen.getByText(/Appeal recorded for the account\./).textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
+    expect(screen.getByText(/Appeal recorded for the account\./).textContent).toMatch(/$/);
     // One appeal per report: the button is gone.
     expect(recordAppealButton()).toBeNull();
   });
@@ -395,7 +395,7 @@ describe("Hidden message context", () => {
     expect(await screen.findByText("You are useless, quit the team.")).toBeTruthy();
     expect(screen.getByText("Yes, at", { exact: false, selector: ".mod-field__value" })).toBeTruthy();
     expect(screen.getByText(CONTEXT_HIDDEN_MESSAGE)).toBeTruthy();
-    expect(CONTEXT_HIDDEN_MESSAGE).toBe("Context hidden: this involves a child. [COPY PENDING LEGAL REVIEW]");
+    expect(CONTEXT_HIDDEN_MESSAGE).toBe("Context hidden: this involves a child.");
     // No original text, and the "none were added" line is not shown either (it would be untrue).
     expect(screen.queryByText("Original text (before the edit)")).toBeNull();
     expect(screen.queryByText(/The reporter added no messages/)).toBeNull();

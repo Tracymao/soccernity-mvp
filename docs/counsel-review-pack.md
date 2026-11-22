@@ -647,386 +647,380 @@ For counsel who has seen v1.0 of this pack.
 
 ## 4. Strings sheet
 
-These are the 144 on-screen strings that still carry the literal tag `[COPY PENDING LEGAL REVIEW]` in `docs/pending-copy-manifest.md` (93 in the web app, 51 in the admin console). They are grouped by screen. The string is shown exactly as it appears in the code, including the tag. Counsel marks one of the three right-hand columns for each row.
+These are the 144 on-screen strings that carried the literal tag `[COPY PENDING LEGAL REVIEW]` in `docs/pending-copy-manifest.md` (93 in the web app, 51 in the admin console). **The founder reviewed every one and cleared the tag (R108, 2026-11-22). No counsel review is needed for this sheet.** The rows are kept as a record. The tag is gone from the code and from the manifest, and `npm run check:pending-copy` now passes. One string (S6) was reworded by the founder; its new wording is shown below.
 
-- **Approve as is:** tick the box.
-- **Reword to:** write the replacement text.
-- **Reject:** tick the box and say why in the reword column if useful.
-
-When a string is approved, an agent removes the tag from the code and deletes that row from the manifest. Until every tag is gone, `npm run check:pending-copy` fails on purpose and the production web and admin sites cannot be built; that is the safeguard.
-
-The 56 staff-only admin two-factor strings were already cleared by the founder without counsel (Decision Log #531) and are not in this sheet.
+The 56 staff-only admin two-factor strings were cleared earlier, also by the founder (Decision Log #531), and are not in this sheet.
 
 ### admin/users/CorrectDobPage.tsx (6 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S1 | Correcting the date of birth re-runs the age-tier checks and can start the guardian flow. You confirm the consequences before anything changes. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, form `6649:24980` (note `6649:25211`) | ☐ | | ☐ |
-| S2 | The age-tier checks have been re-run and the correction is in the audit log. If the correction turned an adult account into a minor account, the guardian flow was started. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, success `6649:25721` (note `6649:25951`) | ☐ | | ☐ |
-| S3 | The age-tier checks re-run: under-13, under-16 and under-18 flags, the card-verification policy and restrictions. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 1, `6649:25717`) | ☐ | | ☐ |
-| S4 | If this makes an adult account that has never gone through the guardian flow a minor account, the guardian flow starts. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 2, `6649:25718`) | ☐ | | ☐ |
-| S5 | The correction is recorded in the audit log together with your reason. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 3, `6649:25719`) | ☐ | | ☐ |
-| S6 | This correction makes the account a minor and no guardian is on file. The consent request goes to this address. [COPY PENDING LEGAL REVIEW] | Admin Correct Date of Birth, Adult To Minor Guardian Details `6752:29980` / Validation `6752:30141` (help line `6752:30127`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S1 | Correcting the date of birth re-runs the age-tier checks and can start the guardian flow. You confirm the consequences before anything changes. | Admin Correct Date of Birth, form `6649:24980` (note `6649:25211`) | Cleared by founder review, no counsel review needed |
+| S2 | The age-tier checks have been re-run and the correction is in the audit log. If the correction turned an adult account into a minor account, the guardian flow was started. | Admin Correct Date of Birth, success `6649:25721` (note `6649:25951`) | Cleared by founder review, no counsel review needed |
+| S3 | The age-tier checks re-run: under-13, under-16 and under-18 flags, the card-verification policy and restrictions. | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 1, `6649:25717`) | Cleared by founder review, no counsel review needed |
+| S4 | If this makes an adult account that has never gone through the guardian flow a minor account, the guardian flow starts. | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 2, `6649:25718`) | Cleared by founder review, no counsel review needed |
+| S5 | The correction is recorded in the audit log together with your reason. | Admin Correct Date of Birth, confirm dialog `6649:25463` (line 3, `6649:25719`) | Cleared by founder review, no counsel review needed |
+| S6 | This correction makes the account a minor and no guardian is on file. We will email the consent request to the guardian at the address you enter below. Use the address from the support ticket. | Admin Correct Date of Birth, Adult To Minor Guardian Details `6752:29980` / Validation `6752:30141` (help line `6752:30127`); wording changed by founder, R108 | Cleared by founder review, no counsel review needed |
 
 ### admin/users/IncorrectDetailsReportsPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S7 | A guardian has said the details on a consent request are wrong. While a report is open the guardian cannot approve or start the card payment; they can still decline or withdraw. Resolving a report lets the guardian approve again. No date of birth is shown here. [COPY PENDING LEGAL REVIEW] | Admin Incorrect-Details Reports list `6737:27844` (callout `6737:28126`; note `6738:30382`) | ☐ | | ☐ |
-| S8 | Resolving clears the report, and the guardian can approve the request again. The action is recorded in the audit log. [COPY PENDING LEGAL REVIEW] | Admin Incorrect-Details Reports, Resolve Confirm `6738:30173` | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S7 | A guardian has said the details on a consent request are wrong. While a report is open the guardian cannot approve or start the card payment; they can still decline or withdraw. Resolving a report lets the guardian approve again. No date of birth is shown here. | Admin Incorrect-Details Reports list `6737:27844` (callout `6737:28126`; note `6738:30382`) | Cleared by founder review, no counsel review needed |
+| S8 | Resolving clears the report, and the guardian can approve the request again. The action is recorded in the audit log. | Admin Incorrect-Details Reports, Resolve Confirm `6738:30173` | Cleared by founder review, no counsel review needed |
 
 ### admin/users/UserDetailPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S9 | This removes @{…} from {…}’s account. [COPY PENDING LEGAL REVIEW] | Admin User Detail, Revoke Username Dialog `6647:25789` (body `6647:26050`) | ☐ | | ☐ |
-| S10 | Account suspended. The account can no longer sign in and has been emailed. [COPY PENDING LEGAL REVIEW] | Admin User Detail, Suspend account result (same sentence as `7042:61998`; no separate user-page frame) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S9 | This removes @{…} from {…}’s account. | Admin User Detail, Revoke Username Dialog `6647:25789` (body `6647:26050`) | Cleared by founder review, no counsel review needed |
+| S10 | Account suspended. The account can no longer sign in and has been emailed. | Admin User Detail, Suspend account result (same sentence as `7042:61998`; no separate user-page frame) | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/holdActions.tsx (8 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S11 | Report #{…}. This holds the reporter’s account in full for 6 months. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Bad Faith Confirm `6672:27278` (dialog body `6672:27338`); B-045, Decision Log #398 D1 | ☐ | | ☐ |
-| S12 | Report #{…}. This holds both accounts in full until an admin lifts it. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Legal Hold Confirm `6672:27349` (dialog body `6672:27409`) | ☐ | | ☐ |
-| S13 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Bad Faith Confirm `6672:27278` (help line `6672:27343`) | ☐ | | ☐ |
-| S14 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Legal Hold Confirm `6672:27349` (help line `6672:27414`) | ☐ | | ☐ |
-| S15 | Reporter acted in bad faith holds the reporter’s account in full for 6 months. Legal hold holds both accounts in full until an admin lifts it. Both ask for confirmation first. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Bad Faith Confirm `6672:27278` and Appeal Review Legal Hold Active `6672:29059` (callout `6724:29181`) | ☐ | | ☐ |
-| S16 | Report #{…}. Legal hold. Lifting the hold releases both accounts. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Lift Hold Confirm `6672:27420` (dialog body `6672:27480`); shown only when the lift releases more than one account | ☐ | | ☐ |
-| S17 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Admin Report Detail Lift Hold Confirm `6672:27420` (help line `6672:27485`) | ☐ | | ☐ |
-| S18 | Holds on this report need a child-safety-vetted admin (Settings › Roles). [COPY PENDING LEGAL REVIEW] | Admin Report Detail, message report that involves a child, shown instead of the three hold controls to an admin who is not child-safety vetted; no Figma frame (founder-accepted, no design pass); B-308, Decision Log #502 (a) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S11 | Report #{…}. This holds the reporter’s account in full for 6 months. | Admin Report Detail Bad Faith Confirm `6672:27278` (dialog body `6672:27338`); B-045, Decision Log #398 D1 | Cleared by founder review, no counsel review needed |
+| S12 | Report #{…}. This holds both accounts in full until an admin lifts it. | Admin Report Detail Legal Hold Confirm `6672:27349` (dialog body `6672:27409`) | Cleared by founder review, no counsel review needed |
+| S13 | The reason is saved to the audit record. | Admin Report Detail Bad Faith Confirm `6672:27278` (help line `6672:27343`) | Cleared by founder review, no counsel review needed |
+| S14 | The reason is saved to the audit record. | Admin Report Detail Legal Hold Confirm `6672:27349` (help line `6672:27414`) | Cleared by founder review, no counsel review needed |
+| S15 | Reporter acted in bad faith holds the reporter’s account in full for 6 months. Legal hold holds both accounts in full until an admin lifts it. Both ask for confirmation first. | Admin Report Detail Bad Faith Confirm `6672:27278` and Appeal Review Legal Hold Active `6672:29059` (callout `6724:29181`) | Cleared by founder review, no counsel review needed |
+| S16 | Report #{…}. Legal hold. Lifting the hold releases both accounts. | Admin Report Detail Lift Hold Confirm `6672:27420` (dialog body `6672:27480`); shown only when the lift releases more than one account | Cleared by founder review, no counsel review needed |
+| S17 | The reason is saved to the audit record. | Admin Report Detail Lift Hold Confirm `6672:27420` (help line `6672:27485`) | Cleared by founder review, no counsel review needed |
+| S18 | Holds on this report need a child-safety-vetted admin (Settings › Roles). | Admin Report Detail, message report that involves a child, shown instead of the three hold controls to an admin who is not child-safety vetted; no Figma frame (founder-accepted, no design pass); B-308, Decision Log #502 (a) | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/ContactEnquiryDetailPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S19 | Enquiries are deleted automatically 12 months after the last message. If you escalate one, the report’s retention applies instead. [COPY PENDING LEGAL REVIEW] | Admin Enquiry Detail `6878:31198` (retention callout); B-046, Decision Log #440, #444 | ☐ | | ☐ |
-| S20 | Escalated to report #{…}. That report’s retention applies instead of the 12-month deletion. [COPY PENDING LEGAL REVIEW] | Admin Enquiry Detail Escalated `6878:31438` (retention callout); B-046, Decision Log #444 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S19 | Enquiries are deleted automatically 12 months after the last message. If you escalate one, the report’s retention applies instead. | Admin Enquiry Detail `6878:31198` (retention callout); B-046, Decision Log #440, #444 | Cleared by founder review, no counsel review needed |
+| S20 | Escalated to report #{…}. That report’s retention applies instead of the 12-month deletion. | Admin Enquiry Detail Escalated `6878:31438` (retention callout); B-046, Decision Log #444 | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/EscalateEnquiryDialog.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S21 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Admin Enquiry Detail Escalate Dialog `6879:31526` (help line); the same sentence the hold dialogs carry | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S21 | The reason is saved to the audit record. | Admin Enquiry Detail Escalate Dialog `6879:31526` (help line); the same sentence the hold dialogs carry | Cleared by founder review, no counsel review needed |
 
 ### web/GuardianConsentConfirmPage.tsx (19 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S22 | Your email address appears on {…}’s profile as their line of contact. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 Web Consent Confirmation `5108:6629`, request summary notice | ☐ | | ☐ |
-| S23 | {…}’s photo and username are visible to other Soccernity members. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 Web Consent Confirmation `5108:6629`, request summary notice | ☐ | | ☐ |
-| S24 | Report incorrect details [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "Report incorrect details" link | ☐ | | ☐ |
-| S25 | You told us some of these details are incorrect. Support will review them and contact you, and you can approve once that is done. You can still decline this request below. [COPY PENDING LEGAL REVIEW] | No frame draws the approval-on-hold state; wording is this PR's (B-029, Decision Log #372) | ☐ | | ☐ |
-| S26 | I confirm I am this account holder’s parent or legal guardian, and I give permission for this account to be activated. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, consent checkbox label | ☐ | | ☐ |
-| S27 | You can decline up to 3 times. Changing the guardian email does not reset the count. After the third decline the account is scheduled for deletion. [COPY PENDING LEGAL REVIEW] | Guardian confirm footnote (replaces "Declining closes the account...", B-130, Decision Log #406 item 13) and the post-decline state; the cap sentence of `5491:8241` addressed to the guardian; Figma `5108:6629` and `6748:29330` / `6748:29450` still carry the old footnote (B-146) | ☐ | | ☐ |
-| S28 | You have declined permission for this account, so it stays switched off. [COPY PENDING LEGAL REVIEW] | Guardian confirm page, post-decline state (no frame; B-169, Decision Log #408 item 6): the clause is not founder wording, counsel to decide the final text | ☐ | | ☐ |
-| S29 | Browse the Sports Hub, including grassroots and pro fixtures. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "What the account holder will be able to do" (QA D-13, B-154: the frame still says "Follow teams and check scores") | ☐ | | ☐ |
-| S30 | {…} Please read this before you decide — it explains what the account can do and what we collect. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629` / `5531:7626`, intro under the heading (W9, B-078, B-176). The first sentence is the account holder's first name from the request summary ("{name} named you as their parent or guardian."), or "You were named as the parent or guardian for a new Soccernity account." without a summary | ☐ | | ☐ |
-| S31 | Date of birth is used for age checks only. It is never shown publicly. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "What we collect" row 1 (new list, W9, B-078 / B-176; the frame does not tag it, tagged here because it describes data processing for a child) | ☐ | | ☐ |
-| S32 | For sign-in and account notices. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "What we collect" row 2 (W9, B-078 / B-176) | ☐ | | ☐ |
-| S33 | Profile details, posts, comments and images they upload. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "What we collect" row 3 (W9, B-078 / B-176) | ☐ | | ☐ |
-| S34 | Kept only to record that you gave consent, and to contact you about it. [COPY PENDING LEGAL REVIEW] | Guardian Consent 4 `5108:6629`, "What we collect" row 4 (W9, B-078 / B-176). Counsel: read next to the "Your email on their profile" section, which says the guardian's email appears on the account holder's profile | ☐ | | ☐ |
-| S35 | Recorded on {…}. {…} can now continue registration, with under-18 protections in place. [COPY PENDING LEGAL REVIEW] | Guardian Consent 7 Consent Approved (Guardian) `5488:7164` / `5501:8225`, sub-heading (W9, B-079). Replaces the sentence "Your approval has been recorded. The account holder can now continue registration. You can close this page." The date is the moment the confirm call succeeded (the response carries no date) | ☐ | | ☐ |
-| S36 | {…} now sets up a profile and picks a club. [COPY PENDING LEGAL REVIEW] | Guardian Consent 7 `5488:7164`, "What happens next" row 1 (W9, B-079) | ☐ | | ☐ |
-| S37 | You can review or withdraw your consent at any time on the guardian withdrawal page. {…} can share the details from their account. [COPY PENDING LEGAL REVIEW] | Guardian Consent 7 `5488:7164`, "What happens next" row 2 (W9, B-079); "guardian withdrawal page" is a link to /guardian-consent/withdraw | ☐ | | ☐ |
-| S38 | You don’t need a Soccernity account. It’s safe to close this window now. [COPY PENDING LEGAL REVIEW] | Guardian Consent 7 `5488:7164`, "What happens next" row 3 (W9, B-079; the frame does not tag it, tagged here because it makes a statement to a guardian about what is needed from them) | ☐ | | ☐ |
-| S39 | This link expires on {…}. [COPY PENDING LEGAL REVIEW] | Guardian confirm footnote, sentence 1 (K5 report section 6, B-185); the date is the request's `expiresAt` | ☐ | | ☐ |
-| S40 | You can withdraw consent at any time on the guardian withdrawal page. [COPY PENDING LEGAL REVIEW] | Guardian confirm footnote, sentence 3 (K5 report section 6, B-185); "guardian withdrawal page" is a link to `/guardian-consent/withdraw` (FC7, Decision Log #415 item 1; page built in FC6, B-112); the link does not change the tagged wording | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S22 | Your email address appears on {…}’s profile as their line of contact. | Guardian Consent 4 Web Consent Confirmation `5108:6629`, request summary notice | Cleared by founder review, no counsel review needed |
+| S23 | {…}’s photo and username are visible to other Soccernity members. | Guardian Consent 4 Web Consent Confirmation `5108:6629`, request summary notice | Cleared by founder review, no counsel review needed |
+| S24 | Report incorrect details | Guardian Consent 4 `5108:6629`, "Report incorrect details" link | Cleared by founder review, no counsel review needed |
+| S25 | You told us some of these details are incorrect. Support will review them and contact you, and you can approve once that is done. You can still decline this request below. | No frame draws the approval-on-hold state; wording is this PR's (B-029, Decision Log #372) | Cleared by founder review, no counsel review needed |
+| S26 | I confirm I am this account holder’s parent or legal guardian, and I give permission for this account to be activated. | Guardian Consent 4 `5108:6629`, consent checkbox label | Cleared by founder review, no counsel review needed |
+| S27 | You can decline up to 3 times. Changing the guardian email does not reset the count. After the third decline the account is scheduled for deletion. | Guardian confirm footnote (replaces "Declining closes the account...", B-130, Decision Log #406 item 13) and the post-decline state; the cap sentence of `5491:8241` addressed to the guardian; Figma `5108:6629` and `6748:29330` / `6748:29450` still carry the old footnote (B-146) | Cleared by founder review, no counsel review needed |
+| S28 | You have declined permission for this account, so it stays switched off. | Guardian confirm page, post-decline state (no frame; B-169, Decision Log #408 item 6): the clause is not founder wording, counsel to decide the final text | Cleared by founder review, no counsel review needed |
+| S29 | Browse the Sports Hub, including grassroots and pro fixtures. | Guardian Consent 4 `5108:6629`, "What the account holder will be able to do" (QA D-13, B-154: the frame still says "Follow teams and check scores") | Cleared by founder review, no counsel review needed |
+| S30 | {…} Please read this before you decide — it explains what the account can do and what we collect. | Guardian Consent 4 `5108:6629` / `5531:7626`, intro under the heading (W9, B-078, B-176). The first sentence is the account holder's first name from the request summary ("{name} named you as their parent or guardian."), or "You were named as the parent or guardian for a new Soccernity account." without a summary | Cleared by founder review, no counsel review needed |
+| S31 | Date of birth is used for age checks only. It is never shown publicly. | Guardian Consent 4 `5108:6629`, "What we collect" row 1 (new list, W9, B-078 / B-176; the frame does not tag it, tagged here because it describes data processing for a child) | Cleared by founder review, no counsel review needed |
+| S32 | For sign-in and account notices. | Guardian Consent 4 `5108:6629`, "What we collect" row 2 (W9, B-078 / B-176) | Cleared by founder review, no counsel review needed |
+| S33 | Profile details, posts, comments and images they upload. | Guardian Consent 4 `5108:6629`, "What we collect" row 3 (W9, B-078 / B-176) | Cleared by founder review, no counsel review needed |
+| S34 | Kept only to record that you gave consent, and to contact you about it. | Guardian Consent 4 `5108:6629`, "What we collect" row 4 (W9, B-078 / B-176). Counsel: read next to the "Your email on their profile" section, which says the guardian's email appears on the account holder's profile | Cleared by founder review, no counsel review needed |
+| S35 | Recorded on {…}. {…} can now continue registration, with under-18 protections in place. | Guardian Consent 7 Consent Approved (Guardian) `5488:7164` / `5501:8225`, sub-heading (W9, B-079). Replaces the sentence "Your approval has been recorded. The account holder can now continue registration. You can close this page." The date is the moment the confirm call succeeded (the response carries no date) | Cleared by founder review, no counsel review needed |
+| S36 | {…} now sets up a profile and picks a club. | Guardian Consent 7 `5488:7164`, "What happens next" row 1 (W9, B-079) | Cleared by founder review, no counsel review needed |
+| S37 | You can review or withdraw your consent at any time on the guardian withdrawal page. {…} can share the details from their account. | Guardian Consent 7 `5488:7164`, "What happens next" row 2 (W9, B-079); "guardian withdrawal page" is a link to /guardian-consent/withdraw | Cleared by founder review, no counsel review needed |
+| S38 | You don’t need a Soccernity account. It’s safe to close this window now. | Guardian Consent 7 `5488:7164`, "What happens next" row 3 (W9, B-079; the frame does not tag it, tagged here because it makes a statement to a guardian about what is needed from them) | Cleared by founder review, no counsel review needed |
+| S39 | This link expires on {…}. | Guardian confirm footnote, sentence 1 (K5 report section 6, B-185); the date is the request's `expiresAt` | Cleared by founder review, no counsel review needed |
+| S40 | You can withdraw consent at any time on the guardian withdrawal page. | Guardian confirm footnote, sentence 3 (K5 report section 6, B-185); "guardian withdrawal page" is a link to `/guardian-consent/withdraw` (FC7, Decision Log #415 item 1; page built in FC6, B-112); the link does not change the tagged wording | Cleared by founder review, no counsel review needed |
 
 ### web/GuardianConsentPage.tsx (9 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S41 | We’ve emailed a fresh approval request to {…}. [COPY PENDING LEGAL REVIEW] | Guardian Consent 10 Approval Request Resent (Minor) `5488:7248` / `5501:8342`, sub-heading (W9, B-079). The frame's second sentence ("The new link is valid for 3 days.") is NOT built: neither the resend response nor the status carries the link lifetime | ☐ | | ☐ |
-| S42 | It has a fresh, single-use approval link. The previous link no longer works. [COPY PENDING LEGAL REVIEW] | Guardian Consent 10 `5488:7248`, "What happens next" row 1 (W9, B-079) | ☐ | | ☐ |
-| S43 | Profile, direct messages and posting stay switched off until they approve. [COPY PENDING LEGAL REVIEW] | Guardian Consent 10 `5488:7248`, "What happens next" row 2 (W9, B-079) | ☐ | | ☐ |
-| S44 | You can change your guardian’s email address from your account. [COPY PENDING LEGAL REVIEW] | Guardian Consent 10 `5488:7248`, "What happens next" row 3 (W9, B-079); followed by a link "Change guardian email" to /guardian-consent/change-email | ☐ | | ☐ |
-| S45 | You can still browse the Sports Hub and check scores. [COPY PENDING LEGAL REVIEW] | Guardian Consent decline page `5491:8241` (desktop) / `5501:8453` (mobile), "Keep exploring while you wait" (QA D-13: the frame still says "follow teams") | ☐ | | ☐ |
-| S46 | Look around the Sports Hub, the Blog and Banter Rooms. Following and posting switch on once your guardian approves. [COPY PENDING LEGAL REVIEW] | Restricted Pending `5108:6630` / `5531:7461`, "What you can still do" (QA D-13, B-154: replaces "Browse and follow"; the "Set up your profile / Add your position and photo" row is removed, #377) | ☐ | | ☐ |
-| S47 | {…} Continue registration to finish setting up your profile. [COPY PENDING LEGAL REVIEW] | Guardian Consent 6 Activation Confirmation `5108:6631`, sub-heading | ☐ | | ☐ |
-| S48 | A guardian can decline up to 3 times. Changing your guardian’s email does not reset the count. After the third decline your account is scheduled for deletion. [COPY PENDING LEGAL REVIEW] | Guardian Consent decline page `5491:8241` (desktop) / `5501:8453` (mobile), static cap sentence | ☐ | | ☐ |
-| S49 | Registration cannot be completed until your guardian approves, including card verification where required. [COPY PENDING LEGAL REVIEW] | Restricted Pending `5108:6630` / `5531:7461`, registration status line (Decision Log #367, B-199) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S41 | We’ve emailed a fresh approval request to {…}. | Guardian Consent 10 Approval Request Resent (Minor) `5488:7248` / `5501:8342`, sub-heading (W9, B-079). The frame's second sentence ("The new link is valid for 3 days.") is NOT built: neither the resend response nor the status carries the link lifetime | Cleared by founder review, no counsel review needed |
+| S42 | It has a fresh, single-use approval link. The previous link no longer works. | Guardian Consent 10 `5488:7248`, "What happens next" row 1 (W9, B-079) | Cleared by founder review, no counsel review needed |
+| S43 | Profile, direct messages and posting stay switched off until they approve. | Guardian Consent 10 `5488:7248`, "What happens next" row 2 (W9, B-079) | Cleared by founder review, no counsel review needed |
+| S44 | You can change your guardian’s email address from your account. | Guardian Consent 10 `5488:7248`, "What happens next" row 3 (W9, B-079); followed by a link "Change guardian email" to /guardian-consent/change-email | Cleared by founder review, no counsel review needed |
+| S45 | You can still browse the Sports Hub and check scores. | Guardian Consent decline page `5491:8241` (desktop) / `5501:8453` (mobile), "Keep exploring while you wait" (QA D-13: the frame still says "follow teams") | Cleared by founder review, no counsel review needed |
+| S46 | Look around the Sports Hub, the Blog and Banter Rooms. Following and posting switch on once your guardian approves. | Restricted Pending `5108:6630` / `5531:7461`, "What you can still do" (QA D-13, B-154: replaces "Browse and follow"; the "Set up your profile / Add your position and photo" row is removed, #377) | Cleared by founder review, no counsel review needed |
+| S47 | {…} Continue registration to finish setting up your profile. | Guardian Consent 6 Activation Confirmation `5108:6631`, sub-heading | Cleared by founder review, no counsel review needed |
+| S48 | A guardian can decline up to 3 times. Changing your guardian’s email does not reset the count. After the third decline your account is scheduled for deletion. | Guardian Consent decline page `5491:8241` (desktop) / `5501:8453` (mobile), static cap sentence | Cleared by founder review, no counsel review needed |
+| S49 | Registration cannot be completed until your guardian approves, including card verification where required. | Restricted Pending `5108:6630` / `5531:7461`, registration status line (Decision Log #367, B-199) | Cleared by founder review, no counsel review needed |
 
 ### web/settings/DataExportPage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S50 | The file contains your personal data. Keep it somewhere safe and don’t share it. [COPY PENDING LEGAL REVIEW] | Settings Download my data Ready to download `6991:54653` / `6991:55861` (callout `6991:54893`); B-060, Decision Log #472 (g) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S50 | The file contains your personal data. Keep it somewhere safe and don’t share it. | Settings Download my data Ready to download `6991:54653` / `6991:55861` (callout `6991:54893`); B-060, Decision Log #472 (g) | Cleared by founder review, no counsel review needed |
 
 ### web/OtherProfilePage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S51 | Follow to see their profile, posts and activity. [COPY PENDING LEGAL REVIEW] | Other User Private, as a non-follower sees it, mobile PV1 `7015:58577` / desktop PV5 `7015:58750` (callout); B-060, Decision Log #472, founder decision 2026-11-08 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S51 | Follow to see their profile, posts and activity. | Other User Private, as a non-follower sees it, mobile PV1 `7015:58577` / desktop PV5 `7015:58750` (callout); B-060, Decision Log #472, founder decision 2026-11-08 | Cleared by founder review, no counsel review needed |
 
 ### web/profile/PrivateProfileNote.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S52 | Only people who follow you can see your profile. [COPY PENDING LEGAL REVIEW] | Own profile, private profile note, mobile PV2 `7015:58666` / desktop PV6 `7015:59532` (line under the bio); B-060, Decision Log #472, founder decision 2026-11-08 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S52 | Only people who follow you can see your profile. | Own profile, private profile note, mobile PV2 `7015:58666` / desktop PV6 `7015:59532` (line under the bio); B-060, Decision Log #472, founder decision 2026-11-08 | Cleared by founder review, no counsel review needed |
 
 ### web/settings/DirectMessagesSettingsPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S53 | When this is on, people you message can see when you’ve read their messages. “Seen” only shows when you and the other person both have read receipts on. [COPY PENDING LEGAL REVIEW] | Settings Direct Messages, Read receipts row description, S1 `7012:57260` / S2 `7012:57309` / S3 `7012:57356` / S4 `7012:58176` (mobile S6 to S9); B-061 read receipts, Decision Log #472 | ☐ | | ☐ |
-| S54 | This can only make messaging stricter. Our safety rules for under-18s still apply. [COPY PENDING LEGAL REVIEW] | Settings Direct Messages, Who can message me, E1 `6981:48879` (all E frames; line `6981:49058`); B-061, Decision Log #472 (i) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S53 | When this is on, people you message can see when you’ve read their messages. “Seen” only shows when you and the other person both have read receipts on. | Settings Direct Messages, Read receipts row description, S1 `7012:57260` / S2 `7012:57309` / S3 `7012:57356` / S4 `7012:58176` (mobile S6 to S9); B-061 read receipts, Decision Log #472 | Cleared by founder review, no counsel review needed |
+| S54 | This can only make messaging stricter. Our safety rules for under-18s still apply. | Settings Direct Messages, Who can message me, E1 `6981:48879` (all E frames; line `6981:49058`); B-061, Decision Log #472 (i) | Cleared by founder review, no counsel review needed |
 
 ### web/twoFactor/CopyTag.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S55 | [COPY PENDING LEGAL REVIEW] | The "Copy Tag" chip drawn at the top of every user two-factor frame (B-087 / B-111, Decision Log #397, #446): settings flow `6655:2` / `6655:41` / `6655:85` / `6655:137` / `6655:173`, `6711:26922`, `6711:27117`, `6711:27333`; sign-in prompt `6711:27530`, `6711:27590`, `6711:27617` (mobile twins `6655:27159`..`27322`, `6712:*`); and the lost-device recovery frames (B-278, Decision Log #455, #456): sign-in side 1.1 to 1.5 `6912:34766`..`6913:35173` (`TwoFactorRecoveryRequest.tsx`, the revised prompt and its 2.8 banner), emailed-link pages 2.1 to 2.7 `6914:34766`..`6914:35084` (`RecoveryConfirmPage.tsx`, `RecoveryCancelPage.tsx`) and guardian pages 3.1 to 3.5 `6915:34766`..`6915:34998` (`RecoveryGuardianPage.tsx`); the plain undrawn lines on those screens (recovery unavailable, loading, could not load, something went wrong, and the not-valid copy reused on the guardian page) sit under the same chip. The frames tag the whole screen with one chip rather than each sentence, and so does the code: this ONE component is rendered on each two-factor screen, so every sentence on those screens (setup, key, code, backup codes, turn off, new backup codes, the sign-in code and backup-code prompts and their errors) is pending legal review until counsel clears the wording and the chip is removed | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S55 | | The "Copy Tag" chip drawn at the top of every user two-factor frame (B-087 / B-111, Decision Log #397, #446): settings flow `6655:2` / `6655:41` / `6655:85` / `6655:137` / `6655:173`, `6711:26922`, `6711:27117`, `6711:27333`; sign-in prompt `6711:27530`, `6711:27590`, `6711:27617` (mobile twins `6655:27159`..`27322`, `6712:*`); and the lost-device recovery frames (B-278, Decision Log #455, #456): sign-in side 1.1 to 1.5 `6912:34766`..`6913:35173` (`TwoFactorRecoveryRequest.tsx`, the revised prompt and its 2.8 banner), emailed-link pages 2.1 to 2.7 `6914:34766`..`6914:35084` (`RecoveryConfirmPage.tsx`, `RecoveryCancelPage.tsx`) and guardian pages 3.1 to 3.5 `6915:34766`..`6915:34998` (`RecoveryGuardianPage.tsx`); the plain undrawn lines on those screens (recovery unavailable, loading, could not load, something went wrong, and the not-valid copy reused on the guardian page) sit under the same chip. The frames tag the whole screen with one chip rather than each sentence, and so does the code: this ONE component is rendered on each two-factor screen, so every sentence on those screens (setup, key, code, backup codes, turn off, new backup codes, the sign-in code and backup-code prompts and their errors) is pending legal review until counsel clears the wording and the chip is removed | Cleared by founder review, no counsel review needed |
 
 ### web/signup/AgeGateStep.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S56 | Thanks for your interest. You need to be at least {…} years old to have a Soccernity account. [COPY PENDING LEGAL REVIEW] | Age Gate below-minimum-age `5464:7077` (mobile `5539:7314`), sub-heading | ☐ | | ☐ |
-| S57 | Soccernity is built around real grassroots football. In the UK, youth football starts at around age 5–6. Below that, a profile wouldn’t reflect anything about you as a player yet — so we keep signups closed until then, no matter what a parent or guardian agrees to. [COPY PENDING LEGAL REVIEW] | Age Gate below-minimum-age `5464:7077` (mobile `5539:7314`), "Why there's an age limit" panel | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S56 | Thanks for your interest. You need to be at least {…} years old to have a Soccernity account. | Age Gate below-minimum-age `5464:7077` (mobile `5539:7314`), sub-heading | Cleared by founder review, no counsel review needed |
+| S57 | Soccernity is built around real grassroots football. In the UK, youth football starts at around age 5–6. Below that, a profile wouldn’t reflect anything about you as a player yet — so we keep signups closed until then, no matter what a parent or guardian agrees to. | Age Gate below-minimum-age `5464:7077` (mobile `5539:7314`), "Why there's an age limit" panel | Cleared by founder review, no counsel review needed |
 
 ### web/signup/GuardianDetailsStep.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S58 | We only use this email address to request and record consent. [COPY PENDING LEGAL REVIEW] | Guardian Details Capture `5108:6627` (mobile `5539:7354`), fineprint `5111:6669` | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S58 | We only use this email address to request and record consent. | Guardian Details Capture `5108:6627` (mobile `5539:7354`), fineprint `5111:6669` | Cleared by founder review, no counsel review needed |
 
 ### web/CreateProfilePage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S59 | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Create Profile `1498:2303` / `1629:2449`, read-only date of birth note (K6 / Decision Log #394) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S59 | Set when you signed up and cannot be changed here. | Create Profile `1498:2303` / `1629:2449`, read-only date of birth note (K6 / Decision Log #394) | Cleared by founder review, no counsel review needed |
 
 ### web/src/components/block/BlockUserDialog.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S60 | You can undo it at any time in Settings; unblocking does not restore follows. They are not told. [COPY PENDING LEGAL REVIEW] | Block confirmation `6655:29600` / `6655:27355` (closing sentence; Decision Log #396, #402 item 4); moved from OtherProfilePage.tsx when B-067 shared the dialog with the messaging screens | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S60 | You can undo it at any time in Settings; unblocking does not restore follows. They are not told. | Block confirmation `6655:29600` / `6655:27355` (closing sentence; Decision Log #396, #402 item 4); moved from OtherProfilePage.tsx when B-067 shared the dialog with the messaging screens | Cleared by founder review, no counsel review needed |
 
 ### web/messages/actions/messageActionRules.ts (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S61 | We may keep a copy of the original for safety and legal reasons. [COPY PENDING LEGAL REVIEW] | Message Delete For Everyone Confirm `6978:47233` (mobile), `6979:48119` (desktop), also Deleting `6978:47338` / `6979:48323`; B-067, Decision Log #472 (b) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S61 | We may keep a copy of the original for safety and legal reasons. | Message Delete For Everyone Confirm `6978:47233` (mobile), `6979:48119` (desktop), also Deleting `6978:47338` / `6979:48323`; B-067, Decision Log #472 (b) | Cleared by founder review, no counsel review needed |
 
 ### web/src/components/report/ReportContextStep.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S62 | Our safeguarding team will see the messages you choose, and the message you are reporting. [COPY PENDING LEGAL REVIEW] | Report a message, Add messages for context, desktop `7025:60129` to `7027:59171` and mobile `7025:59162` to `7027:59162` (callout under the subtitle); B-286, Decision Log #477 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S62 | Our safeguarding team will see the messages you choose, and the message you are reporting. | Report a message, Add messages for context, desktop `7025:60129` to `7027:59171` and mobile `7025:59162` to `7027:59162` (callout under the subtitle); B-286, Decision Log #477 | Cleared by founder review, no counsel review needed |
 
 ### web/profile/EditProfileModal.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S63 | Shown on your profile only if you fill it in. It does not change the country used for safeguarding. [COPY PENDING LEGAL REVIEW] | Edit Profile `1466:15934` / `5702:8317`, Country hint (Decision Log #403 item 17) | ☐ | | ☐ |
-| S64 | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Edit Profile `1466:15934` / `5702:8317`, read-only date of birth note (Decision Log #367) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S63 | Shown on your profile only if you fill it in. It does not change the country used for safeguarding. | Edit Profile `1466:15934` / `5702:8317`, Country hint (Decision Log #403 item 17) | Cleared by founder review, no counsel review needed |
+| S64 | Set when you signed up and cannot be changed here. | Edit Profile `1466:15934` / `5702:8317`, read-only date of birth note (Decision Log #367) | Cleared by founder review, no counsel review needed |
 
 ### web/profile/ProfileImageControl.tsx (4 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S65 | Only you can see this picture until it has been checked. [COPY PENDING LEGAL REVIEW] | Avatar, under review state (K6 pass, Decision Log #371, #411 item 1) | ☐ | | ☐ |
-| S66 | Only you can see this cover photo until it has been checked. [COPY PENDING LEGAL REVIEW] | Cover photo, under review state (K6 pass, Decision Log #411 item 4) | ☐ | | ☐ |
-| S67 | Pictures are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW] | Avatar, note under the control (K6 pass) | ☐ | | ☐ |
-| S68 | Cover photos are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW] | Cover photo, note under the control (K6 pass) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S65 | Only you can see this picture until it has been checked. | Avatar, under review state (K6 pass, Decision Log #371, #411 item 1) | Cleared by founder review, no counsel review needed |
+| S66 | Only you can see this cover photo until it has been checked. | Cover photo, under review state (K6 pass, Decision Log #411 item 4) | Cleared by founder review, no counsel review needed |
+| S67 | Pictures are checked automatically before they appear on your profile. | Avatar, note under the control (K6 pass) | Cleared by founder review, no counsel review needed |
+| S68 | Cover photos are checked automatically before they appear on your profile. | Cover photo, note under the control (K6 pass) | Cleared by founder review, no counsel review needed |
 
 ### web/settings/BlockedUsersPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S69 | You can unblock someone at any time. Unblocking does not restore follows. [COPY PENDING LEGAL REVIEW] | Blocked users list `6705:26172` / `6706:26580`, lead line (Decision Log #396) | ☐ | | ☐ |
-| S70 | They will be able to see your posts again, and you will see theirs. Follows that were removed when you blocked them are not restored. [COPY PENDING LEGAL REVIEW] | Unblock confirmation `6705:26659` (body; Decision Log #396) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S69 | You can unblock someone at any time. Unblocking does not restore follows. | Blocked users list `6705:26172` / `6706:26580`, lead line (Decision Log #396) | Cleared by founder review, no counsel review needed |
+| S70 | They will be able to see your posts again, and you will see theirs. Follows that were removed when you blocked them are not restored. | Unblock confirmation `6705:26659` (body; Decision Log #396) | Cleared by founder review, no counsel review needed |
 
 ### web/guardian-consent/GuardianWithdrawalPage.tsx (9 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S71 | Enter the email address of the Soccernity account you gave consent for. We will send a withdrawal link to the guardian email on that account. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 1 Request `6654:2` (mobile `6654:26727`), sub-heading | ☐ | | ☐ |
-| S72 | If that account has confirmed guardian consent, a withdrawal link has been sent to the guardian. The link can be used once. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 2 Request Sent `6654:30` (mobile `6654:26755`), sub-heading | ☐ | | ☐ |
-| S73 | Nothing has changed yet. Consent is only withdrawn when the guardian confirms from the link. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 2 Request Sent `6654:30`, info panel `6654:50` | ☐ | | ☐ |
-| S74 | Withdrawing consent closes the account straight away. This cannot be undone from this page. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 3 Confirm `6654:57` (pre-filled `6820:29312`; mobile `6654:26782` / `6820:29346`), sub-heading | ☐ | | ☐ |
-| S75 | The account is closed and the person can no longer sign in. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 3 Confirm `6654:57`, card `6654:82` line 1 | ☐ | | ☐ |
-| S76 | The details they entered are deleted after 30 days. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 3 Confirm `6654:57`, card `6654:82` line 2 (the 30-day sentence is the counsel inconsistency of Decision Log #411 item 7, B-200) | ☐ | | ☐ |
-| S77 | Your withdrawal has been recorded and the account has been closed. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91` (mobile `6654:26816`), sub-heading | ☐ | | ☐ |
-| S78 | The details they entered are deleted after 30 days. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 1 (as above, B-200) | ☐ | | ☐ |
-| S79 | We have emailed the account holder to tell them. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 2 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S71 | Enter the email address of the Soccernity account you gave consent for. We will send a withdrawal link to the guardian email on that account. | Guardian Withdrawal 1 Request `6654:2` (mobile `6654:26727`), sub-heading | Cleared by founder review, no counsel review needed |
+| S72 | If that account has confirmed guardian consent, a withdrawal link has been sent to the guardian. The link can be used once. | Guardian Withdrawal 2 Request Sent `6654:30` (mobile `6654:26755`), sub-heading | Cleared by founder review, no counsel review needed |
+| S73 | Nothing has changed yet. Consent is only withdrawn when the guardian confirms from the link. | Guardian Withdrawal 2 Request Sent `6654:30`, info panel `6654:50` | Cleared by founder review, no counsel review needed |
+| S74 | Withdrawing consent closes the account straight away. This cannot be undone from this page. | Guardian Withdrawal 3 Confirm `6654:57` (pre-filled `6820:29312`; mobile `6654:26782` / `6820:29346`), sub-heading | Cleared by founder review, no counsel review needed |
+| S75 | The account is closed and the person can no longer sign in. | Guardian Withdrawal 3 Confirm `6654:57`, card `6654:82` line 1 | Cleared by founder review, no counsel review needed |
+| S76 | The details they entered are deleted after 30 days. | Guardian Withdrawal 3 Confirm `6654:57`, card `6654:82` line 2 (the 30-day sentence is the counsel inconsistency of Decision Log #411 item 7, B-200) | Cleared by founder review, no counsel review needed |
+| S77 | Your withdrawal has been recorded and the account has been closed. | Guardian Withdrawal 4 Success `6654:91` (mobile `6654:26816`), sub-heading | Cleared by founder review, no counsel review needed |
+| S78 | The details they entered are deleted after 30 days. | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 1 (as above, B-200) | Cleared by founder review, no counsel review needed |
+| S79 | We have emailed the account holder to tell them. | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 2 | Cleared by founder review, no counsel review needed |
 
 ### web/community/FinalWeekCarousel.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S80 | Finalists appear in a different order for each viewer. The order is never based on likes, comments, ranking, follower count or when a video was uploaded. [COPY PENDING LEGAL REVIEW] | Community feed "Final week" carousel, component sets `6697:26234` / `6697:27448` (transparency sentence, as drawn; frames `6661:26929` / `6661:29200`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S80 | Finalists appear in a different order for each viewer. The order is never based on likes, comments, ranking, follower count or when a video was uploaded. | Community feed "Final week" carousel, component sets `6697:26234` / `6697:27448` (transparency sentence, as drawn; frames `6661:26929` / `6661:29200`) | Cleared by founder review, no counsel review needed |
 
 ### web/community/PostCard.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S81 | Engagement is locked until the reveal. Only you can see this entry until then. [COPY PENDING LEGAL REVIEW] | Pinned final entry on the finalist's own profile, before the reveal, `6707:26727` (desktop) / `6709:26922` (mobile) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S81 | Engagement is locked until the reveal. Only you can see this entry until then. | Pinned final entry on the finalist's own profile, before the reveal, `6707:26727` (desktop) / `6709:26922` (mobile) | Cleared by founder review, no counsel review needed |
 
 ### web/community/MediaUploadTray.tsx (4 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S82 | Checking… only you can see this until it has been checked. [COPY PENDING LEGAL REVIEW] | Create Post composer 03 / 04 Checking `6847:29794` / `6847:29860` / `6848:29780` / `6848:29839`; contest final entry 03 `6850:29769` / `6850:30027` | ☐ | | ☐ |
-| S83 | Your video is hidden from everyone but you until the reveal at 00:00 on day 25. [COPY PENDING LEGAL REVIEW] | Contest final entry 04 Approved, waiting for the reveal `6850:29820` / `6850:30084` | ☐ | | ☐ |
-| S84 | Your video can be seen with your post. [COPY PENDING LEGAL REVIEW] | Video variant of composer 05 Approved (no frame; the pictures wording is `6847:29922` / `6848:29894`) | ☐ | | ☐ |
-| S85 | Your pictures can be seen with your post. [COPY PENDING LEGAL REVIEW] | Create Post composer 05 Approved `6847:29922` / `6848:29894` | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S82 | Checking… only you can see this until it has been checked. | Create Post composer 03 / 04 Checking `6847:29794` / `6847:29860` / `6848:29780` / `6848:29839`; contest final entry 03 `6850:29769` / `6850:30027` | Cleared by founder review, no counsel review needed |
+| S83 | Your video is hidden from everyone but you until the reveal at 00:00 on day 25. | Contest final entry 04 Approved, waiting for the reveal `6850:29820` / `6850:30084` | Cleared by founder review, no counsel review needed |
+| S84 | Your video can be seen with your post. | Video variant of composer 05 Approved (no frame; the pictures wording is `6847:29922` / `6848:29894`) | Cleared by founder review, no counsel review needed |
+| S85 | Your pictures can be seen with your post. | Create Post composer 05 Approved `6847:29922` / `6848:29894` | Cleared by founder review, no counsel review needed |
 
 ### web/community/PostMedia.tsx (5 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S86 | Only you can see this post until its video has been checked. [COPY PENDING LEGAL REVIEW] | Video variant of the author post card, media under review (no frame; the pictures wording is `6849:29675` / `6849:29769`) | ☐ | | ☐ |
-| S87 | Only you can see this post until its pictures have been checked. [COPY PENDING LEGAL REVIEW] | Author post card, media under review `6849:29675` / `6849:29769` | ☐ | | ☐ |
-| S88 | Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW] | Report on media, reason field (frontend/fc10-followups, B-260). Figma frames exist since pass R and pass S; the sentence is the layer `[COPY PENDING LEGAL REVIEW] Hint` (characters without the tag, as the other tagged Figma lines) directly under the reason field on desktop `6849:30010`, `6858:30609`, `6858:30622`, `6858:30635` and mobile `6849:30169`, `6858:30685`, `6858:30698`, `6858:30711` | ☐ | | ☐ |
-| S89 | Your post stays hidden from other people until every video has been approved. Remove this video or choose another. [COPY PENDING LEGAL REVIEW] | Video variant of the author post card, media rejected (no frame; the pictures wording is `6849:29719` / `6849:29813`) | ☐ | | ☐ |
-| S90 | Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another. [COPY PENDING LEGAL REVIEW] | Author post card, media rejected `6849:29719` / `6849:29813` | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S86 | Only you can see this post until its video has been checked. | Video variant of the author post card, media under review (no frame; the pictures wording is `6849:29675` / `6849:29769`) | Cleared by founder review, no counsel review needed |
+| S87 | Only you can see this post until its pictures have been checked. | Author post card, media under review `6849:29675` / `6849:29769` | Cleared by founder review, no counsel review needed |
+| S88 | Only our moderators see your reason, not the person who posted this. | Report on media, reason field (frontend/fc10-followups, B-260). Figma frames exist since pass R and pass S; the sentence is the layer `[COPY PENDING LEGAL REVIEW] Hint` (characters without the tag, as the other tagged Figma lines) directly under the reason field on desktop `6849:30010`, `6858:30609`, `6858:30622`, `6858:30635` and mobile `6849:30169`, `6858:30685`, `6858:30698`, `6858:30711` | Cleared by founder review, no counsel review needed |
+| S89 | Your post stays hidden from other people until every video has been approved. Remove this video or choose another. | Video variant of the author post card, media rejected (no frame; the pictures wording is `6849:29719` / `6849:29813`) | Cleared by founder review, no counsel review needed |
+| S90 | Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another. | Author post card, media rejected `6849:29719` / `6849:29813` | Cleared by founder review, no counsel review needed |
 
 ### web/community/FinalWeekPanel.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S91 | Everything you upload is checked before it can be shown, and your video stays hidden from everyone but you until the reveal. [COPY PENDING LEGAL REVIEW] | Contest final entry 01 Choose a video, desktop `6850:29675` / mobile `6850:29921` | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S91 | Everything you upload is checked before it can be shown, and your video stays hidden from everyone but you until the reveal. | Contest final entry 01 Choose a video, desktop `6850:29675` / mobile `6850:29921` | Cleared by founder review, no counsel review needed |
 
 ### admin/media-review/MediaReviewItemPage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S92 | Say why this {…} is being rejected. The uploader sees this reason. [COPY PENDING LEGAL REVIEW] | Admin media review, Reject dialog `6852:30985` / `6852:31327`, and for a profile picture / cover photo `6972:46863` / `6972:47057` / `6972:47248` (the frames say "picture" or "profile picture"; the code names the file type: picture, video, profile picture or cover photo) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S92 | Say why this {…} is being rejected. The uploader sees this reason. | Admin media review, Reject dialog `6852:30985` / `6852:31327`, and for a profile picture / cover photo `6972:46863` / `6972:47057` / `6972:47248` (the frames say "picture" or "profile picture"; the code names the file type: picture, video, profile picture or cover photo) | Cleared by founder review, no counsel review needed |
 
 ### web/ContactPage.tsx (3 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S93 | [COPY PENDING LEGAL REVIEW] Our support team reads the messages sent through this form. We keep your message for 12 months after the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern or a complaint, it may be kept for longer as part of a report or case record. See our Privacy Policy. | Contact Us form notice: `Notice — Contact Us form` on `6113:14053`, `6113:14199`, `6115:14611`, `6115:14684` and the form-state frames (`6887:32445` desktop, `6887:32453` mobile); source `docs/legal-copy-draft-tos-privacy-policy.md` Part C, "Screen copy -- Contact Us form notice"; one chip covers both sentences; first sentence is the exact v0.11 wording (founder decision 2026-10-30, not counsel’s); B-046, B-047, Decision Log #440, #444, #445 | ☐ | | ☐ |
-| S94 | Appeal a suspension [COPY PENDING LEGAL REVIEW] | Contact Us category dropdown option, last of seven (`6130:14653` / `6130:14664`, Figma pass V); B-298, B-301, Decision Log #492, #497. Public web page only: the admin inbox label in apps/admin is not tagged | ☐ | | ☐ |
-| S95 | [COPY PENDING LEGAL REVIEW] Use the email address your Soccernity account is registered with so we can find it. | Contact Us helper line, shown only while Appeal a suspension is chosen, with its visible tag chip: `7050:63556` / `7050:63739` / `7050:64028` / `7050:64123` (Figma pass V); B-298, B-301 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S93 | Our support team reads the messages sent through this form. We keep your message for 12 months after the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern or a complaint, it may be kept for longer as part of a report or case record. See our Privacy Policy. | Contact Us form notice: `Notice — Contact Us form` on `6113:14053`, `6113:14199`, `6115:14611`, `6115:14684` and the form-state frames (`6887:32445` desktop, `6887:32453` mobile); source `docs/legal-copy-draft-tos-privacy-policy.md` Part C, "Screen copy -- Contact Us form notice"; one chip covers both sentences; first sentence is the exact v0.11 wording (founder decision 2026-10-30, not counsel’s); B-046, B-047, Decision Log #440, #444, #445 | Cleared by founder review, no counsel review needed |
+| S94 | Appeal a suspension | Contact Us category dropdown option, last of seven (`6130:14653` / `6130:14664`, Figma pass V); B-298, B-301, Decision Log #492, #497. Public web page only: the admin inbox label in apps/admin is not tagged | Cleared by founder review, no counsel review needed |
+| S95 | Use the email address your Soccernity account is registered with so we can find it. | Contact Us helper line, shown only while Appeal a suspension is chosen, with its visible tag chip: `7050:63556` / `7050:63739` / `7050:64028` / `7050:64123` (Figma pass V); B-298, B-301 | Cleared by founder review, no counsel review needed |
 
 ### admin/users/GuardianNoticesSection.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S96 | [COPY PENDING LEGAL REVIEW] | The "Copy Tag" chip at the top of the Guardian notices card in every state: OFF `6920:34766`, ON `6921:35255`, ON review due `6921:35449`, cleared `6921:36121`, no confirmed guardian `6921:36281`. The frames tag the whole card with one chip, so this ONE component covers every card string (title, pills, the vetted-only line, the OFF explanation, the Withholding callout, the review-due note, Set by / Set on / Last reviewed, the reason and review-note labels, the no-guardian hint, the Withhold, Record review and Clear buttons and the section's load-error line); the dialogs and the banner carry their own inline tags below | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S96 | | The "Copy Tag" chip at the top of the Guardian notices card in every state: OFF `6920:34766`, ON `6921:35255`, ON review due `6921:35449`, cleared `6921:36121`, no confirmed guardian `6921:36281`. The frames tag the whole card with one chip, so this ONE component covers every card string (title, pills, the vetted-only line, the OFF explanation, the Withholding callout, the review-due note, Set by / Set on / Last reviewed, the reason and review-note labels, the no-guardian hint, the Withhold, Record review and Clear buttons and the section's load-error line); the dialogs and the banner carry their own inline tags below | Cleared by founder review, no counsel review needed |
 
 ### admin/users/guardianNoticesCopy.ts (8 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S97 | Consent emails (consent request, withdrawal, expiry, turned-18 notice, guardian-email-replaced) are not affected. [COPY PENDING LEGAL REVIEW] | Set dialog `6921:34878` (third bullet; the frame tags the end of the bullet block) | ☐ | | ☐ |
-| S98 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Set dialog `6921:34878` and `6921:35065` (help line); the same sentence the hold dialogs carry | ☐ | | ☐ |
-| S99 | {…} is under 18 and has no confirmed guardian yet. While this is on: [COPY PENDING LEGAL REVIEW] | No frame: the set dialog's intro for an account with no confirmed guardian (frame `6921:34878` draws only the confirmed-guardian intro; frame `6921:36281` draws the button) | ☐ | | ☐ |
-| S100 | Confirm that withholding guardian notices for {…} should continue. Your note is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Record review dialog `6921:35655` | ☐ | | ☐ |
-| S101 | Guardian notices for {…} will be sent as normal from now on. Notices that were skipped while this was on will not be sent. [COPY PENDING LEGAL REVIEW] | Clear dialog `6921:35894` | ☐ | | ☐ |
-| S102 | Guardian notices for {…} are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded. [COPY PENDING LEGAL REVIEW] | Cleared banner `6921:36121` | ☐ | | ☐ |
-| S103 | Enter between 10 and 1000 characters. [COPY PENDING LEGAL REVIEW] | No frame: the line shown when the server refuses the reason or note length (400 `guardian_notices_text_invalid`); the frames draw only the empty-reason error `6921:35065` | ☐ | | ☐ |
-| S104 | Another admin changed guardian notices for this account while this page was open. It now shows the current state. [COPY PENDING LEGAL REVIEW] | No frame: the line shown after a 409 `guardian_notices_already_withheld` / `guardian_notices_not_withheld` (a stale page) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S97 | Consent emails (consent request, withdrawal, expiry, turned-18 notice, guardian-email-replaced) are not affected. | Set dialog `6921:34878` (third bullet; the frame tags the end of the bullet block) | Cleared by founder review, no counsel review needed |
+| S98 | The reason is saved to the audit record. | Set dialog `6921:34878` and `6921:35065` (help line); the same sentence the hold dialogs carry | Cleared by founder review, no counsel review needed |
+| S99 | {…} is under 18 and has no confirmed guardian yet. While this is on: | No frame: the set dialog's intro for an account with no confirmed guardian (frame `6921:34878` draws only the confirmed-guardian intro; frame `6921:36281` draws the button) | Cleared by founder review, no counsel review needed |
+| S100 | Confirm that withholding guardian notices for {…} should continue. Your note is saved to the audit record. | Record review dialog `6921:35655` | Cleared by founder review, no counsel review needed |
+| S101 | Guardian notices for {…} will be sent as normal from now on. Notices that were skipped while this was on will not be sent. | Clear dialog `6921:35894` | Cleared by founder review, no counsel review needed |
+| S102 | Guardian notices for {…} are sent as normal again. Notices skipped while this was on will not be sent. The action was recorded. | Cleared banner `6921:36121` | Cleared by founder review, no counsel review needed |
+| S103 | Enter between 10 and 1000 characters. | No frame: the line shown when the server refuses the reason or note length (400 `guardian_notices_text_invalid`); the frames draw only the empty-reason error `6921:35065` | Cleared by founder review, no counsel review needed |
+| S104 | Another admin changed guardian notices for this account while this page was open. It now shows the current state. | No frame: the line shown after a 409 `guardian_notices_already_withheld` / `guardian_notices_not_withheld` (a stale page) | Cleared by founder review, no counsel review needed |
 
 ### web/profile/usernameReviewCopy.ts (11 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S105 | Your username was removed by Soccernity. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 01 Entry `6956:44591` (card line 1; the frame also names the handle, omitted: not in the response) | ☐ | | ☐ |
-| S106 | You can choose a new username below, or ask for a review of the removal. You can ask once, within 30 days of the removal. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 01 Entry `6956:44591` (card line 2) | ☐ | | ☐ |
-| S107 | A different member of our team reviews your request. Their decision is final. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 02 Request Form `6956:44790` (note `6956:44986`) | ☐ | | ☐ |
-| S108 | We’ll show the result here and send you a notification when it’s decided. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 04 Request Sent `6956:45202` (`6956:45397`) | ☐ | | ☐ |
-| S109 | You asked for a review. Our team is looking at it. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 05 Pending `6956:45402` (`6956:45596`; the frame also gives the request date, omitted: not in the response) | ☐ | | ☐ |
-| S110 | The result will appear here, and you will get a notification. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 05 Pending `6956:45402` (`6956:45597`) | ☐ | | ☐ |
-| S111 | Our team decided to keep the username removed. The decision is final and cannot be reviewed again. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 07 Declined `6956:45803` (`6956:45997`) | ☐ | | ☐ |
-| S112 | Choose a new username below to continue. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 07 Declined `6956:45803` (`6956:45998`) and 08 Window Passed `6956:46003` (`6956:46195`) | ☐ | | ☐ |
-| S113 | The time to ask for a review has passed. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 08 Window Passed `6956:46003` (`6956:46194`; shown after the server answers 403 `username_review_window_closed`; the frame also names the handle and removal date, omitted: not in the response) | ☐ | | ☐ |
-| S114 | Couldn’t send your request. Check your connection and try again. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 09 Error Could Not Send `6956:46200` (`6956:46399`) | ☐ | | ☐ |
-| S115 | You’ve already asked for a review of this removal. The result will appear here. [COPY PENDING LEGAL REVIEW] | Create Profile Username Review 10 Error Already Asked `6956:46409` (`6956:46608`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S105 | Your username was removed by Soccernity. | Create Profile Username Review 01 Entry `6956:44591` (card line 1; the frame also names the handle, omitted: not in the response) | Cleared by founder review, no counsel review needed |
+| S106 | You can choose a new username below, or ask for a review of the removal. You can ask once, within 30 days of the removal. | Create Profile Username Review 01 Entry `6956:44591` (card line 2) | Cleared by founder review, no counsel review needed |
+| S107 | A different member of our team reviews your request. Their decision is final. | Create Profile Username Review 02 Request Form `6956:44790` (note `6956:44986`) | Cleared by founder review, no counsel review needed |
+| S108 | We’ll show the result here and send you a notification when it’s decided. | Create Profile Username Review 04 Request Sent `6956:45202` (`6956:45397`) | Cleared by founder review, no counsel review needed |
+| S109 | You asked for a review. Our team is looking at it. | Create Profile Username Review 05 Pending `6956:45402` (`6956:45596`; the frame also gives the request date, omitted: not in the response) | Cleared by founder review, no counsel review needed |
+| S110 | The result will appear here, and you will get a notification. | Create Profile Username Review 05 Pending `6956:45402` (`6956:45597`) | Cleared by founder review, no counsel review needed |
+| S111 | Our team decided to keep the username removed. The decision is final and cannot be reviewed again. | Create Profile Username Review 07 Declined `6956:45803` (`6956:45997`) | Cleared by founder review, no counsel review needed |
+| S112 | Choose a new username below to continue. | Create Profile Username Review 07 Declined `6956:45803` (`6956:45998`) and 08 Window Passed `6956:46003` (`6956:46195`) | Cleared by founder review, no counsel review needed |
+| S113 | The time to ask for a review has passed. | Create Profile Username Review 08 Window Passed `6956:46003` (`6956:46194`; shown after the server answers 403 `username_review_window_closed`; the frame also names the handle and removal date, omitted: not in the response) | Cleared by founder review, no counsel review needed |
+| S114 | Couldn’t send your request. Check your connection and try again. | Create Profile Username Review 09 Error Could Not Send `6956:46200` (`6956:46399`) | Cleared by founder review, no counsel review needed |
+| S115 | You’ve already asked for a review of this removal. The result will appear here. | Create Profile Username Review 10 Error Already Asked `6956:46409` (`6956:46608`) | Cleared by founder review, no counsel review needed |
 
 ### web/notifications/usernameReviewCopy.ts (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S116 | Your username is back on your account. [COPY PENDING LEGAL REVIEW] | Notification Centre Username Review Outcomes `6956:46618` (approved row `6956:47008`; the frame names the handle, omitted: the notification carries only the outcome) | ☐ | | ☐ |
-| S117 | The username stays removed. [COPY PENDING LEGAL REVIEW] | Notification Centre Username Review Outcomes `6956:46618` (decided row `6956:47027`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S116 | Your username is back on your account. | Notification Centre Username Review Outcomes `6956:46618` (approved row `6956:47008`; the frame names the handle, omitted: the notification carries only the outcome) | Cleared by founder review, no counsel review needed |
+| S117 | The username stays removed. | Notification Centre Username Review Outcomes `6956:46618` (decided row `6956:47027`) | Cleared by founder review, no counsel review needed |
 
 ### web/settings/AccountInformationPage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S118 | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Settings Account Information `6989:49962` / `6989:50344` (note `6989:50153`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S118 | Set when you signed up and cannot be changed here. | Settings Account Information `6989:49962` / `6989:50344` (note `6989:50153`) | Cleared by founder review, no counsel review needed |
 
 ### web/settings/ChangeEmailPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S119 | We’ve also told your current address about this change. [COPY PENDING LEGAL REVIEW] | Email change Check your inbox `6990:50994` / `6990:51906` (callout `6990:51176`), under 18 `6990:51182` / `6990:51948` (callout `6990:51364`) | ☐ | | ☐ |
-| S120 | Your guardian will be told about this change. [COPY PENDING LEGAL REVIEW] | Email change Check your inbox (under 18) `6990:51182` / `6990:51948` (callout `6990:51367`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S119 | We’ve also told your current address about this change. | Email change Check your inbox `6990:50994` / `6990:51906` (callout `6990:51176`), under 18 `6990:51182` / `6990:51948` (callout `6990:51364`) | Cleared by founder review, no counsel review needed |
+| S120 | Your guardian will be told about this change. | Email change Check your inbox (under 18) `6990:51182` / `6990:51948` (callout `6990:51367`) | Cleared by founder review, no counsel review needed |
 
 ### web/settings/PushNotificationsPage.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S121 | Push notifications only say “You have a new notification”. Open Soccernity to see what it is. [COPY PENDING LEGAL REVIEW] | Settings Push On `6990:54293` / `6990:55818`, Off `6990:54466` / `6990:55850` (callout `6990:54462` / `6990:54635`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S121 | Push notifications only say “You have a new notification”. Open Soccernity to see what it is. | Settings Push On `6990:54293` / `6990:55818`, Off `6990:54466` / `6990:55850` (callout `6990:54462` / `6990:54635`) | Cleared by founder review, no counsel review needed |
 
 ### web/src/components/removed/removedContent.ts (3 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S122 | This message was removed by Soccernity [COPY PENDING LEGAL REVIEW] | Message removed by Soccernity M1 `7034:59391`, M2 `7034:59438`, inbox preview M3 `7034:59485`, desktop D1 `7034:59555`, D2 `7034:59758`; B-289, Decision Log #483 | ☐ | | ☐ |
-| S123 | This comment was removed by Soccernity [COPY PENDING LEGAL REVIEW] | Removed comment M4 `7035:59629`, D3 `7035:59818`; B-289, Decision Log #483 | ☐ | | ☐ |
-| S124 | Soccernity removed this post. [COPY PENDING LEGAL REVIEW] | Removed post notice for its author M5 `7035:59686`, D4 `7035:59699`; B-289, Decision Log #483 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S122 | This message was removed by Soccernity | Message removed by Soccernity M1 `7034:59391`, M2 `7034:59438`, inbox preview M3 `7034:59485`, desktop D1 `7034:59555`, D2 `7034:59758`; B-289, Decision Log #483 | Cleared by founder review, no counsel review needed |
+| S123 | This comment was removed by Soccernity | Removed comment M4 `7035:59629`, D3 `7035:59818`; B-289, Decision Log #483 | Cleared by founder review, no counsel review needed |
+| S124 | Soccernity removed this post. | Removed post notice for its author M5 `7035:59686`, D4 `7035:59699`; B-289, Decision Log #483 | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/SuspendAccountDialog.tsx (8 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S125 | They can’t sign in, and every session they have ends now. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, report `7042:61915` (consequence list, line 1) and user page `7045:63231`; B-295, B-301, Decision Log #485, #497 | ☐ | | ☐ |
-| S126 | Engagement points they earned from views, likes and comments are removed. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog `7042:61915` / `7045:63231` (line 2) | ☐ | | ☐ |
-| S127 | If they are under 18, their guardian is told once. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog `7042:61915` / `7045:63231` (line 3) | ☐ | | ☐ |
-| S128 | They are emailed straight away with a short reason based on this report’s category, and told how to appeal through the Contact Us page. For Child safety concern, Other, or no category the reason is “breaching our community rules”. The email names no reporter and no duration. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, report mode `7042:61915` (line 4) | ☐ | | ☐ |
-| S129 | They are emailed straight away with a short reason based on the category you choose, and told how to appeal through the Contact Us page. The email names no reporter and no duration. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, user-page mode `7045:63231` (line 4) | ☐ | | ☐ |
-| S130 | If an appeal against this report is overturned, the account is reinstated automatically. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, report mode `7042:61915` (line 5) | ☐ | | ☐ |
-| S131 | A moderator reviews appeals sent through Contact Us and can reinstate the account from this page. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, user-page mode `7045:63231` (line 5) | ☐ | | ☐ |
-| S132 | The email gives a short reason based on this choice. For Child safety concern and Other it says “breaching our community rules”. [COPY PENDING LEGAL REVIEW] | Admin Suspend Account Dialog, user-page mode `7045:63231` (category help line) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S125 | They can’t sign in, and every session they have ends now. | Admin Suspend Account Dialog, report `7042:61915` (consequence list, line 1) and user page `7045:63231`; B-295, B-301, Decision Log #485, #497 | Cleared by founder review, no counsel review needed |
+| S126 | Engagement points they earned from views, likes and comments are removed. | Admin Suspend Account Dialog `7042:61915` / `7045:63231` (line 2) | Cleared by founder review, no counsel review needed |
+| S127 | If they are under 18, their guardian is told once. | Admin Suspend Account Dialog `7042:61915` / `7045:63231` (line 3) | Cleared by founder review, no counsel review needed |
+| S128 | They are emailed straight away with a short reason based on this report’s category, and told how to appeal through the Contact Us page. For Child safety concern, Other, or no category the reason is “breaching our community rules”. The email names no reporter and no duration. | Admin Suspend Account Dialog, report mode `7042:61915` (line 4) | Cleared by founder review, no counsel review needed |
+| S129 | They are emailed straight away with a short reason based on the category you choose, and told how to appeal through the Contact Us page. The email names no reporter and no duration. | Admin Suspend Account Dialog, user-page mode `7045:63231` (line 4) | Cleared by founder review, no counsel review needed |
+| S130 | If an appeal against this report is overturned, the account is reinstated automatically. | Admin Suspend Account Dialog, report mode `7042:61915` (line 5) | Cleared by founder review, no counsel review needed |
+| S131 | A moderator reviews appeals sent through Contact Us and can reinstate the account from this page. | Admin Suspend Account Dialog, user-page mode `7045:63231` (line 5) | Cleared by founder review, no counsel review needed |
+| S132 | The email gives a short reason based on this choice. For Child safety concern and Other it says “breaching our community rules”. | Admin Suspend Account Dialog, user-page mode `7045:63231` (category help line) | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/RecordAppealDialog.tsx (3 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S133 | Record an appeal for the suspended person against the decision on Report #{…}. They can’t sign in, so staff record it for them. [COPY PENDING LEGAL REVIEW] | Admin Record an Appeal `7044:62187` (and `7044:62269`, `7044:62352`, `7044:62425`), paragraph 1; B-295, B-301, Decision Log #485 (f), #492 | ☐ | | ☐ |
-| S134 | This is only possible inside the appeal window, counted from the decision. Recording it pauses closure of this report until the appeal is decided. [COPY PENDING LEGAL REVIEW] | Admin Record an Appeal `7044:62187`, paragraph 2 | ☐ | | ☐ |
-| S135 | The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW] | Admin Record an Appeal `7044:62187` (help line under the reason box); the same sentence the hold dialogs carry | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S133 | Record an appeal for the suspended person against the decision on Report #{…}. They can’t sign in, so staff record it for them. | Admin Record an Appeal `7044:62187` (and `7044:62269`, `7044:62352`, `7044:62425`), paragraph 1; B-295, B-301, Decision Log #485 (f), #492 | Cleared by founder review, no counsel review needed |
+| S134 | This is only possible inside the appeal window, counted from the decision. Recording it pauses closure of this report until the appeal is decided. | Admin Record an Appeal `7044:62187`, paragraph 2 | Cleared by founder review, no counsel review needed |
+| S135 | The reason is saved to the audit record. | Admin Record an Appeal `7044:62187` (help line under the reason box); the same sentence the hold dialogs carry | Cleared by founder review, no counsel review needed |
 
 ### admin/media-review/SetAsideDialog.tsx (4 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S136 | The {…} is withdrawn from public view and rejected. The uploader sees the standard rejection message. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
-| S137 | The {…} is kept for the set-aside period and is not deleted with the uploader’s account. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
-| S138 | Nothing is reported to anyone. A report to a receiving body is made outside Soccernity, and you record it afterwards. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
-| S139 | 10 to 500 characters. The reason is saved with the record and is never shown to the uploader. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S136 | The {…} is withdrawn from public view and rejected. The uploader sees the standard rejection message. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
+| S137 | The {…} is kept for the set-aside period and is not deleted with the uploader’s account. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
+| S138 | Nothing is reported to anyone. A report to a receiving body is made outside Soccernity, and you record it afterwards. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
+| S139 | 10 to 500 characters. The reason is saved with the record and is never shown to the uploader. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
 
 ### admin/suspected-illegal/SuspectedIllegalDetailPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S140 | These suggestions are pending counsel. None of them is approved or confirmed. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
-| S141 | A report to a receiving body must be made with that body, outside Soccernity. This page does not send anything. It only records that a report was made, or that it was decided not to make one. [COPY PENDING LEGAL REVIEW] | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S140 | These suggestions are pending counsel. None of them is approved or confirmed. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
+| S141 | A report to a receiving body must be made with that body, outside Soccernity. This page does not send anything. It only records that a report was made, or that it was decided not to make one. | No Figma frame (B-206 suspected illegal imagery, backend PR #800); DEFAULT wording, founder-veto-able | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/ReportDetailPage.tsx (2 strings)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S142 | Account suspended. The account can no longer sign in and has been emailed. [COPY PENDING LEGAL REVIEW] | Admin Report Detail, suspended result state `7042:61998` | ☐ | | ☐ |
-| S143 | Appeal recorded for the account. It is waiting for review, and closure of this report is paused. [COPY PENDING LEGAL REVIEW] | Admin Report Detail, appeal recorded state (Record an Appeal, recorded `7044:62498`) | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S142 | Account suspended. The account can no longer sign in and has been emailed. | Admin Report Detail, suspended result state `7042:61998` | Cleared by founder review, no counsel review needed |
+| S143 | Appeal recorded for the account. It is waiting for review, and closure of this report is paused. | Admin Report Detail, appeal recorded state (Record an Appeal, recorded `7044:62498`) | Cleared by founder review, no counsel review needed |
 
 ### admin/moderation/ContextMessagesCard.tsx (1 string)
 
-| # | String as shown | Figma frame | Approve as is | Reword to | Reject |
-|---|---|---|---|---|---|
-| S144 | Context hidden: this involves a child. [COPY PENDING LEGAL REVIEW] | Admin Report Detail, hidden message context `7045:62777`; B-293, B-295, Decision Log #486, #497 | ☐ | | ☐ |
+| # | String as shown | Figma frame | Status |
+|---|---|---|---|
+| S144 | Context hidden: this involves a child. | Admin Report Detail, hidden message context `7045:62777`; B-293, B-295, Decision Log #486, #497 | Cleared by founder review, no counsel review needed |
 
 ## 5. Sign-off
 
 This table is intentionally blank. Nothing in this pack has been signed.
 
 | Document | Version | Reviewed by | Date | Outcome | Notes |
-|---|---|---|---|---|---|
+|---|---|---|---|
 | Legal copy | v0.18 | | | | |
 | DPIA | v0.10 | | | | |
 | Incident plan | v0.8 | | | | |
@@ -1035,5 +1029,5 @@ This table is intentionally blank. Nothing in this pack has been signed.
 | Contest and view-data addendum | v0.3 | | | | |
 | View-data Part C | v0.3 | | | | |
 | Cloudflare draft | v0.3 | | | | |
-| Strings sheet (section 4) | 144 strings | | | | |
+| Strings sheet (section 4) | 144 strings, cleared by founder review (R108), no sign-off needed | | | | |
 | Questions Q1 to Q71 (section 3) | answered: yes / no | | | | |

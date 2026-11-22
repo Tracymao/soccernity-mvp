@@ -67,7 +67,7 @@ describe("adult confirm page (/two-factor-recovery/confirm)", () => {
     vi.mocked(getRecoveryLink).mockResolvedValue({ state: "valid", kind: "adult" });
     renderPage(<RecoveryConfirmPage />, url);
     await screen.findByRole("heading", { name: "Remove two-factor from your account?" });
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
     expect(screen.getByText("Before you confirm")).not.toBeNull();
     expect(screen.getByText("We’ll email you a notice with a link to cancel.")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Confirm" })).not.toBeNull();

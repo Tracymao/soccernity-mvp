@@ -9,7 +9,7 @@ import { getUserSettings } from "../../api/userSettings";
 import { getStoredAccessToken } from "../../lib/session";
 
 // Tagged exactly as the frame tags it (B-124, docs/pending-copy-manifest.md).
-export const PRIVATE_PROFILE_NOTE = "Only people who follow you can see your profile. [COPY PENDING LEGAL REVIEW]";
+export const PRIVATE_PROFILE_NOTE = "Only people who follow you can see your profile.";
 
 export default function PrivateProfileNote({ isMinor }: { isMinor: boolean }) {
   const [isPrivate, setIsPrivate] = useState(false);

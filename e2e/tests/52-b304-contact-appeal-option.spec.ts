@@ -47,9 +47,9 @@ test.describe.serial('Contact Us: the seventh option, Appeal a suspension', () =
     await page.getByRole('combobox', { name: 'Category' }).click();
     await page.getByRole('option', { name: textMatching(APPEAL_LABEL, { exact: true }) }).click();
     await expect(helper).toHaveText(HELPER);
-    // The chip beside the helper is the same tag chip the form notice uses.
+    // No tag chip beside the helper (cleared by founder review, R108).
     const block = page.locator('.contact-page__helper-block');
-    await expect(block.locator('.contact-page__tag')).toHaveText(COPY_TAG);
+    await expect(block.locator('.contact-page__tag')).toHaveCount(0);
 
     await page.getByRole('combobox', { name: 'Category' }).click();
     await page.getByRole('option', { name: 'Data', exact: true }).click();

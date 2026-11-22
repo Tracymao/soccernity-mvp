@@ -95,7 +95,7 @@ test.describe.serial('admin: suspected illegal imagery on profile pictures and c
     const dialog = page.getByRole('dialog', { name: /Set this profile picture aside as suspected illegal imagery/ });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('withdrawn from public view');
-    await expect(dialog).toContainText(COPY_TAG);
+    await expect(dialog).not.toContainText(COPY_TAG);
 
     await dialog.getByRole('button', { name: 'Confirm' }).click();
     await expect(dialog.getByText('Enter a reason to continue.')).toBeVisible();

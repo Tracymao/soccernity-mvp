@@ -92,7 +92,7 @@ describe("FinalWeekPanel", () => {
     renderPanel();
     expect(screen.queryByLabelText("Video link")).toBeNull();
     expect(screen.getByRole("button", { name: /choose a video/i })).not.toBeNull();
-    expect(screen.getByText(/stays hidden from everyone but you until the reveal\. \[COPY PENDING LEGAL REVIEW\]/)).not.toBeNull();
+    expect(screen.getByText(/stays hidden from everyone but you until the reveal\./)).not.toBeNull();
   });
 
   it("Submit stays disabled until there is a caption AND an uploaded video", async () => {

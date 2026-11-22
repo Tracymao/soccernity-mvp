@@ -44,7 +44,7 @@ afterEach(cleanup);
 describe("code mode (Figma 6711:27530)", () => {
   it("shows the drawn copy, the Copy Tag chip, six boxes, Continue and the backup-code link", () => {
     open();
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
     expect(screen.getByRole("heading", { name: "Enter the 6-digit code" })).not.toBeNull();
     expect(screen.getByText("Enter the code shown in your authenticator app for Soccernity.")).not.toBeNull();
     for (let i = 1; i <= 6; i += 1) expect(screen.getByLabelText(`Digit ${i} of 6`)).not.toBeNull();

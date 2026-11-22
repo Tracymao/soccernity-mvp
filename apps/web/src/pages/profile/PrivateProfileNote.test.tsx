@@ -30,7 +30,7 @@ describe("PrivateProfileNote", () => {
     vi.mocked(getUserSettings).mockResolvedValue(settings(false));
     render(<PrivateProfileNote isMinor={false} />);
     expect((await screen.findByTestId("private-profile-note")).textContent).toBe(PRIVATE_PROFILE_NOTE);
-    expect(PRIVATE_PROFILE_NOTE).toBe("Only people who follow you can see your profile. [COPY PENDING LEGAL REVIEW]");
+    expect(PRIVATE_PROFILE_NOTE).toBe("Only people who follow you can see your profile.");
   });
 
   it("shows nothing while the profile is public", async () => {

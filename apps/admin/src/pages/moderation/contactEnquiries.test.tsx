@@ -388,7 +388,7 @@ describe("ContactEnquiryDetailPage", () => {
     expect(screen.getByText("Reply by email opens your email app with the sender’s address filled in.")).not.toBeNull();
     expect(
       screen.getByText(
-        "Enquiries are deleted automatically 12 months after the last message. If you escalate one, the report’s retention applies instead. [COPY PENDING LEGAL REVIEW]",
+        "Enquiries are deleted automatically 12 months after the last message. If you escalate one, the report’s retention applies instead.",
       ),
     ).not.toBeNull();
   });
@@ -454,7 +454,7 @@ describe("ContactEnquiryDetailPage", () => {
     expect(view.getAttribute("href")).toBe(`/moderation/reports/${REPORT_ID}`);
     expect(
       screen.getByText(
-        "Escalated to report #1043d4e5. That report’s retention applies instead of the 12-month deletion. [COPY PENDING LEGAL REVIEW]",
+        "Escalated to report #1043d4e5. That report’s retention applies instead of the 12-month deletion.",
       ),
     ).not.toBeNull();
     expect(screen.queryByText(/Enquiries are deleted automatically/)).toBeNull();
@@ -515,7 +515,7 @@ describe("Escalate to a report dialog", () => {
     expect(minor.checked).toBe(false);
     expect(within(dialog).getByText("Reports marked this way can only be opened by child-safety-vetted admins.")).not.toBeNull();
     expect(within(dialog).getByLabelText("Reason (required)")).not.toBeNull();
-    expect(within(dialog).getByText("The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(within(dialog).getByText("The reason is saved to the audit record.")).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Escalate to a report" })).not.toBeNull();
   });

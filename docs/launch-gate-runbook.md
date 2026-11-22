@@ -30,7 +30,7 @@ A step marked **GATE** must be finished before the next part starts. A step mark
 - **Secret / key** - a value that must never be written into the repository or shared in a chat. Keep them in a password manager.
 - **`sync: false`** - in `render.yaml` this means "Render asks you for the value; the file does not contain it". There are 37 of these per API service.
 - **Migration** - a change to the shape of the database. They are applied automatically on every deploy (step 5.1).
-- **Tagged string** - a sentence in the app that still carries the text `[COPY PENDING LEGAL REVIEW]`. Counsel has not cleared it. There are 200 today (web 149, admin 51; measured 2026-11-21 on the built output after R101, Decision Log #539).
+- **Tagged string** - a sentence in the app that carried the text `[COPY PENDING LEGAL REVIEW]`. The founder reviewed and cleared all of them (R108, 2026-11-22), so there are 0 today and the tag no longer appears in the built output.
 - **Two-factor (2FA)** - a six-digit code from an authenticator app.
 - **Proxy (Cloudflare)** - a service that sits in front of the sites. Optional; NOT DECIDED (step 8.1).
 
@@ -46,7 +46,7 @@ A step marked **GATE** must be finished before the next part starts. A step mark
 
 **Two hard blockers to know now, before you spend money:**
 
-- **The production web and admin sites cannot be built while any tagged string remains.** Their build command runs the pending-copy check, which fails today with 200 places (web 149, admin 51). Counsel has to clear them (Part 7). Staging builds do not run that check. (`render.yaml`, `docs/infra-static-site-hosting-report.md`, `docs/qa-launch-gate-full-run-report.md`)
+- **The production web and admin sites cannot be built while any tagged string remains.** Their build command runs the pending-copy check. The apps' own strings carry no tag any more (R108), but the check still FAILS on the web bundle, because the Terms and Privacy Policy pages render `docs/legal-copy-draft-tos-privacy-policy.md`, which still holds 53 tagged places (admin: 0). It passes once that draft is cleared. If a tagged string is ever added again, the production build fails until it is cleared (Part 7). Staging builds do not run that check. (`render.yaml`, `docs/infra-static-site-hosting-report.md`, `docs/qa-launch-gate-full-run-report.md`)
 - **User uploads (pictures and video) stay OFF in production until the launch condition in step 8.7 is met**, and the founder then sets `MEDIA_UPLOADS_ENABLED` to `true` (step 8.9). Since 2026-11-15 the condition is NOT a written answer from counsel (Decision Log #524 reversed that): it is TWO parts: (a) the suspected-illegal-imagery reporting path tried once on staging, and (b) video working on staging with a real upload. (A third part, the founder registering with the receiving bodies, was removed on 2026-11-17: Decision Log #529.) The founder accepts launching before automatic image matching exists; that is his own risk decision, not counsel's view. While the switch is off, Contest entries cannot be made, because a final entry needs a video. (`.env.example`, Decision Log #501, #524, B-306, B-267 (l), B-206, B-321)
 
 ---
@@ -253,7 +253,7 @@ None of these is decided by this runbook. They are the things that need a person
 
 Counsel receives one pack, `docs/counsel-review-pack.docx` (source `docs/counsel-review-pack.md`): the questions, grouped, and the strings sheet. Only what is still unresolved and needs a lawyer is in it (Decision Log #532, #534).
 
-**7.1 Clear the 200 tagged strings.** WHO: COUNSEL, then AGENT. ROW: B-124, B-208, B-089, B-301. Counsel reads the public strings and the admin strings about children, guardians, holds, suspensions and media. The 56 admin two-factor strings were cleared by the founder, not counsel (Decision Log #531). Six plain-fact strings on the verify-email prompt, the date-of-birth and country step, the register step and the post box were also untagged by the founder (R101, Decision Log #539); the claim in each was checked in the code first. The check prints 200 places today (web 149, admin 51); the manifest lists 144 rows (web 93, admin 51), because the check counts every place the text reaches the built files and the manifest counts one row per string in source. For each cleared string an agent removes the tag from the source and deletes its manifest row. **Strings are cleared by removing the tag, never by allow-listing:** the allow-list file `scripts/pending-copy/dist-allowlist.json` must stay `[]`. Check with `npm run check:pending-copy` (it builds the apps first). YOU SHOULD SEE: it passes (today it fails by design). The production web and admin builds run this same check, so production cannot deploy until it passes.
+**7.1 Confirm no tagged string remains (cleared by the founder, R108).** WHO: AGENT (check only). ROW: B-124, B-208, B-089, B-301. The founder reviewed all 144 remaining strings and cleared them (R108, 2026-11-22); no counsel review was needed. The 56 admin two-factor strings were cleared by the founder, not counsel (Decision Log #531). Six plain-fact strings on the verify-email prompt, the date-of-birth and country step, the register step and the post box were also untagged by the founder (R101, Decision Log #539); the claim in each was checked in the code first. The manifest has no rows (it had 144: web 93, admin 51) and the apps' source holds no tagged string. The check still prints 53 places today (web only), all from the rendered legal draft `docs/legal-copy-draft-tos-privacy-policy.md`; they go when that draft's tags are cleared, which the legal-draft owner does, not this step. **Strings are cleared by removing the tag, never by allow-listing:** the allow-list file `scripts/pending-copy/dist-allowlist.json` must stay `[]`. Check with `npm run check:pending-copy` (it builds the apps first). YOU SHOULD SEE: it passes once the legal draft is cleared (today it fails on 53 places in the web bundle, all from that draft). The production web and admin builds run this same check, so production cannot deploy until it passes.
 
 **7.2 Legal copy.** WHO: COUNSEL. ROW: B-089, B-159. The live Terms and Privacy pages render `docs/legal-copy-draft-tos-privacy-policy.md`. It is a draft, still not approved, with `[PROPOSAL]` markers and an unfilled company name, address and effective date (Decision Log #203 stays open for the prose). Counsel review the current version; the founder fills the company details. Do not publish while the NOT APPROVED banner remains.
 
@@ -297,7 +297,7 @@ Counsel receives one pack, `docs/counsel-review-pack.docx` (source `docs/counsel
 
 ## Part 9 - Going live (FOUNDER, AGENT)
 
-Do not start until: Parts 5 to 7 are GATE-passed, the 200 tagged strings are cleared (step 7.1), Postmark approval is through (step 1.5), and the founder has said go.
+Do not start until: Parts 5 to 7 are GATE-passed, no tagged string remains (step 7.1), Postmark approval is through (step 1.5), and the founder has said go.
 
 **9.1 Merge to `main`.** The two production static sites build from `main`; production API deploys from `main`. WHO: AGENT merges only when the founder says; **Temi verifies and merges** (project rule).
 
@@ -411,7 +411,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 200 tagged strings are cle
 | 6.14 Suspected-imagery reporting path tried on staging (post picture, profile picture, cover) | Agent, founder | B-206, B-321 | |
 | 6.15 Video on staging with a real upload | QA, founder | B-322, B-238 | |
 | 6.16 Static-site headers, `/sw.js`, CSP | Agent, founder | B-179, B-180 | |
-| 7.1 200 tagged strings cleared | Counsel, agent | B-124, B-208, B-301 | |
+| 7.1 No tagged strings remain (R108) | Counsel, agent | B-124, B-208, B-301 | |
 | 7.2 Legal copy | Counsel | B-089, B-159 | |
 | 7.3 DPIA + addenda | Counsel | B-159, B-236, B-241 | |
 | 7.4 Withdrawal wording | Counsel | B-200 | |
@@ -443,7 +443,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, the 200 tagged strings are cle
 - **F15** ANSWERED 2026-11-15 (Decision Log #527): the API runs as a Docker image that carries ffmpeg and ffprobe. The free-plan Docker question no longer applies: staging is Starter (Decision Log #537). (steps 4.5, 6.15, 8.5)
 - **F17** Does `www` redirect to the root, and how? (step 2.4)
 - **F19** Same-site Playwright run on real domains: no written procedure exists. (step 6.10)
-- Also open and owned by counsel or the founder, not by this runbook: Postmark account approval (a launch gate before any outside person signs up on production, step 1.5, Decision Log #541), the 200 tagged strings (B-124), counsel's non-blocking questions on suspected illegal imagery (step 7.5, B-206), B-220, B-253, the DPIA and legal copy sign-off, the withdrawal wording (B-200), and the incident-plan question on guardian lockout notices (Decision Log #438).
+- Also open and owned by counsel or the founder, not by this runbook: Postmark account approval (a launch gate before any outside person signs up on production, step 1.5, Decision Log #541), the 53 tagged places left in the legal draft (B-124), counsel's non-blocking questions on suspected illegal imagery (step 7.5, B-206), B-220, B-253, the DPIA and legal copy sign-off, the withdrawal wording (B-200), and the incident-plan question on guardian lockout notices (Decision Log #438).
 
 ---
 

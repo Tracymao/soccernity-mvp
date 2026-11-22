@@ -178,12 +178,12 @@ export default function ContactEnquiryDetailPage() {
             {escalatedReportId ? (
               <>
                 Escalated to report #{escalatedReportId.slice(0, 8)}. That report’s retention applies instead of the
-                12-month deletion. [COPY PENDING LEGAL REVIEW]
+                12-month deletion.
               </>
             ) : (
               <>
                 Enquiries are deleted automatically 12 months after the last message. If you escalate one, the
-                report’s retention applies instead. [COPY PENDING LEGAL REVIEW]
+                report’s retention applies instead.
               </>
             )}
           </p>

@@ -145,7 +145,7 @@ export default function GuardianWithdrawalPage() {
             <Icon />
             <Header headingRef={headingRef} title="Withdraw your consent">
               Enter the email address of the Soccernity account you gave consent for. We will send a withdrawal
-              link to the guardian email on that account. [COPY PENDING LEGAL REVIEW]
+              link to the guardian email on that account.
             </Header>
             <form className="gw__form" onSubmit={submitRequest} noValidate>
               <div className="gw__field">
@@ -181,12 +181,11 @@ export default function GuardianWithdrawalPage() {
             <Icon />
             <Header headingRef={headingRef} title="Check the guardian’s inbox">
               If that account has confirmed guardian consent, a withdrawal link has been sent to the guardian. The
-              link can be used once. [COPY PENDING LEGAL REVIEW]
+              link can be used once.
             </Header>
             <div className="gw__panel">
               <p className="gw__panel-text">
-                Nothing has changed yet. Consent is only withdrawn when the guardian confirms from the link. [COPY
-                PENDING LEGAL REVIEW]
+                Nothing has changed yet. Consent is only withdrawn when the guardian confirms from the link.
               </p>
             </div>
             <div className="gw__actions">
@@ -204,8 +203,7 @@ export default function GuardianWithdrawalPage() {
           <>
             <Icon />
             <Header headingRef={headingRef} title="Confirm withdrawing consent">
-              Withdrawing consent closes the account straight away. This cannot be undone from this page. [COPY
-              PENDING LEGAL REVIEW]
+              Withdrawing consent closes the account straight away. This cannot be undone from this page.
             </Header>
             <form className="gw__form" onSubmit={submitWithdrawal} noValidate>
               <div className="gw__field">
@@ -229,8 +227,8 @@ export default function GuardianWithdrawalPage() {
               </div>
               <div className="gw__card">
                 <p className="gw__card-title">What happens next</p>
-                <p className="gw__card-text">The account is closed and the person can no longer sign in. [COPY PENDING LEGAL REVIEW]</p>
-                <p className="gw__card-text">The details they entered are deleted after 30 days. [COPY PENDING LEGAL REVIEW]</p>
+                <p className="gw__card-text">The account is closed and the person can no longer sign in.</p>
+                <p className="gw__card-text">The details they entered are deleted after 30 days.</p>
               </div>
               {error && <Alert>{error}</Alert>}
               <div className="gw__actions">
@@ -249,12 +247,12 @@ export default function GuardianWithdrawalPage() {
           <>
             <Icon />
             <Header headingRef={headingRef} title="Consent withdrawn">
-              Your withdrawal has been recorded and the account has been closed. [COPY PENDING LEGAL REVIEW]
+              Your withdrawal has been recorded and the account has been closed.
             </Header>
             <div className="gw__card">
               <p className="gw__card-title">What happens next</p>
-              <p className="gw__card-text">The details they entered are deleted after 30 days. [COPY PENDING LEGAL REVIEW]</p>
-              <p className="gw__card-text">We have emailed the account holder to tell them. [COPY PENDING LEGAL REVIEW]</p>
+              <p className="gw__card-text">The details they entered are deleted after 30 days.</p>
+              <p className="gw__card-text">We have emailed the account holder to tell them.</p>
             </div>
             <div className="gw__actions">
               <Link to="/" className="gw__button gw__button--outline">

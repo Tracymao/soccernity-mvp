@@ -163,12 +163,12 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
         </button>
 
         {/* Verbatim Figma copy for node 5111:6669, including its own
-            "[COPY PENDING LEGAL REVIEW]" bracket -- that's the designer's
+            "" bracket -- that's the designer's
             placeholder note baked into the frame text, not something this
             PR added. Left as-is; DPIA/legal sign-off (Build Plan Section
             8.1) owns finalising it, not figma-to-code. */}
         <p className="signup-form__fineprint">
-          We only use this email address to request and record consent. [COPY PENDING LEGAL REVIEW]
+          We only use this email address to request and record consent.
         </p>
       </form>
 
