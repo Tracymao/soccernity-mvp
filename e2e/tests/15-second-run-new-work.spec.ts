@@ -11,7 +11,7 @@ import {
   registerViaApi,
   uniqueUsername,
   verifyEmailViaApi,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 import { adminPage } from '../support/admin-ui';
 import { URLS } from '../support/stack';
@@ -32,9 +32,7 @@ async function verifiedAdult(label: string, displayName = 'Quinn Player'): Promi
   const a = await registerViaApi({ age: 30, label, displayName });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  const res = await api('PATCH', `/users/${a.userId}`, { token, body: { username } });
-  expect(res.status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { ...a, token, username };
 }
 

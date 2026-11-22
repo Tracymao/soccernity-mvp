@@ -469,7 +469,7 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
 
     // No count of any kind (views, impressions, likes, comments, rank).
     // (The finalists' own names contain digits, so they are taken out first.)
-    let text = ((await carousel.textContent()) ?? '').replace(/Showing \d–\d of \d finalists/, '');
+    let text = ((await carousel.textContent()) ?? '').replace(/Showing \d+(?:–| to )\d+ of \d+ finalists/, '');
     for (const name of seen) text = text.split(name).join('');
     expect(text).not.toMatch(/\d/);
 

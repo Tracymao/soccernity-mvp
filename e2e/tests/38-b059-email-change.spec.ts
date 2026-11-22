@@ -14,7 +14,7 @@ import {
   userByEmail,
   userLogin,
   verifyEmailViaApi,
-  type Account,
+  type Account, textMatching,
 } from '../support/helpers';
 import { API_LOG, USER_PASSWORD } from '../support/stack';
 
@@ -134,7 +134,7 @@ test.describe.serial('Account Information and email change', () => {
     await expect(page.getByLabel('Email')).toHaveValue(acct.email);
     await expect(page.getByLabel('Email')).toHaveJSProperty('readOnly', true);
     await expect(page.getByLabel('Date of birth')).toHaveJSProperty('readOnly', true);
-    await expect(page.getByText('Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(page.getByText(textMatching('Set when you signed up and cannot be changed here.'))).toBeVisible();
     await expect(page.getByText('Username and country are changed in Edit Profile.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 
@@ -197,7 +197,7 @@ test.describe.serial('Account Information and email change', () => {
     await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
     await expect(page.getByText(`We sent a link to ${newEmail}.`)).toBeVisible();
     await expect(page.getByText('Your email stays the same until you use the link. The link only works for a limited time.')).toBeVisible();
-    await expect(page.getByText('We’ve also told your current address about this change. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(page.getByText(textMatching('We’ve also told your current address about this change.'))).toBeVisible();
     await expect(page.getByText('Your guardian will be told about this change.')).toHaveCount(0);
     // Nothing on screen states a lifetime or a wait.
     expect(await page.locator('body').innerText()).not.toMatch(/\b\d+\s*(minutes?|hours?|seconds?|days?)\b/i);
@@ -339,8 +339,8 @@ test.describe.serial('email change for a minor', () => {
     await sendLink(page, target);
 
     await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
-    await expect(page.getByText('We’ve also told your current address about this change. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
-    await expect(page.getByText('Your guardian will be told about this change. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(page.getByText(textMatching('We’ve also told your current address about this change.'))).toBeVisible();
+    await expect(page.getByText(textMatching('Your guardian will be told about this change.'))).toBeVisible();
     await shot(page, '11-check-your-inbox-under-18-desktop');
 
     // Using the link tells the guardian (the one real guardian notice of this event).

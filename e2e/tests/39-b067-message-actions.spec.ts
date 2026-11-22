@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
+import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account, textMatching, assignUsername } from '../support/helpers';
 
 // B-067 (Decision Log #472 (b)): edit a message, delete for me, delete for everyone, delete chat, and the
 // conversation actions menu, on the Community pop-up and on the mobile conversation page, in real Chrome against
@@ -19,8 +19,7 @@ async function verifiedAdult(label: string): Promise<Verified> {
   const a = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  expect((await api('PATCH', `/users/${a.userId}`, { token, body: { username } })).status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { ...a, token, username };
 }
 
@@ -210,7 +209,7 @@ test.describe.serial('Message actions', () => {
 
     const confirm = page.getByRole('dialog', { name: 'Delete for everyone?' });
     await expect(confirm.getByText(/This can’t be undone\./)).toBeVisible();
-    await expect(confirm.getByText('We may keep a copy of the original for safety and legal reasons. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(confirm.getByText(textMatching('We may keep a copy of the original for safety and legal reasons.'))).toBeVisible();
     await shot(page, '08-popup-delete-everyone-confirm');
     await confirm.getByRole('button', { name: 'Delete for everyone' }).click();
 

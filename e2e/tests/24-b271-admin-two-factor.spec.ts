@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { api, db } from '../support/helpers';
+import { api, db, textMatching } from '../support/helpers';
 import { REPO, URLS } from '../support/stack';
 
 // B-271: the Admin Console two-factor screens, in real Chrome against the real API, Postgres and Redis.
@@ -30,10 +30,9 @@ const requireFromApi = createRequire(path.join(REPO, 'services', 'api', 'package
 const ENFORCED = process.env.ADMIN_2FA_ENFORCED === 'true';
 const PASSWORD = 'Two-factor#2026-pass';
 const INVALID_CODE = 'That code did not work. Check it and try again.';
-// Short control labels and the wrong-password message carry the pending-legal-review tag (B-271 follow-ups, B-124).
-const TAG = '[COPY PENDING LEGAL REVIEW]';
-const REGENERATE_CONFIRM = /^Regenerate \[COPY PENDING LEGAL REVIEW\]$/;
-const INCORRECT_PASSWORD = `Incorrect password ${TAG}`;
+// These labels were tagged (B-271 follow-ups, B-124) and cleared by Decision Log #531; textMatching accepts both.
+const REGENERATE_CONFIRM = textMatching('Regenerate', { exact: true });
+const INCORRECT_PASSWORD = textMatching('Incorrect password', { exact: true });
 
 function base32Decode(input: string): Buffer {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -326,7 +325,7 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: /Turn off two-factor authentication\?/ })).toBeVisible();
     await expect(dialog.getByText('Turning this off makes your account less secure.', { exact: false })).toBeVisible();
-    const turnOff = dialog.getByRole('button', { name: /^Turn off \[COPY PENDING LEGAL REVIEW\]$/ });
+    const turnOff = dialog.getByRole('button', { name: textMatching('Turn off', { exact: true }) });
     await expect(turnOff).toBeDisabled(); // no password yet
 
     // A wrong password is refused (by error code), nothing changes.

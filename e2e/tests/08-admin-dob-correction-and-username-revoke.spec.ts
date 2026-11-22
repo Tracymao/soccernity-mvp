@@ -17,7 +17,7 @@ import {
   userByEmail,
   verifyEmailViaApi,
   waitForEmail,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 import { ADMIN_CREDENTIALS, URLS } from '../support/stack';
 import { adminPage } from '../support/admin-ui';
@@ -365,8 +365,7 @@ test.describe.serial('admin: username revoke', () => {
       return { ...a, token: (await me(a)).token };
     };
     const o = await mk('rv-owner');
-    const username = uniqueUsername('held');
-    expect((await api('PATCH', `/users/${o.userId}`, { token: o.token, body: { username } })).status).toBe(200);
+    const username = await assignUsername(o, o.token, 'held');
     owner = { ...o, username };
     other = await mk('rv-other');
   });

@@ -12,7 +12,7 @@ import {
   verifyEmailViaApi,
   waitForEmail,
   guardianConfirmViaApi,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 
 // FC6 (build register B-080 / B-112, B-210 / B-227, B-217, #414): the guardian withdrawal page, the
@@ -23,8 +23,7 @@ async function verifiedAdultWithUsername(label: string): Promise<Account & { tok
   const a = await registerViaApi({ age: 30, label, displayName: 'Quinn Player' });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const res = await api('PATCH', `/users/${a.userId}`, { token, body: { username: uniqueUsername(label) } });
-  expect(res.status).toBe(200);
+  await assignUsername(a, token, label);
   return { ...a, token };
 }
 

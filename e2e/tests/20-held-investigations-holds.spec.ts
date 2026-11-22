@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, registerViaApi, type Account } from '../support/helpers';
+import { api, db, registerViaApi, type Account, textMatching } from '../support/helpers';
 import { adminPage } from '../support/admin-ui';
 import { URLS, USER_PASSWORD } from '../support/stack';
 
@@ -84,7 +84,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Legal hold', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Legal hold' });
-    await expect(dialog).toContainText('This holds both accounts in full until an admin lifts it. [COPY PENDING LEGAL REVIEW]');
+    await expect(dialog).toContainText(textMatching('This holds both accounts in full until an admin lifts it.'));
     await shot(page, '01-legal-hold-dialog');
     await dialog.getByLabel('Reason (required)').fill('short');
     await dialog.getByRole('button', { name: 'Place legal hold' }).click();
@@ -130,7 +130,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     await opener.focus();
     await opener.click();
     const dialog = page.getByRole('dialog', { name: 'Reporter acted in bad faith' });
-    await expect(dialog).toContainText('This holds the reporter’s account in full for 6 months. [COPY PENDING LEGAL REVIEW]');
+    await expect(dialog).toContainText(textMatching('This holds the reporter’s account in full for 6 months.'));
     // Focus moves into the dialog, onto the reason field.
     await expect(dialog.getByLabel('Reason (required)')).toBeFocused();
     // Tab stays inside the dialog.
@@ -280,7 +280,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     await page.getByRole('button', { name: 'Lift hold: Legal hold' }).click();
     const dialog = page.getByRole('dialog', { name: 'Lift hold' });
     // Two accounts are held, so the drawn sentence is shown.
-    await expect(dialog).toContainText('Lifting the hold releases both accounts. [COPY PENDING LEGAL REVIEW]');
+    await expect(dialog).toContainText(textMatching('Lifting the hold releases both accounts.'));
     await shot(page, '05-lift-hold-dialog-from-report');
     await dialog.getByLabel('Reason (required)').fill('Police confirmed the preservation request is withdrawn.');
     await dialog.getByRole('button', { name: 'Lift hold' }).click();

@@ -5722,3 +5722,8 @@ B-IDs 323 before and after; gap frames 146; Decision Log 535 data rows before, 5
 - The static sites' CSP names the exact R2 host `https://fa6d2be1dc1616bdc010c197e51376f2.eu.r2.cloudflarestorage.com`; both R2 wildcards are removed (the client uses path-style URLs). Runbook 6.8 part 6 is marked done; `docs/deployment.md` updated. Rows B-265, B-088 and B-232 are not annotated here.
 - B-324 (crests from our own storage after launch) is registered, not built. 324 B-IDs (41 + 283), 146 gap frames, W11 31.
 - Not verified: a real deploy (a browser upload and an admin signed-link view must show no CSP error).
+
+## 112. Updates 2026-11-22 (R107: Playwright specs made independent of wording and the pending-copy tag; Decision Log #549; e2e/ only, no new B-ID)
+
+- A QA baseline (main `52e25ccd`) had six failing tests and 17 not run, all spec defects. `e2e/support/helpers.ts` gains `textMatching(text, { exact? })` (matches with or without the trailing tag); 14 specs use it. Spec 17's footer regex accepts "7 to 9". `uniqueUsername` (now `e2e/support/username.ts`) builds letters-only names from a safe alphabet; `assignUsername` retries once and puts the 400 body in the failure. Proof spec 67 runs 120,000 names through the real `checkUsernameRules`: zero rejections. Report: `docs/r107-e2e-spec-fixes-report.md`.
+- `POST /admin/media/upload` (B-267 (e)) still has no Playwright coverage. 324 B-IDs, 146 gap frames unchanged.

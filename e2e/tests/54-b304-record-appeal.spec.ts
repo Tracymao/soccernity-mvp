@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { COPY_TAG, adminPageAs, api, createQaAdmin, db, tagged, userLogin, verifiedAccount, type QaAdmin, type Verified } from '../support/helpers';
+import { COPY_TAG, adminPageAs, api, createQaAdmin, db, tagged, userLogin, verifiedAccount, type QaAdmin, type Verified, textMatching } from '../support/helpers';
 import { URLS } from '../support/stack';
 
 // B-304 (c): staff record an appeal on behalf of a person suspended by a report (B-292, B-295, Decision Log #485 (f),
@@ -54,7 +54,7 @@ test.describe.serial('record an appeal on behalf of a suspended person', () => {
     const dialog = page.getByRole('dialog', { name: 'Record an appeal' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('Reason (required)')).toBeVisible();
-    await expect(dialog.getByText(tagged('The reason is saved to the audit record.'), { exact: true })).toBeVisible();
+    await expect(dialog.getByText(textMatching('The reason is saved to the audit record.', { exact: true }))).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Record appeal' }).click();
     await expect(dialog.getByRole('alert').filter({ hasText: 'Enter a reason for the appeal.' })).toBeVisible();
@@ -75,7 +75,7 @@ test.describe.serial('record an appeal on behalf of a suspended person', () => {
     await expect(dialog).toHaveCount(0);
 
     await expect(
-      page.getByText(tagged('Appeal recorded for the account. It is waiting for review, and closure of this report is paused.'), { exact: true }),
+      page.getByText(textMatching('Appeal recorded for the account. It is waiting for review, and closure of this report is paused.', { exact: true })),
     ).toBeVisible();
     // The button that opened the dialog is gone: the report already has an appeal.
     await expect(page.getByRole('button', { name: 'Record an appeal' })).toHaveCount(0);

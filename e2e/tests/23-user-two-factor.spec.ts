@@ -9,7 +9,7 @@ import {
   uniqueUsername,
   userLogin,
   verifyEmailViaApi,
-  type Account,
+  type Account, assignUsername,
 } from '../support/helpers';
 import { USER_PASSWORD } from '../support/stack';
 
@@ -75,8 +75,7 @@ test.describe.serial('user two-factor (B-087 / B-111)', () => {
     acct = await registerViaApi({ age: 30, label: 'tf-user' });
     await verifyEmailViaApi(acct);
     const { token } = await me(acct);
-    const res = await api('PATCH', `/users/${acct.userId}`, { token, body: { username: uniqueUsername('tf') } });
-    expect(res.status).toBe(200);
+    await assignUsername(acct, token, 'tf');
   });
 
   test('enrol: QR step, manual key, the 6-digit code, backup codes shown once, success', async ({ page }) => {
