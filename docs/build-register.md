@@ -5727,3 +5727,7 @@ B-IDs 323 before and after; gap frames 146; Decision Log 535 data rows before, 5
 
 - A QA baseline (main `52e25ccd`) had six failing tests and 17 not run, all spec defects. `e2e/support/helpers.ts` gains `textMatching(text, { exact? })` (matches with or without the trailing tag); 14 specs use it. Spec 17's footer regex accepts "7 to 9". `uniqueUsername` (now `e2e/support/username.ts`) builds letters-only names from a safe alphabet; `assignUsername` retries once and puts the 400 body in the failure. Proof spec 67 runs 120,000 names through the real `checkUsernameRules`: zero rejections. Report: `docs/r107-e2e-spec-fixes-report.md`.
 - `POST /admin/media/upload` (B-267 (e)) still has no Playwright coverage. 324 B-IDs, 146 gap frames unchanged.
+
+## 113. Updates 2026-11-22 (Figma: Admin Change password frames; no new B-ID; Figma and docs only; no Decision Log row)
+
+Seven frames plus a Notes frame capture the built Admin Profile Change password panel (`7073:63591` to `7073:64643`, Notes `7074:64422`). Prototype links are on the clones only; `5403:7327` is unchanged. Report: `docs/figma-admin-change-password-report.md`. Open: the Change Password button on `5403:7327` is not wired to frame 1.
