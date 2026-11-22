@@ -169,7 +169,8 @@ export class GuardianConsentService {
     // candidate in guardian-consent's README).
     if (guardian.consentStatus === 'declined') {
       throw new BadRequestException(
-        'Consent for this account was declined or withdrawn and cannot be confirmed with this link.',
+        "Consent for this account was declined or withdrawn, so this link can't be used to approve it. " +
+          'If you think this is a mistake, contact support.',
       );
     }
 
@@ -290,8 +291,17 @@ export class GuardianConsentService {
     if (!guardian || guardian.consentTokenExpiresAt.getTime() < Date.now()) {
       throw new BadRequestException('Invalid or expired consent token');
     }
+    if (guardian.consentStatus === 'confirmed') {
+      // CH-E1: say what the guardian can do next. The withdrawal request
+      // route and page exist and are linked from the approval screens.
+      throw new BadRequestException(
+        'You have already approved this account. To withdraw approval, request a withdrawal link.',
+      );
+    }
     if (guardian.consentStatus !== 'pending') {
-      throw new BadRequestException('This consent request is no longer awaiting a response.');
+      throw new BadRequestException(
+        'You have already declined this request, so there is nothing more to do with this link.',
+      );
     }
     if (guardian.incorrectDetailsReportedAt) return;
 

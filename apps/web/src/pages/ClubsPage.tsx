@@ -25,6 +25,7 @@
 //     touching every screen, out of this task's scope. These pages are
 //     reachable by direct URL and via the Club Picker → Fan Page link
 //     path; full in-app discoverability waits on #156.
+import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
@@ -154,8 +155,8 @@ export default function ClubsPage() {
           {visibleClubs.map((club) => (
             <li key={club.id} className="clubs-card">
               <Link to={`/clubs/${club.id}`} className="clubs-card__link">
-                {club.logoUrl ? (
-                  <img src={club.logoUrl} alt="" className="clubs-card__badge" width={48} height={48} />
+                {safeImageUrl(club.logoUrl) ? (
+                  <img src={safeImageUrl(club.logoUrl) as string} alt="" className="clubs-card__badge" width={48} height={48} />
                 ) : (
                   <span className="clubs-card__badge clubs-card__badge--initial" aria-hidden="true">
                     {initialFor(club.name)}

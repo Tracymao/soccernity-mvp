@@ -20,6 +20,7 @@
 // Crests use the vendor's logo when present and a monogram tile
 // otherwise -- the same fallback SportsHubPage.tsx's TeamCrest uses. Each
 // row links to its match-centre page.
+import { safeImageUrl } from "../../lib/safeImageUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { listFixtures, SportsApiError, type MatchSummary, type TeamRef } from "../../api/sports";
@@ -31,8 +32,9 @@ export const FIXTURES_COUNT = 7;
 type LoadState = "loading" | "loaded" | "error";
 
 function Crest({ team }: { team: TeamRef }) {
-  if (team.logo) {
-    return <img className="fixtures-card__crest" src={team.logo} alt="" aria-hidden="true" />;
+  const safeLogo = safeImageUrl(team.logo);
+  if (safeLogo) {
+    return <img className="fixtures-card__crest" src={safeLogo} alt="" aria-hidden="true" />;
   }
   return (
     <span className="fixtures-card__crest fixtures-card__crest--mono" aria-hidden="true">

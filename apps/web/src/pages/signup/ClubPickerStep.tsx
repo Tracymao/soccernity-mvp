@@ -48,6 +48,7 @@
 // (b) reasoning. This step calls the already-public-to-authenticated-
 // users POST /clubs/:id/join itself, after account creation, using the
 // access token RegisterResponse already returns.
+import { safeImageUrl } from "../../lib/safeImageUrl";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { joinClub, listClubs, ClubsApiError } from "../../api/clubs";
@@ -220,8 +221,8 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
                 return (
                   <li key={club.id} className="club-picker__item">
                     <div className="club-picker__item-row">
-                      {club.logoUrl ? (
-                        <img src={club.logoUrl} alt="" className="club-picker__logo" width={48} height={48} />
+                      {safeImageUrl(club.logoUrl) ? (
+                        <img src={safeImageUrl(club.logoUrl) as string} alt="" className="club-picker__logo" width={48} height={48} />
                       ) : (
                         <div
                           className="club-picker__logo club-picker__logo--placeholder"

@@ -268,7 +268,7 @@ export default function ReportDetailPage() {
             <p className="mod-note">
               {loadState === "error"
                 ? "Couldn’t load this report. Please try again from the queue."
-                : "No report exists with this id — open it directly from the Moderation Queue instead of a bookmarked link."}
+                : "No report exists with this id. Open it directly from the Moderation Queue instead of a bookmarked link."}
             </p>
             <div className="mod-action-row">
               <Link className="mod-btn mod-btn--primary" to="/moderation">
@@ -404,7 +404,7 @@ export default function ReportDetailPage() {
               <span className="mod-field__label">Appeal</span>
               <span className="mod-field__value">
                 <span className="mod-pill mod-pill--outline mod-pill--plain">
-                  {appealRecordedByStaff ? "Pending — recorded by staff" : "Pending"}
+                  {appealRecordedByStaff ? "Pending, recorded by staff" : "Pending"}
                 </span>
               </span>
             </div>
@@ -434,7 +434,7 @@ export default function ReportDetailPage() {
               This report was already {report.status === "reviewed" ? "dismissed" : "actioned"}
               {report.actionTaken ? ` (${REPORT_ACTION_LABELS[report.actionTaken as ReportAction] ?? report.actionTaken})` : ""}
               {report.reviewedAt ? ` on ${formatDateTime(report.reviewedAt)}` : ""}. It cannot be
-              actioned a second time this way — the only path back to the open queue is an
+              actioned a second time this way. The only path back to the open queue is an
               overturned appeal.
             </p>
             {report.appealStatus === "pending" ? (
@@ -478,7 +478,7 @@ export default function ReportDetailPage() {
             <h2 className="mod-card__title">Take action</h2>
             {report.concernsMinor ? (
               <p className="mod-note">
-                This report concerns a minor — acting on it requires a child-safety-vetted admin
+                This report concerns a minor. Acting on it requires a child-safety-vetted admin
                 (Settings › Roles).
               </p>
             ) : null}

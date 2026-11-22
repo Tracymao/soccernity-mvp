@@ -73,7 +73,7 @@ export function StubButton({ children, variant = "primary" }: {
 export function StubTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
   return (
     <div className="admin-stub__table-wrap">
-      <p className="admin-stub__sample-caption">Sample — not real data</p>
+      <p className="admin-stub__sample-caption">Sample, not real data</p>
       <table className="admin-stub__table">
         <thead>
           <tr>

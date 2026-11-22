@@ -295,7 +295,7 @@ describe("GuardianConsentConfirmPage", () => {
 
   it("shows the backend's 'declined or withdrawn' message when confirming a declined account", async () => {
     vi.mocked(confirmGuardianConsent).mockRejectedValueOnce(
-      new AuthApiError("Consent for this account was declined or withdrawn and cannot be confirmed with this link.", {
+      new AuthApiError("Consent for this account was declined or withdrawn, so this link can't be used to approve it. If you think this is a mistake, contact support.", {
         status: 400,
       }),
     );

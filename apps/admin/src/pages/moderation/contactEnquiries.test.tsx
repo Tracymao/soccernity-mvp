@@ -600,9 +600,9 @@ describe("Escalate to a report dialog", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: GOOD_REASON } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Escalate to a report" }));
 
-    await screen.findByText("Restricted — child-safety vetting required");
+    await screen.findByText("Restricted: child-safety vetting required");
     const restricted = screen.getByRole("dialog", { name: "Escalate to a report" });
-    expect(within(restricted).getByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(within(restricted).getByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(within(restricted).queryByLabelText("Reason (required)")).toBeNull();
     expect(within(restricted).queryByLabelText("Severity")).toBeNull();
     // Nothing was escalated: the page behind still offers the action.
@@ -679,7 +679,7 @@ describe("Escalate to a report dialog", () => {
       vi.mocked(escalateContactEnquiry).mockRejectedValue(vettingRequiredError());
       fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: GOOD_REASON } });
       fireEvent.click(within(dialog).getByRole("button", { name: "Escalate to a report" }));
-      const restricted = await screen.findByText("Restricted — child-safety vetting required");
+      const restricted = await screen.findByText("Restricted: child-safety vetting required");
       const box = restricted.closest("[role=dialog]") as HTMLElement;
       expect(box.contains(document.activeElement)).toBe(true);
       fireEvent.keyDown(document, { key: "Escape" });
@@ -804,7 +804,7 @@ describe("ReportDetailPage for a report made from a Contact Us enquiry", () => {
 
     vi.mocked(actionReport).mockRejectedValueOnce(vettingRequiredError());
     fireEvent.click(screen.getByRole("button", { name: "Dismiss Report" }));
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss Report" })).toBeNull();
   });
 
@@ -821,6 +821,6 @@ describe("ReportDetailPage for a report made from a Contact Us enquiry", () => {
   it("shows the existing restricted state when the read itself is a vetting 403", async () => {
     vi.mocked(getReportById).mockRejectedValue(vettingRequiredError());
     renderReport();
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
   });
 });

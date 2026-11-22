@@ -134,12 +134,12 @@ export function reporterFullLabel(
   report: Pick<Report, "reporterId" | "reporterContactEmail" | "source">,
 ): string {
   if (report.source === "contact_enquiry") {
-    return report.reporterContactEmail ? `Contact Us — ${report.reporterContactEmail}` : "Contact Us";
+    return report.reporterContactEmail ? `Contact Us: ${report.reporterContactEmail}` : "Contact Us";
   }
   if (report.reporterId) return report.reporterId;
   return report.reporterContactEmail
-    ? `Public report — ${report.reporterContactEmail}`
-    : "Public report — no contact given";
+    ? `Public report: ${report.reporterContactEmail}`
+    : "Public report: no contact given";
 }
 
 // The dedicated "you are not child-safety-vetted" state -- rendered in
@@ -155,10 +155,10 @@ export function reporterFullLabel(
 export function VettingRestrictedNotice() {
   return (
     <div className="mod-card mod-card--restricted">
-      <h2 className="mod-card__title">Restricted — child-safety vetting required</h2>
+      <h2 className="mod-card__title">Restricted: child-safety vetting required</h2>
       <p className="mod-note">
         This action requires a child-safety-vetted admin (Settings › Roles). The server rejected
-        it — nothing was changed. You don&rsquo;t currently have that clearance; ask a superadmin
+        it. Nothing was changed. You don&rsquo;t currently have that clearance; ask a superadmin
         to review your vetting status if you believe this is wrong.
       </p>
     </div>
@@ -218,15 +218,15 @@ export function EscalateReportCard({
     <div className="mod-card">
       <h2 className="mod-card__title">Escalate</h2>
       <p className="mod-note">
-        Use this only <strong>after</strong> you have already escalated this report yourself — to
+        Use this only <strong>after</strong> you have already escalated this report yourself, to
         a designated child-safety lead, a regulator, or law enforcement. Recording an escalation
-        here does <strong>not</strong> notify anyone or contact any authority on your behalf — it
+        here does <strong>not</strong> notify anyone or contact any authority on your behalf. It
         only writes down that a human did.
       </p>
       {report.escalatedAt ? (
         <p className="mod-note">
           Last recorded {formatDateTime(report.escalatedAt)}
-          {report.escalatedByAdminId ? ` by admin ${report.escalatedByAdminId.slice(0, 8)}…` : ""} —{" "}
+          {report.escalatedByAdminId ? ` by admin ${report.escalatedByAdminId.slice(0, 8)}…` : ""}:{" "}
           {report.escalatedToAuthority
             ? "an external authority was contacted."
             : "not yet reported to an external authority."}

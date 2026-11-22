@@ -116,6 +116,44 @@ describe('GuardianConsentService.reportIncorrectDetails (B-029)', () => {
     expect(row.incorrectDetailsReportedAt).toBeNull();
   });
 
+  // CH-E1: the message says what the guardian already did.
+  it('tells a guardian who already approved how to withdraw', async () => {
+    const { service } = build({ consentStatus: 'confirmed' });
+    await expect(service.reportIncorrectDetails('tok')).rejects.toThrow(
+      'You have already approved this account. To withdraw approval, request a withdrawal link.',
+    );
+  });
+
+  it('tells a guardian who already declined there is nothing more to do', async () => {
+    const { service } = build({ consentStatus: 'declined' });
+    await expect(service.reportIncorrectDetails('tok')).rejects.toThrow(
+      'You have already declined this request, so there is nothing more to do with this link.',
+    );
+  });
+
+  it('keeps the pending case unchanged (no refusal message)', async () => {
+    const { service, row } = build({ consentStatus: 'pending' });
+    await expect(service.reportIncorrectDetails('tok')).resolves.toBeUndefined();
+    expect(row.incorrectDetailsReportedAt).not.toBeNull();
+  });
+
+  it('new messages never contain the phrase "guardian consent" (web clients match on it)', async () => {
+    for (const consentStatus of ['confirmed', 'declined']) {
+      const { service } = build({ consentStatus });
+      const err = await service.reportIncorrectDetails('tok').catch((e: Error) => e);
+      expect((err as Error).message).not.toMatch(/guardian consent/i);
+    }
+  });
+
+  it('a declined request answers confirm with the support next step and no reversal promise', async () => {
+    const { service } = build({ consentStatus: 'declined' });
+    const err = (await service.confirmConsent('tok').catch((e: Error) => e)) as Error;
+    expect(err.message).toBe(
+      "Consent for this account was declined or withdrawn, so this link can't be used to approve it. If you think this is a mistake, contact support.",
+    );
+    expect(err.message).not.toMatch(/guardian consent|undo|reverse/i);
+  });
+
   it('does not clobber a request that was approved between the read and the write', async () => {
     const { service, row, prisma } = build();
     const snapshot = { ...row }; // what the service reads: still pending

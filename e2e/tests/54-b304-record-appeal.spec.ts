@@ -101,7 +101,7 @@ test.describe.serial('record an appeal on behalf of a suspended person', () => {
     const page = await adminPageAs(browser, recorder.token);
     await page.goto(`${URLS.admin}/moderation/appeals/${reportId}`);
     await expect(page.getByRole('heading', { name: 'Appeal recorded by staff' }).first()).toBeVisible();
-    await expect(page.getByText('Pending — recorded by staff')).toBeVisible();
+    await expect(page.getByText('Pending, recorded by staff')).toBeVisible();
     await expect(
       page.getByText('Staff recorded this appeal on the person’s behalf. The staff member who recorded it cannot decide it.'),
     ).toBeVisible();
@@ -125,7 +125,7 @@ test.describe.serial('record an appeal on behalf of a suspended person', () => {
   test('a second reviewer can decide it: overturning reinstates the account and clears the link', async ({ browser }) => {
     const page = await adminPageAs(browser, reviewer.token);
     await page.goto(`${URLS.admin}/moderation/appeals/${reportId}`);
-    await expect(page.getByText('Pending — recorded by staff')).toBeVisible();
+    await expect(page.getByText('Pending, recorded by staff')).toBeVisible();
     await page.getByRole('button', { name: 'Overturn Decision' }).click();
     // Deciding returns to the queue.
     await expect(page).toHaveURL(`${URLS.admin}/moderation`);

@@ -41,6 +41,7 @@
 //
 // Vendor-absent fields are HIDDEN, not shown as placeholders (see
 // FieldAvailabilityGate.tsx).
+import { safeImageUrl } from "../../lib/safeImageUrl";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
@@ -120,8 +121,9 @@ function useLazyTab<T>(matchId: string | undefined, active: boolean, loader: (id
 }
 
 function TeamCrest({ name, logo, size = 40 }: { name: string; logo: string | null; size?: number }) {
-  if (logo) {
-    return <img className="mc-crest" style={{ width: size, height: size }} src={logo} alt="" aria-hidden="true" />;
+  const safeLogo = safeImageUrl(logo);
+  if (safeLogo) {
+    return <img className="mc-crest" style={{ width: size, height: size }} src={safeLogo} alt="" aria-hidden="true" />;
   }
   return (
     <span className="mc-crest mc-crest--mono" style={{ width: size, height: size }} aria-hidden="true">
@@ -814,8 +816,8 @@ function VideoTab({ highlights, onRetry }: { highlights: Loadable<Highlights>; o
         {items.map((h) => (
           <li key={h.id} className="mc-video-card">
             <a href={h.embedUrl ?? h.url} target="_blank" rel="noreferrer" className="mc-video-card__thumb">
-              {h.thumbnailUrl ? (
-                <img src={h.thumbnailUrl} alt="" />
+              {safeImageUrl(h.thumbnailUrl) ? (
+                <img src={safeImageUrl(h.thumbnailUrl) as string} alt="" />
               ) : (
                 <span className="mc-video-card__placeholder" aria-hidden="true">▶</span>
               )}

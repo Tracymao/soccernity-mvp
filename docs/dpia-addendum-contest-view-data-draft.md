@@ -1,6 +1,6 @@
-# Soccernity — DPIA Addendum: minors' carousel-impression and view/dwell data
+# Soccernity DPIA Addendum: minors' carousel-impression and view/dwell data
 
-## DRAFT FOR COUNSEL — NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
+## DRAFT FOR COUNSEL: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
 **Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
 
@@ -30,7 +30,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 ---
 
-## Changelog — v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.2 → v0.3 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
 
 **[v0.3 CHANGED — #532, #534]** v0.3 is a **narrow refresh of stale references only.** It re-points this addendum at the files now on `origin/main` `b67d9c0` (2026-11-17): the DPIA is **v0.9** (this file said v0.3, and the v0.2 note said v0.8) and the legal draft is **v0.17** (this file said v0.8). It **chooses no option, completes nothing and claims nothing as solved.** **Every disposition in v0.2 is unchanged:** Decision Log #534 re-marked no question in this file. Sign-off is empty and counsel has not reviewed it. The statement that the draft Privacy Policy "mentions points and rank in §1.5 and nothing about impressions, view qualification or dwell measurement" was **re-checked against v0.17** (no match for "impression" or "dwell" in that file, 2026-11-17) and **still holds**; it is annotated, not changed. The references to "the v0.3 DPIA" inside the body (§2.1 lawful basis, §2.6 COPPA, §5 R17 numbering "continues from the v0.3 DPIA's R16", the "§0 item 5" limitation) describe what that DPIA said **when this addendum was written**; they are **kept**, not rewritten, because I did not re-verify each one against v0.9 (they are listed in `docs/addenda-stale-fixes-report.md`). Decision Log #533 and #534 are merged (docs PR #816).
 
@@ -38,7 +38,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 ---
 
-## Changelog — v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+## Changelog: v0.1 → v0.2 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
 
 **[v0.2 CHANGED — #532]** v0.2 is a **narrow refresh**. It exists so counsel receives a current file and one clear list of what still needs a lawyer. It does three things only: (1) it gives **every one of the 16 questions in Section 9 a disposition marker**; (2) it adds a marked note beside the few statements the built system has since contradicted (the contest-entry removal of B-300 and the report-retention cascade of B-307); (3) it adds this changelog. It **chooses no option (R-1 to R-5, P-1 to P-4, N-1 to N-4), completes nothing, applies nothing to the product, the policy or the consent screen, and claims nothing as solved.** No counsel position is recorded, because counsel has not reviewed this file. All earlier text is kept.
 
@@ -65,7 +65,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
    against a live database; **none of this processing is live** (no real users, no production
    deployment, Decision Log #409).
 2. **No statute, regulator guidance or case law was retrieved or checked in this pass.** Any reference
-   to a regime below is the drafter's general knowledge, written to tell counsel where to look, not to
+   to a regime below is the drafter's general knowledge, written to tell counsel where to look; it does not
    assert what the regime requires. This is the same limitation the v0.3 DPIA states at its §0 item 5.
 3. **Counsel has not seen this processing.** `docs/contest-spec.md` records it as STILL OPEN: "counsel
    review of minors' baseline points and of view/dwell heartbeat processing" (the list under
@@ -213,7 +213,7 @@ For counsel:
 
 Ratings are placeholders for counsel, in the same convention as the v0.3 DPIA.
 
-### R17 — Behavioural data about children's viewing is created and kept without a stated retention period **[COPY PENDING LEGAL REVIEW]**
+### R17: Behavioural data about children's viewing is created and kept without a stated retention period **[COPY PENDING LEGAL REVIEW]**
 
 Store A has a short, defined life (fold and delete at the crown). **Stores C and D have none.**
 `PointsLedgerEntry` is documented as append-only and "never deleted"; `ContestEngagement` rows live
@@ -225,7 +225,7 @@ rows in C, **that account Z viewed X's post** (`counterpartId`).
 
 *Draft severity: moderate. Draft likelihood: certain (it is how the code works). Placeholder ratings.*
 
-### R18 — Erasure and anonymisation do not reach stores C and D **[COPY PENDING LEGAL REVIEW]**
+### R18: Erasure and anonymisation do not reach stores C and D **[COPY PENDING LEGAL REVIEW]**
 
 **Finding from the code, not from a report:** `AccountDeletionSweepService.anonymizeUser` deletes the
 viewer's `ContestImpression` rows (A) but contains **no deletion of `PointsLedgerEntry` or
@@ -250,7 +250,7 @@ the ledger or contest engagement rows.
 
 *Draft severity: moderate. Draft likelihood: certain as built. Placeholder ratings.*
 
-### R19 — No transparency, no notice and no opt-out for the viewer or the guardian **[COPY PENDING LEGAL REVIEW]**
+### R19: No transparency, no notice and no opt-out for the viewer or the guardian **[COPY PENDING LEGAL REVIEW]**
 
 Per the W11 report: "The viewer has no control, no notice and no opt-out in this PR (the transparency
 copy of spec 10b was displaced by #400 E10 and no replacement is decided)." The draft Privacy Policy
@@ -262,7 +262,7 @@ confirmation screen does not mention it, and changing that screen's wording bump
 
 *Draft severity: high for a children's service. Draft likelihood: certain as built. Placeholder ratings.*
 
-### R20 — Purging depends on a single sweep; no independent control **[COPY PENDING LEGAL REVIEW]**
+### R20: Purging depends on a single sweep; no independent control **[COPY PENDING LEGAL REVIEW]**
 
 The impression rows (A) are deleted inside the crown transaction (`ContestLifecycleService.complete`). If
 the lifecycle sweep is down at month end, rows persist until it next runs (every minute; steps are
@@ -273,7 +273,7 @@ reaches the crown (abandoned, a failed month) has no defined purge path for its 
 
 *Draft severity: low to moderate. Draft likelihood: low. Placeholder ratings.*
 
-### R21 — Rewards for viewing as a nudge to children **[COPY PENDING LEGAL REVIEW]**
+### R21: Rewards for viewing as a nudge to children **[COPY PENDING LEGAL REVIEW]**
 
 A giver earns 1 point per qualifying view, capped at 40 points a day (and a creator earns 0.25, capped
 at 20), and those points rank people on a public leaderboard that shows usernames, including minors'.
@@ -288,7 +288,7 @@ the drafter knows only in general terms).
 
 *Draft severity: moderate. Draft likelihood: moderate. Placeholder ratings.*
 
-### R22 — The stores treat restricted and unverified accounts differently **[COPY PENDING LEGAL REVIEW]**
+### R22: The stores treat restricted and unverified accounts differently **[COPY PENDING LEGAL REVIEW]**
 
 | Account state | A (carousel impression) | B (heartbeat in Redis) | C and D (Postgres rows) |
 |---|---|---|---|

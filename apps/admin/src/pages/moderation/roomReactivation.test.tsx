@@ -211,7 +211,7 @@ describe("Reactivate Room: refusals are told apart by code, never by message tex
 
   it("403 child_safety_vetting_required: shows the restricted notice, no button, the room unchanged", async () => {
     await press(apiError(403, "child_safety_vetting_required", "vetting"));
-    expect(await screen.findByText("Restricted — child-safety vetting required")).toBeTruthy();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).toBeTruthy();
     expect(REACTIVATE()).toBeNull();
     expect(screen.getByText("Inactive")).toBeTruthy();
     expect(screen.queryByText(ROOM_REACTIVATED_LINE)).toBeNull();

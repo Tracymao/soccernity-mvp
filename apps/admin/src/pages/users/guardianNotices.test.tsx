@@ -478,7 +478,7 @@ describe("conflicts and refusals", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Withhold notices" }));
     const restricted = await screen.findByRole("dialog", { name: "Withhold guardian notices" });
-    expect(within(restricted).getByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(within(restricted).getByText("Restricted: child-safety vetting required")).not.toBeNull();
     await waitFor(() => expect(profileCalls).toHaveBeenCalledTimes(2));
     // The stale section goes away; the restricted dialog stays until Close.
     await waitFor(() => expect(screen.queryByRole("region", { name: "Guardian notices" })).toBeNull());
@@ -490,7 +490,7 @@ describe("conflicts and refusals", () => {
     vi.mocked(getGuardianNotices).mockRejectedValue(err(403, "child_safety_vetting_required"));
     await openPage();
     const restricted = await screen.findByRole("dialog", { name: "Guardian notices" });
-    expect(within(restricted).getByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(within(restricted).getByText("Restricted: child-safety vetting required")).not.toBeNull();
     await waitFor(() => expect(profileCalls).toHaveBeenCalledTimes(2));
   });
 
@@ -503,7 +503,7 @@ describe("conflicts and refusals", () => {
     fireEvent.change(within(dialog).getByLabelText("Note (required)"), { target: { value: "Continue." } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Record review" }));
     expect(await screen.findByRole("dialog", { name: "Record a review" })).not.toBeNull();
-    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(await screen.findByText("Restricted: child-safety vetting required")).not.toBeNull();
   });
 });
 

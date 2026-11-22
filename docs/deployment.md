@@ -473,12 +473,9 @@ described in step 4. If a final domain differs from this layout, change the API'
     `worker-src 'self'` for the push service worker. `/sw.js` is also sent with `Cache-Control: no-cache` so browsers always
     re-check it.
   - **admin:** `connect-src` the API origin only; `img-src` and `media-src` that environment's media host (as above) **and**
-    both R2 wildcards (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
+    the exact R2 account host (the review queue plays a 5-minute signed link on the S3 endpoint); no Stripe, no
     frames, no service worker.
-  - The public media host is `https://media.soccernity.com` on production and `https://media.staging.soccernity.com` on staging (the custom domain on that environment's public bucket, B-265). The two R2
-    wildcards that remain, `https://*.r2.cloudflarestorage.com` and `https://*.eu.r2.cloudflarestorage.com` (the second added because CSP matching of the first against an `.eu.` host was not verified), stand in for `S3_ENDPOINT` (the API's own S3 endpoint,
-    used for browser uploads and the admin review link) because the account id does not exist yet. **At the launch gate,
-    tighten them to your exact `<account-id>.eu.r2.cloudflarestorage.com`.**
+  - The public media host is `https://media.soccernity.com` on production and `https://media.staging.soccernity.com` on staging (the custom domain on that environment's public bucket, B-265). The R2 wildcards are gone (R106, Decision Log #548): `connect-src` (web) and `img-src`/`media-src` (admin) name the exact host `https://fa6d2be1dc1616bdc010c197e51376f2.eu.r2.cloudflarestorage.com`, which is the S3 endpoint (the API uses path-style URLs, so every bucket is reached on it). The web sites also carry `VITE_MEDIA_BASE_URL` (the media host, a build-time value) so the app draws an API-supplied image only from its own origin or that host; no third-party image host is contacted (Decision Log #547).
 
 ### Pending-copy gate (B-124) — which build runs where
 
@@ -548,7 +545,7 @@ Staging and production never share an origin.
 
 ### Inputs for the launch-gate runbook (B-180) that cannot be expressed in `render.yaml`
 
-- The exact S3 endpoint host (your account id), to replace the one remaining wildcard.
+- The exact S3 endpoint host is now in `render.yaml` (R106); nothing left here.
 - The custom domains, the DNS records and the registrar steps.
 - The Cloudflare proxy, WAF and origin lock (B-251), and which side then owns the headers.
 - Redirects: `www.soccernity.com` to the root, and any http to https redirect Render does not do itself.

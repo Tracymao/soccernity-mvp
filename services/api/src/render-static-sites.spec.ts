@@ -83,6 +83,7 @@ const SITES = [
   { env: 'production', app: 'admin', name: 'soccernity-admin', api: 'soccernity-api' },
 ] as const;
 
+const R2_HOST = 'https://fa6d2be1dc1616bdc010c197e51376f2.eu.r2.cloudflarestorage.com';
 describe('render.yaml static sites (B-179)', () => {
   it('defines exactly the API, web and admin services for each environment (six services)', () => {
     expect(all.map((s) => s.name).sort()).toEqual(
@@ -166,6 +167,8 @@ describe('render.yaml static sites (B-179)', () => {
       expect(d.get('style-src')).toEqual(["'self'"]);
       expect(d.get('font-src')).toEqual(["'self'"]);
       expect(csp.value).not.toMatch(/googleapis|gstatic/);
+      // R106: no R2 wildcard, only the exact account host.
+      expect(csp.value).not.toMatch(/\*\.(eu\.)?r2\.cloudflarestorage\.com/);
     });
 
     if (app === 'web') {
@@ -178,14 +181,20 @@ describe('render.yaml static sites (B-179)', () => {
           expect.arrayContaining(['https://js.stripe.com', 'https://*.js.stripe.com', 'https://hooks.stripe.com']),
         );
         expect(d.get('connect-src')).toEqual(
-          expect.arrayContaining(['https://api.stripe.com', 'https://*.r2.cloudflarestorage.com']),
+          expect.arrayContaining(['https://api.stripe.com', R2_HOST]),
         );
         // Each environment has its own media host (Decision Log #535).
         const media = env === 'staging' ? 'https://media.staging.soccernity.com' : 'https://media.soccernity.com';
-        expect(d.get('connect-src')).toEqual(expect.arrayContaining(['https://*.eu.r2.cloudflarestorage.com']));
+        expect(d.get('connect-src')).toEqual(expect.arrayContaining([R2_HOST]));
         expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', 'blob:', media]));
         expect(d.get('media-src')).toEqual(expect.arrayContaining(["'self'", media]));
         expect(d.get('worker-src')).toEqual(["'self'"]);
+      });
+
+      it('web: VITE_MEDIA_BASE_URL equals the media host the CSP allows (R106)', () => {
+        const media = env === 'staging' ? 'https://media.staging.soccernity.com' : 'https://media.soccernity.com';
+        expect(envValue(byName.get(name)!.chunk, 'VITE_MEDIA_BASE_URL')).toBe(media);
+        expect(directives(csp.value).get('img-src')).toContain(media);
       });
 
       it('web: serves /sw.js with Cache-Control: no-cache', () => {
@@ -200,8 +209,8 @@ describe('render.yaml static sites (B-179)', () => {
         expect(d.get('connect-src')).toEqual(["'self'", origins.api]);
         // The review queue plays a 5-minute signed link on the S3 endpoint, so admin needs that origin too.
         const media = env === 'staging' ? 'https://media.staging.soccernity.com' : 'https://media.soccernity.com';
-        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', media, 'https://*.r2.cloudflarestorage.com', 'https://*.eu.r2.cloudflarestorage.com']));
-        expect(d.get('media-src')).toEqual(expect.arrayContaining([media, 'https://*.r2.cloudflarestorage.com', 'https://*.eu.r2.cloudflarestorage.com']));
+        expect(d.get('img-src')).toEqual(expect.arrayContaining(['data:', media, R2_HOST]));
+        expect(d.get('media-src')).toEqual(expect.arrayContaining([media, R2_HOST]));
         expect(hs.some((h) => h.path === '/sw.js')).toBe(false);
       });
     }
