@@ -181,7 +181,7 @@ Terms of Service / Privacy Policy Figma frames (`weZWWqggy9j13eX8bhFgs6`):
 - **Desktop body box** (node `6114:14250`, Terms of Service Desktop, Logged In): ~1059×1084px.
 - **Mobile body box** (node `6116:14616`): ~335×2865px.
 
-A rough capacity estimate, method disclosed rather than asserted as precise: at a legal-document
+A rough capacity estimate, method disclosed: at a legal-document
 body size of ~14 to 15px with ~22 to 24px line height, the **desktop** box's 1084px height fits
 roughly 45 to 48 visible lines before scrolling; at ~1059px width and an average character width of
 ~7 to 8px for that font size, that's roughly 130 to 150 characters per line, call it **~6,000 to 7,000
@@ -806,7 +806,7 @@ Once a guardian confirms consent, the account unlocks to its normal minor-safe d
 permissions, still more restricted than an adult account's permissions, consistent with the
 trust-and-safety approach in Log Book Section 10.1. **This restriction exists specifically so
 that a minor's data is not collected or shown more broadly than necessary before a guardian has
-had the chance to say no**, it fails closed rather than open.
+had the chance to say no**, it fails closed.
 
 Separately, accounts **under 16** carry additional limits that continue after consent is confirmed
 (no direct messaging in either direction, no Bants, no creating Community Groups). These are a
@@ -865,7 +865,7 @@ account's next request, including on a session that is already signed in. When a
 access to more of Soccernity"). When an account turns **18**, guardian consent stops gating the
 account, and the guardian on file receives one informational email that asks nothing of them. The
 guardian's record is **kept**, not deleted, as consent history, and a consent request that was
-still pending at 18 is left inert rather than being allowed to auto-decline an adult into deletion.
+still pending at 18 is left inert so it cannot auto-decline an adult into deletion.
 **[OPEN — disclosed limitations]** (a) Because the job runs daily, an account can keep its old
 classification for up to about 24 hours after a birthday; we accept this. (b) Reclassification
 relies on the declared date of birth, which we do not verify. (c) If a date of birth is later
@@ -1108,8 +1108,8 @@ indefinitely: it is closed and enters the deletion process described above (Sect
 Depending on where you are, you have rights under **UK GDPR**, **EU GDPR**, **Nigeria's NDPA
 2023** and, where they apply, United States children's-privacy rules (including a parent's right to
 review a child's information). These regimes give you broadly similar rights, and Soccernity's own
-stated principle (Log Book Section 10.1) is to apply the stricter wherever they differ, rather than
-the weaker one. These include the right to:
+stated principle (Log Book Section 10.1) is to apply the stricter wherever they differ.
+These include the right to:
 
 - **Access** the personal data we hold about you.
 - **Correct** inaccurate or incomplete data.
