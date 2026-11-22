@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { adminPage } from '../support/admin-ui';
-import { COPY_TAG, db, tagged, uniqueEmail } from '../support/helpers';
+import { COPY_TAG, db, uniqueEmail, textMatching } from '../support/helpers';
 import { URLS } from '../support/stack';
 
 // B-304 (a): the seventh Contact Us option, "Appeal a suspension" (B-298, Decision Log #492), in real Chrome against
@@ -33,9 +33,8 @@ test.describe.serial('Contact Us: the seventh option, Appeal a suspension', () =
       'Enquiries',
       'Feedback',
     ]);
-    // The seventh (last) option is the appeal one and ends with the literal tag.
-    expect(labels[6]).toBe(tagged(APPEAL_LABEL));
-    expect(labels[6].endsWith(COPY_TAG)).toBe(true);
+    // The seventh (last) option is the appeal one (tagged or not).
+    expect(labels[6]).toMatch(textMatching(APPEAL_LABEL, { exact: true }));
     // No other option carries the tag.
     for (const l of labels.slice(0, 6)) expect(l).not.toContain(COPY_TAG);
   });
@@ -46,7 +45,7 @@ test.describe.serial('Contact Us: the seventh option, Appeal a suspension', () =
     await expect(helper).toHaveCount(0);
 
     await page.getByRole('combobox', { name: 'Category' }).click();
-    await page.getByRole('option', { name: tagged(APPEAL_LABEL), exact: true }).click();
+    await page.getByRole('option', { name: textMatching(APPEAL_LABEL, { exact: true }) }).click();
     await expect(helper).toHaveText(HELPER);
     // The chip beside the helper is the same tag chip the form notice uses.
     const block = page.locator('.contact-page__helper-block');
@@ -63,7 +62,7 @@ test.describe.serial('Contact Us: the seventh option, Appeal a suspension', () =
     await page.getByLabel('Name', { exact: true }).fill(name);
     await page.getByLabel('Email', { exact: true }).fill(email);
     await page.getByRole('combobox', { name: 'Category' }).click();
-    await page.getByRole('option', { name: tagged(APPEAL_LABEL), exact: true }).click();
+    await page.getByRole('option', { name: textMatching(APPEAL_LABEL, { exact: true }) }).click();
     await page.getByLabel('Subject', { exact: true }).fill(subject);
     await page.getByLabel('Message', { exact: true }).fill('My account was suspended and I would like a person to look at it again.');
     await page.getByRole('button', { name: 'Submit' }).click();

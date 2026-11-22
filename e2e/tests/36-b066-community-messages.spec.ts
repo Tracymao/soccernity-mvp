@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
+import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account, assignUsername } from '../support/helpers';
 
 // B-066 (Decision Log #378): the message sidebar and chat pop-ups on the Community page, in real Chrome against
 // the real API, Postgres and Redis. Scoped to this work; no other Playwright spec is run by it.
@@ -19,8 +19,7 @@ async function verifiedAdult(label: string): Promise<Verified> {
   const a = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  expect((await api('PATCH', `/users/${a.userId}`, { token, body: { username } })).status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { ...a, token, username };
 }
 

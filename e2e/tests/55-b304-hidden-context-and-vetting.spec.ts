@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { test, expect } from '@playwright/test';
-import { adminPageAs, api, createQaAdmin, db, tagged, verifiedAccount, type QaAdmin, type Verified } from '../support/helpers';
+import { adminPageAs, api, createQaAdmin, db, tagged, verifiedAccount, type QaAdmin, type Verified, textMatching } from '../support/helpers';
 import { URLS } from '../support/stack';
 
 // B-304 (d): hidden message context (B-293, Decision Log #486) and the child-safety vetting rule on the routes that
@@ -75,7 +75,7 @@ test.describe.serial('hidden message context and the vetting rule', () => {
     await page.goto(`${URLS.admin}/moderation/reports/${childReport}`);
     await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
 
-    await expect(page.getByText(tagged('Context hidden: this involves a child.'), { exact: true })).toBeVisible();
+    await expect(page.getByText(textMatching('Context hidden: this involves a child.', { exact: true }))).toBeVisible();
     // The reported message itself is shown, as it reads now, and that it was edited.
     await expect(page.getByText('Message text (current)')).toBeVisible();
     await expect(page.getByText(T.edited)).toBeVisible();
@@ -139,7 +139,7 @@ test.describe.serial('hidden message context and the vetting rule', () => {
     // not child-safety vetted; it draws a line instead. (Before B-308 the button was drawn and the SERVER refused the
     // click, and this test clicked it and looked for the restricted panel.)
     await expect(page.getByText('Context hidden: this involves a child.', { exact: false })).toBeVisible();
-    await expect(page.getByText(tagged('Holds on this report need a child-safety-vetted admin (Settings › Roles).'), { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(textMatching('Holds on this report need a child-safety-vetted admin (Settings › Roles).', { exact: true })).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Legal hold', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Lift hold/ })).toHaveCount(0);

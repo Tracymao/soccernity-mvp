@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
+import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account, assignUsername } from '../support/helpers';
 
 // B-117 (Decision Log #403 item 16, #404 item 10): Bants is an open forum. A signed-in account that has NOT
 // bookmarked ("joined") a room can post in it; "Add to My Bants" is only a bookmark. Real Chrome, real API,
@@ -19,8 +19,7 @@ async function verifiedAdult(label: string): Promise<Verified> {
   const a = await registerViaApi({ age: 30, label });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const username = uniqueUsername(label);
-  expect((await api('PATCH', `/users/${a.userId}`, { token, body: { username } })).status).toBe(200);
+  const username = await assignUsername(a, token, label);
   return { ...a, token, username };
 }
 

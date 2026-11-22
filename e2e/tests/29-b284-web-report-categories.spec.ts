@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account } from '../support/helpers';
+import { api, db, loginViaUi, me, registerViaApi, uniqueUsername, verifyEmailViaApi, type Account, assignUsername } from '../support/helpers';
 
 // B-284 (Decision Log #465): the reason category on the two web report forms, in real Chrome against the real
 // API, Postgres and Redis. Scoped to this work: the in-app report dialog on a post page (category required,
@@ -26,8 +26,7 @@ async function member(label: string): Promise<Member> {
   const a = await registerViaApi({ age: 30, label, displayName: `Report ${label}` });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
-  const res = await api('PATCH', `/users/${a.userId}`, { token, body: { username: uniqueUsername(label) } });
-  expect(res.status).toBe(200);
+  await assignUsername(a, token, label);
   return { ...a, token };
 }
 

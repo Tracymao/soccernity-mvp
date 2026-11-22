@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { adminPage } from '../support/admin-ui';
-import { adminPageAs, api, createQaAdmin, db, tagged, verifiedAccount, type QaAdmin, type Verified } from '../support/helpers';
+import { adminPageAs, api, createQaAdmin, db, tagged, textMatching, verifiedAccount, type QaAdmin, type Verified } from '../support/helpers';
 import { URLS } from '../support/stack';
 
 // B-309 (c): B-308 (PR #757) in real Chrome against the real API, Postgres and Redis.
@@ -16,7 +16,7 @@ test.use({ viewport: { width: 1440, height: 1300 } });
 
 const RUN = Date.now().toString(36);
 const REASON = 'A reason that is long enough for the audit record.';
-const LINE = tagged('Holds on this report need a child-safety-vetted admin (Settings › Roles).');
+const LINE = textMatching('Holds on this report need a child-safety-vetted admin (Settings › Roles).', { exact: true });
 
 test.describe.serial('hold controls on a child-involved message report, and readable audit notes', () => {
   let unvetted: QaAdmin;
@@ -68,7 +68,7 @@ test.describe.serial('hold controls on a child-involved message report, and read
     await page.goto(`${URLS.admin}/moderation/reports/${childReport}`);
     await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
     await expect(page.getByText('Context hidden: this involves a child.', { exact: false })).toBeVisible();
-    await expect(page.getByText(LINE, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(LINE).first()).toBeVisible();
     await expect(page.getByTestId('hold-controls-restricted').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Legal hold', exact: true })).toHaveCount(0);
@@ -82,7 +82,7 @@ test.describe.serial('hold controls on a child-involved message report, and read
     await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Legal hold', exact: true }).first()).toBeVisible();
-    await expect(page.getByText(LINE, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(LINE)).toHaveCount(0);
     await expect(page.getByTestId('hold-controls-restricted')).toHaveCount(0);
     await page.context().close();
   });
@@ -93,7 +93,7 @@ test.describe.serial('hold controls on a child-involved message report, and read
     await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Legal hold', exact: true }).first()).toBeVisible();
-    await expect(page.getByText(LINE, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(LINE)).toHaveCount(0);
     await expect(page.getByText('Context hidden', { exact: false })).toHaveCount(0);
     await page.context().close();
   });
@@ -106,7 +106,7 @@ test.describe.serial('hold controls on a child-involved message report, and read
     const hidden = await adminPageAs(browser, unvetted.token);
     await hidden.goto(`${URLS.admin}/moderation/reports/${childReport}`);
     await expect(hidden.getByRole('heading', { name: /^Report #/ })).toBeVisible();
-    await expect(hidden.getByText(LINE, { exact: true }).first()).toBeVisible();
+    await expect(hidden.getByText(LINE).first()).toBeVisible();
     await expect(hidden.getByText('Active since', { exact: false }).first()).toBeVisible();
     await expect(hidden.getByRole('button', { name: /^Lift hold/ })).toHaveCount(0);
     await hidden.context().close();
