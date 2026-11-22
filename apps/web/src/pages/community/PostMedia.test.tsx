@@ -61,7 +61,7 @@ describe("PostMedia — as the author", () => {
     await screen.findByText("Under review");
     expect(getUpload).toHaveBeenCalledWith("tok", ID);
     expect(
-      screen.getByText("Only you can see this post until its pictures have been checked. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Only you can see this post until its pictures have been checked."),
     ).not.toBeNull();
     expect(screen.getByAltText("Picture attached to this post")).not.toBeNull();
   });
@@ -121,7 +121,7 @@ describe("PostMedia — as the author", () => {
     expect(screen.getByText("Not related to football.")).not.toBeNull();
     expect(
       screen.getByText(
-        "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another. [COPY PENDING LEGAL REVIEW]",
+        "Your post stays hidden from other people until every picture has been approved. Remove this picture or choose another.",
       ),
     ).not.toBeNull();
 
@@ -166,7 +166,7 @@ describe("PostMedia — as another viewer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
     expect(screen.getByText("0 / 500")).not.toBeNull();
     expect(
-      screen.getByText("Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Only our moderators see your reason, not the person who posted this."),
     ).not.toBeNull();
     const box = screen.getByLabelText(/Why are you reporting it/) as HTMLTextAreaElement;
     expect(box.maxLength).toBe(500);

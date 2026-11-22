@@ -20,10 +20,6 @@ interface Props {
   className?: string;
 }
 
-// The legal-review tag at the end of a REMOVED_*_TEXT string. A regular expression, not a string, so this file
-// carries no tagged string of its own for the pending-copy guard to list.
-const TAG_AT_END = /\s*(\[COPY PENDING LEGAL REVIEW\])\s*$/;
-
 function RemovedIcon({ size }: { size: number }) {
   return (
     <svg
@@ -42,10 +38,6 @@ function RemovedIcon({ size }: { size: number }) {
 }
 
 export default function RemovedPlaceholder({ text, variant = "row", meta, className }: Props) {
-  const match = TAG_AT_END.exec(text);
-  const tag = match ? match[1] : null;
-  const label = match ? text.slice(0, match.index).trim() : text;
-  const inlineTag = variant === "bubble";
   return (
     <div
       className={["removed-placeholder", `removed-placeholder--${variant}`, className].filter(Boolean).join(" ")}
@@ -54,15 +46,8 @@ export default function RemovedPlaceholder({ text, variant = "row", meta, classN
       <RemovedIcon size={variant === "heading" ? 20 : 14} />
       <div className="removed-placeholder__body">
         <p className="removed-placeholder__text">
-          <span className="removed-placeholder__label">{label}</span>
-          {tag && inlineTag && (
-            <>
-              {" "}
-              <span className="removed-placeholder__tag">{tag}</span>
-            </>
-          )}
+          <span className="removed-placeholder__label">{text}</span>
         </p>
-        {tag && !inlineTag && <span className="removed-placeholder__tag removed-placeholder__tag--own-line">{tag}</span>}
         {meta && <span className="removed-placeholder__meta">{meta}</span>}
       </div>
     </div>

@@ -67,7 +67,7 @@ type LoadState = "loading" | "loaded" | "not-found" | "error";
 // The private-card callout (Figma PV1 / PV5). The second sentence is tagged exactly as the frame tags it
 // (B-124, docs/pending-copy-manifest.md).
 export const PRIVATE_PROFILE_TITLE = "This profile is private";
-export const PRIVATE_PROFILE_BODY = "Follow to see their profile, posts and activity. [COPY PENDING LEGAL REVIEW]";
+export const PRIVATE_PROFILE_BODY = "Follow to see their profile, posts and activity.";
 
 export default function OtherProfilePage() {
   const { userId } = useParams<{ userId: string }>();

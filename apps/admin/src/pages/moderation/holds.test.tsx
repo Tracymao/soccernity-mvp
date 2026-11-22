@@ -68,7 +68,6 @@ beforeEach(() => {
   vi.mocked(getAdminProfile).mockReset();
 });
 
-const TAG = "[COPY PENDING LEGAL REVIEW]";
 const REPORT_ID = "1a2b3c4d-0000-4000-8000-000000001042";
 const GOOD_REASON = "Counsel confirmed the hold is no longer needed.";
 
@@ -262,7 +261,7 @@ describe("HeldInvestigationsPage", () => {
     expect(within(dialog).getByText("Report #1a2b3c4d. Legal hold.")).not.toBeNull();
     expect(within(dialog).queryByText(/both accounts/)).toBeNull();
     expect(within(dialog).getByLabelText("Reason (required)")).not.toBeNull();
-    expect(within(dialog).getByText(`The reason is saved to the audit record. ${TAG}`)).not.toBeNull();
+    expect(within(dialog).getByText(`The reason is saved to the audit record.`)).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Lift hold" })).not.toBeNull();
   });
@@ -608,7 +607,7 @@ describe("ReportDetailPage case-level holds", () => {
     }
     expect(
       screen.getByText(
-        `Reporter acted in bad faith holds the reporter’s account in full for 6 months. Legal hold holds both accounts in full until an admin lifts it. Both ask for confirmation first. ${TAG}`,
+        `Reporter acted in bad faith holds the reporter’s account in full for 6 months. Legal hold holds both accounts in full until an admin lifts it. Both ask for confirmation first.`,
       ),
     ).not.toBeNull();
   });
@@ -621,10 +620,10 @@ describe("ReportDetailPage case-level holds", () => {
     const dialog = await screen.findByRole("dialog", { name: "Reporter acted in bad faith" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(
-      within(dialog).getByText(`Report #1a2b3c4d. This holds the reporter’s account in full for 6 months. ${TAG}`),
+      within(dialog).getByText(`Report #1a2b3c4d. This holds the reporter’s account in full for 6 months.`),
     ).not.toBeNull();
     expect(within(dialog).getByLabelText("Reason (required)")).not.toBeNull();
-    expect(within(dialog).getByText(`The reason is saved to the audit record. ${TAG}`)).not.toBeNull();
+    expect(within(dialog).getByText(`The reason is saved to the audit record.`)).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Confirm bad faith" })).not.toBeNull();
     expect(placeBadFaithHold).not.toHaveBeenCalled();
@@ -635,7 +634,7 @@ describe("ReportDetailPage case-level holds", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Legal hold" }));
     const dialog = await screen.findByRole("dialog", { name: "Legal hold" });
     expect(
-      within(dialog).getByText(`Report #1a2b3c4d. This holds both accounts in full until an admin lifts it. ${TAG}`),
+      within(dialog).getByText(`Report #1a2b3c4d. This holds both accounts in full until an admin lifts it.`),
     ).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Place legal hold" })).not.toBeNull();
   });
@@ -793,9 +792,9 @@ describe("ReportDetailPage case-level holds", () => {
       fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
       const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
       expect(
-        within(dialog).getByText(`Report #1a2b3c4d. Legal hold. Lifting the hold releases both accounts. ${TAG}`),
+        within(dialog).getByText(`Report #1a2b3c4d. Legal hold. Lifting the hold releases both accounts.`),
       ).not.toBeNull();
-      expect(within(dialog).getByText(`The reason is saved to the audit record. ${TAG}`)).not.toBeNull();
+      expect(within(dialog).getByText(`The reason is saved to the audit record.`)).not.toBeNull();
     });
 
     it("does not claim two accounts when only one is held", async () => {
@@ -1118,7 +1117,7 @@ describe("AppealReviewPage case-level holds", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Legal hold" }));
     const dialog = await screen.findByRole("dialog", { name: "Legal hold" });
     expect(
-      within(dialog).getByText(`Report #1a2b3c4d. This holds both accounts in full until an admin lifts it. ${TAG}`),
+      within(dialog).getByText(`Report #1a2b3c4d. This holds both accounts in full until an admin lifts it.`),
     ).not.toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "Counsel asked us to preserve both accounts." } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Place legal hold" }));

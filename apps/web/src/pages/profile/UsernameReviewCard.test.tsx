@@ -11,7 +11,6 @@ vi.mock("../../api/usernameReview", async () => {
 });
 import { getUsernameReviewStatus, requestUsernameReview } from "../../api/usernameReview";
 
-const TAG = "[COPY PENDING LEGAL REVIEW]";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -54,7 +53,7 @@ describe("UsernameReviewCard: what the server's state shows", () => {
     status("can_request");
     renderCard();
     expect(await screen.findByRole("heading", { name: "Your username was removed" })).not.toBeNull();
-    expect(screen.getByText(`Your username was removed by Soccernity. ${TAG}`)).not.toBeNull();
+    expect(screen.getByText(`Your username was removed by Soccernity.`)).not.toBeNull();
     expect(screen.getByText(/ask for a review of the removal\. You can ask once, within 30 days of the removal\./)).not.toBeNull();
     expect(screen.getByRole("button", { name: "Ask for a review" })).not.toBeNull();
     expect(document.body.textContent).not.toContain("@");
@@ -65,8 +64,8 @@ describe("UsernameReviewCard: what the server's state shows", () => {
     renderCard();
     expect(await screen.findByRole("heading", { name: "Your review request" })).not.toBeNull();
     expect(screen.getByText("Pending")).not.toBeNull();
-    expect(screen.getByText(`You asked for a review. Our team is looking at it. ${TAG}`)).not.toBeNull();
-    expect(screen.getByText(`The result will appear here, and you will get a notification. ${TAG}`)).not.toBeNull();
+    expect(screen.getByText(`You asked for a review. Our team is looking at it.`)).not.toBeNull();
+    expect(screen.getByText(`The result will appear here, and you will get a notification.`)).not.toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
     expect(document.body.textContent).not.toMatch(/\d{4}/);
   });
@@ -77,7 +76,7 @@ describe("UsernameReviewCard: what the server's state shows", () => {
     expect(await screen.findByRole("heading", { name: "Review decided" })).not.toBeNull();
     expect(screen.getByText("Declined")).not.toBeNull();
     expect(screen.getByText(/decision is final and cannot be reviewed again/)).not.toBeNull();
-    expect(screen.getByText(`Choose a new username below to continue. ${TAG}`)).not.toBeNull();
+    expect(screen.getByText(`Choose a new username below to continue.`)).not.toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
 });
@@ -91,7 +90,7 @@ describe("UsernameReviewCard: the request form", () => {
     expect(document.activeElement).toBe(field);
     expect(field.maxLength).toBe(500);
     expect(screen.getByText("0 / 500")).not.toBeNull();
-    expect(screen.getByText(`A different member of our team reviews your request. Their decision is final. ${TAG}`)).not.toBeNull();
+    expect(screen.getByText(`A different member of our team reviews your request. Their decision is final.`)).not.toBeNull();
     expect(field.getAttribute("aria-describedby")?.split(" ")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Send request" })).not.toBeNull();
   });
@@ -131,7 +130,7 @@ describe("UsernameReviewCard: the request form", () => {
     await act(async () => resolve({ state: "pending", requestableUntil: null }));
     expect(await screen.findByRole("heading", { name: "Your review request" })).not.toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Request sent");
-    expect(screen.getByText(`We’ll show the result here and send you a notification when it’s decided. ${TAG}`)).not.toBeNull();
+    expect(screen.getByText(`We’ll show the result here and send you a notification when it’s decided.`)).not.toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -171,7 +170,7 @@ describe("UsernameReviewCard: errors, chosen by the server's code", () => {
   it("a network failure or server error: frame 09 'Couldn't send your request', the form and text kept, can retry", async () => {
     const field = await sendFailing(new UsernameReviewApiError("Couldn't reach the Soccernity server."), "keep me");
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(`Couldn’t send your request. Check your connection and try again. ${TAG}`);
+    expect(alert.textContent).toBe(`Couldn’t send your request. Check your connection and try again.`);
     expect(field.value).toBe("keep me");
     expect((screen.getByRole("button", { name: "Send request" }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -179,7 +178,7 @@ describe("UsernameReviewCard: errors, chosen by the server's code", () => {
   it("409 username_review_already_requested: frame 10, and Cancel then shows the pending card", async () => {
     await sendFailing(new UsernameReviewApiError("English that must not be shown", { status: 409, code: "username_review_already_requested" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(`You’ve already asked for a review of this removal. The result will appear here. ${TAG}`);
+    expect(alert.textContent).toBe(`You’ve already asked for a review of this removal. The result will appear here.`);
     expect(document.body.textContent).not.toContain("English that must not be shown");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(await screen.findByText("Pending")).not.toBeNull();
@@ -187,8 +186,8 @@ describe("UsernameReviewCard: errors, chosen by the server's code", () => {
 
   it("403 username_review_window_closed: the window-passed card, the form is gone, no button to ask", async () => {
     await sendFailing(new UsernameReviewApiError("x", { status: 403, code: "username_review_window_closed" }));
-    expect(await screen.findByText(`The time to ask for a review has passed. ${TAG}`)).not.toBeNull();
-    expect(screen.getByText(`Choose a new username below to continue. ${TAG}`)).not.toBeNull();
+    expect(await screen.findByText(`The time to ask for a review has passed.`)).not.toBeNull();
+    expect(screen.getByText(`Choose a new username below to continue.`)).not.toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
 

@@ -76,8 +76,8 @@ export function CaseLevelHoldButtons({
       {placing === "bad_faith" ? (
         <HoldDialog
           title="Reporter acted in bad faith"
-          intro={<>Report #{reportNumber(report)}. This holds the reporter’s account in full for 6 months. [COPY PENDING LEGAL REVIEW]</>}
-          reasonHelp="The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]"
+          intro={<>Report #{reportNumber(report)}. This holds the reporter’s account in full for 6 months.</>}
+          reasonHelp="The reason is saved to the audit record."
           confirmLabel="Confirm bad faith"
           submittingLabel="Saving…"
           onSubmit={placeBadFaith}
@@ -88,8 +88,8 @@ export function CaseLevelHoldButtons({
       {placing === "legal_hold" ? (
         <HoldDialog
           title="Legal hold"
-          intro={<>Report #{reportNumber(report)}. This holds both accounts in full until an admin lifts it. [COPY PENDING LEGAL REVIEW]</>}
-          reasonHelp="The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]"
+          intro={<>Report #{reportNumber(report)}. This holds both accounts in full until an admin lifts it.</>}
+          reasonHelp="The reason is saved to the audit record."
           confirmLabel="Place legal hold"
           submittingLabel="Saving…"
           onSubmit={placeLegal}
@@ -109,7 +109,7 @@ export function CaseLevelHoldButtons({
  * New wording, pending legal review.
  */
 export const HOLD_CONTROLS_RESTRICTED_MESSAGE =
-  "Holds on this report need a child-safety-vetted admin (Settings › Roles). [COPY PENDING LEGAL REVIEW]";
+  "Holds on this report need a child-safety-vetted admin (Settings › Roles).";
 
 export function HoldControlsRestrictedLine() {
   return (
@@ -126,7 +126,7 @@ export function CaseLevelHoldCallout() {
       <span className="mod-callout__bar" aria-hidden />
       <p>
         Reporter acted in bad faith holds the reporter’s account in full for 6 months. Legal hold holds both accounts in
-        full until an admin lifts it. Both ask for confirmation first. [COPY PENDING LEGAL REVIEW]
+        full until an admin lifts it. Both ask for confirmation first.
       </p>
     </div>
   );
@@ -184,7 +184,7 @@ export function LiftHoldDialog({
   let intro;
   if (type === "legal_hold" && holdIds.length > 1) {
     // The drawn sentence, only where the lift really releases more than one account.
-    intro = <>Report #{number}. Legal hold. Lifting the hold releases both accounts. [COPY PENDING LEGAL REVIEW]</>;
+    intro = <>Report #{number}. Legal hold. Lifting the hold releases both accounts.</>;
   } else {
     const label = type === "bad_faith" ? "Reporter acted in bad faith." : "Legal hold.";
     intro = number ? `Report #${number}. ${label}` : label;
@@ -194,7 +194,7 @@ export function LiftHoldDialog({
     <HoldDialog
       title="Lift hold"
       intro={intro}
-      reasonHelp="The reason is saved to the audit record. [COPY PENDING LEGAL REVIEW]"
+      reasonHelp="The reason is saved to the audit record."
       confirmLabel="Lift hold"
       submittingLabel="Saving…"
       onSubmit={lift}

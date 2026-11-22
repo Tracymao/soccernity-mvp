@@ -55,8 +55,8 @@ export const MESSAGES = {
 } as const;
 
 // Tagged sentences, as the frames draw them.
-export const OLD_ADDRESS_NOTICE = "We’ve also told your current address about this change. [COPY PENDING LEGAL REVIEW]";
-export const GUARDIAN_NOTICE = "Your guardian will be told about this change. [COPY PENDING LEGAL REVIEW]";
+export const OLD_ADDRESS_NOTICE = "We’ve also told your current address about this change.";
+export const GUARDIAN_NOTICE = "Your guardian will be told about this change.";
 
 type Step = "password" | "twofactor" | "newEmail" | "sent";
 

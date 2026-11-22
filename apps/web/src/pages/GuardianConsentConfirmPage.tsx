@@ -106,7 +106,7 @@ function formatLongDate(iso: string): string {
 // 13). Same facts as the sentence on the minor's decline page
 // (GuardianConsentPage.tsx), reworded for the person who decides.
 const GUARDIAN_CAP_SENTENCE =
-  "You can decline up to 3 times. Changing the guardian email does not reset the count. After the third decline the account is scheduled for deletion. [COPY PENDING LEGAL REVIEW]";
+  "You can decline up to 3 times. Changing the guardian email does not reset the count. After the third decline the account is scheduled for deletion.";
 
 // Decision Log #377 removed "Build a player profile" (no player profile in the
 // MVP), and #407 item 4 (QA D-13) stops promising following (a restricted-
@@ -114,7 +114,7 @@ const GUARDIAN_CAP_SENTENCE =
 const WHAT_THEY_CAN_DO = [
   {
     title: "Check scores and fixtures",
-    body: "Browse the Sports Hub, including grassroots and pro fixtures. [COPY PENDING LEGAL REVIEW]",
+    body: "Browse the Sports Hub, including grassroots and pro fixtures.",
   },
   {
     title: "Post and comment in Community",
@@ -135,19 +135,19 @@ const WHAT_THEY_CAN_DO = [
 const WHAT_WE_COLLECT = [
   {
     title: "Name and date of birth",
-    body: "Date of birth is used for age checks only. It is never shown publicly. [COPY PENDING LEGAL REVIEW]",
+    body: "Date of birth is used for age checks only. It is never shown publicly.",
   },
   {
     title: "Email address",
-    body: "For sign-in and account notices. [COPY PENDING LEGAL REVIEW]",
+    body: "For sign-in and account notices.",
   },
   {
     title: "Anything {name} chooses to post",
-    body: "Profile details, posts, comments and images they upload. [COPY PENDING LEGAL REVIEW]",
+    body: "Profile details, posts, comments and images they upload.",
   },
   {
     title: "Your name, email and relationship",
-    body: "Kept only to record that you gave consent, and to contact you about it. [COPY PENDING LEGAL REVIEW]",
+    body: "Kept only to record that you gave consent, and to contact you about it.",
   },
 ];
 
@@ -292,7 +292,7 @@ export default function GuardianConsentConfirmPage() {
               <h1 className="consent-page__heading">Thank you, {name} can continue</h1>
               <p className="consent-page__subheading" role="status">
                 Recorded on {recordedOn}. {nameCap} can now continue registration, with under-18 protections in
-                place. [COPY PENDING LEGAL REVIEW]
+                place.
               </p>
             </div>
             <div className="consent-card">
@@ -305,7 +305,7 @@ export default function GuardianConsentConfirmPage() {
                   <div className="consent-row__text">
                     <span className="consent-row__title">{nameCap} continues registration</span>
                     <span className="consent-row__body">
-                      {nameCap} now sets up a profile and picks a club. [COPY PENDING LEGAL REVIEW]
+                      {nameCap} now sets up a profile and picks a club.
                     </span>
                   </div>
                 </div>
@@ -318,7 +318,7 @@ export default function GuardianConsentConfirmPage() {
                     <span className="consent-row__body">
                       You can review or withdraw your consent at any time on the{" "}
                       <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. {nameCap} can share the
-                      details from their account. [COPY PENDING LEGAL REVIEW]
+                      details from their account.
                     </span>
                   </div>
                 </div>
@@ -329,8 +329,7 @@ export default function GuardianConsentConfirmPage() {
                   <div className="consent-row__text">
                     <span className="consent-row__title">Nothing else is needed from you</span>
                     <span className="consent-row__body">
-                      You don&rsquo;t need a Soccernity account. It&rsquo;s safe to close this window now. [COPY
-                      PENDING LEGAL REVIEW]
+                      You don&rsquo;t need a Soccernity account. It&rsquo;s safe to close this window now.
                     </span>
                   </div>
                 </div>
@@ -350,7 +349,7 @@ export default function GuardianConsentConfirmPage() {
           <div className="consent-card">
             <h1 className="consent-page__heading">Your decision has been recorded</h1>
             <p className="consent-status-message" role="status">
-              <span>You have declined permission for this account, so it stays switched off. [COPY PENDING LEGAL REVIEW]</span>{" "}
+              <span>You have declined permission for this account, so it stays switched off.</span>{" "}
               {GUARDIAN_CAP_SENTENCE} You can close this page.
             </p>
           </div>
@@ -363,8 +362,7 @@ export default function GuardianConsentConfirmPage() {
               </h1>
               <p className="consent-page__subheading">
                 {first ? fillName(INTRO_NAMED, first, possessive) : INTRO_UNNAMED}{" "}
-                Please read this before you decide. It explains what the account can do and what we collect. [COPY
-                PENDING LEGAL REVIEW]
+                Please read this before you decide. It explains what the account can do and what we collect.
               </p>
             </div>
 
@@ -396,11 +394,11 @@ export default function GuardianConsentConfirmPage() {
                 </dl>
                 <p className="consent-footnote">
                   Your email address appears on {firstName(summary.minorName)}&rsquo;s profile as their line of
-                  contact. [COPY PENDING LEGAL REVIEW]
+                  contact.
                 </p>
                 <p className="consent-footnote">
                   {firstName(summary.minorName)}&rsquo;s photo and username are visible to other Soccernity
-                  members. [COPY PENDING LEGAL REVIEW]
+                  members.
                 </p>
                 {reportState !== "sent" && !summary.incorrectDetailsReported && (
                   <button
@@ -409,7 +407,7 @@ export default function GuardianConsentConfirmPage() {
                     onClick={handleReport}
                     disabled={reportState === "sending"}
                   >
-                    Report incorrect details [COPY PENDING LEGAL REVIEW]
+                    Report incorrect details
                   </button>
                 )}
                 {reportState === "error" && (
@@ -425,8 +423,7 @@ export default function GuardianConsentConfirmPage() {
                 <p className="consent-card__title">Approval is on hold</p>
                 <p className="consent-page__subheading">
                   You told us some of these details are incorrect. Support will review them and contact you, and
-                  you can approve once that is done. You can still decline this request below. [COPY PENDING LEGAL
-                  REVIEW]
+                  you can approve once that is done. You can still decline this request below.
                 </p>
               </div>
             )}
@@ -508,7 +505,6 @@ export default function GuardianConsentConfirmPage() {
                 <label htmlFor="consent-confirm-checkbox">
                   I confirm I am this account holder&rsquo;s parent or legal guardian, and I give permission for
                   this account to be activated.{" "}
-                  <span className="consent-fineprint">[COPY PENDING LEGAL REVIEW]</span>
                 </label>
               </div>
 
@@ -546,14 +542,14 @@ export default function GuardianConsentConfirmPage() {
                 {summary && (
                   <>
                     <span>
-                      This link expires on {formatLongDate(summary.expiresAt)}. [COPY PENDING LEGAL REVIEW]
+                      This link expires on {formatLongDate(summary.expiresAt)}.
                     </span>{" "}
                   </>
                 )}
                 <span>{GUARDIAN_CAP_SENTENCE}</span>{" "}
                 <span>
                   You can withdraw consent at any time on the{" "}
-                  <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. [COPY PENDING LEGAL REVIEW]
+                  <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>.
                 </span>{" "}
                 Read our <Link to="/privacy">Privacy Policy</Link>.
               </p>

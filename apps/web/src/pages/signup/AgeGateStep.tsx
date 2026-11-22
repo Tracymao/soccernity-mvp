@@ -119,7 +119,7 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
         <h1 className="signup-split__heading">Soccernity isn&rsquo;t for you just yet</h1>
         <p className="signup-split__subheading">
           Thanks for your interest. You need to be at least {MINIMUM_SIGNUP_AGE} years old to have a Soccernity
-          account. [COPY PENDING LEGAL REVIEW]
+          account.
         </p>
 
         <div className="signup-form">
@@ -128,8 +128,7 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
             <p className="signup-info-panel__body">
               Soccernity is built around real grassroots football. In the UK, youth football starts at around age
               5 to 6. Below that, a profile wouldn&rsquo;t reflect anything about you as a player yet, so we
-              keep signups closed until then, no matter what a parent or guardian agrees to. [COPY PENDING LEGAL
-              REVIEW]
+              keep signups closed until then, no matter what a parent or guardian agrees to.
             </p>
           </div>
 

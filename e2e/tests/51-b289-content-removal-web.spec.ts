@@ -114,7 +114,7 @@ test.describe.serial('messages a moderator removed', () => {
     const placeholder = chat.getByTestId('removed-placeholder');
     await expect(placeholder).toHaveCount(1);
     await expect(placeholder).toContainText(removedMessageLabel);
-    await expect(placeholder).toContainText(TAG);
+    await expect(placeholder).not.toContainText(TAG);
     await expect(page.getByText('This message was deleted')).toHaveCount(0);
     await expect(page.getByText(REMOVED)).toHaveCount(0);
     // Nothing to press on it: no "...", no menu, not even on a long press or a right click.
@@ -139,7 +139,7 @@ test.describe.serial('messages a moderator removed', () => {
     const placeholder = page.getByTestId('removed-placeholder');
     await expect(placeholder).toHaveCount(1);
     await expect(placeholder).toContainText(removedMessageLabel);
-    await expect(placeholder).toContainText(TAG);
+    await expect(placeholder).not.toContainText(TAG);
     await expect(page.getByText(REMOVED)).toHaveCount(0);
     await expect(placeholder.getByRole('button')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -220,7 +220,7 @@ test.describe.serial('a comment and a post a moderator removed', () => {
     const placeholder = page.getByTestId('removed-placeholder');
     await expect(placeholder).toHaveCount(1);
     await expect(placeholder).toContainText('This comment was removed by Soccernity');
-    await expect(placeholder).toContainText(TAG);
+    await expect(placeholder).not.toContainText(TAG);
     await expect(page.getByText(COMMENT_REMOVED)).toHaveCount(0);
     await expect(page.getByText(commenter.username)).toHaveCount(0);
     await expect(placeholder.getByRole('button')).toHaveCount(0);
@@ -253,7 +253,7 @@ test.describe.serial('a comment and a post a moderator removed', () => {
     await page.goto(`/posts/${removedPostId}`);
     const notice = page.getByTestId('removed-placeholder');
     await expect(notice).toContainText('Soccernity removed this post.');
-    await expect(notice).toContainText(TAG);
+    await expect(notice).not.toContainText(TAG);
     await expect(page.getByText(POST_REMOVED_TEXT)).toHaveCount(0);
     await expect(page.getByRole('button', { name: /comment|like|save/i })).toHaveCount(0);
     await shot(page, 'M5-post-notice-mobile');

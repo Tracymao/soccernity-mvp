@@ -430,7 +430,8 @@ export async function expectVerifyScreen(
 export const COPY_TAG = '[COPY PENDING LEGAL REVIEW]';
 /** `text` followed by the tag, the way the apps render a tagged sentence. */
 export function tagged(text: string): string {
-  return COPY_TAG ? `${text} ${COPY_TAG}` : text;
+  // R108: the founder cleared every tag, so a former tagged sentence now renders as plain text.
+  return text;
 }
 
 /**

@@ -65,7 +65,7 @@ const emailField = () => screen.getByLabelText("Email") as HTMLInputElement;
 const subjectField = () => screen.getByLabelText("Subject") as HTMLInputElement;
 const messageField = () => screen.getByLabelText("Message") as HTMLTextAreaElement;
 // Decision Log #497 (B-301): the option label carries the literal tag as a plain suffix.
-const APPEAL_LABEL = "Appeal a suspension [COPY PENDING LEGAL REVIEW]";
+const APPEAL_LABEL = "Appeal a suspension";
 const categoryButton = () => screen.getByRole("combobox", { name: "Category" });
 
 function chooseCategory(label: string) {
@@ -139,9 +139,9 @@ describe("ContactPage — the form as drawn", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
-  it("shows the tagged notice under the form with a real link to /privacy", () => {
+  it("shows the notice under the form with a real link to /privacy", () => {
     renderPage();
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).toBeTruthy();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
     expect(screen.getByText(/^Our support team reads the messages sent through this form\./)).toBeTruthy();
     expect(screen.getByText(/12 months after the last message in the enquiry/)).toBeTruthy();
     const link = screen.getByRole("link", { name: "Privacy Policy" });
@@ -273,22 +273,16 @@ describe("ContactPage — the Appeal a suspension helper line (Figma pass V)", (
     );
   });
 
-  it("carries the literal tag: the option label, and a chip directly before the helper (Decision Log #497)", () => {
+  it("carries no tag on the option label or the helper line (cleared by founder review, R108)", () => {
     renderPage();
-    // No chip beside a helper before the category is chosen: only the existing notice's chip.
-    expect(screen.getAllByText("[COPY PENDING LEGAL REVIEW]")).toHaveLength(1);
+    expect(screen.queryByText(/COPY PENDING/)).toBeNull();
     chooseCategory(APPEAL_LABEL);
-    // The chosen option label shows its suffix tag in the closed select.
-    expect(categoryButton().textContent).toContain("Appeal a suspension [COPY PENDING LEGAL REVIEW]");
-    // The notice chip plus the helper chip.
-    const chips = screen.getAllByText("[COPY PENDING LEGAL REVIEW]");
-    expect(chips).toHaveLength(2);
-    const helper = screen.getByText(HELPER);
-    expect(helper.parentElement?.firstElementChild?.textContent).toBe("[COPY PENDING LEGAL REVIEW]");
-    // The other six options are not tagged.
+    expect(categoryButton().textContent).toContain("Appeal a suspension");
+    expect(screen.getByText(HELPER)).toBeTruthy();
+    expect(screen.queryByText(/COPY PENDING/)).toBeNull();
     fireEvent.click(categoryButton());
     const options = within(screen.getByRole("listbox", { name: "Category" })).getAllByRole("option");
-    expect(options.filter((o) => /PENDING/.test(o.textContent ?? "")).map((o) => o.textContent)).toEqual([APPEAL_LABEL]);
+    expect(options.filter((o) => /PENDING/.test(o.textContent ?? ""))).toEqual([]);
   });
 });
 
@@ -417,7 +411,7 @@ describe("ContactPage — submitting", () => {
     expect(subjectField().value).toBe("");
     expect(messageField().value).toBe("");
     expect(screen.getByText("Choose a category")).toBeTruthy();
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).toBeTruthy();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
   });
 });
 

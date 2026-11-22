@@ -414,7 +414,7 @@ export default function SuspectedIllegalDetailPage() {
             <p className="mod-note">No body is suggested for this uploader’s country.</p>
           )}
           <p className="mod-note">
-            These suggestions are pending counsel. None of them is approved or confirmed. [COPY PENDING LEGAL REVIEW]
+            These suggestions are pending counsel. None of them is approved or confirmed.
           </p>
         </section>
 
@@ -422,8 +422,7 @@ export default function SuspectedIllegalDetailPage() {
           <span className="mod-callout__bar" aria-hidden />
           <p>
             A report to a receiving body must be made with that body, outside Soccernity. This page does not send
-            anything. It only records that a report was made, or that it was decided not to make one. [COPY PENDING
-            LEGAL REVIEW]
+            anything. It only records that a report was made, or that it was decided not to make one.
           </p>
         </div>
 

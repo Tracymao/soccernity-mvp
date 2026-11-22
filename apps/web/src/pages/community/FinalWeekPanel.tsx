@@ -160,7 +160,7 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
                 </p>
                 <p className="composer__note">
                   Everything you upload is checked before it can be shown, and your video stays hidden from everyone but
-                  you until the reveal. [COPY PENDING LEGAL REVIEW]
+                  you until the reveal.
                 </p>
               </>
             ) : (

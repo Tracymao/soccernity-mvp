@@ -147,7 +147,7 @@ export default function FinalWeekCarousel({ accessToken }: Props) {
       <p className="fwc__lead">Every finalist is shown to everyone equally.</p>
       <p className="fwc__note">
         Finalists appear in a different order for each viewer. The order is never based on likes, comments, ranking,
-        follower count or when a video was uploaded. [COPY PENDING LEGAL REVIEW]
+        follower count or when a video was uploaded.
       </p>
       <ul className="fwc__tiles">
         {shown.map((item) => (

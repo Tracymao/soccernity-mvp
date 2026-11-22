@@ -282,8 +282,8 @@ export default function CorrectDobPage() {
               <fieldset className="ud-guardian" data-testid="guardian-fields">
                 <legend>Guardian details</legend>
                 <p className="ud-field__help">
-                  This correction makes the account a minor and no guardian is on file. The consent request goes to
-                  this address. [COPY PENDING LEGAL REVIEW]
+                  This correction makes the account a minor and no guardian is on file. We will email the consent
+                  request to the guardian at the address you enter below. Use the address from the support ticket.
                 </p>
                 <div className="ud-field">
                   <label htmlFor="guardian-name">Guardian&rsquo;s full name</label>
@@ -328,7 +328,7 @@ export default function CorrectDobPage() {
 
             <div className="ud-callout" role="note">
               Correcting the date of birth re-runs the age-tier checks and can start the guardian flow. You confirm
-              the consequences before anything changes. [COPY PENDING LEGAL REVIEW]
+              the consequences before anything changes.
             </div>
 
             <div className="ud-buttons">
@@ -377,7 +377,7 @@ export default function CorrectDobPage() {
             </dl>
             <div className="ud-callout" role="note">
               The age-tier checks have been re-run and the correction is in the audit log. If the correction turned an
-              adult account into a minor account, the guardian flow was started. [COPY PENDING LEGAL REVIEW]
+              adult account into a minor account, the guardian flow was started.
             </div>
           </section>
         ) : null}
@@ -412,14 +412,14 @@ export default function CorrectDobPage() {
               <ul className="ud-dialog__list">
                 <li>
                   The age-tier checks re-run: under-13, under-16 and under-18 flags, the card-verification policy and
-                  restrictions. [COPY PENDING LEGAL REVIEW]
+                  restrictions.
                 </li>
                 <li>
                   If this makes an adult account that has never gone through the guardian flow a minor account, the
-                  guardian flow starts. [COPY PENDING LEGAL REVIEW]
+                  guardian flow starts.
                 </li>
                 <li>
-                  The correction is recorded in the audit log together with your reason. [COPY PENDING LEGAL REVIEW]
+                  The correction is recorded in the audit log together with your reason.
                 </li>
               </ul>
               {submitError ? (

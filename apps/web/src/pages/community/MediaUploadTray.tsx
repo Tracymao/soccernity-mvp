@@ -112,7 +112,7 @@ function TrayItem({
           <p className="media-item__name">
             {item.name} <span className="media-chip">Checking</span>
           </p>
-          <p className="media-item__hint">Checking… only you can see this until it has been checked. [COPY PENDING LEGAL REVIEW]</p>
+          <p className="media-item__hint">Checking… only you can see this until it has been checked.</p>
           {item.kind === "video" && <p className="media-item__hint">Videos can take a little longer to check.</p>}
           {item.errorMessage && (
             <p className="media-item__error" role="alert">
@@ -140,10 +140,10 @@ function TrayItem({
           </p>
           <p className="media-item__hint">
             {variant === "final"
-              ? "Your video is hidden from everyone but you until the reveal at 00:00 on day 25. [COPY PENDING LEGAL REVIEW]"
+              ? "Your video is hidden from everyone but you until the reveal at 00:00 on day 25."
               : item.kind === "video"
-                ? "Your video can be seen with your post. [COPY PENDING LEGAL REVIEW]"
-                : "Your pictures can be seen with your post. [COPY PENDING LEGAL REVIEW]"}
+                ? "Your video can be seen with your post."
+                : "Your pictures can be seen with your post."}
           </p>
         </div>
         <button type="button" className="media-item__action" onClick={() => void onRemove(item.key)}>

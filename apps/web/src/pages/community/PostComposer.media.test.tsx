@@ -118,7 +118,7 @@ describe("composer — attach controls", () => {
     expect(createUpload).toHaveBeenCalledWith("tok", { contentType: "image/png", size: 5 });
     expect(confirmUpload).toHaveBeenCalledWith("tok", "m1");
     expect(
-      screen.getByText("Checking… only you can see this until it has been checked. [COPY PENDING LEGAL REVIEW]"),
+      screen.getByText("Checking… only you can see this until it has been checked."),
     ).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
@@ -176,7 +176,7 @@ describe("composer — attach controls", () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 50);
     });
     await screen.findByText("Approved");
-    expect(screen.getByText("Your pictures can be seen with your post. [COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.getByText("Your pictures can be seen with your post.")).not.toBeNull();
     expect(getUpload).toHaveBeenCalledWith("tok", "m1");
   });
 

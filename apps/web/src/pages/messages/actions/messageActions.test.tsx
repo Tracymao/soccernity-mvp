@@ -466,7 +466,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       ).toBeTruthy();
       expect(
         within(confirm).getByText(
-          "We may keep a copy of the original for safety and legal reasons. [COPY PENDING LEGAL REVIEW]",
+          "We may keep a copy of the original for safety and legal reasons.",
         ),
       ).toBeTruthy();
       // No promise of erasure anywhere in the dialog.
@@ -722,7 +722,7 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       const dialog = await toContextStep();
       expect(dialog.textContent).toContain("Optional. Pick messages from this chat that help our team understand what happened.");
       expect(dialog.textContent).toContain(
-        "Our safeguarding team will see the messages you choose, and the message you are reporting. [COPY PENDING LEGAL REVIEW]",
+        "Our safeguarding team will see the messages you choose, and the message you are reporting.",
       );
       const boxes = checkboxes(dialog);
       expect(boxes).toHaveLength(20);

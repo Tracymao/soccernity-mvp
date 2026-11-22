@@ -105,7 +105,7 @@ describe("status", () => {
     expect(screen.getByRole("button", { name: "Turn on" })).not.toBeNull();
     expect(screen.queryByText("Text message")).toBeNull();
     // The Copy Tag chip every frame carries.
-    expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).not.toBeNull();
+    expect(screen.queryByText("[COPY PENDING LEGAL REVIEW]")).toBeNull();
   });
 
   it("when on: toggle on, the callout, backup codes left, Turn off and Get new backup codes", async () => {

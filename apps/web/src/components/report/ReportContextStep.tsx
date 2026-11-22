@@ -27,7 +27,7 @@ export const CONTEXT_WORDING = {
   subtitle: "Optional. Pick messages from this chat that help our team understand what happened.",
   // Says who sees what, so it carries the tag (the Figma frames tag it too).
   safeguarding:
-    "Our safeguarding team will see the messages you choose, and the message you are reporting. [COPY PENDING LEGAL REVIEW]",
+    "Our safeguarding team will see the messages you choose, and the message you are reporting.",
   clear: "Clear selection",
   includeAll: "Include the messages shown",
   allIncluded: "All shown messages included",

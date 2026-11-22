@@ -90,9 +90,9 @@ describe("wording", () => {
     }
   });
 
-  it("carries the tag only on the one line the frames tag", () => {
+  it("carries no tag (cleared by founder review, R108)", () => {
     const tagged = Object.entries(WORDING).filter(([, text]) => text.includes("[COPY PENDING LEGAL REVIEW]"));
-    expect(tagged.map(([key]) => key)).toEqual(["retention"]);
+    expect(tagged.map(([key]) => key)).toEqual([]);
   });
 });
 

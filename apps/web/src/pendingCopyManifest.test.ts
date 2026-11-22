@@ -30,9 +30,11 @@ describe("pending-copy manifest matches the source of apps/web and apps/admin", 
   const manifest = parseManifest(fs.readFileSync(MANIFEST_PATH, "utf8"));
   const { unlisted, stale } = compareToManifest(scanned, manifest);
 
-  it("finds the tagged strings at all (the scanner is not silently empty)", () => {
-    expect(scanned.length).toBeGreaterThan(0);
-    expect(manifest.length).toBeGreaterThan(0);
+  // R108 (2026-11-22): the founder cleared every tagged string, so the table and
+  // the source are both empty. The scanner itself is proven against fixtures in
+  // the tests below, so an empty result here is not a silent failure.
+  it("source and manifest agree on how many tagged strings exist", () => {
+    expect(scanned.length).toBe(manifest.length);
   });
 
   it("has a manifest row for every tagged string in the source", () => {

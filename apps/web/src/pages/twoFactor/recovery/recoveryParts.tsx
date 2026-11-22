@@ -16,7 +16,6 @@ import {
   type RecoveryLinkSummary,
 } from "../../../api/twoFactorRecovery";
 import checkIcon from "../../../assets/icons/withdrawal-check.svg";
-import CopyTag from "../CopyTag";
 import "../../guardian-consent/GuardianWithdrawalPage.css";
 import "../twoFactor.css";
 
@@ -38,7 +37,6 @@ export function Shell({ state, children }: { state: string; children: ReactNode 
   return (
     <div className="gw" data-testid="two-factor-recovery-page" data-state={state}>
       <div className="gw__column">
-        <CopyTag />
         {children}
       </div>
     </div>

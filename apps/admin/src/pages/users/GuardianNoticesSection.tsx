@@ -44,11 +44,6 @@ function daysAgo(iso: string): string {
   return days === 1 ? " (1 day ago)" : ` (${days} days ago)`;
 }
 
-/** The one chip each card carries (Figma "Copy Tag"): everything on the card is pending legal review. */
-export function GuardianNoticesCopyTag() {
-  return <p className="gn-copy-tag">[COPY PENDING LEGAL REVIEW]</p>;
-}
-
 export type GuardianNoticesDialogKind = "withhold" | "review" | "clear";
 
 interface DialogSpec {
@@ -307,7 +302,6 @@ export default function GuardianNoticesSection({
   return (
     <>
       <section className="us-card gn-card" aria-labelledby="gn-title">
-        <GuardianNoticesCopyTag />
         <div className="gn-heading">
           <h2 className="us-card__title" id="gn-title">
             {copy.GUARDIAN_NOTICES_TITLE}

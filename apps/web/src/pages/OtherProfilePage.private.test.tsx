@@ -101,7 +101,7 @@ describe("a private profile, seen by a non-follower (PV1 / PV5)", () => {
     expect(screen.getByTestId("private-profile")).not.toBeNull();
     expect(screen.getByText(PRIVATE_PROFILE_TITLE)).not.toBeNull();
     expect(PRIVATE_PROFILE_TITLE).toBe("This profile is private");
-    expect(PRIVATE_PROFILE_BODY).toBe("Follow to see their profile, posts and activity. [COPY PENDING LEGAL REVIEW]");
+    expect(PRIVATE_PROFILE_BODY).toBe("Follow to see their profile, posts and activity.");
     expect(screen.getByText(PRIVATE_PROFILE_BODY)).not.toBeNull();
     expect(screen.getByRole("button", { name: "Follow" })).not.toBeNull();
     // The neutral band replaces the cover; no picture is drawn from the (null) cover.

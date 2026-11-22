@@ -31,4 +31,4 @@ export const CONSENT_SCREEN_VERSION = 'v8';
 // guardian is told/agrees to, and update this hash in the same PR. For a
 // meaning-neutral fix (e.g. a typo) update only this hash. The spec prints
 // the current hash. Deliberately not auto-bumped -- a human decides.
-export const CONSENT_SCREEN_TEXT_HASH = '39c309d61e66fcc8613577b5568fc0fa4c8228349b5b64d81094a5cb09117b0d';
+export const CONSENT_SCREEN_TEXT_HASH = 'e1823708c566654d9a5a6c5f25391fc0da68f9e23750b3ee0c8a5c91c43570b6';

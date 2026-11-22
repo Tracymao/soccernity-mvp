@@ -95,15 +95,14 @@ export default function SetAsideDialog({
           <ul className="si-consequences">
             <li>
               The {noun} is withdrawn from public view and rejected. The uploader sees the standard rejection message.
-              [COPY PENDING LEGAL REVIEW]
+
             </li>
             <li>
-              The {noun} is kept for the set-aside period and is not deleted with the uploader’s account. [COPY PENDING
-              LEGAL REVIEW]
+              The {noun} is kept for the set-aside period and is not deleted with the uploader’s account.
             </li>
             <li>
               Nothing is reported to anyone. A report to a receiving body is made outside Soccernity, and you record it
-              afterwards. [COPY PENDING LEGAL REVIEW]
+              afterwards.
             </li>
           </ul>
           <div className="mod-field">
@@ -129,8 +128,7 @@ export default function SetAsideDialog({
             ) : null}
           </div>
           <p className="mod-note" id={helpId}>
-            10 to 500 characters. The reason is saved with the record and is never shown to the uploader. [COPY PENDING
-            LEGAL REVIEW]
+            10 to 500 characters. The reason is saved with the record and is never shown to the uploader.
           </p>
         </div>
         <div className="mod-dialog__actions">

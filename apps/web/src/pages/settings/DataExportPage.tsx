@@ -53,7 +53,7 @@ export const MESSAGES = {
   stalled: "Your file is still being prepared. It can take a few minutes. You can check again, or come back later.",
   // The one sentence the frame tags; the literal tag is shown to the person on purpose (B-124).
   personalData:
-    "The file contains your personal data. Keep it somewhere safe and don’t share it. [COPY PENDING LEGAL REVIEW]",
+    "The file contains your personal data. Keep it somewhere safe and don’t share it.",
 } as const;
 
 type View = "loading" | "loadError" | "form" | "preparing" | "stalled" | "ready" | "failed" | "tooMany" | "expired";

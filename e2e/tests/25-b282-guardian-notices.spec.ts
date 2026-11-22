@@ -90,7 +90,7 @@ test.describe.serial('guardian notices: the vetted-admin section on a minor', ()
     const section = page.getByRole('region', { name: 'Guardian notices' });
     await expect(section).toBeVisible();
     await expect(section.getByText('Sending normally')).toBeVisible();
-    await expect(section.getByText('[COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    await expect(section.getByText('[COPY PENDING LEGAL REVIEW]')).toHaveCount(0);
     await shot(page, '01-off');
 
     // Set: an empty reason is refused on the page, nothing is stored.
