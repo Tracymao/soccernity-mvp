@@ -27,7 +27,7 @@ and `enquiries_feedback` was split into `enquiries` and `feedback`. Migration
 
 A **seventh category, `suspension_appeal`** (label "Appeal a suspension", **last** in the list), was added by
 `backend/b298-contact-appeal-category` (B-298, Decision Log #492 (b), (e)): the way a suspended person asks for the
-decision to be looked at again. The label is new user-facing wording, `[COPY PENDING LEGAL REVIEW]` (a code
+decision to be looked at again. The label is new user-facing wording, cleared by the founder's review of 2026-11-22 (R108), no counsel review needed (see the
 comment in `contact.constants.ts`). Migration `20261128100000_add_contact_suspension_appeal_category` replaces the
 CHECK with the seven values; the six existing ones are kept and no row is touched. Nothing else about the enquiry
 changes: escalation to a report, retention and the rate limits are as before. The DTO `@IsIn` lists and the

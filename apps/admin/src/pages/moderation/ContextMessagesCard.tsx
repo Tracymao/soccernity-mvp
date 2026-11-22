@@ -86,8 +86,7 @@ interface Props {
   contextHidden?: boolean;
 }
 
-// Figma 7045:62777. Tagged: the literal [COPY PENDING LEGAL REVIEW] ends the rendered string and the sentence has a
-// row in docs/pending-copy-manifest.md (Decision Log #497, B-301).
+// Figma 7045:62777. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. (Decision Log #497, B-301)
 export const CONTEXT_HIDDEN_MESSAGE = "Context hidden: this involves a child.";
 
 export default function ContextMessagesCard({ reportedMessage, contextMessages, contextHidden = false }: Props) {

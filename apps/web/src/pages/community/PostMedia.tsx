@@ -20,8 +20,8 @@
 // the post card offers it); POST /reports has no per-account daily cap and stays open to a restricted-pending
 // account, so it is the way out for someone at the media-report limit. It makes no request of its own.
 //
-// Strings that say who can see a file, or who sees a reporter's reason, are tagged [COPY PENDING LEGAL REVIEW] (Decision Log #412 item 5) and
-// have rows in docs/pending-copy-manifest.md.
+// Strings that say who can see a file, or who sees a reporter's reason, were once tagged (Decision Log #412 item 5).
+// Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MEDIA_REPORT_REASON_MAX_LENGTH,

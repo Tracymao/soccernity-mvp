@@ -46,8 +46,8 @@ Add one entry to `GUARDIAN_SECURITY_EVENTS` in `guardian-security-notice.constan
 
 ## Wording
 
-All wording is plain functional copy and is **[COPY PENDING LEGAL REVIEW]**. It is listed in
-`docs/pending-copy-manifest.md` (the `services/api` section; that guard covers `apps/web` and `apps/admin` only).
+All wording is plain functional copy, cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. It is listed in
+`docs/pending-copy-manifest.md` (the `services/api` section, kept as history; that guard covers `apps/web` and `apps/admin` only).
 
 ---
 
@@ -161,8 +161,8 @@ TTL, (B) minor reports and blocks send nothing, holds send nothing).
 
 ## Wording
 
-All wording is plain functional copy and is **[COPY PENDING LEGAL REVIEW]**; it is listed in
-`docs/pending-copy-manifest.md` (the `services/api` section).
+All wording is plain functional copy, cleared by the founder's review of 2026-11-22 (R108), no counsel review needed; it is listed in
+`docs/pending-copy-manifest.md` (the `services/api` section, kept as history).
 
 ## What the withhold flag gates (B-280; Decision Log #458)
 

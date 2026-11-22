@@ -24,8 +24,8 @@ export interface UsernameReviewStatus {
 // revoked again). The review concerns the LATEST one (by revokedAt): it is the one that put the account in its
 // current no-username state. An older record's request (if one was made) is left to the admins to decide.
 //
-// All wording that reaches the user (the error messages) is plain and functional and is
-// [COPY PENDING LEGAL REVIEW]; the web client should branch on `code`, not on the English.
+// All wording that reaches the user (the error messages) is plain and functional.
+// Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. The web client should branch on `code`, not on the English.
 @Injectable()
 export class UsernameReviewService {
   constructor(private readonly prisma: PrismaService) {}
