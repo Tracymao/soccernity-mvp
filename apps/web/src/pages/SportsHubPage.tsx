@@ -36,6 +36,7 @@
 //
 // "Most Recent Stories" stays illustrative sample content -- no
 // news/story endpoint exists (see ./sports-hub/sportsHubData.ts).
+import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -59,8 +60,9 @@ interface LeagueOption {
 }
 
 function TeamCrest({ name, logo }: { name: string; logo: string | null }) {
-  if (logo) {
-    return <img className="sh-match__crest" src={logo} alt="" aria-hidden="true" />;
+  const safeLogo = safeImageUrl(logo);
+  if (safeLogo) {
+    return <img className="sh-match__crest" src={safeLogo} alt="" aria-hidden="true" />;
   }
   return (
     <span className="sh-match__crest sh-match__crest--mono" aria-hidden="true">
