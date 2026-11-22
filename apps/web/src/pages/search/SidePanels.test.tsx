@@ -99,6 +99,26 @@ describe("TrendingNewsPanel", () => {
 });
 
 describe("FixturesPanel", () => {
+  it("shows the monogram, not an <img>, for a crest on a third-party host", async () => {
+    vi.mocked(listFixtures).mockResolvedValue({
+      items: [
+        match(1, {
+          homeTeam: { id: "h1", name: "Home 1", logo: "https://highlightly.net/crests/h1.png" },
+          awayTeam: { id: "w1", name: "Away 1", logo: "https://highlightly.net/crests/w1.png" },
+        }),
+      ],
+      nextCursor: null,
+    });
+    const { container } = render(
+      <MemoryRouter>
+        <FixturesPanel />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText("Home 1")).not.toBeNull());
+    expect(container.querySelector("img.fixtures-card__crest")).toBeNull();
+    expect(container.querySelectorAll(".fixtures-card__crest--mono").length).toBe(2);
+  });
+
   it("requests today's fixtures (YYYY-MM-DD) and shows at most 7 rows linked to the match centre", async () => {
     vi.mocked(listFixtures).mockResolvedValue({
       items: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => match(n)),

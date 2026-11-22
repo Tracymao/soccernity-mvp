@@ -35,6 +35,7 @@
 // A missing / 404 club renders an honest "Club not found" state with a
 // link back to /clubs. GET /clubs/:id is JwtAuthGuard-only; a no-session
 // visit shows a "log in" prompt and never calls the API.
+import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -216,8 +217,8 @@ export default function ClubFanPage() {
       </Link>
 
       <div className="clubs-fan__identity">
-        {club.logoUrl ? (
-          <img src={club.logoUrl} alt="" className="clubs-fan__badge" width={88} height={88} />
+        {safeImageUrl(club.logoUrl) ? (
+          <img src={safeImageUrl(club.logoUrl) as string} alt="" className="clubs-fan__badge" width={88} height={88} />
         ) : (
           <span className="clubs-fan__badge clubs-fan__badge--initial" aria-hidden="true">
             {initialFor(club.name)}
