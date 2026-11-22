@@ -121,8 +121,8 @@ account or already turned two-factor off, the link reads as expired.
 account closed or already turned two-factor off, and deletes ended rows 30 days after `doneAt` and never-used links 30
 days after they expired. At most 200 completions per run; a failing row is logged and retried next hour.
 
-**Emails** (seven templates on `RegistrationEmailService`, all `[COPY PENDING LEGAL REVIEW]`, listed in
-`docs/pending-copy-manifest.md`): none logs a recipient, a token or a link, live or not; a link email is skipped, with an
+**Emails** (seven templates on `RegistrationEmailService`, wording cleared by the founder's review of 2026-11-22 (R108), no counsel review needed, listed in
+`docs/pending-copy-manifest.md` as history): none logs a recipient, a token or a link, live or not; a link email is skipped, with an
 error logged, if `WEB_APP_BASE_URL` is unusable. **No B-275 guardian security notice is sent for any recovery step**: the
 guardian's own link email is the one guardian email of the request, and approve/decline are the guardian's own actions.
 

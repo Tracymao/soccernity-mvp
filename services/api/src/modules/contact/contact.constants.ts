@@ -7,7 +7,7 @@
 //   - livescores_issues is REMOVED: users cannot report on live scores, that data comes from a third-party service.
 //   - enquiries_feedback is SPLIT into enquiries and feedback.
 //   - suspension_appeal is LAST: a suspended person's way to ask for the decision to be looked at again. The
-//     label "Appeal a suspension" is new user-facing wording: [COPY PENDING LEGAL REVIEW].
+//     label "Appeal a suspension" is new user-facing wording. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 export const CONTACT_CATEGORIES = [
   'technical_issues',
   'editorial_complaints',
@@ -27,7 +27,7 @@ export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   suggestions: 'Suggestions',
   enquiries: 'Enquiries',
   feedback: 'Feedback',
-  // [COPY PENDING LEGAL REVIEW]
+  // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   suspension_appeal: 'Appeal a suspension',
 };
 

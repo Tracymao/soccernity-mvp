@@ -156,8 +156,8 @@ export class RegistrationEmailService {
     // (POST /auth/guardian-consent/withdraw/request, Decision Log #340), so the
     // page asks for the minor's email first. buildWebAppLink cannot return null
     // here because linkFor() above already accepted the same base URL.
-    // [COPY PENDING LEGAL REVIEW]: the sentence that introduces this link, in
-    // both bodies below, is guardian-facing wording counsel has not approved.
+    // The sentence that introduces this link, in both bodies below, is guardian-facing wording.
+    // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
     const withdrawalPageLink = buildWebAppLink(
       this.config.get<string>('WEB_APP_BASE_URL'),
       '/guardian-consent/withdraw',
@@ -209,7 +209,7 @@ export class RegistrationEmailService {
   // The wording is "approved, continue registration" -- NOT "everything is
   // switched on": approval is only the middle of the sign-up flow (#367), and
   // the account still has to complete its profile. Plain functional copy,
-  // [COPY PENDING LEGAL REVIEW], not counsel-reviewed.
+  // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   //
   // The link goes to /login, deliberately and not to a Create Profile route:
   // the minor is usually logged out when this arrives, and the login response
@@ -240,8 +240,8 @@ export class RegistrationEmailService {
   // #395 B2) this is sent only for the THIRD decline of a consent request;
   // declines 1 and 2 send nothing (the minor sees the decline page inside the
   // account). The wording says the account is closed after the limit was
-  // reached, without exposing a running count. [COPY PENDING LEGAL REVIEW]:
-  // functional wording only, not counsel-reviewed.
+  // reached, without exposing a running count. Functional wording only.
+  // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   async sendConsentDeclinedEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
     await this.dispatch({
       to,
@@ -292,7 +292,7 @@ export class RegistrationEmailService {
   // backend/b158-clear-guardian-email-tags (B-158, founder decision 2026-11-04): the founder has read this
   // wording and the accuracy check was done (the days come from GRACE_PERIOD_DAYS, the same constant the
   // deletion sweep uses; the lapse path is refuseConsentAndScheduleDeletion; the change-guardian-email screen
-  // it points to exists). It is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on the counsel
+  // it points to exists). It is untagged and is not on the counsel
   // list.
   async sendConsentDeclineLapseReminderEmail(
     to: string,
@@ -320,7 +320,7 @@ export class RegistrationEmailService {
   // backend/b158-clear-guardian-email-tags (B-158, founder decision 2026-11-04): the founder has read this
   // wording and the accuracy check was done (graceDays comes from GRACE_PERIOD_DAYS, the same constant the
   // deletion sweep uses; "closed and scheduled for deletion" matches the second-lapse path through
-  // refuseConsentAndScheduleDeletion). It is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on
+  // refuseConsentAndScheduleDeletion). It is untagged and is not on
   // the counsel list.
   async sendConsentExpiredEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
     await this.dispatch({
@@ -371,8 +371,8 @@ export class RegistrationEmailService {
   // changed or reset, sign-in locked). ONE template for every event: the caller (GuardianSecurityNoticeService)
   // passes the subject, the one-sentence summary and the time, all taken from the registry in
   // guardian-security-notice.constants.ts, so a new event needs no change here. The email says what happened and
-  // when and NOTHING else: no IP address, device, location or other account data, no link. [COPY PENDING LEGAL
-  // REVIEW]: functional wording only, not counsel-reviewed (docs/pending-copy-manifest.md).
+  // when and NOTHING else: no IP address, device, location or other account data, no link.
+  // Functional wording only. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   async sendGuardianSecurityNoticeEmail(to: string, subject: string, summary: string, when: string): Promise<void> {
     await this.dispatch({
       to,
@@ -389,7 +389,7 @@ export class RegistrationEmailService {
   // the reason, the rule, a report, a reporter, a moderator or any content of a post. The Contact Us link is
   // built from WEB_APP_BASE_URL; when that is unusable the email is still sent, without the link, because the
   // notice itself matters more than its pointer (unlike a token email, nothing here depends on the link).
-  // [COPY PENDING LEGAL REVIEW]: functional wording only (docs/pending-copy-manifest.md).
+  // Functional wording only. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   async sendGuardianSafetyNoticeEmail(to: string, subject: string, summary: string, when: string): Promise<void> {
     const contactLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/contact', {}) ?? '';
     await this.dispatch({
@@ -479,8 +479,8 @@ export class RegistrationEmailService {
   // text, never who reported, never a duration. It says the person can appeal through the Contact Us page; the link is
   // built from WEB_APP_BASE_URL, and when that is unusable the email is still sent, naming the page without a link
   // (the notice matters more than its pointer, like the guardian safety notice).
-  // [COPY PENDING LEGAL REVIEW]: every new sentence in this email and in the reinstatement email below, and the
-  // reason lines in suspensionReasonLine (docs/pending-copy-manifest.md, services/api section).
+  // Every new sentence in this email and in the reinstatement email below, and the reason lines in
+  // suspensionReasonLine, were once tagged. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   async sendAccountSuspendedEmail(to: string, reasonCategory: string | null): Promise<void> {
     const contactLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/contact', {}) ?? '';
     await this.dispatch({
@@ -493,7 +493,7 @@ export class RegistrationEmailService {
 
   // backend/b291-suspension-on-report (B-291): to the person whose suspension was lifted (a manual reinstatement from
   // the admin user page, or the overturn of the appeal against the suspending report). Short, with no reason and no
-  // mention of any report. [COPY PENDING LEGAL REVIEW]
+  // mention of any report. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
   async sendAccountReinstatedEmail(to: string): Promise<void> {
     await this.dispatch({
       to,
@@ -504,8 +504,8 @@ export class RegistrationEmailService {
   }
 
   // B-033 (Decision Log #398 D3): to the user whose username an admin has just
-  // revoked. [COPY PENDING LEGAL REVIEW] -- plain functional wording, not
-  // counsel-reviewed. It deliberately carries NO free-text from the admin's
+  // revoked. Plain functional wording. Cleared by the founder's review of 2026-11-22 (R108), no
+  // counsel review needed. It deliberately carries NO free-text from the admin's
   // reason (that is an internal note and can name other people or reports); it
   // states only the categories the username rules cover, what changes for the
   // account until a new name is chosen, and that the old name cannot be used
@@ -515,7 +515,7 @@ export class RegistrationEmailService {
   // backend/b139-username-review (B-139 part (c), Decision Log #467, as amended 2026-11-03): the email also says
   // the person can ASK FOR A REVIEW of the removal, and how (the "Ask for a review" button on the screen where
   // they choose a new username, when they next log in) and until which day. The founder reviews that added
-  // paragraph himself: it is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on the counsel list.
+  // paragraph himself: it is untagged and is not on the counsel list.
   // Every earlier sentence is unchanged. `lastDayToAsk` is computed by the caller from the same helper and the
   // same revokedAt the review route uses (username-review-window.util.ts), so the two cannot disagree.
   async sendUsernameRevokedEmail(to: string, displayName: string, lastDayToAsk: Date): Promise<void> {
@@ -531,7 +531,7 @@ export class RegistrationEmailService {
   // (LoginLockoutNotifier). Plain security notice: it says only that someone entered the wrong password several
   // times, that nothing needs doing if it was the owner, and where to reset the password if it was not. It
   // carries nothing about the guesser (no IP, no times, no count) and makes no legal or safety promise, so it
-  // is not tagged [COPY PENDING LEGAL REVIEW]. Returns false (sending nothing) when WEB_APP_BASE_URL is
+  // is untagged. Returns false (sending nothing) when WEB_APP_BASE_URL is
   // unusable, because the reset link is the point of the email; a send failure inside dispatch() is logged and
   // swallowed like every other template here.
   async sendLoginLockoutNoticeEmail(to: string): Promise<boolean> {
@@ -557,7 +557,7 @@ export class RegistrationEmailService {
   // completes the change. Returns false (sending nothing) when WEB_APP_BASE_URL is unusable, because the link is the
   // whole point of the email; the caller then discards the request. The link path is a PROPOSAL for the web page
   // (/email-change/confirm?token=), which is not built yet. Plain functional wording, no promise about safety, data
-  // or who is told, so it is not tagged [COPY PENDING LEGAL REVIEW].
+  // or who is told, so it is untagged.
   async sendEmailChangeVerifyEmail(to: string, token: string): Promise<boolean> {
     const link = this.linkFor('email-change-verify', '/email-change/confirm', token);
     if (!link) return false;
@@ -590,7 +590,7 @@ export class RegistrationEmailService {
 
   // Decision Log #476. To an address somebody asked to use for an email change when that address already belongs to a
   // Soccernity account. NO link, nothing about the person who asked, nothing the owner has to do. Plain functional
-  // wording with no promise about safety, data or who is told, so it is not tagged [COPY PENDING LEGAL REVIEW].
+  // wording with no promise about safety, data or who is told, so it is untagged.
   async sendEmailChangeUnavailableEmail(to: string): Promise<void> {
     await this.dispatch({
       to,
@@ -602,7 +602,7 @@ export class RegistrationEmailService {
 
   // backend/b069-transactional-emails (B-069; Decision Log #472, adopted default (a)). Five plain account emails
   // that had a Figma frame but no template. The founder reviews the wording himself (not counsel), so none of it
-  // is tagged [COPY PENDING LEGAL REVIEW]; the PR body lists every sentence that states something about
+  // is tagged; the PR body lists every sentence that states something about
   // retention, deletion, who is told or safety. Each is fire-and-log like every other send here: dispatch()
   // swallows a provider failure, and the callers never await these on the request path.
   //
@@ -711,7 +711,7 @@ export class RegistrationEmailService {
   // name, email, subject or message (the message is read in the admin inbox, behind admin sign-in), so the
   // text never travels through the email provider or sits in a shared mailbox. `link` is null when
   // ADMIN_APP_BASE_URL is unusable; the email is still sent, because "there is a new enquiry" is the point.
-  // No acknowledgement goes to the enquirer. Not tagged [COPY PENDING LEGAL REVIEW]: internal, staff-facing,
+  // No acknowledgement goes to the enquirer. Untagged: internal, staff-facing,
   // makes no promise to a user.
   async sendContactEnquiryNotificationEmail(to: string, categoryLabel: string, link: string | null): Promise<void> {
     await this.dispatch({
@@ -724,8 +724,7 @@ export class RegistrationEmailService {
 
   // ---------------------------------------------------------------
   // backend/b276-two-factor-recovery (B-276; Decision Log #455, #456). A user who lost BOTH their authenticator
-  // device and their backup codes. All seven are plain functional copy, [COPY PENDING LEGAL REVIEW] by the standing
-  // convention (docs/pending-copy-manifest.md); the tag does not hold the build. None logs a recipient or a token
+  // device and their backup codes. All seven are plain functional copy. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. None logs a recipient or a token
   // (RECOVERY_TEMPLATES). Each link email is skipped, and an error logged, if WEB_APP_BASE_URL is unusable.
   // ---------------------------------------------------------------
 
@@ -1516,7 +1515,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
 // the plain-words line in the suspension email ("Your Soccernity account has been suspended for <line>."). Fixed text
 // only: never free text from a report, never who reported, never a duration. 'child_safety_concern', 'other', a
 // missing category and any category this map does not know all use the generic line, so the email never names a
-// child-safety matter. The lines are adopted defaults, veto-able. [COPY PENDING LEGAL REVIEW]
+// child-safety matter. The lines are adopted defaults, veto-able. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed.
 export const SUSPENSION_GENERIC_REASON_LINE = 'breaching our community rules';
 const SUSPENSION_REASON_LINES: Readonly<Record<string, string>> = {
   harassment_or_bullying: 'harassing or bullying other people',

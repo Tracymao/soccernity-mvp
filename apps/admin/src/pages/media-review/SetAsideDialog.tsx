@@ -7,9 +7,8 @@
 //  * 409 suspected_illegal_already_recorded -> a fixed line.
 //  * any other 4xx -> the server's message; anything else a fixed line. The typed reason is kept after an error.
 //
-// WORDING is DEFAULT, founder-veto-able. Each sentence that says what happens to the file, to the uploader or to
-// retention carries the literal tag [COPY PENDING LEGAL REVIEW] in the rendered text, with a row in
-// docs/pending-copy-manifest.md (Decision Log #412 item 5, #497).
+// WORDING is DEFAULT, founder-veto-able. The sentences that say what happens to the file, to the uploader or to
+// retention were cleared by the founder's review of 2026-11-22 (R108), no counsel review needed (Decision Log #412 item 5, #497).
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import { isChildSafetyVettingRequiredError } from "../../api/moderation";

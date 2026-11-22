@@ -38,7 +38,7 @@ import {
 export const WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER = 'Entry withdrawn — guardian consent revoked';
 export type ContestViewer = 'public' | 'admin';
 
-/** A short, factual reason, shown with the forfeit pop-up (spec section 7). [COPY PENDING LEGAL REVIEW: reaches minors.] */
+/** A short, factual reason, shown with the forfeit pop-up (spec section 7). Reaches minors. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. */
 // Defined in contest-removal.rules.ts (a leaf module) so the removal seam can use it without an import cycle.
 export { FORFEIT_REASON_TOO_FEW_ENTRIES };
 

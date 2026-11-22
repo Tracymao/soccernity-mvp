@@ -11,9 +11,8 @@
 //  * any other 4xx (already appealed, staff_appeal_not_applicable, reported_account_unavailable) -> the server's
 //    message; anything else a fixed line. The typed reason is kept after an error.
 //
-// WORDING. The two paragraphs and the audit-record line are the Figma wording. Each carries the literal tag
-// [COPY PENDING LEGAL REVIEW] in the rendered text, with a row in docs/pending-copy-manifest.md (Decision Log #497,
-// B-301). The same audit-record sentence is already tagged in holdActions.tsx.
+// WORDING. The two paragraphs and the audit-record line are the Figma wording. Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. (Decision Log #497,
+// B-301). The same audit-record sentence is in holdActions.tsx.
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import { APPEAL_REASON_MAX_LENGTH, isChildSafetyVettingRequiredError } from "../../api/moderation";

@@ -24,9 +24,8 @@
 // Throttle: 5 attempts per 15 minutes per IP, held in configuration on the server (#403 item 15).
 // The page shows no number and no countdown, only the fixed message the frame draws.
 //
-// Wording: the strings that say what withdrawing does to the child or the guardian's data carry
-// [COPY PENDING LEGAL REVIEW] (Decision Log #414 item 1, #412 item 5) and have rows in
-// docs/pending-copy-manifest.md. Labels, buttons and the invalid / too-many-attempts messages are
+// Wording: the strings that say what withdrawing does to the child or the guardian's data were once
+// tagged (Decision Log #414 item 1, #412 item 5). Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. Labels, buttons and the invalid / too-many-attempts messages are
 // functional and untagged. One known inconsistency is not resolved here: the "deleted after 30
 // days" sentence (frames) differs from the legal draft (anonymised; consent record kept 6 months)
 // and from the code email ("permanently deleted"); that is one counsel item (Decision Log #411

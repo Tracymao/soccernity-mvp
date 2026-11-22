@@ -16,10 +16,8 @@
 // any other 4xx shows the server's own message in the dialog; anything else a fixed line. The chosen category is kept
 // after an error.
 //
-// WORDING. Every sentence in the consequence list and the category help line is the wording of the Figma frames and
-// carries the literal tag [COPY PENDING LEGAL REVIEW] in the rendered string, with one row per sentence in
-// docs/pending-copy-manifest.md (Decision Log #497, B-301). The tag is a suffix on the sentence, as in holdActions.tsx.
-// npm run check:pending-copy fails until counsel clears them.
+// WORDING. Every sentence in the consequence list and the category help line is the wording of the Figma frames.
+// Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. (Decision Log #497, B-301)
 import { type FormEvent, useId, useRef, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 import {

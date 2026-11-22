@@ -2,9 +2,8 @@
 // draw (composer 02-10 desktop/mobile, contest final entry 02-05): uploading with progress and Cancel,
 // checking, approved, not approved with its reason, and the upload errors with Try again.
 //
-// Tagged strings ([COPY PENDING LEGAL REVIEW], Decision Log #412 item 5) are the ones that say who can see an
-// upload or what is checked; each has a row in docs/pending-copy-manifest.md. Everything else is
-// functional wording from the frames.
+// The strings that say who can see an upload or what is checked were once tagged (Decision Log #412 item 5).
+// Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. Everything else is functional wording from the frames.
 import type { UploadItem } from "./useMediaUploads";
 import { POST_MEDIA_CODES } from "../../api/postMedia";
 import "./MediaUpload.css";
