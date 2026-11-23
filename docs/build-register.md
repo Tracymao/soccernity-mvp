@@ -5778,3 +5778,9 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 - Statements that no check key is configured, that nothing is sent to AWS, or that nothing is deployed were rewritten in the legal copy, DPIA, incident plan, post-media addendum and post-media Part C. The AWS opt-out is recorded as "set out to set it before the key; whether it was set is not confirmed".
 - Versions: legal copy v0.23, DPIA v0.15, incident plan v0.13, post-media addendum v0.11, post-media Part C v0.7, contest and view-data addendum v0.7, view-data Part C v0.7, Cloudflare draft unchanged at v0.6, counsel pack v1.5 (the Word file was not rebuilt, no pandoc in this session).
 - Report: docs/copy-rekognition-render-live-report.md. 324 B-IDs, 146 gap frames unchanged.
+
+## 122. Updates 2026-11-23 (AWS opt-out set before the key, Sentry DSN held by the deployed API, both Render environments deployed, pack v1.6; Decision Log #555; no new B-ID; docs only)
+
+- Decision Log #555 (founder, 2026-11-23, BUILT as docs): the AWS Organizations "Opt out from all services" policy, which covers Rekognition, was set before the Rekognition key was configured; the deployed API holds the Sentry DSN (EU data region); both Render environments, staging and production, are deployed. The product has not launched and holds no data from real use.
+- Counsel drafts updated: legal copy v0.24, DPIA v0.16 (R12 status only), incident plan v0.14, post-media addendum v0.12, post-media Part C v0.8, contest and view-data addendum v0.8, view-data Part C v0.8. Cloudflare draft unchanged at v0.6. Counsel pack v1.6, Word file rebuilt. No disposition, rating or counsel question changed.
+- Report: docs/copy-optout-dsn-environments-report.md. 324 B-IDs, 146 gap frames unchanged.

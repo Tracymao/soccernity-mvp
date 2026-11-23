@@ -1,6 +1,6 @@
 # Soccernity: Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.23): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.24): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,11 +33,11 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.23 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.24 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
   counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice; v0.13 (2026-11-09) wrote the direct-message retention wording and the report-a-message disclosure; v0.14 (2026-11-10) wrote the removed-content wording; v0.15 (2026-11-11) wrote the suspension, appeal, message-report visibility and report-retention wording; v0.16 (2026-11-11) restored the counsel-approved report-retention range, narrowed Terms 7.3 and brought the Contact Us description up to the built feature. Their
-  per-version changelogs are superseded by this one and live in git history.
+  per-version changelogs are superseded by this one and live in git history. v0.24 (2026-11-23): the deployed API holds the Sentry DSN in staging and production (founder statement); the product has not launched. No rule or figure changed.
 
 ### v0.18 changelog (2026-11-17)
 
@@ -915,7 +915,7 @@ acting on Soccernity's instructions as a data processor unless stated otherwise:
   our own servers and used for the registration country lookup in Section 1.8. No IP address is sent
   to MaxMind or anyone else.
 - **Sentry**: an error-monitoring tool, wired into the platform (EU data region) **[v0.19 CHANGED, #536, #541]** but not yet actively collecting
-  data from real use as of this draft (the account and DSN exist, Render is configured and the API is deployed, and the product has not launched). **[v0.22 CHANGED, accounts live, 2026-11-23]** **[PROPOSAL, carried from the DPIA draft]** **[v0.23 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+  data from real use as of this draft (the account exists, the deployed API holds the DSN in staging and production, and the product has not launched). **[v0.22 CHANGED, accounts live, 2026-11-23]** **[PROPOSAL, carried from the DPIA draft]** **[v0.23 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.24 CHANGED, Sentry DSN held by the deployed API, both environments deployed, 2026-11-23]**
   Before Sentry is switched on, we should configure it to avoid capturing request bodies or user
   identifiers from safety-sensitive endpoints (in particular, the guardian-consent flow), so
   that an error trace does not itself become a place where children's or guardians' data ends up

@@ -23,7 +23,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 - **Document:** DPIA addendum for contest view and impression data
 - **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.7**, still draft, NOT APPROVED)
+- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.7**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.8**, still draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 10)
 - **Companion file:** `docs/legal-copy-part-c-view-data-draft.md` (the proposed Part C row and
   viewer-notice options; it holds the notice wording, this file holds the risk analysis)
@@ -36,7 +36,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.5 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA on lines where the cited section still says what the sentence relies on; line 212 (risk numbering) and line 54 were left. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): the sentence that risk numbers continue from the v0.3 DPIA's R16 was corrected (the DPIA now defines R1 to R16 and R33 to R36, so R17 to R22 collide with no DPIA risk); DPIA pointers moved to v0.14; no risk was renumbered, and no counsel disposition changed. v0.7 (2026-11-23): DPIA pointers moved to v0.15; nothing else changed, and no counsel disposition changed.
+--- v0.5 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA on lines where the cited section still says what the sentence relies on; line 212 (risk numbering) and line 54 were left. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): the sentence that risk numbers continue from the v0.3 DPIA's R16 was corrected (the DPIA now defines R1 to R16 and R33 to R36, so R17 to R22 collide with no DPIA risk); DPIA pointers moved to v0.14; no risk was renumbered, and no counsel disposition changed. v0.7 (2026-11-23): DPIA pointers moved to v0.15; nothing else changed, and no counsel disposition changed. v0.8 (2026-11-23): DPIA pointers moved to v0.16; nothing else changed, and no counsel disposition changed.
 
 ## Changelog: v0.1 → v0.2 (2026-11-17)
 
@@ -66,7 +66,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
    deployment, Decision Log #409).
 2. **No statute, regulator guidance or case law was retrieved or checked in this pass.** Any reference
    to a regime below is the drafter's general knowledge, written to tell counsel where to look; it does not
-   assert what the regime requires. This is the same limitation the DPIA v0.15 states at its §0 item 5. **[v0.5 CHANGED, DPIA label updated to the current version]** **[v0.7 CHANGED, DPIA label updated to the current version]**
+   assert what the regime requires. This is the same limitation the DPIA v0.16 states at its §0 item 5. **[v0.5 CHANGED, DPIA label updated to the current version]** **[v0.7 CHANGED, DPIA label updated to the current version]** **[v0.8 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 3. **Counsel has not seen this processing.** `docs/contest-spec.md` records it as STILL OPEN: "counsel
    review of minors' baseline points and of view/dwell heartbeat processing" (the list under
    "ASSUMED / OPEN items", items 7 and 8, and again in sections 14b and 14d). The founder decided
@@ -211,7 +211,7 @@ For counsel:
 
 ## 5. Risks (proposed R17 to R22; the DPIA defines R1 to R16 and R33 to R36, so these ids collide with no DPIA risk)
 
-Ratings are placeholders for counsel, in the same convention as the DPIA v0.15. **[v0.5 CHANGED, DPIA label updated to the current version]** **[v0.7 CHANGED, DPIA label updated to the current version]**
+Ratings are placeholders for counsel, in the same convention as the DPIA v0.16. **[v0.5 CHANGED, DPIA label updated to the current version]** **[v0.7 CHANGED, DPIA label updated to the current version]** **[v0.8 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 ### R17: Behavioural data about children's viewing is created and kept without a stated retention period
 

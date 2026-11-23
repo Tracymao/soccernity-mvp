@@ -14,7 +14,7 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 approved). Every block of wording below carries the pending-legal-review tag on purpose, and **[PROPOSAL]** / **[OPEN]** follow
 the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.7**, still draft, NOT APPROVED)
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.7**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.8**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md` and the code on
   `origin/main` at `5857ea8`, as recorded in the DPIA addendum. **Nothing here is live** and no statute or regulator guidance
   was retrieved.
@@ -32,7 +32,7 @@ the conventions of the existing legal draft.
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.5 (2026-11-23): the stale version pointer in section 2 note updated to the current legal draft; nothing else changed. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): legal draft pointer updated (now v0.22) and the no-AWS-account statement updated because the account now exists; nothing is sent to AWS today; no counsel disposition changed. v0.7 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed.
+--- v0.5 (2026-11-23): the stale version pointer in section 2 note updated to the current legal draft; nothing else changed. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): legal draft pointer updated (now v0.22) and the no-AWS-account statement updated because the account now exists; nothing is sent to AWS today; no counsel disposition changed. v0.7 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed. v0.8 (2026-11-23): the AWS opt-out of AI-services data use was set before the Rekognition key was configured (founder statement, 2026-11-23); legal draft label moved to v0.24; no counsel disposition changed.
 
 ### Changelog — v0.1 → v0.2 (2026-11-17)
 
@@ -44,7 +44,7 @@ the conventions of the existing legal draft.
 
 **Disposition index:** §7 questions: 1 B for the model and A for whether the Policy may describe an automatic approval, 2 B (premise overtaken, launch step not done), 3 A, 4 A, 5 A, 6 A, 7 A, 8 A; section 4 notice options N-1 to N-5: A (none chosen); section 5 option table: the built options (M-2/M-3, P-2 to P-4, F-2 with exception) are B, the rest A or D as marked in the note after that table. The DPIA addendum (`docs/dpia-addendum-post-media-draft.md`, v0.5) holds the full list.
 
-**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.23; the numbers have moved again.)* **[v0.5 CHANGED, current legal draft version]** **That file is not touched here.**
+**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.24; the numbers have moved again.)* **[v0.5 CHANGED, current legal draft version]** **That file is not touched here.** **[v0.8 CHANGED, legal draft label moved to v0.24; the numbers statement is unchanged]**
 
 ---
 
@@ -139,7 +139,7 @@ Mode B only. In Mode A the entry is not needed for post media.
 > copy before hidden information is removed. **[OPEN: the storage location of the bucket is not set; counsel to confirm the
 > wording and transfer position.]**
 
-*[v0.2 CHANGED — #430 item 1, #518, #521, B-193]* An AWS account exists and the Rekognition key is configured, so the automatic check can send files to AWS. **[v0.6 CHANGED, accounts live, 2026-11-23]** The founder set out to set the AWS opt-out of AI-services data use before any real key was configured (#430 item 1); the key is now configured, but whether the opt-out was set is not confirmed. Storage is now two R2 buckets; the location is the Cloudflare EU jurisdiction (#535). *[v0.2 DISPOSITION: A — the processor wording, region and transfer position are for counsel; B for the opt-out step (founder; whether done is not confirmed).]* **[v0.7 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+*[v0.2 CHANGED — #430 item 1, #518, #521, B-193]* An AWS account exists and the Rekognition key is configured, so the automatic check can send files to AWS. **[v0.6 CHANGED, accounts live, 2026-11-23]** The founder set out to set the AWS opt-out of AI-services data use before any real key was configured (#430 item 1); the key is now configured, and the opt-out was set before it (founder statement, 2026-11-23). Storage is now two R2 buckets; the location is the Cloudflare EU jurisdiction (#535). *[v0.2 DISPOSITION: A — the processor wording, region and transfer position are for counsel; B for the opt-out step (founder; done).]* **[v0.7 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.8 CHANGED, AWS opt-out set before the key, 2026-11-23]**
 
 ### 3.4 Candidate for PP §7 ("Public and semi-public visibility") — when an upload is seen
 
@@ -260,7 +260,7 @@ The full list is the DPIA addendum Section 12. Those that decide *what the wordi
    *[v0.2 DISPOSITION: B — the question's premise is overtaken: pending and rejected files are private, copied to public only on approval (B-257; #430 item 2); the two-bucket setup is a founder launch step, not done (B-265, #520, #521). Counsel's view not recorded.]*
 3. Must the Policy name Amazon Web Services and Cloudflare, and the region of each, and disclose any opt-out position on
    AI-service improvement?
-   *[v0.2 DISPOSITION: A — for counsel; non-blocking. The AWS opt-out step is B (founder, #430 item 1; not yet done).]*
+   *[v0.2 DISPOSITION: A — for counsel; non-blocking. The AWS opt-out step is B (founder, #430 item 1; done).]* **[v0.8 CHANGED, AWS opt-out set before the key, 2026-11-23]**
 4. Must the Policy disclose that audio is not checked and that sampling may miss short content? Or would that be unwise?
    *[v0.2 DISPOSITION: A — for counsel; non-blocking.]*
 5. Is a rule against uploading images of children (Section 3.6) appropriate, enforceable and consistent with the platform's
