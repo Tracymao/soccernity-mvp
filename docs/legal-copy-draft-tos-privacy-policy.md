@@ -1,6 +1,6 @@
 # Soccernity: Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.21): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.22): NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,7 +33,7 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.21 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.22 (draft, still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
   counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice; v0.13 (2026-11-09) wrote the direct-message retention wording and the report-a-message disclosure; v0.14 (2026-11-10) wrote the removed-content wording; v0.15 (2026-11-11) wrote the suspension, appeal, message-report visibility and report-retention wording; v0.16 (2026-11-11) restored the counsel-approved report-retention range, narrowed Terms 7.3 and brought the Contact Us description up to the built feature. Their
@@ -41,7 +41,7 @@ Do not fill either from this file. The sign-off block at the end of this documen
 
 ### v0.18 changelog (2026-11-17)
 
-A stale-statement fix on v0.17. **Still a draft: NOT APPROVED, NOT LEGAL ADVICE, sign-off empty; counsel has not seen v0.16, v0.17 or v0.18.** Founder decisions of 2026-11-15 to 2026-11-17 (Decision Log #479, #524 to #534; #533 and #534 are merged (docs PR #816); the founder's decisions, **not counsel's**). **No new rule and no new figure.** (1) Google and Facebook sign-in removed from ToS 4.3, PP 1.9, PP 5 (#479). (2) Markers for built features (#368 to #373) and two-factor removed; PP 6 describes the httpOnly cookie token model (B-246). (3) ToS 7.3 and 7.9 state the built appeal screens and Contact Us category. (4) The 365-day figure for set-aside files is no longer stated in public text (Decision Log #534); it stays configuration. (5) Part C rows 18 (B), 22 (A), 33 (D), 35 (D), 41 (D) re-marked per #534. Every change is marked `[v0.18 CHANGED ...]`; stale items not verified are listed in `docs/legal-copy-v0.18-report.md`. v0.19 (2026-11-22): wording pass and hosting-location facts; no change of meaning, no change to any counsel disposition. v0.20 (2026-11-22): the pending-legal-review tag was removed from the Terms of Service and Privacy Policy text (Parts A and B); the mentions in this changelog and in Part C are kept; no wording was changed, and no counsel disposition changed (one sentence on consent pending at 18 was reworded; see docs/copy-clear-draft-tags-report.md). v0.21 (2026-11-22): the last mentions and tags of the pending-legal-review tag were removed or reworded in plain words so the web release check can pass; no other wording was changed, and no counsel disposition changed.
+A stale-statement fix on v0.17. **Still a draft: NOT APPROVED, NOT LEGAL ADVICE, sign-off empty; counsel has not seen v0.16, v0.17 or v0.18.** Founder decisions of 2026-11-15 to 2026-11-17 (Decision Log #479, #524 to #534; #533 and #534 are merged (docs PR #816); the founder's decisions, **not counsel's**). **No new rule and no new figure.** (1) Google and Facebook sign-in removed from ToS 4.3, PP 1.9, PP 5 (#479). (2) Markers for built features (#368 to #373) and two-factor removed; PP 6 describes the httpOnly cookie token model (B-246). (3) ToS 7.3 and 7.9 state the built appeal screens and Contact Us category. (4) The 365-day figure for set-aside files is no longer stated in public text (Decision Log #534); it stays configuration. (5) Part C rows 18 (B), 22 (A), 33 (D), 35 (D), 41 (D) re-marked per #534. Every change is marked `[v0.18 CHANGED ...]`; stale items not verified are listed in `docs/legal-copy-v0.18-report.md`. v0.19 (2026-11-22): wording pass and hosting-location facts; no change of meaning, no change to any counsel disposition. v0.20 (2026-11-22): the pending-legal-review tag was removed from the Terms of Service and Privacy Policy text (Parts A and B); the mentions in this changelog and in Part C are kept; no wording was changed, and no counsel disposition changed (one sentence on consent pending at 18 was reworded; see docs/copy-clear-draft-tags-report.md). v0.21 (2026-11-22): the last mentions and tags of the pending-legal-review tag were removed or reworded in plain words so the web release check can pass; no other wording was changed, and no counsel disposition changed. v0.22 (2026-11-23): two vendor statements brought up to date because the accounts are now live (Sentry has a real account and DSN, the storage provider is Cloudflare R2 with buckets in the EU jurisdiction, an AWS account exists but no check key is configured); nothing is deployed and no counsel disposition changed.
 
 ### v0.17 changelog (2026-11-17)
 
@@ -907,15 +907,15 @@ acting on Soccernity's instructions as a data processor unless stated otherwise:
   for the younger-child US group. Card details go directly to Stripe and never reach Soccernity.
 - **Amazon Web Services (Amazon Rekognition)**: ****[v0.18 CHANGED — #371: built; "not yet built" marker removed]****
   automated safety check on uploaded pictures and videos (for a video, on still frames taken from it), including avatars and cover photos, in an EU/UK region where
-  available. Files the check is unsure about, and files that users report, go to a Soccernity reviewer, and a file is not shown to other users until it has passed. No hash-matching against known abuse imagery is in place. **[v0.17 CHANGED — #524, #525]**
+  available. Files the check is unsure about, and files that users report, go to a Soccernity reviewer, and a file is not shown to other users until it has passed. No hash-matching against known abuse imagery is in place. An AWS account now exists, but no check key is configured, so nothing is sent to AWS today. **[v0.17 CHANGED — #524, #525]** **[v0.22 CHANGED, accounts live, 2026-11-23]**
   **[OPEN: counsel — cross-border transfer, and any duties that apply to hosting images of
   minors, including hash-matching for child sexual abuse material, whose availability on our
-  storage provider is unconfirmed.]**
+  storage provider (Cloudflare R2, buckets in the EU jurisdiction) is unconfirmed.]**
 - **MaxMind GeoLite2**: ****[v0.18 CHANGED — #368: built; "not yet built" marker removed]**** a country database held on
   our own servers and used for the registration country lookup in Section 1.8. No IP address is sent
   to MaxMind or anyone else.
 - **Sentry**: an error-monitoring tool, wired into the platform (EU data region) **[v0.19 CHANGED, #536, #541]** but not yet actively collecting
-  data as of this draft (no live account exists). **[PROPOSAL, carried from the DPIA draft]**
+  data from real use as of this draft (the account and DSN exist, but nothing is deployed). **[v0.22 CHANGED, accounts live, 2026-11-23]** **[PROPOSAL, carried from the DPIA draft]**
   Before Sentry is switched on, we should configure it to avoid capturing request bodies or user
   identifiers from safety-sensitive endpoints (in particular, the guardian-consent flow), so
   that an error trace does not itself become a place where children's or guardians' data ends up
