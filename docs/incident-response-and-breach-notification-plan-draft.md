@@ -1,4 +1,4 @@
-# Soccernity: incident-response and breach-notification plan (DRAFT v0.10)
+# Soccernity: incident-response and breach-notification plan (DRAFT v0.11)
 
 > **DRAFT FOR COUNSEL REVIEW. NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
@@ -7,7 +7,7 @@
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21, v0.10 2026-11-22): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is created but not configured, on purpose); the R2 buckets, AWS, Google OAuth and Meta are not yet created **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]**
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21, v0.10 2026-11-22, v0.11 2026-11-23): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is created but not configured, on purpose); the four R2 buckets in the EU jurisdiction are decided (#535) and AWS is not yet created; Google and Meta sign-in was removed (#479) **[v0.11 CHANGED, hosting and sign-in facts from #535, #479]** **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]**
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
@@ -42,7 +42,7 @@ it found and left.
    staff welfare was found" now points at Decision Log #533 and #534.
 
 **Not changed, on purpose:** the v0.2 to v0.7 change lists; every `[OPEN]`, `[UNVERIFIED]` and `[PLACEHOLDER]` marker; Q1 to Q17, Q21, Q22 and the US and EU
-questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.11 (2026-11-23): stale statements fixed in place (hosting facts, version pointers); no counsel disposition changed. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
 
 ## v0.7 changes (what changed since v0.6, and why)
@@ -53,7 +53,7 @@ checked is in `docs/incident-plan-v07-report.md`. Every changed passage is marke
 the pending-legal-review tag.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
 merged code, the merged builders' reports and the Decision Log. The Security session could not be asked (this session is non-interactive).
 
-**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.16, DPIA v0.8, this plan v0.6 or the tagged strings. The founder wants counsel to receive current
+**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.21, DPIA v0.13, this plan v0.11 or the strings sheet. **[v0.11 CHANGED, current versions]** The founder wants counsel to receive current
 documents and **one** list of questions that holds only what is unresolved and needs a lawyer. Every question in §12 and every US/EU question in §6.3 and §6.4 now carries a
 `[v0.7 DISPOSITION: …]` marker: **A** open for counsel; **B** decided by the founder (Decision Log number named; counsel's view is not recorded unless said); **C** resolved,
 counsel signed off; **D** founder or engineering housekeeping. **Nothing was dropped**: B, C and D items stay in the file, and the documents still state the founder's decisions.
@@ -913,7 +913,7 @@ They are listed so the founder and counsel see what the plan depends on; each is
 *Draft for counsel review, not approved, not legal advice.* **Nothing in this list is decided. Options are set out with their
 trade-offs; the draft deliberately does not pick one.**
 
-**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.16, DPIA v0.8, plan v0.6 or the tagged
+**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.21, DPIA v0.13, plan v0.11 or the
 strings. **Only the rows marked A below go to counsel**; B, C and D rows are kept so nothing is lost and so counsel can see what the founder has already decided. Where
 a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition and the founder is asked to say (`docs/incident-plan-v07-report.md`).
 
@@ -934,7 +934,7 @@ a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition an
 | **Q4** | **[v0.7 DISPOSITION: A — no decision recorded]** Is a **leaked database copy without the encryption key** a notifiable breach, and would the Art. 34(3)(a) "unintelligible" exception apply to the date of birth (encrypted) but not to email, name, `isMinor` and messages (not encrypted)? What if the key may also have leaked? |
 | **Q5** | **[v0.7 DISPOSITION: A — no decision on a breach notice to guardians (#456 covers security actions, not breaches)]** **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? **[v0.2 CHANGED — still open. #456 tells guardians of security actions, not of breaches; see §7.5.]** **[v0.8 CHANGED — #534, Q18 folded in]** *Sub-point (from Q18): does the "withhold guardian notices" flag (#458) also stop a **breach** notice to that guardian, and who decides, given the reason is visible only to child-safety-vetted admins (§7.5)? Q5 stays open for counsel (A).* |
 | **Q6** | **[v0.7 DISPOSITION: A — no decision recorded]** For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
-| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; not re-checked against legal copy v0.16]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
+| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; checked against legal copy v0.21 on 2026-11-23, which still reads the same]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
 | **Q8** | **[v0.7 DISPOSITION: A — no decision recorded (the 6 and 7-year report range is recorded as counsel-approved, #490; the rest is open)]** Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (6 years; 7 years for a minor **[v0.4 CHANGED — #490]**; v0.3 said 12 months and 6), which run independently of any incident.]** |
 | **Q9** | **[v0.7 DISPOSITION: D — a build and authorisation question; no decision recorded and nothing contradicts the founder's reading]** Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
 | **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged with the pending-legal-review tag in the platform's manifest, and no counsel position is recorded here. |
