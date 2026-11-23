@@ -5752,3 +5752,7 @@ The "Suspected illegal imagery" action (third button) was added to the four Medi
 ## 117. Updates 2026-11-23 (web: guardian consent page shows the reason when Report incorrect details fails; R111; no new B-ID; web only)
 
 The report-incorrect-details failure line on `GuardianConsentConfirmPage` now shows the existing approved message (no connection, too many attempts, dead link) instead of one fixed line; no new wording. Report: `docs/r111-report-details-failure-reason-report.md`. Decision Log row to follow.
+
+## 118. Updates 2026-11-23 (R112: pack build script fixed; web bundle ships only the Terms and Privacy text; no new B-ID)
+
+`docs/counsel-pack-build.py` now has a width entry for the 4-column strings sheet (grid matches the committed docx; rebuilt text equals it). `apps/web` reads the legal draft through a Vite virtual module that exports only `TERMS_MARKDOWN`, `PRIVACY_MARKDOWN`, `IS_NOT_APPROVED` and `SOURCE_VERSION` (identical values, importers unchanged), so Part C, the changelog and the disposition markers are no longer in the bundle. Report: `docs/r112-pack-build-and-legal-slice-report.md`. Decision Log row to follow.
