@@ -5748,3 +5748,7 @@ Twenty-one frames plus a Notes frame draw the built admin screens (list L1 to L7
 ## 116. Updates 2026-11-23 (Figma: B-206 set-aside action and confirmation dialog on the Media review item page; no new B-ID; Figma and docs only; no Decision Log row)
 
 The "Suspected illegal imagery" action (third button) was added to the four Media review item frames and eight new frames draw its dialog states (reason required, entered, submitting, error, profile picture, set aside, restricted); 9 prototype links. Wording is the built wording, nothing tagged. Top-level nodes 1,894 to 1,903, original id hash unchanged. Open: Video and Cover buttons not linked, not-vetted case in notes only. Report: `docs/figma-admin-set-aside-report.md`. 324 B-IDs, 146 gap frames unchanged.
+
+## 117. Updates 2026-11-23 (web: guardian consent page shows the reason when Report incorrect details fails; R111; no new B-ID; web only)
+
+The report-incorrect-details failure line on `GuardianConsentConfirmPage` now shows the existing approved message (no connection, too many attempts, dead link) instead of one fixed line; no new wording. Report: `docs/r111-report-details-failure-reason-report.md`. Decision Log row to follow.

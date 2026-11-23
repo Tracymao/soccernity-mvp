@@ -204,6 +204,7 @@ export default function GuardianConsentConfirmPage() {
   const [cardGate, setCardGate] = useState<CardGate>("loading");
   const [summary, setSummary] = useState<GuardianRequestSummary | null>(null);
   const [reportState, setReportState] = useState<ReportState>("idle");
+  const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
   // "Recorded on {date}" on the approved screen: the confirm response carries no
   // date, so the moment of the successful call is shown.
   const [recordedOn, setRecordedOn] = useState<string | null>(null);
@@ -238,10 +239,12 @@ export default function GuardianConsentConfirmPage() {
   async function handleReport() {
     if (!token) return;
     setReportState("sending");
+    setReportErrorMessage(null);
     try {
       await reportIncorrectGuardianDetails(token);
       setReportState("sent");
-    } catch {
+    } catch (error) {
+      setReportErrorMessage(error instanceof AuthApiError ? error.message : null);
       setReportState("error");
     }
   }
@@ -412,7 +415,7 @@ export default function GuardianConsentConfirmPage() {
                 )}
                 {reportState === "error" && (
                   <p className="consent-status-message consent-status-message--error" role="alert">
-                    Couldn&rsquo;t send that just now. Please try again shortly.
+                    {reportErrorMessage ?? <>Couldn&rsquo;t send that just now. Please try again shortly.</>}
                   </p>
                 )}
               </div>

@@ -408,13 +408,52 @@ describe("GuardianConsentConfirmPage", () => {
 
     it("shows an error and no hold when the report call fails", async () => {
       vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
-      vi.mocked(reportIncorrectGuardianDetails).mockRejectedValue(new AuthApiError("nope", { status: 429 }));
+      vi.mocked(reportIncorrectGuardianDetails).mockRejectedValue(new Error("boom"));
       renderConfirmPage();
 
       fireEvent.click(await screen.findByRole("button", { name: /report incorrect details/i }));
 
       expect((await screen.findByRole("alert")).textContent).toMatch(/couldn.t send that just now/i);
       expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+    });
+
+    it.each([
+      [
+        "a dead link",
+        new AuthApiError("This link is invalid or has expired. Ask the account holder to resend the request.", {
+          status: 400,
+        }),
+      ],
+      ["rate limiting", new AuthApiError("Too many attempts. Please wait a minute and try again.", { status: 429 })],
+      [
+        "no connection",
+        new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", { status: 0 }),
+      ],
+    ])("shows the reason when the report call fails because of %s", async (_label, failure) => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      vi.mocked(reportIncorrectGuardianDetails).mockRejectedValue(failure);
+      renderConfirmPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /report incorrect details/i }));
+
+      expect((await screen.findByRole("alert")).textContent).toBe(failure.message);
+      expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+      expect(screen.getByRole("button", { name: /report incorrect details/i })).not.toBeNull();
+    });
+
+    it("clears the failure line when a retry succeeds and shows approval on hold", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      vi.mocked(reportIncorrectGuardianDetails)
+        .mockRejectedValueOnce(new AuthApiError("Too many attempts. Please wait a minute and try again.", { status: 429 }))
+        .mockResolvedValueOnce({ message: "ok" } as never);
+      renderConfirmPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /report incorrect details/i }));
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: /report incorrect details/i }));
+
+      expect(await screen.findByTestId("approval-on-hold")).not.toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
     });
 
     it("carries on as before when the summary lookup fails (invalid token): no panel, no hold", async () => {
