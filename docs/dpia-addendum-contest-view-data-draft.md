@@ -23,7 +23,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 - **Document:** DPIA addendum for contest view and impression data
 - **Draft date:** 2026-10-27
-- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED)
+- **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED)
 - **Reviewed by counsel:** NOT YET (Section 10)
 - **Companion file:** `docs/legal-copy-part-c-view-data-draft.md` (the proposed Part C row and
   viewer-notice options; it holds the notice wording, this file holds the risk analysis)
@@ -36,7 +36,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.5 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA on lines where the cited section still says what the sentence relies on; line 212 (risk numbering) and line 54 were left. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+--- v0.5 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA on lines where the cited section still says what the sentence relies on; line 212 (risk numbering) and line 54 were left. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): the sentence that risk numbers continue from the v0.3 DPIA's R16 was corrected (the DPIA now defines R1 to R16 and R33 to R36, so R17 to R22 collide with no DPIA risk); DPIA pointers moved to v0.14; no risk was renumbered, and no counsel disposition changed.
 
 ## Changelog: v0.1 → v0.2 (2026-11-17)
 
@@ -66,7 +66,7 @@ another document. **[PROPOSAL]** = a suggestion for counsel to confirm, revise o
    deployment, Decision Log #409).
 2. **No statute, regulator guidance or case law was retrieved or checked in this pass.** Any reference
    to a regime below is the drafter's general knowledge, written to tell counsel where to look; it does not
-   assert what the regime requires. This is the same limitation the DPIA v0.13 states at its §0 item 5. **[v0.5 CHANGED, DPIA label updated to the current version]**
+   assert what the regime requires. This is the same limitation the DPIA v0.14 states at its §0 item 5. **[v0.5 CHANGED, DPIA label updated to the current version]**
 3. **Counsel has not seen this processing.** `docs/contest-spec.md` records it as STILL OPEN: "counsel
    review of minors' baseline points and of view/dwell heartbeat processing" (the list under
    "ASSUMED / OPEN items", items 7 and 8, and again in sections 14b and 14d). The founder decided
@@ -188,7 +188,7 @@ and does not answer.
 
 ## 4. Lawful basis
 
-**[PROPOSAL, NOT DETERMINED]** As in the DPIA v0.13 §2.1, this draft does **not** select a lawful basis. **[v0.5 CHANGED, DPIA label updated to the current version]**
+**[PROPOSAL, NOT DETERMINED]** As in the DPIA v0.14 §2.1, this draft does **not** select a lawful basis. **[v0.5 CHANGED, DPIA label updated to the current version]**
 For counsel:
 
 - Candidate bases are legitimate interests (running the contest and leaderboard) or contract (the
@@ -203,15 +203,15 @@ For counsel:
 - Whether children's data used to grant **rewards** (points, rank, a public leaderboard that shows
   usernames, including minors, Decision Log #45) engages any rule on nudging or on detrimental use
   (Section 5, R21).
-- COPPA (US under-13s): the DPIA v0.13 §2.6 treats card verification as the stated control for the **[v0.5 CHANGED, DPIA label updated to the current version]**
+- COPPA (US under-13s): the DPIA v0.14 §2.6 treats card verification as the stated control for the **[v0.5 CHANGED, DPIA label updated to the current version]**
   under-13 US band. Whether the *collection of view/dwell data* from a verified-consent under-13 is
   within what that consent covers is for counsel.
 
 ---
 
-## 5. Risks (proposed R17 to R22; numbering continues from the v0.3 DPIA's R16)
+## 5. Risks (proposed R17 to R22; the DPIA defines R1 to R16 and R33 to R36, so these ids collide with no DPIA risk)
 
-Ratings are placeholders for counsel, in the same convention as the DPIA v0.13. **[v0.5 CHANGED, DPIA label updated to the current version]**
+Ratings are placeholders for counsel, in the same convention as the DPIA v0.14. **[v0.5 CHANGED, DPIA label updated to the current version]**
 
 ### R17: Behavioural data about children's viewing is created and kept without a stated retention period
 

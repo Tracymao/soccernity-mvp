@@ -14,7 +14,7 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 approved). Every block of wording below carries the pending-legal-review tag on purpose, and **[PROPOSAL]** / **[OPEN]** follow
 the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED)
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md` and the code on
   `origin/main` at `5857ea8`, as recorded in the DPIA addendum. **Nothing here is live** and no statute or regulator guidance
   was retrieved.
@@ -32,7 +32,7 @@ the conventions of the existing legal draft.
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.5 (2026-11-23): the stale version pointer in section 2 note updated to the current legal draft; nothing else changed. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+--- v0.5 (2026-11-23): the stale version pointer in section 2 note updated to the current legal draft; nothing else changed. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): legal draft pointer updated (now v0.22) and the no-AWS-account statement updated because the account now exists; nothing is sent to AWS today; no counsel disposition changed.
 
 ### Changelog — v0.1 → v0.2 (2026-11-17)
 
@@ -44,7 +44,7 @@ the conventions of the existing legal draft.
 
 **Disposition index:** §7 questions: 1 B for the model and A for whether the Policy may describe an automatic approval, 2 B (premise overtaken, launch step not done), 3 A, 4 A, 5 A, 6 A, 7 A, 8 A; section 4 notice options N-1 to N-5: A (none chosen); section 5 option table: the built options (M-2/M-3, P-2 to P-4, F-2 with exception) are B, the rest A or D as marked in the note after that table. The DPIA addendum (`docs/dpia-addendum-post-media-draft.md`, v0.5) holds the full list.
 
-**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.21; the numbers have moved again.)* **[v0.5 CHANGED, current legal draft version]** **That file is not touched here.**
+**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.22; the numbers have moved again.)* **[v0.5 CHANGED, current legal draft version]** **That file is not touched here.**
 
 ---
 
@@ -139,7 +139,7 @@ Mode B only. In Mode A the entry is not needed for post media.
 > copy before hidden information is removed. **[OPEN: the storage location of the bucket is not set; counsel to confirm the
 > wording and transfer position.]**
 
-*[v0.2 CHANGED — #430 item 1, #518, #521, B-193]* No AWS account, IAM user or Rekognition key exists yet (a founder step), so **nothing is sent to AWS today**. The founder will set the AWS opt-out of AI-services data use before any real key is configured (#430 item 1). Storage is now two R2 buckets; the location is still unset. *[v0.2 DISPOSITION: A — the processor wording, region and transfer position are for counsel; B for the opt-out step (founder, not yet done).]*
+*[v0.2 CHANGED — #430 item 1, #518, #521, B-193]* An AWS account now exists, but no IAM user or Rekognition key is configured (a founder step), so **nothing is sent to AWS today**. **[v0.6 CHANGED, accounts live, 2026-11-23]** The founder will set the AWS opt-out of AI-services data use before any real key is configured (#430 item 1). Storage is now two R2 buckets; the location is still unset. *[v0.2 DISPOSITION: A — the processor wording, region and transfer position are for counsel; B for the opt-out step (founder, not yet done).]*
 
 ### 3.4 Candidate for PP §7 ("Public and semi-public visibility") — when an upload is seen
 

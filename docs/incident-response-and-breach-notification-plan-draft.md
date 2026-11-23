@@ -1,4 +1,4 @@
-# Soccernity: incident-response and breach-notification plan (DRAFT v0.11)
+# Soccernity: incident-response and breach-notification plan (DRAFT v0.12)
 
 > **DRAFT FOR COUNSEL REVIEW. NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
@@ -42,7 +42,7 @@ it found and left.
    staff welfare was found" now points at Decision Log #533 and #534.
 
 **Not changed, on purpose:** the v0.2 to v0.7 change lists; every `[OPEN]`, `[UNVERIFIED]` and `[PLACEHOLDER]` marker; Q1 to Q17, Q21, Q22 and the US and EU
-questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.11 (2026-11-23): stale statements fixed in place (hosting facts, version pointers); no counsel disposition changed. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.11 (2026-11-23): stale statements fixed in place (hosting facts, version pointers); no counsel disposition changed. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.12 (2026-11-23): vendor-account statements updated because the accounts are now live (Sentry has a real DSN, AWS and the R2 buckets exist); nothing is deployed, no counsel disposition changed.
 
 
 ## v0.7 changes (what changed since v0.6, and why)
@@ -53,7 +53,7 @@ checked is in `docs/incident-plan-v07-report.md`. Every changed passage is marke
 the pending-legal-review tag.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
 merged code, the merged builders' reports and the Decision Log. The Security session could not be asked (this session is non-interactive).
 
-**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.21, DPIA v0.13, this plan v0.11 or the strings sheet. **[v0.11 CHANGED, current versions]** The founder wants counsel to receive current
+**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.22, DPIA v0.14, this plan v0.12 or the strings sheet. **[v0.11 CHANGED, current versions]** The founder wants counsel to receive current
 documents and **one** list of questions that holds only what is unresolved and needs a lawyer. Every question in §12 and every US/EU question in §6.3 and §6.4 now carries a
 `[v0.7 DISPOSITION: …]` marker: **A** open for counsel; **B** decided by the founder (Decision Log number named; counsel's view is not recorded unless said); **C** resolved,
 counsel signed off; **D** founder or engineering housekeeping. **Nothing was dropped**: B, C and D items stay in the file, and the documents still state the founder's decisions.
@@ -195,7 +195,7 @@ plus Nigeria's NDPA 2023, with the US and EU as live questions). **[v0.7 CHANGED
 *Draft for counsel review, not approved, not legal advice.*
 
 Read from `services/api/prisma/schema.prisma` and the code on 2026-10-31. "At rest" below means what the **application** does;
-whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **not verified** (the Neon and Upstash accounts exist, the R2 buckets do not yet; nothing was run against them) **[v0.8 CHANGED — runbook]**.
+whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **not verified** (the Neon, Upstash and R2 accounts and buckets exist; nothing was run against them) **[v0.12 CHANGED, accounts live, 2026-11-23]** **[v0.8 CHANGED — runbook]**.
 
 | Data | Where | Protection in the code | What a leak of it alone means |
 |---|---|---|---|
@@ -227,7 +227,7 @@ Facts a responder needs, all read from the repo: **[v0.3 CHANGED — v0.2 said t
 /admin/action-log` now exists (PR #607, `admin-action-log/README.md`, Decision Log #464): a superadmin reads every row, any other
 admin only their own, and an admin who is not child-safety-vetted never sees rows about a minor or a guardian-notice action, so
 an engineering or moderator responder cannot assume they see the whole trail; a full export is still a database query.]** **no bulk-email or broadcast tool exists** (email
-goes out per event through `RegistrationEmailService` templates); Sentry is **inactive** until a real `SENTRY_DSN` is set, and
+goes out per event through `RegistrationEmailService` templates); Sentry has a real `SENTRY_DSN` but nothing is deployed, so it collects nothing from real use **[v0.12 CHANGED, accounts live, 2026-11-23]**, and
 today only two code paths report to it (the global and auth rate limiters failing open).
 
 ---
@@ -257,8 +257,8 @@ enquiry or a message) are **outside this plan** and belong in the safeguarding /
 the escalation trail on `Report`). They are listed so a responder who finds one mid-incident knows to hand it over, not to fold it
 into the breach clock. `[OPEN]`, counsel: is a separate safeguarding-incident plan needed (§12, Q14)?
 
-**Reporting channels into the plan (what exists today):** the Sentry alerts on the `rate_limiter` tag (inactive until the DSN is
-real; launch-gate check B-267 (c)); a processor's own breach notice; a user, guardian or researcher writing to
+**Reporting channels into the plan (what exists today):** the Sentry alerts on the `rate_limiter` tag (a real DSN exists but nothing is
+deployed; launch-gate check B-267 (c)); a processor's own breach notice; a user, guardian or researcher writing to
 `support@soccernity.com`; a moderator or admin noticing an anomaly; a failed boot with a refusal message in the Render log.
 There is no security.txt or monitored vulnerability-disclosure address today `[OPEN — founder]`.
 
@@ -367,7 +367,7 @@ system.** Where a tool does not exist, §4.9 says so.
   per 15 minutes per account-and-IP pair; 20 per 24 hours per account; per-IP ceiling), admin login 5 per 15 minutes per IP,
   guardian-withdrawal 5 per 15 minutes. All numbers are environment variables in `render.yaml` and can be tightened by redeploy.
 - **Fail-open with Sentry report** when Redis is down (`rate_limiter=global` / `rate_limiter=auth`; **[v0.6 CHANGED — #500, B-305]** and the session-revocation check, tags `session_revocation=user` / `admin`, which also fails open). **No alert reaches anyone
-  until `SENTRY_DSN` is real and an alert rule exists (B-267 (c)).** The admin login is *not* fail-closed (Decision Log #433).
+  until the API runs with `SENTRY_DSN` and an alert rule exists (B-267 (c)).** The admin login is *not* fail-closed (Decision Log #433).
 - Accounts: a moderator can suspend (`suspended`, not reversible by the user) or delete a user (`PATCH /admin/users/:id`);
   a held account is handled by `AccountHold`. **[v0.3 CHANGED — suspension by this route now requires a reason category (400
   without one) and emails the person; see §4.10.]**
@@ -381,7 +381,7 @@ system.** Where a tool does not exist, §4.9 says so.
   suspending the Render service `[PLACEHOLDER: who holds the Render login]`.
 
 ### 4.8 Processor contact routes (to be filled on account creation)
-Contact routes below are **placeholders**, the accounts exist for most processors (the R2 buckets and AWS do not yet) but nothing here was tested **[v0.8 CHANGED — runbook]**, and the vendors' current security /
+Contact routes below are **placeholders**, the accounts exist for most processors (the R2 buckets and an AWS account now exist too) but nothing here was tested **[v0.8 CHANGED — runbook]**, and the vendors' current security /
 breach contacts were not looked up. Record the account owner, the support tier and the security-contact route when each account is
 opened.
 
@@ -391,7 +391,7 @@ opened.
 | Neon (Postgres, London eu-west-2, not the EU) **[v0.9 CHANGED, #536, #541]** | The whole database, backups, branches | `[PLACEHOLDER: support route; point-in-time restore window]` |
 | Upstash (Redis, London eu-west-2, not the EU, free plan) **[v0.9 CHANGED, #536, #541]** | Refresh tokens (hashed), reset / verification tokens, counters | `[PLACEHOLDER]`, free plan has no SLA (Decision Log #439) |
 | Postmark (email) | Recipient addresses and message bodies in transit / activity logs | `[PLACEHOLDER]` |
-| Sentry (EU region) **[v0.9 CHANGED, #536, #541]** | Error events (today: none) | `[PLACEHOLDER]`. DSN not real; scrubbing of request bodies is a DPIA R11 proposal, not done |
+| Sentry (EU region) **[v0.9 CHANGED, #536, #541]** | Error events (today: none) | `[PLACEHOLDER]`. DSN exists but nothing is deployed; scrubbing of request bodies is a DPIA R11 proposal, not done |
 | Cloudflare R2 (media, EU jurisdiction buckets; public address media.soccernity.com, proxied by Cloudflare from the start, Decision Log #541; also edge if added, Decision Log #424) **[v0.9 CHANGED, #536, #541]** | Images and videos of children | `[PLACEHOLDER]` |
 | Amazon Web Services (Rekognition image check) | Frames / images sent for classification | `[PLACEHOLDER]`, opt-out of AI-services data use is a founder launch step |
 | Stripe (card verification) | Card data and the PaymentIntent for under-13 US guardians | `[PLACEHOLDER]` |
@@ -701,7 +701,7 @@ account hold (#459).
 | Email-change and recovery requests **[v0.2 CHANGED]** | Postgres `EmailChangeRequest`, `TwoFactorRecoveryRequest` | Note the rows and states for the affected accounts before cancelling or deleting anything. Ended recovery rows are removed 30 days after they end. |
 | Media | R2 `private-media/` and `post-media/` | Object list and access logs if enabled `[UNVERIFIED]`. |
 | Repository history | GitHub | Commit hashes; a secret ever committed is treated as exposed. |
-| Sentry events | Sentry | Inactive until the DSN is real. |
+| Sentry events | Sentry | A real DSN exists but nothing is deployed, so nothing is collected yet. |
 | Email activity | Postmark | Message activity, bounces. |
 | Screenshots / chat | Responders | Name files with date and time; do not store children's data in chat tools. |
 
@@ -899,7 +899,7 @@ needed, and what may be promised about points, `[OPEN — Q20]`.
 They are listed so the founder and counsel see what the plan depends on; each is a separate register item.
 
 - Real accounts and contacts for each processor (§4.8) and a written owner for each login.
-- A real `SENTRY_DSN` and alert rules on `rate_limiter` (B-267 (c)); an on-call route that rings a human.
+- The API running with the real `SENTRY_DSN`, and alert rules on `rate_limiter` (B-267 (c)); an on-call route that rings a human.
 - `TRUST_PROXY_HOPS` verified so IP-based limits and country derivation see real client IPs (B-267 (b)).
 - Upstash plan decision (Decision Log #439): a Redis outage stops sign-in, refresh, reset and verification, and is not a breach.
 - The R2 public-address rule that keeps `private-media/` private, proven by a refused request (B-265).
@@ -913,7 +913,7 @@ They are listed so the founder and counsel see what the plan depends on; each is
 *Draft for counsel review, not approved, not legal advice.* **Nothing in this list is decided. Options are set out with their
 trade-offs; the draft deliberately does not pick one.**
 
-**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.21, DPIA v0.13, plan v0.11 or the
+**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.22, DPIA v0.14, plan v0.12 or the
 strings. **Only the rows marked A below go to counsel**; B, C and D rows are kept so nothing is lost and so counsel can see what the founder has already decided. Where
 a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition and the founder is asked to say (`docs/incident-plan-v07-report.md`).
 
@@ -934,7 +934,7 @@ a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition an
 | **Q4** | **[v0.7 DISPOSITION: A — no decision recorded]** Is a **leaked database copy without the encryption key** a notifiable breach, and would the Art. 34(3)(a) "unintelligible" exception apply to the date of birth (encrypted) but not to email, name, `isMinor` and messages (not encrypted)? What if the key may also have leaked? |
 | **Q5** | **[v0.7 DISPOSITION: A — no decision on a breach notice to guardians (#456 covers security actions, not breaches)]** **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? **[v0.2 CHANGED — still open. #456 tells guardians of security actions, not of breaches; see §7.5.]** **[v0.8 CHANGED — #534, Q18 folded in]** *Sub-point (from Q18): does the "withhold guardian notices" flag (#458) also stop a **breach** notice to that guardian, and who decides, given the reason is visible only to child-safety-vetted admins (§7.5)? Q5 stays open for counsel (A).* |
 | **Q6** | **[v0.7 DISPOSITION: A — no decision recorded]** For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
-| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; checked against legal copy v0.21 on 2026-11-23, which still reads the same]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
+| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; checked against legal copy v0.22 on 2026-11-23, which still reads the same]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
 | **Q8** | **[v0.7 DISPOSITION: A — no decision recorded (the 6 and 7-year report range is recorded as counsel-approved, #490; the rest is open)]** Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (6 years; 7 years for a minor **[v0.4 CHANGED — #490]**; v0.3 said 12 months and 6), which run independently of any incident.]** |
 | **Q9** | **[v0.7 DISPOSITION: D — a build and authorisation question; no decision recorded and nothing contradicts the founder's reading]** Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
 | **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged with the pending-legal-review tag in the platform's manifest, and no counsel position is recorded here. |
