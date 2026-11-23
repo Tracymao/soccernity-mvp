@@ -6,7 +6,7 @@ Figma and docs only. No code, tests, strings, Build Plan docx, legal draft or De
 Every string is copied exactly from `SetAsideDialog.tsx`, `MediaReviewItemPage.tsx` and `apps/admin/src/api/suspectedIllegal.ts`. No new string was invented. Nothing is tagged `[COPY PENDING LEGAL REVIEW]` (founder cleared it 2026-11-22, R108).
 
 ## Edited in place
-Third button "Suspended illegal imagery" label is "Suspected illegal imagery" on the four item frames: Picture `6852:30003` (button `7090:67164`), Video `6852:30323` (`7090:67166`), Profile picture `6972:46346` (`7090:67168`), Cover `6972:46516` (`7090:67170`). The decision frames `6852:30318`, `6852:30653`, `6972:46388`, `6972:46558` are now 376x90: the action row wraps and the third button sits on a second line (checked on all four).
+The third button on the four item frames is labelled "Suspected illegal imagery": Picture `6852:30003` (button `7090:67164`), Video `6852:30323` (`7090:67166`), Profile picture `6972:46346` (`7090:67168`), Cover `6972:46516` (`7090:67170`). The decision frames `6852:30318`, `6852:30653`, `6972:46388`, `6972:46558` are now 376x90: the action row wraps and the third button sits on a second line (checked on all four).
 
 ## New frames (1440x1184, Admin Shell Active = Moderation)
 - SA-1 `7092:67168` dialog, reason required (empty, validation line)
@@ -16,7 +16,7 @@ Third button "Suspended illegal imagery" label is "Suspected illegal imagery" on
 - SA-5 `7097:67707` dialog for a profile picture
 - SA-6 `7099:67843` picture set aside (record status shown)
 - SA-7 `7099:68023` profile picture set aside
-- SA-8 `7101:68108` restricted notice (callout `7101:68281`), the existing child-safety-vetting-required notice
+- SA-8 `7101:68108` restricted notice: a full-width `Card — Restricted` (`7106:68253`, cloned from `7075:66265`) above the Details card, with the exact `VettingRestrictedNotice` text (title "Restricted: child-safety vetting required", the code's body with its curly apostrophe). The earlier callout `7101:68281` was removed and the Details panel is back to the Picture item layout (529 high); the action row stays wrapped with the third button, as in the code. The prototype link on the disabled Cancel of SA-3 (`7094:67552`) was removed because the code disables Cancel while submitting
 - Notes frame `7102:68239` (7 notes)
 
 ## Prototype links (9, read back)
