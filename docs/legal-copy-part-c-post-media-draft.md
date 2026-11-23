@@ -14,7 +14,7 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 approved). Every block of wording below carries the pending-legal-review tag on purpose, and **[PROPOSAL]** / **[OPEN]** follow
 the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED)
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #524 to #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532 to #534]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md` and the code on
   `origin/main` at `5857ea8`, as recorded in the DPIA addendum. **Nothing here is live** and no statute or regulator guidance
   was retrieved.
@@ -32,7 +32,7 @@ the conventions of the existing legal draft.
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+--- v0.5 (2026-11-23): the stale version pointer in section 2 note updated to the current legal draft; nothing else changed. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
 ### Changelog — v0.1 → v0.2 (2026-11-17)
 
@@ -44,7 +44,7 @@ the conventions of the existing legal draft.
 
 **Disposition index:** §7 questions: 1 B for the model and A for whether the Policy may describe an automatic approval, 2 B (premise overtaken, launch step not done), 3 A, 4 A, 5 A, 6 A, 7 A, 8 A; section 4 notice options N-1 to N-5: A (none chosen); section 5 option table: the built options (M-2/M-3, P-2 to P-4, F-2 with exception) are B, the rest A or D as marked in the note after that table. The DPIA addendum (`docs/dpia-addendum-post-media-draft.md`, v0.5) holds the full list.
 
-**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.17; the numbers have moved again.)* **That file is not touched here.**
+**Not edited, and now stale in places:** the line numbers quoted in section 2 refer to `docs/legal-copy-draft-tos-privacy-policy.md` v0.8; that file is now v0.16 and the numbers have moved. **[v0.3 CHANGED — #532]** *(It is now v0.21; the numbers have moved again.)* **[v0.5 CHANGED, current legal draft version]** **That file is not touched here.**
 
 ---
 

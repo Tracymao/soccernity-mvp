@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL REVIEW: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
-**Status: draft for counsel review.** v0.5 tag removal 2026-11-22 (v0.4 wording pass 2026-11-21): sentences reworded for plain language; obligations, numbers, defined terms and cross-references unchanged; facts corrected under #536 and #541 are marked.
+**Status: draft for counsel review.** v0.6 stale-statement fixes 2026-11-23 (proxy timing under #518, accounts and media address under #541); v0.5 tag removal 2026-11-22 (v0.4 wording pass 2026-11-21): sentences reworded for plain language; obligations, numbers, defined terms and cross-references unchanged; facts corrected under #536 and #541 are marked.
 
 This is a **new, standalone file** in the style of `docs/dpia-addendum-post-media-draft.md` and
 `docs/legal-copy-part-c-post-media-draft.md`. It does **not** edit `docs/legal-copy-draft-tos-privacy-policy.md`
@@ -19,13 +19,13 @@ to confirm, revise or reject. **[OPEN]** = belongs to the founder or counsel; th
 **[UNVERIFIED, FOR COUNSEL]** = a claim about Cloudflare, Render or a law that this draft could not confirm from a
 primary source (the reason is given each time).
 
-- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**; wording pass 2026-11-21 (**v0.4**, still draft, NOT APPROVED) **[v0.4 CHANGED, #536, #541]**; tag removal 2026-11-22 (**v0.5**, still draft, NOT APPROVED) **[v0.5 CHANGED, #541]**. Changelog v0.3 → v0.4 (2026-11-21): wording pass for plain language (dashes and a few phrasings removed); no duty, number, date, reference, marker or disposition changed; facts block applied (media custom domain `media.soccernity.com` proxied by Cloudflare from the start, #541; R2 in the EU jurisdiction, #536). v0.5 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+- **Draft date:** 2026-11-01. **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #449, #532, #534]**; wording pass 2026-11-21 (**v0.4**, still draft, NOT APPROVED) **[v0.4 CHANGED, #536, #541]**; tag removal 2026-11-22 (**v0.5**, still draft, NOT APPROVED) **[v0.5 CHANGED, #541]**; revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED) **[v0.6 CHANGED, #518, #541]**. Changelog v0.6 (2026-11-23): the statements that no Cloudflare account exists and that the proxy is built at the launch gate were corrected to the current facts (account exists, #541; proxy deferred until after launch, #518); no duty, number or disposition changed. Changelog v0.3 → v0.4 (2026-11-21): wording pass for plain language (dashes and a few phrasings removed); no duty, number, date, reference, marker or disposition changed; facts block applied (media custom domain `media.soccernity.com` proxied by Cloudflare from the start, #541; R2 in the EU jurisdiction, #536). v0.5 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 - **Decision Log:** #449 (adopted 2026-10-31: free-plan Cloudflare proxy in front of the API and the two static sites,
-  with an origin lock; built at the launch gate), #424 (the original recommendation), #437 (DNS records stay
+  with an origin lock; building deferred until after launch, #518), #424 (the original recommendation), #437 (DNS records stay
   "DNS only" until then), #429 (re-verify `TRUST_PROXY_HOPS`), #4 (scope: UK, Nigeria, US, EU).
 - **Register:** B-251 (edge protection), with B-249, B-256, B-267 (b), B-090, B-265.
-- **Nothing here is live.** No Cloudflare account, domain, DNS record or deployment exists. The proxy is built at the
-  launch gate (B-090). Everything about Cloudflare below is from its public documents as retrieved on 2026-11-01.
+- **Nothing here is live.** A Cloudflare account exists (DNS) and the media address is proxied from the start (#541). The proxy is built after
+  launch (#518) **[v0.6 CHANGED, #518, #541]**. Everything about Cloudflare below is from its public documents as retrieved on 2026-11-01.
 
 ---
 
@@ -95,7 +95,7 @@ primary source (the reason is given each time).
 
 | Item | State |
 |---|---|
-| Free-plan Cloudflare proxy in front of the API, `apps/web` and `apps/admin` static sites | Adopted (#449); **not built**; built at the launch gate |
+| Free-plan Cloudflare proxy in front of the API, `apps/web` and `apps/admin` static sites | Adopted (#449); **not built**; building deferred until after launch (#518) |
 | Origin lock (Render origin accepts only the proxy) | Adopted (#449); **mechanism not designed** (Section 9.2) |
 | DNS records | "DNS only" (not proxied) until the build (#437). **[v0.4 CHANGED, #541]** The R2 media custom domain (`media.soccernity.com`) is the exception: it is proxied by Cloudflare from the start. |
 | Which traffic Cloudflare sees | Everything sent to the proxied hostnames, in both directions |
@@ -389,7 +389,7 @@ R11 in `docs/sprint-1-dpia-outline-draft.md` (v0.3) is "Sub-processor and hostin
 still lists hosting and email as unselected. **[PROPOSAL]** Add the following to R11, or, if counsel prefers a separate
 risk, record it as R32 (R17–R22 and R23–R31 are used by the view-data and post-media addenda):
 
-> **R11 (addition): edge proxy that decrypts all traffic.** From the launch gate, a Cloudflare free-plan proxy sits in
+> **R11 (addition): edge proxy that decrypts all traffic.** After launch (#518), a Cloudflare free-plan proxy sits in
 > front of the API and the two static sites (Decision Log #449). It decrypts and can log every request, including
 > credentials, session tokens, dates of birth, guardian-consent tokens, minors' posts and messages, uploads before
 > moderation, and staff reads of children's data. Location of processing cannot be limited on the free plan; log

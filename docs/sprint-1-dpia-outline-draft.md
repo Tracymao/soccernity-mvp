@@ -27,11 +27,11 @@ resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
 - **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6); Contact Us appeal category now offered on the web page and in the admin inbox `docs/dpia-contactus-rollforward-2026-11-12` (v0.7); hold-route vetting, session revocation, the uploads switch and the Contest-entry retention lift `docs/dpia-v08-incident-v06` (v0.8); counsel-pack dispositions of the open items, the B-206 reporting path and the review model `legal/dpia-v09-counsel-refresh` (v0.9); stale statements and three re-marked dispositions `legal/dpia-incident-stale-fixes` (v0.10); wording pass and hosting-location facts, no change of meaning (v0.11); tag removal `copy/clear-draft-tags` (v0.12)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6); revised 2026-11-12 (v0.7); revised 2026-11-13 (v0.8); revised 2026-11-17 (v0.9); revised 2026-11-17 (v0.10); revised 2026-11-22 (v0.11); revised 2026-11-22 (v0.12)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6); revised 2026-11-12 (v0.7); revised 2026-11-13 (v0.8); revised 2026-11-17 (v0.9); revised 2026-11-17 (v0.10); revised 2026-11-22 (v0.11); revised 2026-11-22 (v0.12); revised 2026-11-23 (v0.13)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
   Claude Code, from the merged code rather than from summaries; v0.3 to v0.12 likewise
 - **Reviewed by counsel:** NOT YET, see Section 6
-- **Version:** 0.12 (draft, still NOT APPROVED)
+- **Version:** 0.13 (draft, still NOT APPROVED)
 
 ### Changelog: v0.9 → v0.10 (2026-11-17)
 
@@ -56,7 +56,7 @@ lists every change with line numbers, and the statements it found and left.
 5. **§2.6.3 and R16, built behaviour:** a pointer records that a server-side age floor, the guardian-email check and card verification for the under-13 US
    band are built since v0.3. The v0.3 analysis is kept as history; whether the card step is COPPA-grade is still the legal question (§5 item 24, marked C in v0.9).
 6. **The v0.4 and v0.5 "still stale" lists** carry a pointer (not a rewrite): R9's "no staff vetting" and "no field records a minor" are answered by the
-   built mechanism; R34(f)'s "Contest effects undecided" is answered by Decision Log #488 and built by B-300 (PR #742, read from `CLAUDE.md`). v0.11 (2026-11-22): wording pass and hosting-location facts (Decision Log #536, #541); no new risk, no re-rating, no change to any counsel disposition. v0.12 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
+   built mechanism; R34(f)'s "Contest effects undecided" is answered by Decision Log #488 and built by B-300 (PR #742, read from `CLAUDE.md`). v0.11 (2026-11-22): wording pass and hosting-location facts (Decision Log #536, #541); no new risk, no re-rating, no change to any counsel disposition. v0.13 (2026-11-23): stale statements fixed in place (hosting account, client applications); no new risk, no re-rating, no counsel disposition changed. v0.12 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed.
 
 **Not changed, on purpose:** the v0.1 to v0.9 changelogs (history); every `[ACTION FOR REVIEW]`, `[OPEN]` and `[FOR FOUNDER — not a counsel blocker]`
 item; every other disposition as marked in v0.9; every placeholder rating; the Section 6 sign-off block.
@@ -485,7 +485,7 @@ context (R33). `Message.mediaUrl` is a leftover column: the send route refuses i
 **Messages are not end-to-end encrypted.** `contentText` is a plain text column in Postgres; the messaging module has no
 encryption code (the application-level encryption this pass found elsewhere is the `DOB_ENCRYPTION_KEY` cipher used for
 date of birth and authenticator secrets; this pass did not search the whole codebase for others). Whether the database host also encrypts storage at rest is a provider matter that is
-**not verified** (no hosting account exists). Sources: `services/api/prisma/schema.prisma` (`Message`),
+**not verified** (Render is created but not configured, so nothing is deployed). **[v0.13 CHANGED, hosting facts, runbook accounts list]** Sources: `services/api/prisma/schema.prisma` (`Message`),
 `modules/messaging/messaging.service.ts`.
 
 **Behavioural and engagement:** `Notification`, `LeaderboardEntry` (points, rank,
@@ -657,7 +657,7 @@ Assessed field by field against the built schema. **All conclusions provisional.
    strength: there is no location tracking, no device fingerprinting, no
    advertising identifier, no behavioural-advertising infrastructure, and no
    third-party analytics SDK in the data model. Counsel should verify this holds
-   in the built client applications, which do not yet exist and therefore cannot
+   in the built client applications (`apps/web`, `apps/admin`), which this draft has not reviewed and therefore cannot
    be checked here.
 2. **No profiling of minors occurs in MVP** beyond the leaderboard's points
    calculation. This is a direct consequence of deferring the Discover pillar.
