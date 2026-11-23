@@ -82,7 +82,6 @@ import CardVerificationPanel, { type CardGate } from "./guardian-consent/CardVer
 import { consentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
 
-const REPORT_FALLBACK_MESSAGE = "Couldn’t send that just now. Please try again shortly.";
 const GENERIC_ERROR_MESSAGE =
   "This link is invalid or has expired. Ask the account holder to resend the approval request from their account.";
 
@@ -245,7 +244,7 @@ export default function GuardianConsentConfirmPage() {
       await reportIncorrectGuardianDetails(token);
       setReportState("sent");
     } catch (error) {
-      setReportErrorMessage(error instanceof AuthApiError ? error.message : REPORT_FALLBACK_MESSAGE);
+      setReportErrorMessage(error instanceof AuthApiError ? error.message : null);
       setReportState("error");
     }
   }
@@ -416,7 +415,7 @@ export default function GuardianConsentConfirmPage() {
                 )}
                 {reportState === "error" && (
                   <p className="consent-status-message consent-status-message--error" role="alert">
-                    {reportErrorMessage ?? REPORT_FALLBACK_MESSAGE}
+                    {reportErrorMessage ?? <>Couldn&rsquo;t send that just now. Please try again shortly.</>}
                   </p>
                 )}
               </div>
