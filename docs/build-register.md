@@ -5771,3 +5771,10 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 - Risk numbering: the DPIA defines R1 to R16 and R33 to R36, so the contest and view-data addendum risks R17 to R22 and the post-media addendum risks R23 to R31 collide with no DPIA risk. No risk id changed; only the stale sentence in the contest addendum was corrected.
 - Versions: legal copy v0.22, DPIA v0.14, incident plan v0.12, post-media addendum v0.10, post-media Part C v0.6, contest and view-data addendum v0.6, view-data Part C v0.6, Cloudflare draft unchanged at v0.6, counsel pack v1.4. Closes open items 1 to 4 of #552.
 - Report: docs/copy-accounts-live-report.md. 324 B-IDs, 146 gap frames unchanged.
+
+## 121. Updates 2026-11-23 (Rekognition key configured, Render configured and the API deployed, drafts v0.23 and pack v1.5; Decision Log #554; no new B-ID; docs only)
+
+- Founder statement 2026-11-23, recorded as Decision Log #554: the AWS account exists and the Rekognition check key is configured, so the automatic image check can run; Render is configured and the API is deployed. This does not mean the product has launched or holds real use, and those statements stay. Google and Meta sign-in stays removed (#479).
+- Statements that no check key is configured, that nothing is sent to AWS, or that nothing is deployed were rewritten in the legal copy, DPIA, incident plan, post-media addendum and post-media Part C. The AWS opt-out is recorded as "set out to set it before the key; whether it was set is not confirmed".
+- Versions: legal copy v0.23, DPIA v0.15, incident plan v0.13, post-media addendum v0.11, post-media Part C v0.7, contest and view-data addendum v0.7, view-data Part C v0.7, Cloudflare draft unchanged at v0.6, counsel pack v1.5 (the Word file was not rebuilt, no pandoc in this session).
+- Report: docs/copy-rekognition-render-live-report.md. 324 B-IDs, 146 gap frames unchanged.

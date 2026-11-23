@@ -14,7 +14,7 @@ Produced by Claude Code in the `safeguarding-drafter` role (CLAUDE.md non-negoti
 is a draft, never approved). Every block of wording below carries the pending-legal-review tag on purpose,
 and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal draft.
 
-- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED)
+- **Draft date:** 2026-10-27, **Version:** 0.1 (draft, NOT APPROVED); refreshed 2026-11-17 (**v0.2**, still draft, NOT APPROVED) **[v0.2 CHANGED — #532]**; refreshed again 2026-11-17 (**v0.3**, still draft, NOT APPROVED) **[v0.3 CHANGED — #532]**; revised 2026-11-22 (**v0.4**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.5**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.6**, still draft, NOT APPROVED); revised 2026-11-23 (**v0.7**, still draft, NOT APPROVED)
 - **Facts from:** `docs/backend-w11-exposure-report.md` §4 and `docs/backend-w12-points-report.md` §4, with
   two direct code checks recorded in the DPIA addendum (R18). **Nothing here is live** and no regulator
   guidance was retrieved.
@@ -27,7 +27,7 @@ and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal dra
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.5 (2026-11-23): the stale version pointer on the "Stale in this file" line updated to the current legal draft; the row-number statement was not re-checked. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): legal draft pointer updated (now v0.22); nothing else changed, and no counsel disposition changed.
+--- v0.5 (2026-11-23): the stale version pointer on the "Stale in this file" line updated to the current legal draft; the row-number statement was not re-checked. v0.4 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.6 (2026-11-23): legal draft pointer updated (now v0.22); nothing else changed, and no counsel disposition changed. v0.7 (2026-11-23): legal draft pointer updated (now v0.23); nothing else changed, and no counsel disposition changed.
 
 ## Changelog — v0.1 → v0.2 (2026-11-17)
 
@@ -37,7 +37,7 @@ and **[PROPOSAL]** / **[OPEN]** follow the conventions of the existing legal dra
 
 **Result of the check:** no Decision Log entry decides any of the five questions here or the 16 in the DPIA addendum (`docs/dpia-addendum-contest-view-data-draft.md`, now v0.2, which holds the list). **All stay A.** The one founder position that bears on them is "same rules for minors" (#382 to #385, #404), a product decision and not legal clearance.
 
-**Stale in this file, not edited:** "Part C of the v0.8 draft" and "the last existing row is 44". The legal draft is now **v0.22** **[v0.5 CHANGED, current legal draft version]** and its Part C already uses row 45 (the Contact Us form notice) and rows 52 to 54, so the proposed number **must be renumbered** by whoever applies this (stated from `CLAUDE.md`'s status bullets; that file was not re-opened). **That file is not touched here.**
+**Stale in this file, not edited:** "Part C of the v0.8 draft" and "the last existing row is 44". The legal draft is now **v0.23** **[v0.5 CHANGED, current legal draft version]** and its Part C already uses row 45 (the Contact Us form notice) and rows 52 to 54, so the proposed number **must be renumbered** by whoever applies this (stated from `CLAUDE.md`'s status bullets; that file was not re-opened). **That file is not touched here.** **[v0.7 CHANGED, current legal draft version]**
 
 **Not verified:** CI could not be read; nothing was run; the Security session could not be asked (non-interactive). Facts were read on `origin/main` `014afcd` (2026-11-17).
 
