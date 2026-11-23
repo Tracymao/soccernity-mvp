@@ -1023,12 +1023,12 @@ This table is intentionally blank. Nothing in this pack has been signed.
 | Document | Version | Reviewed by | Date | Outcome | Notes |
 |---|---|---|---|---|---|
 | Legal copy | v0.23 | | | | |
-| DPIA | v0.14 | | | | |
-| Incident plan | v0.12 | | | | |
-| Post-media addendum | v0.10 | | | | |
-| Post-media Part C | v0.6 | | | | |
-| Contest and view-data addendum | v0.6 | | | | |
-| View-data Part C | v0.6 | | | | |
+| DPIA | v0.15 | | | | |
+| Incident plan | v0.13 | | | | |
+| Post-media addendum | v0.11 | | | | |
+| Post-media Part C | v0.7 | | | | |
+| Contest and view-data addendum | v0.7 | | | | |
+| View-data Part C | v0.7 | | | | |
 | Cloudflare draft | v0.6 | | | | |
 | Strings sheet (section 4) | 144 strings, cleared by founder review (R108), no sign-off needed | | | | |
 | Questions Q1 to Q71 (section 3) | answered: yes / no | | | | |
