@@ -22,8 +22,8 @@ counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to th
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6); revised 2026-11-21 (v0.7); revised 2026-11-22 (v0.8); revised 2026-11-23 (v0.9); revised 2026-11-23 (v0.10); revised 2026-11-23 (v0.11)
-- **Version:** 0.11 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6); revised 2026-11-21 (v0.7); revised 2026-11-22 (v0.8); revised 2026-11-23 (v0.9); revised 2026-11-23 (v0.10); revised 2026-11-23 (v0.11); revised 2026-11-23 (v0.12)
+- **Version:** 0.12 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
@@ -41,7 +41,7 @@ does not make. **[ASSUMPTION n]** = something this draft took as true; all are l
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
---- v0.9 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA where the cited section still says what the sentence relies on; labels in sentences that describe the old DPIA text as stale were left. v0.8 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.10 (2026-11-23): statements that no AWS account exists updated because the account now exists; no check key is configured and nothing is deployed, so nothing is sent to AWS today; no counsel disposition changed. v0.11 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed.
+--- v0.9 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA where the cited section still says what the sentence relies on; labels in sentences that describe the old DPIA text as stale were left. v0.8 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.10 (2026-11-23): statements that no AWS account exists updated because the account now exists; no check key is configured and nothing is deployed, so nothing is sent to AWS today; no counsel disposition changed. v0.11 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed. v0.12 (2026-11-23): the AWS opt-out of AI-services data use was set before the Rekognition key was configured, the deployed API holds the Sentry DSN, and both Render environments (staging and production) are deployed (founder statements, 2026-11-23); the product has not launched and there is no data from real use; DPIA label moved to v0.16; no counsel disposition changed.
 
 ### Changelog: v0.4 → v0.5 (2026-11-17)
 
@@ -110,7 +110,7 @@ refresh is needed for the rest.
    has been built for the statutory reporting path for illegal content; that path is counsel's to define (Section 7) and
    **nothing in this draft is claimed as solved.**
 3. **Nothing described here is live.** There are no real users, no launch and no data from real use of Rekognition, **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
-   Cloudflare R2 or ffmpeg (Decision Log #409; the API is deployed and the accounts and key are configured, but nothing has launched). Several facts below are therefore "as built and tested", **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+   Cloudflare R2 or ffmpeg (Decision Log #409; the API is deployed in staging and production and the accounts and key are configured, but nothing has launched). Several facts below are therefore "as built and tested", **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
    never "as operated".
 
 **[v0.5 CHANGED — #430, #524, #525, #526]** **Update to §0 (v0.5).** *(Old text above is kept.)*
@@ -172,7 +172,7 @@ who are not users**, and places (Sections 1.3 and R29).
    ("same rules for minors", Decision Log #419 item 8). An account whose email is unverified or whose profile is incomplete
    can upload a file but cannot publish a post (those gates sit on posting, not on the upload routes). Restricted-pending minors cannot upload. Under-16s are not excluded
    from posting (the under-16 tier restricts messaging, Bants and group creation, Decision Log #346). **[ASSUMPTION 1]**
-2. **People depicted who are not users**, frequently children (grassroots football photography; DPIA v0.15 R8). The check **[v0.9 CHANGED, DPIA label updated to the current version]**
+2. **People depicted who are not users**, frequently children (grassroots football photography; DPIA v0.16 R8). The check **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
    does nothing to identify or protect them (R29).
 3. **Contest finalists**, whose single Final-week video is also held until the reveal (00:00 on day 25, Europe/London).
 4. **Moderators/admins**, who will view files (R28). No review endpoint or screen exists yet.
@@ -322,7 +322,7 @@ product-and-counsel question this draft raises (Q3) and does not answer.
 
 ## 3. Lawful basis
 
-**[PROPOSAL, NOT DETERMINED]** As in the DPIA v0.15 §2.1, this draft does **not** select a lawful basis. For counsel: **[v0.9 CHANGED, DPIA label updated to the current version]**
+**[PROPOSAL, NOT DETERMINED]** As in the DPIA v0.16 §2.1, this draft does **not** select a lawful basis. For counsel: **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 - The service "as described in the Terms" (contract) covers storing and showing a user's own post. Whether it also covers
   **sending a child's image to a third-party processor for a safety check**, or **a human reviewing every minor's file**,
@@ -338,7 +338,7 @@ product-and-counsel question this draft raises (Q3) and does not answer.
   rejection of a child's picture or Contest entry is a decision "solely automated" with a "legal or similarly significant
   effect" (UK/EU GDPR Article 22), and whether a route to human review of an automatic rejection is required, is for
   counsel (R23; Q2). No such route is built: a rejected file can only be removed and resubmitted.
-- COPPA (US under-13s): the DPIA v0.15 §2.6 treats card verification as the stated control. Whether uploads by a **[v0.9 CHANGED, DPIA label updated to the current version]**
+- COPPA (US under-13s): the DPIA v0.16 §2.6 treats card verification as the stated control. Whether uploads by a **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
   verified-consent under-13, and the sending of their images to AWS, are within what that consent covers is for counsel.
 
 ---
@@ -402,10 +402,10 @@ applies; the legal entity is not yet registered) and what safeguard applies (ade
 
 The AWS FAQ as retrieved says Rekognition "may store and use image and video inputs processed by the service solely to
 provide and maintain the service", and that a customer "may opt out of having your image and video inputs used to improve or
-develop the quality of Amazon Rekognition" using an **AWS Organizations opt-out policy**. **Whether Soccernity opts out is not
-decided and not configured**: the W14 report records it as open (its default 17). Using children's images to improve a
-vendor's AI product is the kind of secondary use a DPIA must address. **[OPEN: founder and counsel; decide before real keys
-are used. An AWS Organizations opt-out policy requires an AWS Organizations setup, which does not exist today.]**
+develop the quality of Amazon Rekognition" using an **AWS Organizations opt-out policy**. **Whether Soccernity opts out: it was
+set before the key was configured**: the W14 report recorded it as open (its default 17). Using children's images to improve a
+vendor's AI product is the kind of secondary use a DPIA must address. **[OPEN: founder and counsel; the founder set it before the real key
+was configured. An AWS Organizations opt-out policy needs an AWS Organizations setup, which the founder has in place.]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 
 ### 4.6 Sourcing limitations specific to this section
 
@@ -541,7 +541,7 @@ requires or whether it applies.** Counsel will know which apply; this list exist
 ## 8. Risks (proposed R23 to R31; numbering continues after the view-data addendum's R17 to R22)
 
 Numbering assumes `docs/dpia-addendum-contest-view-data-draft.md` (R17 to R22) is accepted; renumber if it is not. Ratings are
-placeholders for counsel, in the same convention as the DPIA v0.15. **[v0.9 CHANGED, DPIA label updated to the current version]**
+placeholders for counsel, in the same convention as the DPIA v0.16. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 ### R23: The review model is not settled, and in one mode nothing can ever be published
 
@@ -601,7 +601,7 @@ improve its services is not decided; no data-processing agreement or transfer as
 *Draft severity: high. Draft likelihood: certain once Mode B is used. Placeholder ratings.* **[ACTION FOR REVIEW]** Counsel:
 Q7 to Q10. This extends v0.3 DPIA R11 (sub-processor exposure), whose text predates the choice of Cloudflare R2 and AWS.
 
-**[v0.5 CHANGED — #430 item 1, #518, #521, B-193]** **Still accurate, with three updates.** (1) An AWS account exists and the Rekognition key is configured (B-193), so the automatic check can send files to AWS. **[v0.10 CHANGED, accounts live, 2026-11-23]** (2) The founder set out to set the AWS opt-out of AI-services data use **before any real key was configured** (#430 item 1); the key is now configured, but whether the opt-out was set is not confirmed. (3) Storage is now two R2 buckets (B-265); the buckets are in the Cloudflare EU jurisdiction **[v0.7 CHANGED, #536, #541]**. *Disposition: A: the lawful basis, the transfer position, the processor terms and the region are for counsel (§12 questions 4, 7, 9, 10); the opt-out step is B/D (founder; whether done is not confirmed).* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+**[v0.5 CHANGED — #430 item 1, #518, #521, B-193]** **Still accurate, with three updates.** (1) An AWS account exists and the Rekognition key is configured (B-193), so the automatic check can send files to AWS. **[v0.10 CHANGED, accounts live, 2026-11-23]** (2) The founder set out to set the AWS opt-out of AI-services data use **before any real key was configured** (#430 item 1); the key is now configured, and the opt-out was set before it (founder statement, 2026-11-23). (3) Storage is now two R2 buckets (B-265); the buckets are in the Cloudflare EU jurisdiction **[v0.7 CHANGED, #536, #541]**. *Disposition: A: the lawful basis, the transfer position, the processor terms and the region are for counsel (§12 questions 4, 7, 9, 10); the opt-out step is B/D (founder; done).* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 
 ### R28: Moderators and other staff will see children's images and possibly unlawful material, with no access rules yet
 
@@ -612,7 +612,7 @@ a date-of-birth view) but nothing records who opened which file. Pending files a
 staff member can also view a file without going through any tool. Staff welfare for exposure to harmful material is not
 addressed anywhere.
 
-*Draft severity: high. Draft likelihood: certain once review exists. Placeholder ratings.* Extends DPIA v0.15 R9. **[v0.9 CHANGED, DPIA label updated to the current version]**
+*Draft severity: high. Draft likelihood: certain once review exists. Placeholder ratings.* Extends DPIA v0.16 R9. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 **[v0.5 CHANGED — #430 item 3, B-258, #525]** **R28 is partly answered.** (1) A media review queue now exists. (2) **Reviewers of a minor's file must be child-safety-vetted** and a non-vetted admin cannot see a minor's item (B-258; #430 item 3); only a vetted admin can set a file aside (#525). (3) Reviewers see a file through a **five-minute signed link**, not a public address (B-257). (4) **Still not built:** logging that an admin opened a file (the admin action log records decisions and set-asides, not views); reduced-exposure or two-person review. (5) Staff welfare and vetting are the founder's HR duty. *Disposition: B for vetting and signed links (counsel's view not recorded); D for file-open logging and welfare (founder).*
 
@@ -856,7 +856,7 @@ Added because R24 turns on it. Built today: the public prefix.
 7. Is **Amazon Web Services** an acceptable processor for children's images, and what contract and safeguards are needed?
     *[v0.5 DISPOSITION: A — whether AWS is an acceptable processor, and the contract and safeguards, are for counsel. The AWS account exists, but no data-processing terms or regional document is on file yet (B-193).]*
 8. Must Soccernity **opt out** of AWS using inputs to improve Rekognition, and is that opt-out a precondition for real keys?
-    *[v0.5 DISPOSITION: B — the founder will set the AWS opt-out of AI-services data use before any real key is configured (Decision Log #430 item 1). Counsel's view not recorded; the key is now configured but whether the opt-out was set is not confirmed (B-193).]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+    *[v0.5 DISPOSITION: B — the founder will set the AWS opt-out of AI-services data use before any real key is configured (Decision Log #430 item 1). Counsel's view not recorded; the key is now configured and the opt-out was set before it (B-193).]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 9. Does the chosen Rekognition region (default Ireland) process **only** in that region, and does the Frankfurt host → Ireland
    → Cloudflare chain constitute restricted transfers under UK GDPR (and under the NDPA for Nigerian users) needing a
    safeguard or assessment? Is the **R2 bucket location** (EU jurisdiction, **[v0.7 CHANGED, #536, #541]**) acceptable?
@@ -872,7 +872,7 @@ Added because R24 turns on it. Built today: the public prefix.
 
 **Staff and access**
 
-12. Must reviewers of minors' media be **child-safety vetted** (equivalent to the DBS-type check DPIA v0.15 R9 raises)? **[v0.9 CHANGED, DPIA label updated to the current version]**
+12. Must reviewers of minors' media be **child-safety vetted** (equivalent to the DBS-type check DPIA v0.16 R9 raises)? **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
     Which option in 10.1 is required? Must every file open be logged?
     *[v0.5 DISPOSITION: B — reviewers of a minor's file must be child-safety-vetted (#430 item 3; built B-258).]*
     *[v0.5 DISPOSITION: D — 12a: logging every file open in the admin action log is neither decided nor built; the log records decisions and set-asides only; for the founder.]*
@@ -970,7 +970,7 @@ This block is intentionally empty. A completed addendum requires a competent per
    label list, and of an optional human-review service. **No AWS data-processing terms were retrieved.**
 3. **No statute, regulator guidance, code of practice or case law was retrieved or checked.** Every reference to a regime in
    Sections 3 and 7 is the drafter's general knowledge, written to tell counsel where to look, not to assert what any regime
-   requires or whether it applies. This is the same limitation the DPIA v0.15 states at its §0 item 5. **[v0.9 CHANGED, DPIA label updated to the current version]**
+   requires or whether it applies. This is the same limitation the DPIA v0.16 states at its §0 item 5. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 4. **Counsel has not seen this processing.** The founder's decisions (#419) are product decisions, not legal clearance.
 
 ---
