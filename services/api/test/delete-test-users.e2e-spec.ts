@@ -106,8 +106,11 @@ describe('delete-test-users (e2e, local Postgres only)', () => {
     await mkUser('t1@example.com');
     const r = await run(base(['--email', 't1@example.com']));
     const url = new URL(process.env.DATABASE_URL as string);
+    // The database NAME is printed on purpose; in CI the password ("soccernity") is a substring of
+    // that name, so drop the one legitimate "Database:" line before looking for secrets.
+    const rest = (r.out + r.err).replace(`Database: ${DB_NAME}`, '');
     for (const secret of [url.password, `${url.username}:${url.password}`, url.host, process.env.DATABASE_URL as string]) {
-      if (secret) expect(r.out + r.err).not.toContain(secret);
+      if (secret) expect(rest).not.toContain(secret);
     }
     expect(r.out).toContain(`Database: ${DB_NAME}`);
   });
