@@ -2,7 +2,7 @@
 
 ## DRAFT FOR COUNSEL: NOT APPROVED, NOT LEGAL ADVICE, NOT A COMPLETED DPIA
 
-**Status: draft for counsel review. [COPY PENDING LEGAL REVIEW]**
+**Status: draft for counsel review.**
 
 This is a **new, standalone addendum**. It deliberately does **not** edit
 `docs/sprint-1-dpia-outline-draft.md` (v0.3 when this addendum was written; **[CHANGED v0.2 — 2026-11-10]** v0.4 from 2026-11-10, which adds R33 and R34 and points here for the media of a removed post; **[CHANGED v0.3 — 2026-11-11]** v0.5 from 2026-11-11, which adds R35 and R36 and restates the hold rules side by side; **[CHANGED v0.4 — 2026-11-11]** v0.6 from 2026-11-11, which restores report retention to 6 and 7 years), which is the DPIA it would attach to, and it does not edit
@@ -16,20 +16,20 @@ with UK GDPR, EU GDPR, US COPPA, the Nigeria Data Protection Act 2023, the Onlin
 Services Act, any child-protection or obscenity law, or any other regime. **A DPIA is only a DPIA once a competent
 person has completed, challenged and signed it.** The sign-off block in Section 13 is empty on purpose.
 
-**Tag convention.** Every heading and every block of proposed wording below carries `[COPY PENDING LEGAL REVIEW]`; the
+**Tag convention.** Every heading and every block of proposed wording below carries the pending-legal-review tag; the
 tag is repeated deliberately so it survives being copied into another document. **[PROPOSAL]** = a suggestion for
 counsel to confirm, revise or reject. **[OPEN]** = a decision that belongs to the founder and counsel, which this draft
 does not make. **[ASSUMPTION n]** = something this draft took as true; all are listed in Section 11.
 
 - **Document:** DPIA addendum for post and Contest-entry media (images and videos)
-- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6); revised 2026-11-21 (v0.7)
-- **Version:** 0.7 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
+- **Draft date:** 2026-10-27 (v0.1); revised 2026-11-10 (v0.2); revised 2026-11-11 (v0.3); revised 2026-11-11 (v0.4); revised 2026-11-17 (v0.5); revised 2026-11-17 (v0.6); revised 2026-11-21 (v0.7); revised 2026-11-22 (v0.8); revised 2026-11-23 (v0.9); revised 2026-11-23 (v0.10); revised 2026-11-23 (v0.11); revised 2026-11-23 (v0.12)
+- **Version:** 0.12 (draft, NOT APPROVED) **[v0.6 CHANGED — #532 to #534]**
 - **Reviewed by counsel:** NOT YET (Section 13)
 - **Companion file:** `docs/legal-copy-part-c-post-media-draft.md` (the proposed Part C row, policy-text candidates and the
   user-facing notice options; it holds the wording, this file holds the risk analysis and the options)
 
 
-### Changelog: v0.5 → v0.6 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+### Changelog: v0.5 → v0.6 (2026-11-17)
 
 **[v0.6 CHANGED — #533, #534]** **What this update is, stated plainly.** v0.6 is a **narrow refresh of dispositions and stale references only.** It records founder decisions already taken (Decision Log #533 and #534; docs PR R98, **pending merge when this was written, so cite them as "#533 and #534 (docs PR R98, pending merge)"**) and brings stale version references to what is on `origin/main` `b67d9c0` (2026-11-17). It **chooses no option, completes nothing and claims nothing as solved.** The §13 sign-off block is unchanged and **empty**; counsel has not reviewed this file; no counsel position is recorded.
 
@@ -41,9 +41,9 @@ does not make. **[ASSUMPTION n]** = something this draft took as true; all are l
 
 **Not verified:** CI cannot be read from here and nothing was run (docs only); the Security session could not be asked (non-interactive); no statute, regulator text or vendor page was retrieved.
 
----
+--- v0.9 (2026-11-23): "v0.3 DPIA" labels updated to the current DPIA where the cited section still says what the sentence relies on; labels in sentences that describe the old DPIA text as stale were left. v0.8 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.10 (2026-11-23): statements that no AWS account exists updated because the account now exists; no check key is configured and nothing is deployed, so nothing is sent to AWS today; no counsel disposition changed. v0.11 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed. v0.12 (2026-11-23): the AWS opt-out of AI-services data use was set before the Rekognition key was configured, the deployed API holds the Sentry DSN, and both Render environments (staging and production) are deployed (founder statements, 2026-11-23); the product has not launched and there is no data from real use; DPIA label moved to v0.16; no counsel disposition changed.
 
-### Changelog: v0.4 → v0.5 (2026-11-17) **[COPY PENDING LEGAL REVIEW]**
+### Changelog: v0.4 → v0.5 (2026-11-17)
 
 **[v0.5 CHANGED — #524 to #532]** **What this update is, stated plainly.** v0.5 is a **narrow refresh** so that counsel receives a current document and one clear list of what still needs a lawyer. It does three things only: (1) it records, next to each stale passage, what the founder decided and what has been built since this addendum was written (Decision Log #430 to #432 and #524 to #532; build-register B-257, B-258, B-259, B-265, B-283, B-306, B-321; PRs #476, #477, #489, #608, #791, #800, #803, #806, #807); (2) it gives **every open question, finding and option a disposition marker** (A, B, C or D, defined below) and never drops one; (3) it corrects statements the built system now contradicts, **by adding a marked note beside the old text, never by deleting it.** It **chooses no option, completes nothing and claims nothing as solved**; the §13 sign-off block is unchanged and **empty**; nothing here is legal advice or a statement that Soccernity complies with any law. The facts come from `CLAUDE.md`'s status bullets, `docs/build-register.md` and the module READMEs on `origin/main` (`014afcd`, 2026-11-17); **nothing was run**, CI could not be read, and the Security session could not be asked (non-interactive). The earlier changelogs below are kept as written.
 
@@ -59,7 +59,7 @@ does not make. **[ASSUMPTION n]** = something this draft took as true; all are l
 
 ---
 
-### Changelog: v0.2 → v0.3 (2026-11-11) **[COPY PENDING LEGAL REVIEW]**
+### Changelog: v0.2 → v0.3 (2026-11-11)
 
 **[CHANGED v0.3 — 2026-11-11]** **What this update is, stated plainly.** v0.3 changes only what the founder's decisions of 2026-11-11 and the code now on
 `origin/main` (`0e440bf`) require for **the files of a removed post** (§1.5), and nothing else: Decision Log #487 and B-294 (PR
@@ -74,7 +74,7 @@ still stale and is still not rewritten.** The matching DPIA changes are R35 and 
 
 ---
 
-### Changelog: v0.1 → v0.2 (2026-11-10) **[COPY PENDING LEGAL REVIEW]**
+### Changelog: v0.1 → v0.2 (2026-11-10)
 
 **[CHANGED v0.2 — 2026-11-10]** **What this update is, stated plainly.** v0.2 adds one subject, the stored pictures and videos of a **post a moderator has
 removed** (Decision Log #483, #484; build-register B-289, B-290, merged as PR #714 and PR #716), and changes only the passages that
@@ -95,7 +95,7 @@ refresh is needed for the rest.
 
 ---
 
-## 0. Read this first: three things counsel should know before reading further **[COPY PENDING LEGAL REVIEW]**
+## 0. Read this first: three things counsel should know before reading further
 
 1. **The records disagree about who looks at an upload.** Decision Log #419 item 4 and build-register rows B-239 and
    B-241 say *every* upload stays hidden until a human moderator approves it. The pipeline that was actually built
@@ -109,18 +109,18 @@ refresh is needed for the rest.
    material, and nothing in the product hash-matches.** Amazon's own published FAQ says so in terms (Section 5). Nothing
    has been built for the statutory reporting path for illegal content; that path is counsel's to define (Section 7) and
    **nothing in this draft is claimed as solved.**
-3. **Nothing described here is live.** There are no real users, no production deployment and no real Rekognition,
-   Cloudflare R2 or ffmpeg configuration (Decision Log #409). Several facts below are therefore "as built and tested",
+3. **Nothing described here is live.** There are no real users, no launch and no data from real use of Rekognition, **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+   Cloudflare R2 or ffmpeg (Decision Log #409; the API is deployed in staging and production and the accounts and key are configured, but nothing has launched). Several facts below are therefore "as built and tested", **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
    never "as operated".
 
 **[v0.5 CHANGED — #430, #524, #525, #526]** **Update to §0 (v0.5).** *(Old text above is kept.)*
 - **Item 1 (the records disagree) is superseded.** The founder's decision is **automatic check first, then report-and-review**; only the uncertain results and reported files go to the moderator queue (Decision Log #430 item 1, in the docs PR #485; built as W14 PR #474, W15 PR #476 and the admin screens PR #477). **#419 item 4 ("a person approves every upload") no longer describes the intended product.** *Disposition: B, founder decision #430 item 1; counsel's view not recorded.* One built fact keeps "Mode A" alive: until the AWS account and Rekognition keys exist (a founder step, B-193; not done) **no automatic check runs**, so every upload waits for a moderator; nothing is ever approved by default.
 - **Item 2 (no hash-matching; no reporting path; nothing built for evidence) is partly out of date.** Still true: **nothing hash-matches and nothing calls any authority or vendor.** No longer true: a **suspected-illegal-imagery path is built** (#525; B-206/B-321; PRs #800, #803, #806, #807): a vetted admin sets a file aside, it is kept privately (365 days by default, a founder-veto-able default), the filing is recorded by hand; every receiving body in it is "pending counsel" with no address. Detection comes **after** launch (#526) and is not built. *Disposition: B, #524, #525, #526, #529; counsel's view not recorded. What the law requires stays under §7 question 1 (A).*
-- **Item 3 (nothing is live) is still true** (Decision Log #409; the Blueprint was not imported and no AWS account exists). #524 adds that uploads are meant to go live at launch with `MEDIA_UPLOADS_ENABLED` as the off switch (off by default in production unless set to exactly `true`). *Disposition: D, housekeeping, founder.*
+- **Item 3 (nothing is live) is still true** (Decision Log #409; the Blueprint was not imported; an AWS account now exists) **[v0.10 CHANGED, accounts live, 2026-11-23]**. #524 adds that uploads are meant to go live at launch with `MEDIA_UPLOADS_ENABLED` as the off switch (off by default in production unless set to exactly `true`). *Disposition: D, housekeeping, founder.*
 
 ---
 
-## 1. Scope: what this addendum covers **[COPY PENDING LEGAL REVIEW]**
+## 1. Scope: what this addendum covers
 
 A signed-in, non-restricted account (adult or consent-confirmed minor) can upload pictures and one video per post, and a
 Contest finalist uploads one video as their Final-week entry. Weekly Contest entries are ordinary posts and use the same
@@ -128,7 +128,7 @@ pipeline. Decision Log #419 reversed the earlier "links only" launch (#418 item 
 separate pipeline (build-register B-035, B-196) and are **out of scope here**, except where Section 4 notes the shared
 Rekognition processor.
 
-### 1.1 The path of one upload **[COPY PENDING LEGAL REVIEW]**
+### 1.1 The path of one upload
 
 Reproduced from `docs/backend-w14-media-report.md` and `services/api/src/modules/post-media/README.md`, and checked against
 the code on `origin/main` at `5857ea8` (2026-10-27).
@@ -145,7 +145,7 @@ the code on `origin/main` at `5857ea8` (2026-10-27).
 
 **[v0.5 CHANGED — #430 item 2, #518, #521, B-257, B-265, B-259]** **Steps 2, 4 and 5 of the table above describe the pipeline of 2026-10-27 and are superseded in these respects.** (a) Since B-257 (PR #489) a processed file is written to a **private** prefix (`private-media/<uploaderId>/<id>.<ext>`) and **copied** to the public prefix (`post-media/`) **only on approval**, with the size verified; if the copy fails the file stays pending (it fails closed). A pending or rejected file therefore is **not** on a public address, which narrows R24. (b) Since B-265 (PR #791; Decision Log #520, #521) private files are meant to live in a **separate bucket with no public address**, and public files are served from `media.soccernity.com` (proxied by Cloudflare from the start, **[v0.7 CHANGED, #536, #541]**); the browser's upload link is signed against the private bucket. **R2's cross-bucket copy has never run against a real R2 account (unproven)** and the buckets, the domain and the access rules are a founder launch-gate step that is **not done**. (c) The `quarantine/` original is still deleted straight after (hourly purge after 24 hours at the latest); a confirmed upload **never attached to a post is now purged after 7 days** (B-259). (d) The author sees a pending or rejected file only through a **five-minute signed link**. (e) The upload routes now carry the full `POST /posts` guard set (consent, verified email, complete profile), and HEIC is refused with its own message (B-259). *Disposition: B, founder decisions #430 item 2 and #518 to #521, built; counsel's view not recorded. The R2 cross-bucket and launch-step points are D (founder, unproven).*
 
-### 1.2 What is stored per upload **[COPY PENDING LEGAL REVIEW]**
+### 1.2 What is stored per upload
 
 One `PostMedia` row per file (migration `20261029100000_add_post_media`). Sensitive-seeming fields are marked.
 
@@ -166,13 +166,13 @@ One `PostMedia` row per file (migration `20261029100000_add_post_media`). Sensit
 The processed **file itself** is the main item: a photograph or video that may show the uploader, other people, **children
 who are not users**, and places (Sections 1.3 and R29).
 
-### 1.3 Who the processing covers **[COPY PENDING LEGAL REVIEW]**
+### 1.3 Who the processing covers
 
 1. **Uploaders**: any active, non-restricted account, **including minors whose guardian has confirmed consent**
    ("same rules for minors", Decision Log #419 item 8). An account whose email is unverified or whose profile is incomplete
    can upload a file but cannot publish a post (those gates sit on posting, not on the upload routes). Restricted-pending minors cannot upload. Under-16s are not excluded
    from posting (the under-16 tier restricts messaging, Bants and group creation, Decision Log #346). **[ASSUMPTION 1]**
-2. **People depicted who are not users**, frequently children (grassroots football photography; v0.3 DPIA R8). The check
+2. **People depicted who are not users**, frequently children (grassroots football photography; DPIA v0.16 R8). The check **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
    does nothing to identify or protect them (R29).
 3. **Contest finalists**, whose single Final-week video is also held until the reveal (00:00 on day 25, Europe/London).
 4. **Moderators/admins**, who will view files (R28). No review endpoint or screen exists yet.
@@ -180,7 +180,7 @@ who are not users**, and places (Sections 1.3 and R29).
 5. **Guardians**, who are consent-holders for the minors above; the consent screen does not mention uploads or the check
    (R31).
 
-### 1.4 Two review models, as built **[COPY PENDING LEGAL REVIEW]**
+### 1.4 Two review models, as built
 
 The pipeline behaves in one of two ways depending on whether Amazon Rekognition credentials are configured. Which one
 Soccernity launches with is not decided.
@@ -202,7 +202,7 @@ moderation README, hidden content (the README says that in terms; the claim was 
 
 **[v0.5 CHANGED — #430 item 1, B-037, B-258, B-259, B-289, B-284]** **The last two sentences above are stale.** (1) A user can now report a picture or video with `POST /media/:id/report` (one report per user per file, an optional reason up to 500 characters, **three different reporters hide the file**, at most **20 reports per account per rolling 24 hours**, a founder-veto-able default); a reported approved file joins the moderator queue. There is still **no media target** in `POST /reports` and **no public route** for a non-user to report a media file. (2) Moderator removal of a post **is enforced** (B-289; §1.5). (3) "Mode A has no moderator tool, so nothing is ever approved" is no longer true: the queue exists. *Disposition: B, #430 items 3 and 4; counsel's view not recorded. Whether a public media-report route for non-users is wanted is D and is on the founder list.*
 
-### 1.5 The files of a post a moderator has removed **[COPY PENDING LEGAL REVIEW]**
+### 1.5 The files of a post a moderator has removed
 
 **[CHANGED v0.2 — 2026-11-10]** *New in v0.2. Sources: `services/api/src/modules/post-media/post-media-objects.service.ts` (`withdraw`,
 `republishForPost`, `finishPublish`, the reconciler), `post-media/rejected-media-evidence.util.ts`
@@ -305,7 +305,7 @@ PR #735; DPIA v0.6 R36. Nothing was run.*
 
 ---
 
-## 2. Purposes and necessity (facts for counsel; no conclusion drawn) **[COPY PENDING LEGAL REVIEW]**
+## 2. Purposes and necessity (facts for counsel; no conclusion drawn)
 
 | Element | Stated purpose | Could it be done with less? (observations, for counsel to test) |
 |---|---|---|
@@ -320,9 +320,9 @@ product-and-counsel question this draft raises (Q3) and does not answer.
 
 ---
 
-## 3. Lawful basis **[COPY PENDING LEGAL REVIEW]**
+## 3. Lawful basis
 
-**[PROPOSAL, NOT DETERMINED]** As in the v0.3 DPIA §2.1, this draft does **not** select a lawful basis. For counsel:
+**[PROPOSAL, NOT DETERMINED]** As in the DPIA v0.16 §2.1, this draft does **not** select a lawful basis. For counsel: **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 - The service "as described in the Terms" (contract) covers storing and showing a user's own post. Whether it also covers
   **sending a child's image to a third-party processor for a safety check**, or **a human reviewing every minor's file**,
@@ -338,16 +338,16 @@ product-and-counsel question this draft raises (Q3) and does not answer.
   rejection of a child's picture or Contest entry is a decision "solely automated" with a "legal or similarly significant
   effect" (UK/EU GDPR Article 22), and whether a route to human review of an automatic rejection is required, is for
   counsel (R23; Q2). No such route is built: a rejected file can only be removed and resubmitted.
-- COPPA (US under-13s): the v0.3 DPIA §2.6 treats card verification as the stated control. Whether uploads by a
+- COPPA (US under-13s): the DPIA v0.16 §2.6 treats card verification as the stated control. Whether uploads by a **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
   verified-consent under-13, and the sending of their images to AWS, are within what that consent covers is for counsel.
 
 ---
 
-## 4. What is sent to Amazon Rekognition, and where it goes **[COPY PENDING LEGAL REVIEW]**
+## 4. What is sent to Amazon Rekognition, and where it goes
 
 Mode B only. Facts from `media-moderation-client.ts` and the W14 report, checked in code.
 
-### 4.1 What IS sent **[COPY PENDING LEGAL REVIEW]**
+### 4.1 What IS sent
 
 - **A still image as bytes in the request body.** For a picture: the processed (metadata-stripped) file itself. For a
   video: **one sampled frame per call**, extracted on the application host, **many calls per video** (up to 30 at default
@@ -357,7 +357,7 @@ Mode B only. Facts from `media-moderation-client.ts` and the W14 report, checked
 - **API credentials and the request metadata any API call carries** (source IP address of the API host, timestamp). The
   source IP is the **host's**, not the user's.
 
-### 4.2 What is NOT sent **[COPY PENDING LEGAL REVIEW]**
+### 4.2 What is NOT sent
 
 No user id, no display name, no username, no account data, no filename, no storage URL, no post text, no caption, no
 location, no guardian data, no age or `isMinor` flag. **The uploader's age affects only which thresholds the Soccernity
@@ -366,12 +366,12 @@ on AWS's side except what the image itself shows. No audio is sent (Section 6). 
 **it does not call face detection, face comparison, face search, celebrity recognition, text detection, or any Rekognition
 collection feature**, and no face data is created or stored. [ASSUMPTION 2: this describes the code on `origin/main` today.]
 
-### 4.3 What comes back and what is kept **[COPY PENDING LEGAL REVIEW]**
+### 4.3 What comes back and what is kept
 
 Moderation labels: category name, parent category name, confidence. Soccernity stores **only the category names at or above
 the pass threshold** (`checkLabels`), no confidences and no image.
 
-### 4.4 The EU-region question: what is known, what is not **[COPY PENDING LEGAL REVIEW]**
+### 4.4 The EU-region question: what is known, what is not
 
 **What the records say.** Decision Log #391 records "EU hosting for everything: Render Frankfurt, Neon/Upstash EU". **[v0.7 CHANGED, #536, #541]** #536 amends that wording: Neon and Upstash are in London (eu-west-2), not "the EU" generally. It does
 not name a Rekognition region. The W14 build chose **`eu-west-1` (Ireland)** as the default for `REKOGNITION_REGION` and cited
@@ -398,16 +398,16 @@ stored, or whether it moves outside the region**. So whether an image sent to `e
 device, Cloudflare's network, Germany, Ireland. Whether each hop is a "restricted transfer" under UK GDPR (assuming it
 applies; the legal entity is not yet registered) and what safeguard applies (adequacy regulations for the EEA, the Cloudflare and AWS terms) is for counsel (Q9).
 
-### 4.5 AWS terms on use of submitted content **[COPY PENDING LEGAL REVIEW]**
+### 4.5 AWS terms on use of submitted content
 
 The AWS FAQ as retrieved says Rekognition "may store and use image and video inputs processed by the service solely to
 provide and maintain the service", and that a customer "may opt out of having your image and video inputs used to improve or
-develop the quality of Amazon Rekognition" using an **AWS Organizations opt-out policy**. **Whether Soccernity opts out is not
-decided and not configured**: the W14 report records it as open (its default 17). Using children's images to improve a
-vendor's AI product is the kind of secondary use a DPIA must address. **[OPEN: founder and counsel; decide before real keys
-are used. An AWS Organizations opt-out policy requires an AWS Organizations setup, which does not exist today.]**
+develop the quality of Amazon Rekognition" using an **AWS Organizations opt-out policy**. **Whether Soccernity opts out: it was
+set before the key was configured**: the W14 report recorded it as open (its default 17). Using children's images to improve a
+vendor's AI product is the kind of secondary use a DPIA must address. **[OPEN: founder and counsel; the founder set it before the real key
+was configured. An AWS Organizations opt-out policy needs an AWS Organizations setup, which the founder has in place.]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 
-### 4.6 Sourcing limitations specific to this section **[COPY PENDING LEGAL REVIEW]**
+### 4.6 Sourcing limitations specific to this section
 
 The two AWS pages were fetched with a tool that **summarises the page with a smaller model**; quotation marks above reproduce
 the tool's returned text, not a verified copy of the page. Counsel should read the two pages themselves
@@ -416,7 +416,7 @@ have changed since 2026-10-27. No AWS data-processing agreement or regional-data
 
 ---
 
-## 5. What the automatic check is, and what it is not **[COPY PENDING LEGAL REVIEW]**
+## 5. What the automatic check is, and what it is not
 
 1. **It detects configured moderation categories in a single image.** Soccernity calls `DetectModerationLabels`. The reject
    categories are configuration (`MEDIA_CHECK_REJECT_CATEGORIES`, default "Explicit", "Violence", "Visually Disturbing",
@@ -441,7 +441,7 @@ have changed since 2026-10-27. No AWS data-processing agreement or regional-data
 
 ---
 
-## 6. Coverage limits of the check **[COPY PENDING LEGAL REVIEW]**
+## 6. Coverage limits of the check
 
 Facts from `sampleFrameTimes` in `media-moderation-decision.util.ts` and the check service.
 
@@ -474,7 +474,7 @@ file can only be examined once a review tool exists; today none does.
 
 ---
 
-## 7. The statutory reporting path for illegal content: counsel's questions, nothing solved **[COPY PENDING LEGAL REVIEW]**
+## 7. The statutory reporting path for illegal content: counsel's questions, nothing solved
 
 **State of the product.** Soccernity has **no** process, route, role, record or code for: detecting known illegal material;
 preserving evidence; reporting suspected illegal content or a suspected offence to a public authority or a designated
@@ -534,16 +534,16 @@ requires or whether it applies.** Counsel will know which apply; this list exist
    *[v0.5 DISPOSITION: A — platform duties to children are for counsel; non-blocking (#524, #532).]*
 8. Is the **combination** of "no hash-matching + 5-second frame sampling + no audio check + automatic approval" (Mode B) an
    acceptable system for a platform whose users include children, or is Mode A (a human opens everything) the minimum?
-   *[v0.5 DISPOSITION: B — the model is chosen: automatic check first, then report-and-review (#430 item 1; #524). Counsel's view not recorded. Whether the combination is adequate in law is questions 1 and 7 (A). Until the AWS account exists no check runs and a human sees every file.]*
+   *[v0.5 DISPOSITION: B — the model is chosen: automatic check first, then report-and-review (#430 item 1; #524). Counsel's view not recorded. Whether the combination is adequate in law is questions 1 and 7 (A). The check key is configured, so the check can run; if it were missing, no check would run and a human would see every file.]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 
 ---
 
-## 8. Risks (proposed R23 to R31; numbering continues after the view-data addendum's R17 to R22) **[COPY PENDING LEGAL REVIEW]**
+## 8. Risks (proposed R23 to R31; numbering continues after the view-data addendum's R17 to R22)
 
 Numbering assumes `docs/dpia-addendum-contest-view-data-draft.md` (R17 to R22) is accepted; renumber if it is not. Ratings are
-placeholders for counsel, in the same convention as the v0.3 DPIA.
+placeholders for counsel, in the same convention as the DPIA v0.16. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
-### R23: The review model is not settled, and in one mode nothing can ever be published **[COPY PENDING LEGAL REVIEW]**
+### R23: The review model is not settled, and in one mode nothing can ever be published
 
 Section 1.4. The decision record says a human approves every upload; the build lets the check approve and reject without
 a human; the legal draft says "reviewed by a person if flagged". In Mode A no moderator tool exists, so no upload is ever
@@ -556,7 +556,7 @@ Log #419, build-register, v0.8 legal draft, and the product itself) must be reco
 
 **[v0.5 CHANGED — #430 item 1, B-037, #524]** **R23 is partly answered.** The founder has decided the model (automatic check first, then report-and-review; #430 item 1), the moderator queue exists, and the documents were reconciled in the register. **Still open:** whether an automatic rejection of a child's file engages Article 22 and whether a route to human review of a rejection is required (a rejected file can still only be removed and resubmitted). *Disposition: B for the model (counsel's view not recorded); A for Article 22 (§12 question 2).*
 
-### R24: Files that are not yet approved, or were rejected, can be fetched by anyone who has the address **[COPY PENDING LEGAL REVIEW]**
+### R24: Files that are not yet approved, or were rejected, can be fetched by anyone who has the address
 
 W14 deliberately writes the processed file to the **public** prefix before the check or any human has seen it (W14 report
 default 2, follows the brief). The service never *returns* the address to anyone but the uploader, and the key contains two
@@ -573,7 +573,7 @@ prefix on approval (Option 10.6).
 
 **[v0.5 CHANGED — #430 item 2, #518, #521, B-257, B-265]** **R24 describes the pipeline of 2026-10-27 and is superseded.** The recommended private prefix is **built** (B-257, PR #489: pending and rejected files are private, copied to the public prefix only on approval) and a **separate private bucket** is built (B-265, PR #791). A rejected file is **no longer kept for ever**: it is deleted on every path unless a hold, an open report or a set-aside protects it (B-283). Not done: the bucket, the access rules and `media.soccernity.com` (founder launch-gate step); the cross-bucket copy is unproven against real R2; pending-file addresses still appear in the uploader's own browser. *Disposition: B, founder decisions #430 item 2, #518 to #521; built; counsel's view not recorded. Residual: D (founder launch step; see §1.5 finding 6).*
 
-### R25: Illegal material: no detection, no hash-matching, no reporting or evidence path **[COPY PENDING LEGAL REVIEW]**
+### R25: Illegal material: no detection, no hash-matching, no reporting or evidence path
 
 Sections 5 and 7. A children's platform that accepts images and video from the public and is built to publish a clear-looking
 file with no human involved (Mode B) has no mechanism to find known unlawful material or to report it.
@@ -583,7 +583,7 @@ file with no human involved (Mode B) has no mechanism to find known unlawful mat
 
 **[v0.5 CHANGED — #524, #525, #526, #529]** **R25 is narrowed, not mitigated.** A record, set-aside and evidence-keeping path now exists (#525) and a detection plan exists (#526, after launch, not built); **there is still no hash-matching and no automatic call to any authority**, and the founder accepts launching without it (#524). *Disposition: A: what the law requires of a platform like this, and the deadlines, are for counsel; non-blocking (#532). B for the plan (#526; counsel's view not recorded).*
 
-### R26: Coverage gaps let harmful files be approved automatically **[COPY PENDING LEGAL REVIEW]**
+### R26: Coverage gaps let harmful files be approved automatically
 
 Section 6. Frame sampling at five-second spacing misses short content; audio is unexamined; the thresholds are untested on
 football photography or on children's images; text is not read; the check does not know who is depicted. In Mode B a file that
@@ -591,7 +591,7 @@ passes is published to all eligible users, including other children.
 
 *Draft severity: high. Draft likelihood: moderate. Placeholder ratings.*
 
-### R27: Children's images go to an additional processor and across borders, with AI-improvement terms undecided **[COPY PENDING LEGAL REVIEW]**
+### R27: Children's images go to an additional processor and across borders, with AI-improvement terms undecided
 
 Section 4. Mode B sends the processed image, or many frames per video, of an identified-by-context child's upload to AWS
 (Ireland by default), alongside Cloudflare for storage and Render for processing. The region for Rekognition is an
@@ -601,9 +601,9 @@ improve its services is not decided; no data-processing agreement or transfer as
 *Draft severity: high. Draft likelihood: certain once Mode B is used. Placeholder ratings.* **[ACTION FOR REVIEW]** Counsel:
 Q7 to Q10. This extends v0.3 DPIA R11 (sub-processor exposure), whose text predates the choice of Cloudflare R2 and AWS.
 
-**[v0.5 CHANGED — #430 item 1, #518, #521, B-193]** **Still accurate, with three updates.** (1) No AWS account, IAM user or Rekognition key exists yet (a founder step, B-193), so **nothing is sent to AWS today**. (2) The founder will set the AWS opt-out of AI-services data use **before any real key is configured** (#430 item 1). (3) Storage is now two R2 buckets (B-265); the buckets are in the Cloudflare EU jurisdiction **[v0.7 CHANGED, #536, #541]**. *Disposition: A: the lawful basis, the transfer position, the processor terms and the region are for counsel (§12 questions 4, 7, 9, 10); the opt-out step is B/D (founder, not yet done).*
+**[v0.5 CHANGED — #430 item 1, #518, #521, B-193]** **Still accurate, with three updates.** (1) An AWS account exists and the Rekognition key is configured (B-193), so the automatic check can send files to AWS. **[v0.10 CHANGED, accounts live, 2026-11-23]** (2) The founder set out to set the AWS opt-out of AI-services data use **before any real key was configured** (#430 item 1); the key is now configured, and the opt-out was set before it (founder statement, 2026-11-23). (3) Storage is now two R2 buckets (B-265); the buckets are in the Cloudflare EU jurisdiction **[v0.7 CHANGED, #536, #541]**. *Disposition: A: the lawful basis, the transfer position, the processor terms and the region are for counsel (§12 questions 4, 7, 9, 10); the opt-out step is B/D (founder; done).* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 
-### R28: Moderators and other staff will see children's images and possibly unlawful material, with no access rules yet **[COPY PENDING LEGAL REVIEW]**
+### R28: Moderators and other staff will see children's images and possibly unlawful material, with no access rules yet
 
 No review endpoint or screen exists. The report queue is gated on `AdminUser.childSafetyVetted` for reports marked as
 concerning a minor (`concernsMinor`); **nothing says that the same gate applies to the media queue**, and a media file has
@@ -612,11 +612,11 @@ a date-of-birth view) but nothing records who opened which file. Pending files a
 staff member can also view a file without going through any tool. Staff welfare for exposure to harmful material is not
 addressed anywhere.
 
-*Draft severity: high. Draft likelihood: certain once review exists. Placeholder ratings.* Extends v0.3 DPIA R9.
+*Draft severity: high. Draft likelihood: certain once review exists. Placeholder ratings.* Extends DPIA v0.16 R9. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 
 **[v0.5 CHANGED — #430 item 3, B-258, #525]** **R28 is partly answered.** (1) A media review queue now exists. (2) **Reviewers of a minor's file must be child-safety-vetted** and a non-vetted admin cannot see a minor's item (B-258; #430 item 3); only a vetted admin can set a file aside (#525). (3) Reviewers see a file through a **five-minute signed link**, not a public address (B-257). (4) **Still not built:** logging that an admin opened a file (the admin action log records decisions and set-asides, not views); reduced-exposure or two-person review. (5) Staff welfare and vetting are the founder's HR duty. *Disposition: B for vetting and signed links (counsel's view not recorded); D for file-open logging and welfare (founder).*
 
-### R29: People depicted who are not users, especially children, are unaffected by any control **[COPY PENDING LEGAL REVIEW]**
+### R29: People depicted who are not users, especially children, are unaffected by any control
 
 Extends v0.3 DPIA R8, whose text refers to the earlier free-link path (`Post.mediaUrls`), which has been replaced. The check
 does not detect that a child appears, the uploader attests to nothing, and no consent of a depicted child or their parent is
@@ -628,7 +628,7 @@ Weekly Contest entries and Final-week videos are by design competition footage t
 
 *Draft severity: high. Draft likelihood: high (grassroots football photography). Placeholder ratings.*
 
-### R30: Retention: check labels, rejected files, decision fields and unattached uploads have no defined clock **[COPY PENDING LEGAL REVIEW]**
+### R30: Retention: check labels, rejected files, decision fields and unattached uploads have no defined clock
 
 Facts: the original is kept for seconds to at most 24 hours; a never-confirmed upload for at most 24 hours (hourly purge, a
 bucket lifecycle rule is recommended but is a human step); the processed file and the row live with the post, and are deleted
@@ -657,7 +657,7 @@ decision fields of files that were **never** part of a removed post still have n
 
 **[v0.5 CHANGED — #462 (g), #464, #430 item 4, B-283, B-259, B-307]** **R30's first paragraph is partly superseded.** A rejected file's **object** is now deleted on every path (a post or upload deleted by a live account, `DELETE /media/uploads/:id`, anonymisation, the purge, a stray-object sweep) **unless** an active admin hold, an unclosed report or a set-aside protects it; a confirmed upload never attached to a post is purged after **7 days**; Contest-entry media of a **completed** cycle follows the report sweep (B-307). **Still without a clock:** the check labels, the rejection reason, the decision fields and the moderator id on the `PostMedia` row of a file that was never part of a removed post. *Disposition: B for the object deletions (counsel's view not recorded); A for the retention of the labels, reason and moderator id (§12 questions 14a and 17).*
 
-### R31: No notice to the uploader or the guardian about the check, the reviewers or the retention **[COPY PENDING LEGAL REVIEW]**
+### R31: No notice to the uploader or the guardian about the check, the reviewers or the retention
 
 The guardian consent screen does not mention uploads. The uploader is told only that a file did not meet the rules, in a
 generic sentence, and sees no explanation that an automated tool from a third party looked at their picture. The v0.8 legal
@@ -668,7 +668,7 @@ draft discloses the check for avatars and cover photos only (PP §5). Changing t
 
 ---
 
-## 9. Mitigations already in the product (as built; not live; none reviewed by counsel) **[COPY PENDING LEGAL REVIEW]**
+## 9. Mitigations already in the product (as built; not live; none reviewed by counsel)
 
 - No free web address for a user's media is accepted on any route; a request carrying one is a 400.
 - Direct-to-storage upload through a one-time link bound to the declared type and exact length; per-user throttle
@@ -696,11 +696,11 @@ draft discloses the check for avatars and cover photos only (PP §5). Changing t
 
 ---
 
-## 10. Options, not decisions **[COPY PENDING LEGAL REVIEW]**
+## 10. Options, not decisions
 
 Each option lists what it would require and what it trades off. **The drafter recommends none.** Options may be combined.
 
-### 10.1 Moderator access controls and logging **[COPY PENDING LEGAL REVIEW]**
+### 10.1 Moderator access controls and logging
 
 | Option | Would require | Trade-off |
 |---|---|---|
@@ -715,7 +715,7 @@ Each option lists what it would require and what it trades off. **The drafter re
 
 **[v0.5 CHANGED — B-257, B-258, #525, #430 item 3]** **Status of the options:** **M-2 and M-3 are built in effect** (a minor's file needs a vetted admin; B-258; #430 item 3); **M-5 is built** (five-minute signed links); **M-1 is not what is built** (the queue is role-gated and, for minors, vetting-gated); **M-4 (logging every file open), M-6 and M-7 are not built and not decided** (D, founder; listed in the report); **M-8** welfare and guidance are the founder's HR duty (D). *Disposition: B for M-2, M-3 and M-5 (counsel's view not recorded); D for M-4, M-6, M-7, M-8.*
 
-### 10.2 Retention of rejected files **[COPY PENDING LEGAL REVIEW]**
+### 10.2 Retention of rejected files
 
 Built today: rejected files stay in the object store until the uploader removes them, the post is deleted, or the account is
 anonymised.
@@ -734,7 +734,7 @@ counsel-approved retention period.
 
 **[v0.5 CHANGED — #462 (g), #464, #525, B-283]** **The paragraph "Built today: rejected files stay in the object store until …" is superseded.** A rejected file's private object is now **deleted on every path unless protected** (B-283), which resembles F-2 with an exception; a vetted admin can additionally **set a file aside** and it is kept for `preserveUntil` (365 days by default) past account deletion (F-4 in effect for those files, #525). *Disposition: B, #462 (g), #464, #525; counsel's view not recorded; the period beyond 365 days is A (question 4a).*
 
-### 10.3 Retention of the check's category labels and decision fields **[COPY PENDING LEGAL REVIEW]**
+### 10.3 Retention of the check's category labels and decision fields
 
 Built today: `checkLabels`, `rejectionReason`, `decisionSource`, `decidedAt`, `decidedBy` live as long as the row.
 
@@ -746,7 +746,7 @@ Built today: `checkLabels`, `rejectionReason`, `decisionSource`, `decidedAt`, `d
 | L-4 Keep labels but never expose them, and purge them when the uploader is anonymised or turns 18 | Extend the anonymisation and age-reclassification steps | Meets "no longer needed" only partly |
 | L-5 Keep `decidedBy` only as long as needed for a complaint/appeal window, then null it | A purge job | Staff-accountability record is lost afterwards |
 
-### 10.4 A user-facing "what is checked" notice **[COPY PENDING LEGAL REVIEW]**
+### 10.4 A user-facing "what is checked" notice
 
 Context: the uploader is told only "This file didn't meet our rules"; the guardian consent screen is silent. The proposed
 wording for each option is in `docs/legal-copy-part-c-post-media-draft.md` Section 3.
@@ -759,7 +759,7 @@ wording for each option is in `docs/legal-copy-part-c-post-media-draft.md` Secti
 | N-4 N-3 + a guardian-facing line | Guardian consent screen | **Yes** (bumps `CONSENT_SCREEN_VERSION`; every already-confirmed guardian would not have seen it) |
 | N-5 N-2 + a rejected-file explanation naming the categories that would normally be rejected (without revealing thresholds) | Rejection message | No, but a more specific message can help a user avoid the rule and can reveal what the check is looking for |
 
-### 10.5 Thresholds that are stricter for minors' accounts **[COPY PENDING LEGAL REVIEW]**
+### 10.5 Thresholds that are stricter for minors' accounts
 
 Built today: same reject categories for everyone, lower numbers for a minor uploader (pass 20 / reject 80 against adult
 pass 40 / reject 90); decided by `User.isMinor` at check time.
@@ -773,7 +773,7 @@ pass 40 / reject 90); decided by `User.isMinor` at check time.
 | T-5 Under-16s stricter than 16 to 17s | A tier lookup | Another tier to maintain; the under-16 tier already exists (#346) |
 | T-6 Measure first: run both modes on a test set of football photographs and minors' sample images with consent and set thresholds from results | Test data and process | Needs a lawful, safe source of test images |
 
-### 10.6 Where an unreviewed file lives before it is approved **[COPY PENDING LEGAL REVIEW]**
+### 10.6 Where an unreviewed file lives before it is approved
 
 Added because R24 turns on it. Built today: the public prefix.
 
@@ -788,7 +788,7 @@ Added because R24 turns on it. Built today: the public prefix.
 
 ---
 
-## 11. Assumptions this draft made **[COPY PENDING LEGAL REVIEW]**
+## 11. Assumptions this draft made
 
 1. **Under-16s are uploaders.** Nothing in the code limits an under-16 from uploading; the under-16 tier restricts other
    features (Decision Log #346). Assumed intended.
@@ -826,14 +826,14 @@ Added because R24 turns on it. Built today: the public prefix.
 
 ---
 
-## 12. Questions counsel must answer **[COPY PENDING LEGAL REVIEW]**
+## 12. Questions counsel must answer
 
 **Review model and decisions**
 
 1. Which review model is acceptable for a platform whose users include children: **Mode A** (a human sees every file) or
    **Mode B** (the check decides the clear cases)? If Mode B, is automatic **approval** of a child's picture or video
    acceptable given Sections 5 and 6?
-    *[v0.5 DISPOSITION: B — the model is chosen: automatic check first, then report-and-review (#430 item 1; #524). Counsel's view not recorded. Until the AWS account exists no check runs and every upload goes to a moderator.]*
+    *[v0.5 DISPOSITION: B — the model is chosen: automatic check first, then report-and-review (#430 item 1; #524). Counsel's view not recorded. The check key is configured, so the check can run; if it were missing, no check would run and every upload would go to a moderator.]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 2. Is an **automatic rejection** of a child's file a decision to which UK/EU GDPR Article 22 applies, and is a route to human
    review of a rejection required? (R23)
     *[v0.5 DISPOSITION: A — Article 22 and a route to human review of an automatic rejection are for counsel; non-blocking.]*
@@ -845,7 +845,7 @@ Added because R24 turns on it. Built today: the public prefix.
 
 4. What lawful basis supports sending a child's image to AWS for a safety check, and does it differ for an adult uploader's
    image that shows a child?
-    *[v0.5 DISPOSITION: A — the lawful basis for sending a child's image to AWS is for counsel; nothing is sent today (no AWS account).]*
+    *[v0.5 DISPOSITION: A — the lawful basis for sending a child's image to AWS is for counsel; files can be sent to AWS now that the check key is configured.]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 5. Is any **accuracy testing** required before launch, and on what data? (Section 5 item 4; Option T-6)
     *[v0.5 DISPOSITION: A — whether accuracy testing is required before launch is for counsel; non-blocking. The thresholds are engineering defaults, untested on football or children's images (D, engineering).]*
 6. May the thresholds differ by **uploader age** only, or must they reflect **who is depicted**? (Option 10.5)
@@ -854,13 +854,13 @@ Added because R24 turns on it. Built today: the public prefix.
 **Processors, regions and transfers**
 
 7. Is **Amazon Web Services** an acceptable processor for children's images, and what contract and safeguards are needed?
-    *[v0.5 DISPOSITION: A — whether AWS is an acceptable processor, and the contract and safeguards, are for counsel. No AWS account, data-processing terms or regional document exists yet (B-193).]*
+    *[v0.5 DISPOSITION: A — whether AWS is an acceptable processor, and the contract and safeguards, are for counsel. The AWS account exists, but no data-processing terms or regional document is on file yet (B-193).]*
 8. Must Soccernity **opt out** of AWS using inputs to improve Rekognition, and is that opt-out a precondition for real keys?
-    *[v0.5 DISPOSITION: B — the founder will set the AWS opt-out of AI-services data use before any real key is configured (Decision Log #430 item 1). Counsel's view not recorded; not yet done (founder step, B-193).]*
+    *[v0.5 DISPOSITION: B — the founder will set the AWS opt-out of AI-services data use before any real key is configured (Decision Log #430 item 1). Counsel's view not recorded; the key is now configured and the opt-out was set before it (B-193).]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]** **[v0.12 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**
 9. Does the chosen Rekognition region (default Ireland) process **only** in that region, and does the Frankfurt host → Ireland
    → Cloudflare chain constitute restricted transfers under UK GDPR (and under the NDPA for Nigerian users) needing a
    safeguard or assessment? Is the **R2 bucket location** (EU jurisdiction, **[v0.7 CHANGED, #536, #541]**) acceptable?
-    *[v0.5 DISPOSITION: A — the Rekognition region, the chain of transfers and the R2 bucket location are for counsel; the bucket location is still unset and now covers two buckets (B-265).]*
+    *[v0.5 DISPOSITION: A — the Rekognition region, the chain of transfers and the R2 bucket location are for counsel; the bucket location is the Cloudflare EU jurisdiction (#535) and covers two buckets (B-265).]* **[v0.11 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 10. Is a transfer assessment or data-processing agreement required for Cloudflare as well as AWS?
     *[v0.5 DISPOSITION: A — see `docs/cloudflare-processor-and-cross-border-draft.md`, which holds the Cloudflare questions (proxy and storage); non-blocking.]*
 
@@ -872,7 +872,7 @@ Added because R24 turns on it. Built today: the public prefix.
 
 **Staff and access**
 
-12. Must reviewers of minors' media be **child-safety vetted** (equivalent to the DBS-type check v0.3 DPIA R9 raises)?
+12. Must reviewers of minors' media be **child-safety vetted** (equivalent to the DBS-type check DPIA v0.16 R9 raises)? **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
     Which option in 10.1 is required? Must every file open be logged?
     *[v0.5 DISPOSITION: B — reviewers of a minor's file must be child-safety-vetted (#430 item 3; built B-258).]*
     *[v0.5 DISPOSITION: D — 12a: logging every file open in the admin action log is neither decided nor built; the log records decisions and set-asides only; for the founder.]*
@@ -942,7 +942,7 @@ Added because R24 turns on it. Built today: the public prefix.
 
 ---
 
-## 13. Sign-off **[COPY PENDING LEGAL REVIEW]**
+## 13. Sign-off
 
 This block is intentionally empty. A completed addendum requires a competent person to challenge and sign it.
 
@@ -957,7 +957,7 @@ This block is intentionally empty. A completed addendum requires a competent per
 
 ---
 
-## Sourcing limitations (referenced from Section 4.6) **[COPY PENDING LEGAL REVIEW]**
+## Sourcing limitations (referenced from Section 4.6)
 
 1. **Facts about the product** come from `docs/backend-w14-media-report.md`, `services/api/src/modules/post-media/README.md`,
    Decision Log #419 as summarised in `CLAUDE.md` and `docs/build-register.md` (rows B-036, B-037, B-206, B-238, B-239, B-241),
@@ -970,12 +970,12 @@ This block is intentionally empty. A completed addendum requires a competent per
    label list, and of an optional human-review service. **No AWS data-processing terms were retrieved.**
 3. **No statute, regulator guidance, code of practice or case law was retrieved or checked.** Every reference to a regime in
    Sections 3 and 7 is the drafter's general knowledge, written to tell counsel where to look, not to assert what any regime
-   requires or whether it applies. This is the same limitation the v0.3 DPIA states at its §0 item 5.
+   requires or whether it applies. This is the same limitation the DPIA v0.16 states at its §0 item 5. **[v0.9 CHANGED, DPIA label updated to the current version]** **[v0.12 CHANGED, DPIA label moved to v0.16; the cited item reads the same]**
 4. **Counsel has not seen this processing.** The founder's decisions (#419) are product decisions, not legal clearance.
 
 ---
 
-## Closing statement **[COPY PENDING LEGAL REVIEW]**
+## Closing statement
 
 **[v0.5 CHANGED — #524 to #532]** *v0.5 note: this revision is a **narrow refresh**. It adds a changelog, a disposition marker (A to D) on every open question, finding and option, and marked notes beside the passages the built system now contradicts (the review model, the public prefix, the moderator queue, user reports of a file, the rejected-file deletion, the two-bucket storage, the suspected-illegal set-aside path, the Contest-entry retention block, and the founder's decisions #524 to #532). It does **not** complete or approve the addendum, it **chooses no option**, it **claims nothing as solved**, and it records no counsel position, because counsel has not reviewed this addendum. The §13 sign-off block remains empty.*
 

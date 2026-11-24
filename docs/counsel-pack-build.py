@@ -35,11 +35,14 @@ d = Document(OUT)
 body = d.element.body
 
 PORTRAIT_W, LAND_W = 17.0, 26.1  # text width in cm
-WIDTHS = {  # first header cell -> column widths (cm)
+WIDTHS = {  # first header cell -> column widths (cm); each entry says which table it is for
+    # "Document (file in docs/)": section 2 documents table (landscape). "Question": question-to-source table.
+    # "v1.0": v1.0 to v1.1 map. "#": the strings sheet, 4 columns (# | String as shown | Figma frame | Status),
+    # landscape, widths sum to LAND_W. "Document": sign-off table.
     "Document (file in docs/)": [4.5, 1.6, 15.0, 5.0],
     "Question": [2.0, 1.6, 22.5],
     "v1.0": [2.5, 2.5, 21.1],
-    "#": [1.2, 9.8, 5.6, 1.9, 6.2, 1.4],
+    "#": [1.4, 14.0, 6.5, 4.2],
     "Document": [5.5, 2.5, 4.5, 3.0, 4.1, 6.5],
 }
 

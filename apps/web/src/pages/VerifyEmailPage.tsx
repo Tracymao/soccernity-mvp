@@ -33,12 +33,15 @@
 // of the ordinary Verified state's "full access" framing. Checked Figma
 // directly before building anything (get_design_context on "Verify Email
 // -- 2 Verified", 5143:6648): it renders one single generic Verified
-// layout with no consent-status branch anywhere -- there is still no
-// dedicated Figma frame for this state, confirming CLAUDE.md's own
-// documented history (PR #107 lists it as a founder-blocked, never-
-// designed product decision). The `verified-pending-consent` block below
-// is therefore a CONSERVATIVE INTERIM DESIGN, built without a matching
-// Figma source, not a finished Figma-sourced screen -- see its own inline
+// layout with no consent-status branch anywhere (that was true at the
+// time of the check; CLAUDE.md's own documented history, PR #107, lists
+// it as a founder-blocked, never-designed product decision). The state is
+// now drawn as G1-1 "Web - Verify Email - Guardian approval pending -
+// Desktop" (7114:68249) and G1-2, the mobile version (7114:68291), but
+// that drawing does not make it founder-approved. The
+// `verified-pending-consent` block below is still a CONSERVATIVE INTERIM
+// DESIGN, built from the code, not a founder-approved Figma-sourced
+// screen -- see its own inline
 // comment further down for the full detail, matching this project's
 // established "flagged, not invented as if real" discipline (see e.g.
 // EditProfileModal.tsx's disabled unbacked fields, or how ClubPickerStep
@@ -216,8 +219,9 @@ export default function VerifyEmailPage() {
           </>
         )}
 
-        {/* CONSERVATIVE INTERIM DESIGN -- no Figma frame exists for this
-            state (see this file's own header comment, Decision Log #38).
+        {/* CONSERVATIVE INTERIM DESIGN -- drawn as G1-1 and G1-2 (7114:68249,
+            7114:68291), but still not founder-approved (see this file's own
+            header comment, Decision Log #38).
             Deliberately reuses the ordinary Verified state's icon/card/
             button scaffolding and CSS classes -- the email genuinely was
             verified, so the same success icon is honest here -- but the

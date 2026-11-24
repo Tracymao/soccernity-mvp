@@ -26,12 +26,12 @@ belonging to the founder and counsel, which this draft deliberately does not
 resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
-- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6); Contact Us appeal category now offered on the web page and in the admin inbox `docs/dpia-contactus-rollforward-2026-11-12` (v0.7); hold-route vetting, session revocation, the uploads switch and the Contest-entry retention lift `docs/dpia-v08-incident-v06` (v0.8); counsel-pack dispositions of the open items, the B-206 reporting path and the review model `legal/dpia-v09-counsel-refresh` (v0.9); stale statements and three re-marked dispositions `legal/dpia-incident-stale-fixes` (v0.10); wording pass and hosting-location facts, no change of meaning (v0.11)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6); revised 2026-11-12 (v0.7); revised 2026-11-13 (v0.8); revised 2026-11-17 (v0.9); revised 2026-11-17 (v0.10); revised 2026-11-22 (v0.11)
+- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3); messages and content removal `docs/dpia-refresh-2026-11-10` (v0.4); suspension on a report, vetted-only message context and report retention `legal/dpia-refresh-2026-11-11` (v0.5); report retention restored to 6 to 7 years, who may act on a message report that involves a child, appeals by a suspended person `legal/dpia-incident-retention-restored-2026-11-11` (v0.6); Contact Us appeal category now offered on the web page and in the admin inbox `docs/dpia-contactus-rollforward-2026-11-12` (v0.7); hold-route vetting, session revocation, the uploads switch and the Contest-entry retention lift `docs/dpia-v08-incident-v06` (v0.8); counsel-pack dispositions of the open items, the B-206 reporting path and the review model `legal/dpia-v09-counsel-refresh` (v0.9); stale statements and three re-marked dispositions `legal/dpia-incident-stale-fixes` (v0.10); wording pass and hosting-location facts, no change of meaning (v0.11); tag removal `copy/clear-draft-tags` (v0.12); AWS opt-out set before the key, Sentry DSN held by the deployed API, both Render environments deployed `copy/optout-dsn-environments` (v0.16)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3); revised 2026-11-10 (v0.4); revised 2026-11-11 (v0.5); revised 2026-11-11 (v0.6); revised 2026-11-12 (v0.7); revised 2026-11-13 (v0.8); revised 2026-11-17 (v0.9); revised 2026-11-17 (v0.10); revised 2026-11-22 (v0.11); revised 2026-11-22 (v0.12); revised 2026-11-23 (v0.13); revised 2026-11-23 (v0.14); revised 2026-11-23 (v0.15); revised 2026-11-23 (v0.16)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
-  Claude Code, from the merged code rather than from summaries; v0.3 to v0.11 likewise
+  Claude Code, from the merged code rather than from summaries; v0.3 to v0.12 likewise
 - **Reviewed by counsel:** NOT YET, see Section 6
-- **Version:** 0.11 (draft, still NOT APPROVED)
+- **Version:** 0.16 (draft, still NOT APPROVED)
 
 ### Changelog: v0.9 → v0.10 (2026-11-17)
 
@@ -56,10 +56,10 @@ lists every change with line numbers, and the statements it found and left.
 5. **§2.6.3 and R16, built behaviour:** a pointer records that a server-side age floor, the guardian-email check and card verification for the under-13 US
    band are built since v0.3. The v0.3 analysis is kept as history; whether the card step is COPPA-grade is still the legal question (§5 item 24, marked C in v0.9).
 6. **The v0.4 and v0.5 "still stale" lists** carry a pointer (not a rewrite): R9's "no staff vetting" and "no field records a minor" are answered by the
-   built mechanism; R34(f)'s "Contest effects undecided" is answered by Decision Log #488 and built by B-300 (PR #742, read from `CLAUDE.md`). v0.11 (2026-11-22): wording pass and hosting-location facts (Decision Log #536, #541); no new risk, no re-rating, no change to any counsel disposition.
+   built mechanism; R34(f)'s "Contest effects undecided" is answered by Decision Log #488 and built by B-300 (PR #742, read from `CLAUDE.md`). v0.11 (2026-11-22): wording pass and hosting-location facts (Decision Log #536, #541); no new risk, no re-rating, no change to any counsel disposition. v0.13 (2026-11-23): stale statements fixed in place (hosting account, client applications); no new risk, no re-rating, no counsel disposition changed. v0.12 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.14 (2026-11-23): statements about Sentry, the AWS account and the storage buckets updated because the accounts are now live; nothing is deployed, no new risk, no re-rating, no counsel disposition changed.
 
 **Not changed, on purpose:** the v0.1 to v0.9 changelogs (history); every `[ACTION FOR REVIEW]`, `[OPEN]` and `[FOR FOUNDER — not a counsel blocker]`
-item; every other disposition as marked in v0.9; every placeholder rating; the Section 6 sign-off block.
+item; every other disposition as marked in v0.9; every placeholder rating; the Section 6 sign-off block. v0.15 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed. v0.16 (2026-11-23): the AWS opt-out was set before the Rekognition key was configured, the deployed API holds the Sentry DSN (EU data region) and both Render environments, staging and production, are deployed (founder statements, 2026-11-23); R12's status paragraph updated (the risk, the scheduled-jobs sentence, the severity line and the action for review are unchanged); the product has not launched and no data from real use exists; version pointers moved; no counsel disposition changed.
 
 
 ### Changelog: v0.8 → v0.9 (2026-11-17)
@@ -485,7 +485,7 @@ context (R33). `Message.mediaUrl` is a leftover column: the send route refuses i
 **Messages are not end-to-end encrypted.** `contentText` is a plain text column in Postgres; the messaging module has no
 encryption code (the application-level encryption this pass found elsewhere is the `DOB_ENCRYPTION_KEY` cipher used for
 date of birth and authenticator secrets; this pass did not search the whole codebase for others). Whether the database host also encrypts storage at rest is a provider matter that is
-**not verified** (no hosting account exists). Sources: `services/api/prisma/schema.prisma` (`Message`),
+**not verified** (Render is configured and the API is deployed in staging and production, but this was not checked in the deployed API). **[v0.13 CHANGED, hosting facts, runbook accounts list]** Sources: `services/api/prisma/schema.prisma` (`Message`), **[v0.15 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 `modules/messaging/messaging.service.ts`.
 
 **Behavioural and engagement:** `Notification`, `LeaderboardEntry` (points, rank,
@@ -559,17 +559,17 @@ data, not user data.
   (auth provider) is not re-verified in this pass.
 - **Sub-processors:** an email provider (`EMAIL_PROVIDER_API_KEY`) will transmit
   guardian consent emails; S3-compatible storage will hold user media; Sentry is
-  wired for error monitoring but currently inert (no DSN, `Sentry.init()` never
-  called). **[ACTION FOR REVIEW]** Each becomes a processor requiring an Article
+  wired for error monitoring; the deployed API holds the DSN in staging and production, EU data region **[v0.16 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]** (`Sentry.init()` never **[v0.15 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+  called without a DSN). **[v0.14 CHANGED, accounts live, 2026-11-23]** **[ACTION FOR REVIEW]** Each becomes a processor requiring an Article
   28 contract and its own transfer assessment once selected. None is selected yet.
   **[PROPOSAL]** Counsel to consider whether Sentry error payloads should be
-  configured to scrub request bodies and user identifiers before any real DSN is
-  added, given that error traces from consent endpoints would otherwise capture
+  configured to scrub request bodies and user identifiers before the real DSN is
+  used, given that error traces from consent endpoints would otherwise capture
   children's and guardians' data in a third-party system.
 
 ### 1.6 Two decisions this draft does not make, and will not
 
-Stated here rather than buried later, because the rest of the document depends on
+Stated here because the rest of the document depends on
 them and readers should not mistake silence for resolution.
 
 **[OPEN DECISION — Decision Log #4] Jurisdictional scope beyond UK GDPR, scope extended by
@@ -657,7 +657,7 @@ Assessed field by field against the built schema. **All conclusions provisional.
    strength: there is no location tracking, no device fingerprinting, no
    advertising identifier, no behavioural-advertising infrastructure, and no
    third-party analytics SDK in the data model. Counsel should verify this holds
-   in the built client applications, which do not yet exist and therefore cannot
+   in the built client applications (`apps/web`, `apps/admin`), which this draft has not reviewed and therefore cannot
    be checked here.
 2. **No profiling of minors occurs in MVP** beyond the leaderboard's points
    calculation. This is a direct consequence of deferring the Discover pillar.
@@ -976,7 +976,7 @@ FOR REVIEW]** Counsel to confirm.
 - **Separate consent to third-party disclosure.** Not modelled (finding 6).
 - **Retention and security.** Retention is designed (R6, §2.4), but whether it satisfies COPPA's
   "no longer than reasonably necessary" and the written-retention and written-security-programme
-  requirements is unassessed; hosting and processors are not yet live (R11, R12).
+  requirements is unassessed; hosting and processors are deployed in staging and production, but the product has not launched and nothing has run on real use **[v0.16 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]** (R11, R12).
 - **No under-13-specific control.** Under-13s go through the same 5 to 17 flow; the only additional
   restrictions are the under-16 tier's feature limits (R13).
 
@@ -1017,7 +1017,7 @@ following, read directly from `modules/messaging/messaging.service.ts` (`startCo
 `assertRecipientMessageable`) and the `Under16RestrictionGuard` (PRs #272, #273, #276, #280;
 Decision Log #346, #347, #350):
 
-**Controls in place (code merged; not deployed or tested in a live environment):**
+**Controls in place (code merged and the API deployed; not tested in a live environment):** **[v0.15 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 
 1. **An adult cannot start a new conversation with a minor.** If the caller's stored
    `isMinor` is false, the recipient's `isMinor` is true, and no thread between the two already
@@ -1080,7 +1080,7 @@ across those four outcomes, so a regression that re-adds an early return fails a
   the application (`participantKey`, a sorted-and-joined unique key, makes find-or-create
   race-safe), not by the schema.
 - **(g)** **[CHANGED v0.4 — 2026-11-10]** Messages are not end-to-end encrypted, are deleted 12 months after sending (with exceptions), and a
-  recipient can report a message, which shows it and chosen context to staff. See **R33**. Note that (e) above is now partly
+  recipient can report a message, which shows it and chosen context to staff. See **R33**. Item (e) above is now partly
   out of date: a recipient *can* report a message; the content of a thread is still not screened.
 
 *Draft severity: very high, unchanged; the controls reduce the likelihood of the direct
@@ -1276,8 +1276,8 @@ child records trivially filterable by an attacker.
 
 *Draft severity: very high. Draft likelihood: low, but non-zero.* **[ACTION FOR
 REVIEW]** Counsel to consider encryption-at-rest requirements and whether breach
-notification to guardians (not only to affected users) is required. Note that
-`isMinor` is a required safeguarding field under `CLAUDE.md` non-negotiable #1,
+notification to guardians (not only to affected users) is required.
+Since `isMinor` is a required safeguarding field under `CLAUDE.md` non-negotiable #1,
 this risk is a reason to protect the field, **never** a reason to remove it.
 
 ### R11: Sub-processor and hosting exposure (cannot be assessed yet)
@@ -1287,7 +1287,7 @@ Email provider, media storage, hosting, and error monitoring are all unselected
 emails containing a child's display name and an activation token will pass through
 a third party.
 
-**[v0.10 CHANGED — #391, #307, #26]** **[v0.11 CHANGED, #536, #541]** *The sentence above is out of date: hosting is decided (#391: Render in Frankfurt; Neon and Upstash in London, eu-west-2, #536), Postmark is the email provider (wired, not live), media storage is Cloudflare R2 (#307) in the EU jurisdiction with the public media address served through Cloudflare from the start (#541), and Sentry is wired and inert until a real DSN exists. Which are live is unverified. The transfer assessment for these processors is still open for counsel (§5 item 3). The risk is kept as recorded.*
+**[v0.10 CHANGED — #391, #307, #26]** **[v0.11 CHANGED, #536, #541]** *The sentence above is out of date: hosting is decided (#391: Render in Frankfurt; Neon and Upstash in London, eu-west-2, #536), Postmark is the email provider (the account exists), media storage is Cloudflare R2 (#307) in the EU jurisdiction with the public media address served through Cloudflare from the start (#541), and the API is deployed in staging and production, holding the Sentry DSN **[v0.14 CHANGED, accounts live, 2026-11-23]**. Whether they work there is unverified. **[v0.16 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]** The transfer assessment for these processors is still open for counsel (§5 item 3). The risk is kept as recorded.*
 
 *Draft severity: unknown. Draft likelihood: unknown.* **This risk is recorded as
 explicitly un-assessed rather than assessed as low.** It cannot be closed until
@@ -1300,9 +1300,9 @@ screens existed, and `AuthModule` was commented out. None of that is true now: t
 registration, guardian consent (confirm / resend / decline / withdraw / expiry), the
 restricted-pending guards, the under-16 tier, the adult-to-minor DM rule, account anonymization
 and the age sweep are all merged code.* The risk survives in a narrower form, and is easy to
-lose: **"merged" is not "operating".** No live deployment is recorded in the repository;
-`CLAUDE.md` records hosting as chosen (Decision Log #26) but live deployment as unverified, and
-the email provider (Postmark) and error monitoring (Sentry) as wired but not live. Every
+lose: **"merged" is not "operating".** The API is deployed on Render in staging and production, but the product has not launched and the record does not show these controls verified there;
+`CLAUDE.md` records hosting as chosen (Decision Log #26) and deployed, and
+the Postmark account as existing and error monitoring (Sentry) as wired, with the DSN held by the deployed API; none of it is recorded as verified in operation. **[v0.16 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]** Every
 "Built today? Yes" in Section 4 therefore means *the code is merged and covered by automated
 tests*, not that the control has run against real users, a real mail provider, or production
 data. Several mitigations also depend on **scheduled jobs running correctly in production**,
@@ -1684,7 +1684,7 @@ person's own address for **every** suspension. It says the account is suspended 
 report's reason category (for example "harassing or bullying other people"), says how to appeal through the Contact Us page, and
 never names the reporter, quotes the report or states a duration. The generic line "breaching our community rules" is used for the
 categories `child_safety_concern`, `other`, a missing category and any unknown one, so the email never names a child-safety
-matter. The reinstatement email carries no reason. Both are tagged `[COPY PENDING LEGAL REVIEW]`; the category-to-words map is
+matter. The reinstatement email carries no reason. Both are tagged with the pending-legal-review tag; the category-to-words map is
 an adopted default. **Risks for counsel:** (i) the person learns they were reported and for roughly what category; in a
 two-person thread that may let them infer who reported them; (ii) for a serious matter that may be under investigation by an
 external authority, an automatic email to the account holder at the moment of suspension could prejudice that investigation, and
@@ -1759,8 +1759,8 @@ category is a question for counsel. **[ACTION FOR REVIEW]** all of (i) to (vii).
    event at most once a minute per scope (tag `session_revocation=user` or `admin`); it never throws. So **while Redis is down a revoked but unexpired access
    token works again**, until Redis returns or the token expires. Failing closed would have signed everyone out on every Redis blip; the founder accepted
    fail-open (Decision Log #500). If the marker cannot be **written**, the error is raised to the caller (the refresh tokens may already have been deleted by then,
-   so an access token can survive that one failed call). Sentry only reports once a real `SENTRY_DSN` exists (a launch-gate item, B-267), so until then the report
-   goes to the log only.
+   so an access token can survive that one failed call). The deployed API holds the Sentry DSN in staging and production, and no alert rule is recorded as set up (a launch-gate item, B-267), so the report **[v0.15 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
+   goes to Sentry, where nobody is yet alerted.
 3. **The one-second edge (accepted).** The token's issue time and the marker are whole seconds, so a token issued in the same second as, but just before, a
    revocation is **not** refused; a token from an earlier second is. Accepted by the founder (Decision Log #500).
 4. **A side effect, built:** a password change now ends the **current** device's access token too; before, the device kept working for up to 15 minutes. The web
@@ -1919,7 +1919,7 @@ entry below should be read as a claim that the mitigation is adequate.*
 | **R8** Third parties in media | Reporting and takedown route for anyone depicted, including non-users; **[PROPOSAL]** an explicit, plain-language rule on uploading images of children | `Report` model and the Admin moderation queue (Build Plan **Section 8.4**). **[ACTION FOR REVIEW]** `Report` requires a logged-in `reporterId`, so a non-user parent has **no route to report a photo of their child**. Significant gap **[v0.9 CHANGED — #525, #530; §5 item 10]** *Two things changed since this row was written: `POST /reports/public` (no sign-in; `Report.reporterId` is now nullable) lets a non-user report a post, comment or user, though this draft has not assessed whether it fits a parent whose child is depicted; and a vetted admin can set a suspected-illegal file aside (R8 update, v0.9). A non-user still has no route that is specific to a depicted photo.* | **Partially** |
 | **R9** Moderation exposure | **[PROPOSAL]** Restrict child-related reports to specifically designated staff; **[PROPOSAL]** an escalation path for reports disclosing risk of harm | `AdminUser.role` (`editor \| moderator \| superadmin`) gives a role primitive to build on. Build Plan **Section 8.4** moderation/appeals workflow. **[ACTION FOR REVIEW]** Counsel to advise on staff vetting and on any reporting duty to external authorities | **Partially** |
 | **R10** Breach impact | **[PROPOSAL]** Encryption at rest; access controls; a breach-response plan naming who notifies guardians | Depends entirely on hosting, **Decision Log #9, still open** **[v0.10 CHANGED — hosting decided, Decision Log #391; the breach-response plan is a separate draft, `docs/incident-response-and-breach-notification-plan-draft.md`]**. Cannot be specified here | **No** |
-| **R11** Sub-processors | Article 28 contracts, transfer assessments, and processor-specific review for email, storage, hosting, and monitoring; **[PROPOSAL]** configure Sentry to scrub request bodies and identifiers before any real DSN is added | `.env.example` placeholders. Sentry is currently inert, `Sentry.init()` is never called without a DSN, per `services/api/src/app.module.ts` | **No** |
+| **R11** Sub-processors | Article 28 contracts, transfer assessments, and processor-specific review for email, storage, hosting, and monitoring; **[PROPOSAL]** configure Sentry to scrub request bodies and identifiers before the real DSN is used | `.env.example` placeholders. The API is deployed in staging and production and holds the DSN (EU data region), and `Sentry.init()` is never called without a DSN, per `services/api/src/app.module.ts` | **No** | **[v0.15 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 | **R12** Controls merged, not verified live | Re-run and re-sign this DPIA once controls are deployed and tested; keep DPIA review as a hard blocker | Definition of Done, Build Plan **Section 7** | N/A, process control |
 | **R13** Under-16 tier | Messaging and Banter off entirely; Community Groups creation off; guardian contact shown on own profile; distinct `under_16_restricted` code; guard fails closed if untagged | `User.isUnder16`; `Under16RestrictionGuard` + `@RestrictUnder16(feature)`; `users.service.ts` `guardianContact` (PR #272; Decision Log #346). **Open:** rests on self-declared DOB; 403 not enumeration-safe; guardian email shown to the child; 16 to 17 tier not built | **Code merged**, partial |
 | **R14** Age reclassification | Daily recompute of `isMinor` / `isUnder16`, both directions; append-only `AgeReclassificationLog` written in the same transaction; guardian email at 18, in-app notice at 16; `Guardian` row kept at 18 | `AgeReclassificationSweepService` (PRs #275 / #279 / #281 / #282; Decision Log #349). **Open:** ~24h lag; third-party email about an adult; guardian data retained for an adult's account; log has no retention period; younger-direction users may be stranded | **Code merged**: not verified live |

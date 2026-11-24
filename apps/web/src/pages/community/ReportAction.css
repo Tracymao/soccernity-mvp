@@ -1,5 +1,5 @@
-/* ReportAction.tsx — the trigger and the small target menu (no Figma frame, built plainly, matching the
- * surrounding post/comment chrome's tokens); the report dialog itself is at the end of this file. The
+/* ReportAction.tsx — the trigger and the small target menu (drawn as G6-1 desktop 7116:69268 and G6-2 mobile 7116:69318; built
+ * matching the surrounding post/comment chrome's tokens); the report dialog itself is at the end of this file. The
  * .report-action__target/__textarea/__buttons/__submit/__cancel/__error rules are still used by OwnPostMenu.tsx. */
 
 .report-action__trigger {

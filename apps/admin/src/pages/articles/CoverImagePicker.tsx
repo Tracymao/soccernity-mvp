@@ -1,13 +1,7 @@
 // Cover image picker — Decision Log #334, resolved.
 //
-// No Figma frame designs this control anywhere in the file (checked
-// before building it — the Media section's own frames, Figma nodes
-// 361:553 / 396:442 / 916:2362 / 917:24, only ever cover the standalone
-// Media Library/Upload/Preview screens, never a picker embedded in
-// another screen's composer). Built plain and flagged here, matching
-// this project's established "no design exists, build plainly and
-// disclose it" precedent (AdminProfilePage.tsx's Change Password panel,
-// PR #245's ReportAction component).
+// The picker is drawn as G4-2 7122:69435 (loading), G4-3 7122:69602 (with
+// images), G4-4 7122:69786 (cover chosen) and G4-5 7122:69954 (load error).
 //
 // This is a PICKER, not an uploader — it reuses the already-shipped
 // GET /admin/media (listMedia) to choose from images already in the

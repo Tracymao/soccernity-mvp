@@ -1,11 +1,8 @@
 // Admin Console sign-in.
 //
-// NO FIGMA SOURCE: none of the 29 designed Admin Panel screens is a login
-// screen — they all assume an authenticated session. This screen is built
-// plain and on-brand, the same "no dedicated Figma frame exists, built
-// plainly and flagged" precedent apps/web used for ClubPickerStep and the
-// Edit Profile "Manage Account" panel. Decision Log candidate raised in
-// this PR.
+// The plain sign-in is drawn as "Admin sign-in (B-271 base, plain)"
+// (6896:32445), and its text matches the code exactly. The full two-factor
+// sign-in family is drawn too (6896:32472, 6899:*, 6900:*).
 //
 // Auth path: the isolated AdminUser login (POST /admin/auth/login,
 // Decision Log #54) via AdminAuthContext.login — never apps/web's

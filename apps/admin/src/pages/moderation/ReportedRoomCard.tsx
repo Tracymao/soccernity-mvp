@@ -2,7 +2,9 @@
 // "banter_room" report: the room's current status, and, when the SERVER says this admin may reactivate it now
 // (`reportedRoom.staffMayReactivate`), a Reactivate Room button next to where Deactivate Room was recorded.
 //
-// No Figma frame exists for this action. It reuses the existing action control (`mod-btn mod-btn--primary`) and, like
+// Drawn as G3-1 to G3-9 (G3-1 7115:68271 room inactive with Reactivate Room; G3-2 saving 7115:68463;
+// G3-3 reactivated 7115:68655; G3-4 7115:68839; G3-5 7115:69025; G3-6 7115:69211; G3-7 7115:69406;
+// G3-8 room gone 7115:69601; G3-9 vetting restricted 7115:69783). It reuses the existing action control (`mod-btn mod-btn--primary`) and, like
 // Deactivate Room, asks for no confirmation and no note (the route accepts an optional note; this screen does not
 // offer one). Wording is plain and a default for the founder to veto.
 //

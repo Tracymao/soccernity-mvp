@@ -1,14 +1,14 @@
 # Counsel review pack
 
-**Soccernity — draft documents and one list of questions for counsel**
+**Soccernity: draft documents and one list of questions for counsel**
 
-*Pack version 1.1, prepared 2026-11-17 on branch `legal/counsel-review-pack-v11`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
+*Pack version 1.7, prepared 2026-11-23 on branch `copy/pack-q16-optout`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
 
 ## 1. Cover page
 
 **Who Soccernity is.** Soccernity is a social platform for grassroots football: players who are not part of a club or academy, and the fans, coaches and communities around them. It has users in the UK, Nigeria, the US and the EU, and many of those users are children. It has accounts, posts, direct messages, community rooms, a weekly video-skill Contest with a points leaderboard, pictures and video uploaded by users, and an admin console used by staff. The platform is not live yet.
 
-**What counsel is asked.** Counsel is asked to read the eight drafts listed in section 2 and to answer the 71 questions in section 3. Every question is something that is still unresolved and needs a lawyer. Each question says whether it is needed before the documents are signed or can follow launch. Counsel is also asked, in section 4, to approve, reword or reject each of 144 on-screen strings that carry the tag `[COPY PENDING LEGAL REVIEW]`.
+**What counsel is asked.** Counsel is asked to read the eight drafts listed in section 2 and to answer the 71 questions in section 3. Every question is something that is still unresolved and needs a lawyer. Each question says whether it is needed before the documents are signed or can follow launch.
 
 **Status of every draft.** Every draft in this pack is NOT APPROVED. Every sign-off block is empty. A draft being written, or a question being marked, closes nothing. Where a draft says what the founder decided, that records the founder's decision; it does not record counsel's view, and the pack never says counsel agrees.
 
@@ -18,24 +18,25 @@
 - Anything counsel has already signed off (disposition C), for example the scope of regimes, the lawful basis, the special-category clause, the governing-law clause, no EU representative, and card verification as the COPPA control.
 - Housekeeping and engineering items (disposition D).
 - The 56 admin two-factor strings. They are staff-only instructions and the founder cleared them himself without counsel (Decision Log #531).
+- The 144 on-screen strings in section 4. The founder reviewed every one and cleared the tag himself (R108, 2026-11-22); section 4 keeps them as a record.
 - Whether launch should wait. **None of the questions below blocks launch** (Decision Log #524, #532). Uploads go live at launch with `MEDIA_UPLOADS_ENABLED` as the off switch and no counsel gate. Launching before hash-matching exists is the founder's own risk and is not counsel's view. The founder will not register with NCMEC or the UK reporting body before uploads go on (Decision Log #529).
 
 **How labels work.** "Needed before the documents are signed" means counsel's answer changes the text of a document or the on-screen wording that is being signed. "Can follow launch" is a default the founder may veto, with a one-clause reason on each question.
 
 ## 2. Documents
 
-Counsel last gave input on the legal copy at v0.7 (Decision Log #4 and #203; the sign-off covers the decisions, not the live prose). Counsel has not seen v0.16, v0.17 or v0.18 of the legal copy. No other draft in this pack has been reviewed by counsel.
+Counsel last gave input on the legal copy at v0.7 (Decision Log #4 and #203; the sign-off covers the decisions, not the live prose). Counsel has not seen v0.16 to v0.24 of the legal copy. No other draft in this pack has been reviewed by counsel. Section 2 lists the current version of each draft; the source references in section 3 name the version in which the question was raised, so they can be older than the versions listed in section 2.
 
 | Document (file in `docs/`) | Version | What changed since counsel last saw it | Questions that cite it |
 |---|---|---|---|
-| Legal copy (`legal-copy-draft-tos-privacy-policy.md`) | v0.18 | Counsel last saw v0.7 (resolved decisions applied). Since then (including v0.18: Google and Facebook sign-in removed from the text, built-feature markers removed, the 365-day set-aside figure no longer stated in public text): Contact Us retention and notice, direct-message retention, what staff see when a message is reported, soft removal of content, suspension and appeals, report retention restored to the 6-7 year range, the suspected-illegal-imagery path, and (v0.17) every Part C row sorted into A, B, C or D. | 21 questions: Q1, Q3, Q4, Q6, Q7, Q14, Q28, Q33, Q36, Q37, Q38, Q39, Q40, Q41, Q47, Q61, Q67, Q68, Q69, Q70, Q71 |
-| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.10 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorted every one of the 51 open items into A, B, C or D and recorded that uploads no longer wait for counsel (Decision Log #524). v0.10 re-marks items 40, 41 and 47 from "decided by the founder" (B) to founder or engineering housekeeping (D), because no decision exists for them; marks hosting as decided (Frankfurt, Decision Log #391); and adds pointers to later built work. | 12 questions: Q1, Q6, Q7, Q14, Q32, Q34, Q37, Q39, Q42, Q47, Q58, Q59 |
-| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.8 | No counsel review. v0.7 re-sorted the questions into A, B, C or D and recorded the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. v0.8 folds Q18 into Q5, re-marks Q19, Q20, Q23 and Q24 (a) and (b) as housekeeping (D) and Q24 (c) as decided (B, Decision Log #503), and fixes the "no account exists" lines. | 17 questions: Q3, Q6, Q15, Q42, Q45, Q46, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q56, Q57, Q60 |
-| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.6 | No counsel review. v0.5 recorded the decided review model (automatic check first, then report-and-review), the set-aside path and profile pictures and covers, and sorted every question. v0.6 re-marks section 7 question 5 from D to B (staff legal protection and welfare is the founder's duty, Decision Log #533; 5a stays A) and section 12 question 19 from A to D (Decision Log #534), and brings stale version references up to date. | 19 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q16, Q17, Q20, Q34, Q35, Q43, Q62 |
-| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note and updated the wording options to the decided review model. v0.3 refreshed stale references only (legal draft version, Part C row numbers); no disposition changed. | 9 questions: Q1, Q3, Q13, Q16, Q43, Q61, Q62, Q65, Q66 |
-| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.3 | No counsel review. v0.2 recorded removed Contest entries (B-300) and the report-retention cascade (B-307) and sorted every question. v0.3 refreshed stale version references only; no disposition changed. | 12 questions: Q25, Q26, Q27, Q28, Q29, Q30, Q31, Q32, Q34, Q44, Q63, Q64 |
-| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.3 | No counsel review. v0.2 sorted every question and note against the current built behaviour. v0.3 refreshed stale version and row-number references only; no disposition changed. | 5 questions: Q25, Q44, Q61, Q63, Q64 |
-| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.3 | No counsel review. v0.2 recorded that the proxy is adopted in principle but building it is deferred until after launch (Decision Log #449, #518) and sorted every question. v0.3 marks Q9 (which option) as decided by the founder (B, Decision Log #449) in every place it appears, and refreshes stale references. | 10 questions: Q18, Q19, Q20, Q21, Q22, Q23, Q24, Q55, Q61, Q68 |
+| Legal copy (`legal-copy-draft-tos-privacy-policy.md`) | v0.24 | Counsel last saw v0.7 (resolved decisions applied). Since then (including v0.18: Google and Facebook sign-in removed from the text, built-feature markers removed, the 365-day set-aside figure no longer stated in public text): Contact Us retention and notice, direct-message retention, what staff see when a message is reported, soft removal of content, suspension and appeals, report retention restored to the 6-7 year range, the suspected-illegal-imagery path, and (v0.17) every Part C row sorted into A, B, C or D. Later versions (v0.19 to v0.21) made a wording pass with no change of meaning, removed the pending-legal-review tag on the founder's decision of 2026-11-22, and kept the earlier counsel dispositions. v0.22 brings two vendor statements up to date because the accounts are now live (the error-monitoring and storage vendors, and an AWS account that exists but has no check key configured); nothing is deployed and no counsel disposition changed. v0.24 records that the deployed API holds the error-monitoring key (Sentry, EU region) in staging and production; the product has not launched and no disposition changed. | 21 questions: Q1, Q3, Q4, Q6, Q7, Q14, Q28, Q33, Q36, Q37, Q38, Q39, Q40, Q41, Q47, Q61, Q67, Q68, Q69, Q70, Q71 |
+| DPIA (`sprint-1-dpia-outline-draft.md`) | v0.16 | No counsel sign-off exists; the sign-off block is empty. v0.9 sorted every one of the 51 open items into A, B, C or D and recorded that uploads no longer wait for counsel (Decision Log #524). v0.10 re-marks items 40, 41 and 47 from "decided by the founder" (B) to founder or engineering housekeeping (D), because no decision exists for them; marks hosting as decided (Decision Log #391, amended by #536 for the database and cache locations); and adds pointers to later built work. v0.11 states where each service is hosted (Decision Log #536, #541) and makes a wording pass with no change of meaning; v0.12 removes the pending-legal-review tag on the founder's decision of 2026-11-22. v0.13 corrected the hosting statement (Render is created but not configured) and the label of the client applications this draft has not reviewed. v0.14 updates the Sentry, AWS and storage statements because the accounts are now live; nothing is deployed, no risk was re-rated and no disposition changed. v0.16 records that the AWS opt-out was set before the check key was configured, that the deployed API holds the Sentry key (EU region), that both Render environments are deployed, and updates the status of R12; the product has not launched and no risk was re-rated. | 12 questions: Q1, Q6, Q7, Q14, Q32, Q34, Q37, Q39, Q42, Q47, Q58, Q59 |
+| Incident plan (`incident-response-and-breach-notification-plan-draft.md`) | v0.14 | No counsel review. v0.7 re-sorted the questions into A, B, C or D and recorded the built suspected-illegal-imagery path, uploads at launch, detection after launch (not built) and the Docker image. v0.8 folds Q18 into Q5, re-marks Q19, Q20, Q23 and Q24 (a) and (b) as housekeeping (D) and Q24 (c) as decided (B, Decision Log #503), and fixes the "no account exists" lines. v0.9 states hosting locations (Decision Log #536, #541) and makes a wording pass with no change of meaning; v0.10 removes the pending-legal-review tag on the founder's decision of 2026-11-22. v0.11 corrected the platform-status lines (R2 buckets decided under #535, AWS not yet created, Google and Meta sign-in removed under #479) and refreshed its pointers to the current draft versions. v0.12 updates the vendor-account statements (Sentry has a real DSN, AWS and the R2 buckets exist) and its pointers; nothing is deployed and no disposition changed. v0.14 points to legal copy v0.24 and DPIA v0.16; no disposition changed. | 17 questions: Q3, Q6, Q15, Q42, Q45, Q46, Q47, Q48, Q49, Q50, Q51, Q52, Q53, Q54, Q56, Q57, Q60 |
+| Post-media addendum (`dpia-addendum-post-media-draft.md`) | v0.12 | No counsel review. v0.5 recorded the decided review model (automatic check first, then report-and-review), the set-aside path and profile pictures and covers, and sorted every question. v0.6 re-marks section 7 question 5 from D to B (staff legal protection and welfare is the founder's duty, Decision Log #533; 5a stays A) and section 12 question 19 from A to D (Decision Log #534), and brings stale version references up to date. v0.7 states hosting locations (Decision Log #536, #541) and makes a wording pass with no change of meaning; v0.8 removes the pending-legal-review tag on the founder's decision of 2026-11-22. v0.9 replaced the stale "v0.3 DPIA" labels with the current DPIA version where the cited section still says the same thing. v0.10 updates the statements that no AWS account exists (the account exists, no check key is configured, nothing is sent to AWS today) and points to DPIA v0.14. v0.12 records that the AWS opt-out was set before the check key was configured and that the API is deployed in staging and production, and points to DPIA v0.16; no disposition changed. | 19 questions: Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q16, Q17, Q20, Q34, Q35, Q43, Q62 |
+| Post-media Part C (`legal-copy-part-c-post-media-draft.md`) | v0.8 | No counsel review. v0.2 sorted every question and note and updated the wording options to the decided review model. v0.3 refreshed stale references only (legal draft version, Part C row numbers); no disposition changed. v0.4 removes the pending-legal-review tag on the founder's decision of 2026-11-22; no wording or disposition changed. v0.5 updated one pointer to the current legal copy version. v0.6 points to legal copy v0.22 and updates the no-AWS-account statement. v0.8 records that the AWS opt-out was set before the key was configured and points to legal copy v0.24; no disposition changed. | 9 questions: Q1, Q3, Q13, Q16, Q43, Q61, Q62, Q65, Q66 |
+| Contest and view-data addendum (`dpia-addendum-contest-view-data-draft.md`) | v0.8 | No counsel review. v0.2 recorded removed Contest entries (B-300) and the report-retention cascade (B-307) and sorted every question. v0.3 refreshed stale version references only; no disposition changed. v0.4 removes the pending-legal-review tag on the founder's decision of 2026-11-22; no wording or disposition changed. v0.5 replaced stale "v0.3 DPIA" labels with the current DPIA version. v0.6 corrects the sentence about where its risk numbers continue from (R17 to R22 collide with no DPIA risk) and points to DPIA v0.14. v0.8 points to DPIA v0.16; no disposition changed. | 12 questions: Q25, Q26, Q27, Q28, Q29, Q30, Q31, Q32, Q34, Q44, Q63, Q64 |
+| View-data Part C (`legal-copy-part-c-view-data-draft.md`) | v0.8 | No counsel review. v0.2 sorted every question and note against the current built behaviour. v0.3 refreshed stale version and row-number references only; no disposition changed. v0.4 removes the pending-legal-review tag on the founder's decision of 2026-11-22; no wording or disposition changed. v0.5 updated one pointer to the current legal copy version. v0.6 points to legal copy v0.22. v0.8 points to legal copy v0.24; no disposition changed. | 5 questions: Q25, Q44, Q61, Q63, Q64 |
+| Cloudflare draft (`cloudflare-processor-and-cross-border-draft.md`) | v0.6 | No counsel review. v0.2 sorted every question. v0.3 marks Q9 (which option) as decided by the founder (B, Decision Log #449) in every place it appears, and refreshes stale references. v0.4 states hosting locations (Decision Log #536, #541) and makes a wording pass with no change of meaning; v0.5 removes the pending-legal-review tag on the founder's decision of 2026-11-22. Position on the proxy: the media address `media.soccernity.com` is proxied by Cloudflare from the start (Decision Log #541); the proxy in front of the API and the static sites is adopted in principle but building it is deferred until after launch (Decision Log #449, #518). v0.6 corrected the statements that no Cloudflare account exists and that the proxy is built at the launch gate (an account exists and the media address is proxied from the start under #541; the proxy is deferred until after launch under #518). | 10 questions: Q18, Q19, Q20, Q21, Q22, Q23, Q24, Q55, Q61, Q68 |
 
 Document codes used below: LC legal copy, DP DPIA, IP incident plan, PA post-media addendum, PC post-media Part C, CA contest and view-data addendum, VC view-data Part C, CF Cloudflare draft.
 
@@ -43,7 +44,7 @@ Document codes used below: LC legal copy, DP DPIA, IP incident plan, PA post-med
 
 There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question appears once; where several drafts ask the same thing, the question lists every place it appears. Counsel answers a question once and the answer applies to every document that cites it.
 
-### Group 1 — Suspected illegal imagery (none of these blocks launch)
+### Group 1: Suspected illegal imagery (none of these blocks launch)
 
 **Q1.** Does any law that applies to Soccernity (UK, Nigeria, US, EU) require, or strongly expect, a platform that lets users upload pictures and video to run proactive detection (hash-matching) of known illegal child imagery?
 
@@ -87,7 +88,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Can follow launch (default, founder may veto): the sweep is built, runs after 6 or 7 years, and no public text depends on it.
 - *Sources:* Post-media addendum v0.6, section 12 question 24; Legal copy v0.18, Part C row 50; DPIA v0.10, section 5 item 34.
 
-### Group 2 — Automated rejection of a child's file, and video from children
+### Group 2: Automated rejection of a child's file, and video from children
 
 **Q8.** Is an automatic rejection of a child's file a decision to which UK or EU GDPR Article 22 applies? If so, is the human route (a report, a moderator review) enough?
 
@@ -125,11 +126,11 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Needed before the documents are signed: the rule is in the Terms text.
 - *Sources:* Post-media Part C v0.3, question 5.
 
-### Group 3 — Cross-border transfers and processors
+### Group 3: Cross-border transfers and processors
 
 **Q14.** For each of the processors the Policy names (Postmark, the object store, Sentry, Render, Neon, Upstash and others), is the transfer and data-location position acceptable under UK GDPR, EU GDPR and the Nigerian Data Protection Act 2023, and what must the Policy say?
 
-- *Why it matters:* Hosting is in the EU (Frankfurt) but several processors are US companies and no transfer assessment has been written.
+- *Why it matters:* Render runs in Frankfurt, Neon and Upstash run in London (eu-west-2, not the EU) and the R2 buckets are in the EU jurisdiction. Several processors are US companies and no transfer assessment has been written.
 - *Label:* Needed before the documents are signed: the Policy section on processors and international transfers cannot be final without it.
 - *Sources:* Legal copy v0.18, Part C row 9; Legal copy v0.18, Part C row 20; DPIA v0.10, section 5 item 3.
 
@@ -141,11 +142,11 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 
 **Q16.** Is Amazon Web Services an acceptable processor for children's images, and what contract and what opt-out (AWS may use inputs to improve its services unless the account opts out) is needed?
 
-- *Why it matters:* The founder will set the opt-out before any key is configured; the AWS account does not yet exist.
+- *Why it matters:* The founder set the opt-out before any key was configured (founder statement, 2026-11-23); the AWS account exists and the check key is configured.
 - *Label:* Needed before the documents are signed: the Policy names AWS and must describe the opt-out.
 - *Sources:* Post-media addendum v0.6, section 12 question 7; Post-media Part C v0.3, note at line 142.
 
-**Q17.** Does the chosen Rekognition region (Ireland by default) process only in that region, and does the chain from the object store (R2, location unconfirmed) to Rekognition create a transfer that needs its own assessment?
+**Q17.** Does the chosen Rekognition region (Ireland by default) process only in that region, and does the chain from the object store (R2, EU jurisdiction) to Rekognition create a transfer that needs its own assessment?
 
 - *Why it matters:* Where a child's picture is processed is a fact the Policy must state.
 - *Label:* Needed before the documents are signed: the Policy states the region.
@@ -193,7 +194,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Can follow launch (default, founder may veto): the proxy is deferred until after launch.
 - *Sources:* Cloudflare draft v0.3, question 8.
 
-### Group 4 — Profiling of children through view data and points
+### Group 4: Profiling of children through view data and points
 
 **Q25.** Is processing the view, impression and dwell data of children (the stores that rank Contest entries, balance finalist exposure and award points) permissible, on what lawful basis, and for under-13s?
 
@@ -249,7 +250,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Needed before the documents are signed: the Policy describes what other users can see.
 - *Sources:* Legal copy v0.18, Part C row 43.
 
-### Group 5 — Erasure, anonymisation, age changes and retention
+### Group 5: Erasure, anonymisation, age changes and retention
 
 **Q34.** When an account is anonymised, the posts, comments, messages and Contest and points records stay under '[deleted user]' or an anonymised id. Does that meet the right to erasure (Article 17 and the Nigerian equivalent), including the object-store file gap and the points and engagement rows that stay?
 
@@ -317,7 +318,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Needed before the documents are signed: the Policy table has an open row until the periods are set.
 - *Sources:* Contest and view-data addendum v0.3, question 7; Contest and view-data addendum v0.3, question 9; Contest and view-data addendum v0.3, question 10; View-data Part C v0.3, question 5.
 
-### Group 6 — Breach notification
+### Group 6: Breach notification
 
 **Q45.** When two regimes apply to the same breach, is one filing with merged contents acceptable, or must each regulator get its own?
 
@@ -397,7 +398,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document and no public text depends on it.
 - *Sources:* Incident plan v0.8, question -EU1; Incident plan v0.8, question -EU2; Incident plan v0.8, question -EU3; Incident plan v0.8, question -EU4.
 
-### Group 7 — Legal facts the drafts recall from memory
+### Group 7: Legal facts the drafts recall from memory
 
 **Q58.** The drafts quote Article 8 (age of digital consent) and the member-state age table from memory. Please confirm the age that applies in each country Soccernity serves, and whether it depends on the lawful basis.
 
@@ -417,7 +418,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 - *Label:* Can follow launch (default, founder may veto): the plan is an operating document.
 - *Sources:* Incident plan v0.8, question 3; Incident plan v0.8, question 2.
 
-### Group 8 — Notices and wording that change when processing changes
+### Group 8: Notices and wording that change when processing changes
 
 **Q61.** May the guardian consent screen stay as it is when data about viewing, the automated file check and the proxy (if added) are added, or must it change (and the consent screen version with it)? Must guardians who already consented be told?
 
@@ -1020,14 +1021,14 @@ The 56 staff-only admin two-factor strings were cleared earlier, also by the fou
 This table is intentionally blank. Nothing in this pack has been signed.
 
 | Document | Version | Reviewed by | Date | Outcome | Notes |
-|---|---|---|---|
-| Legal copy | v0.18 | | | | |
-| DPIA | v0.10 | | | | |
-| Incident plan | v0.8 | | | | |
-| Post-media addendum | v0.6 | | | | |
-| Post-media Part C | v0.3 | | | | |
-| Contest and view-data addendum | v0.3 | | | | |
-| View-data Part C | v0.3 | | | | |
-| Cloudflare draft | v0.3 | | | | |
+|---|---|---|---|---|---|
+| Legal copy | v0.24 | | | | |
+| DPIA | v0.16 | | | | |
+| Incident plan | v0.14 | | | | |
+| Post-media addendum | v0.12 | | | | |
+| Post-media Part C | v0.8 | | | | |
+| Contest and view-data addendum | v0.8 | | | | |
+| View-data Part C | v0.8 | | | | |
+| Cloudflare draft | v0.6 | | | | |
 | Strings sheet (section 4) | 144 strings, cleared by founder review (R108), no sign-off needed | | | | |
 | Questions Q1 to Q71 (section 3) | answered: yes / no | | | | |

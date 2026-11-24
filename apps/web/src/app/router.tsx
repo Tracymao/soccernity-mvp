@@ -248,10 +248,9 @@ export const routes: RouteObject[] = [
       { path: "search", element: <SearchTrendingPage /> },
       { path: "banter", element: <BanterPage /> },
       // Banter Room -- a single room's feed + posting (Build Plan Section
-      // 4.4, BanterModule -- Decision Log #275/#276). No Figma frame
-      // exists for this screen (the Bants frames only show the room
-      // LIST); built plain and flagged -- see BanterRoomPage.tsx's own
-      // header comment.
+      // 4.4, BanterModule -- Decision Log #275/#276). Drawn as the Bants
+      // room page frames (mobile 6998:54688, desktop 7002:55068); see
+      // BanterRoomPage.tsx's own header comment.
       { path: "banter/:roomId", element: <BanterRoomPage /> },
 
       // Direct Messaging (Build Plan Section 4.7, MessagingModule --
@@ -350,8 +349,8 @@ export const routes: RouteObject[] = [
 
       // Report a concern -- an unauthenticated public reporting page
       // (POST /reports/public, ModerationModule's PublicReportsController).
-      // No Figma frame exists for this; built plain, see ReportPage.tsx's
-      // own header comment. No login gate -- reachable with no session at
+      // Drawn as "Report - Public page" (6947:39713 to 6947:40905, B-284);
+      // see ReportPage.tsx's own header comment. No login gate -- reachable with no session at
       // all, that's the whole point. No site footer -- a utility page,
       // same category as ClubFanPage/GrassrootsTeamPage/ContestPage. Nav
       // entry point: linked from Footer.tsx (there's no separate help/

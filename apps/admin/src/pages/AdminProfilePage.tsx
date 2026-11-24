@@ -8,9 +8,8 @@
 //   editable (services/api update-admin-profile.dto.ts's allowlist);
 //   Email and Role render as read-only in edit mode with a disclosed
 //   "changed by a superadmin, not here" note.
-// - Change Password → POST /admin/auth/change-password. NO FIGMA FRAME
-//   exists for this form (the Figma screen only has the button) — built
-//   plainly as an inline panel, disclosed. On success the backend revokes
+// - Change Password → POST /admin/auth/change-password. Drawn as
+//   "Admin - Profile - Change password - 1 to 7" (7073:63591 to 7073:64643). On success the backend revokes
 //   every other admin session for this account, which the success copy
 //   states.
 import { useState } from "react";

@@ -1,13 +1,13 @@
-# Soccernity: incident-response and breach-notification plan (DRAFT v0.9)
+# Soccernity: incident-response and breach-notification plan (DRAFT v0.14)
 
 > **DRAFT FOR COUNSEL REVIEW. NOT APPROVED, NOT LEGAL ADVICE.**
 > Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context;
 > v0.2 also reflects **#456**, **#458**, **#459**, **#477**, **#478** and **#479**;
-> **v0.3 also reflects #482, #483, #484, #485, #486 and #487; v0.4 also reflects #490, #491, #492, #493 and #494; v0.6 also reflects #495, #498, #499, #500, #501 and #503; v0.7 also reflects #524 to #532 and re-sorts the counsel questions in §12 by who must decide them; v0.8 also reflects Decision Log #533 and #534 and re-marks Q18, Q19, Q20, Q23 and Q24**),
+> **v0.3 also reflects #482, #483, #484, #485, #486 and #487; v0.4 also reflects #490, #491, #492, #493 and #494; v0.6 also reflects #495, #498, #499, #500, #501 and #503; v0.7 also reflects #524 to #532 and re-sorts the counsel questions in §12 by who must decide them; v0.8 also reflects Decision Log #533 and #534 and re-marks Q18, Q19, Q20, Q23 and Q24; v0.14 also reflects the founder's statements of 2026-11-23 on the AWS opt-out, the Sentry DSN and both Render environments**),
 > as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
 > written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
 > **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
-> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is created but not configured, on purpose); the R2 buckets, AWS, Google OAuth and Meta are not yet created **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]**
+> Platform status when written (v0.1 2026-10-31, v0.2 2026-11-09, v0.3 and v0.4 2026-11-11, v0.6 2026-11-13, v0.7 and v0.8 2026-11-17, v0.9 2026-11-21, v0.10 2026-11-22, v0.11 and v0.14 2026-11-23): **not live**. Accounts for Neon, Upstash, Render, Cloudflare, Stripe, MaxMind, Postmark and Sentry exist (Render is configured and the API is deployed in staging and production; the deployed API holds the Sentry DSN, EU data region; the AWS opt-out was set before the key was configured) **[v0.14 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**; the four R2 buckets in the EU jurisdiction are decided (#535) and the AWS account exists and the Rekognition check key is configured; Google and Meta sign-in was removed (#479) **[v0.11 CHANGED, hosting and sign-in facts from #535, #479]** **[v0.8 CHANGED — from the runbook, `docs/launch-gate-runbook.md`, corrected 2026-11-14; the v0.7 text said no account exists]** **[v0.9 CHANGED, #536, #541: wording pass; where the plan states a location it now matches the decided hosting facts]** **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 > yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
 > run against a live system.
 
@@ -29,7 +29,7 @@ blocker is marked **[FOR FOUNDER — not a counsel blocker]**.
 **What this update is, stated plainly.** A narrow refresh against `origin/main` (`b67d9c0`), made so counsel does not read statements that the built system or a
 founder decision contradicts. It re-marks the dispositions of five questions, fixes stale statements, and adds a sub-point to Q5. Every changed passage is marked
 `[v0.8 CHANGED — …]`. It re-rates nothing, closes no risk, and does not complete, advance or approve this plan; **it is still a DRAFT, NOT APPROVED, NOT LEGAL
-ADVICE.** No new customer-facing wording was needed, so nothing is tagged `[COPY PENDING LEGAL REVIEW]`. Nothing was run, CI cannot be read from here, and the
+ADVICE.** No new customer-facing wording was needed, so nothing is tagged with the pending-legal-review tag. Nothing was run, CI cannot be read from here, and the
 Security session could not be asked (non-interactive; no open PR touched this file). Decision Log #533 and #534 are cited as "docs PR R98, pending merge" because
 that PR was not on `origin/main` when this was written. The report `docs/dpia-v010-incident-v08-report.md` lists every change with line numbers and the statements
 it found and left.
@@ -42,7 +42,7 @@ it found and left.
    staff welfare was found" now points at Decision Log #533 and #534.
 
 **Not changed, on purpose:** the v0.2 to v0.7 change lists; every `[OPEN]`, `[UNVERIFIED]` and `[PLACEHOLDER]` marker; Q1 to Q17, Q21, Q22 and the US and EU
-questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position.
+questions apart from the Q5 sub-point; the roles (placeholders); the sign-off position. v0.11 (2026-11-23): stale statements fixed in place (hosting facts, version pointers); no counsel disposition changed. v0.10 (2026-11-22): the pending-legal-review tag was removed from every place it appeared in this draft, on the founder's decision of 2026-11-22 (review of every tagged string); no wording was changed, and no counsel disposition changed. v0.12 (2026-11-23): vendor-account statements updated because the accounts are now live (Sentry has a real DSN, AWS and the R2 buckets exist); nothing is deployed, no counsel disposition changed. v0.13 (2026-11-23): the Rekognition check key is configured and Render is configured with the API deployed (founder statement, 2026-11-23); the statements that said no key was configured, that nothing is sent to AWS, or that nothing is deployed were rewritten; "deployed" does not mean launched or real use; version pointers moved; no counsel disposition changed. v0.14 (2026-11-23): the AWS opt-out was set before the Rekognition key was configured, the deployed API holds the Sentry DSN (EU data region) and both Render environments, staging and production, are deployed (founder statements, 2026-11-23); the product has not launched and no data from real use exists; version pointers moved; no counsel disposition changed.
 
 
 ## v0.7 changes (what changed since v0.6, and why)
@@ -50,10 +50,10 @@ questions apart from the Q5 sub-point; the roles (placeholders); the sign-off po
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-17 against `origin/main` (`014afcd`, after PR #808) for the founder decisions recorded as
 Decision Log #524 to #532 and the builds they cover (the B-206 path, B-321, B-322). The full item list with line numbers, the disposition table and what could not be
 checked is in `docs/incident-plan-v07-report.md`. Every changed passage is marked `[v0.7 CHANGED — …]`. **No new customer-facing wording was needed, so nothing is tagged
-`[COPY PENDING LEGAL REVIEW]`.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
+the pending-legal-review tag.** Nothing here approves, advances or closes anything. Nothing was run, and CI cannot be read from here: what follows is read from the
 merged code, the merged builders' reports and the Decision Log. The Security session could not be asked (this session is non-interactive).
 
-**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.16, DPIA v0.8, this plan v0.6 or the tagged strings. The founder wants counsel to receive current
+**Why §12 was re-sorted.** Counsel has not yet reviewed legal copy v0.24, DPIA v0.16, this plan v0.14 or the strings sheet. **[v0.11 CHANGED, current versions]** The founder wants counsel to receive current
 documents and **one** list of questions that holds only what is unresolved and needs a lawyer. Every question in §12 and every US/EU question in §6.3 and §6.4 now carries a
 `[v0.7 DISPOSITION: …]` marker: **A** open for counsel; **B** decided by the founder (Decision Log number named; counsel's view is not recorded unless said); **C** resolved,
 counsel signed off; **D** founder or engineering housekeeping. **Nothing was dropped**: B, C and D items stay in the file, and the documents still state the founder's decisions.
@@ -68,7 +68,7 @@ Where the Decision Log did not support the founder's reading, the item is marked
    file-level only for profile pictures and covers.**
 3. **Detection is after launch and not built** (Decision Log **#526**): IWF Image Intercept first, Hive as the fallback; PhotoDNA and the Cloudflare scanning tool were dropped.
    §8.3. **The founder will not register with NCMEC or the UK body before uploads go on** (**#529**), so there is **no prepared route to file** until he does. §8.3.
-4. **The API runs from a Docker image with ffmpeg and ffprobe** (Decision Log **#527**, B-322, PR #801). §4.7. Proven locally only; a real Render deploy is not proven.
+4. **The API runs from a Docker image with ffmpeg and ffprobe** (Decision Log **#527**, B-322, PR #801). §4.7. Proven locally; the API is now deployed on Render in staging and production, but video processing there is not confirmed. **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 5. **The review model is decided** (Decision Log **#430**): only child-safety-vetted staff open such files. Staff welfare and vetting is the founder's HR duty (a founder
    statement in the brief; **[v0.8 CHANGED — Decision Log #533 and #534 record it as the founder's HR duty]** the v0.7 wording "no Decision Log entry for it was found" is history). §8.3.
 6. **What stays on counsel's list, and is non-blocking** (Decision Log #524, #529, #532): whether the law requires proactive detection, per-country duties, receiving bodies and
@@ -83,7 +83,7 @@ Where the Decision Log did not support the founder's reading, the item is marked
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-13 against `origin/main` (`d6138c8`, after PRs #755 to #758) for the founder decisions
 recorded as Decision Log #498 to #503 and the builds they cover (B-302, B-305, B-306, B-307, B-308). The item list with line numbers and sources is in
 `docs/dpia-v08-incident-v06-report.md`. Every changed passage is marked `[v0.6 CHANGED — …]`. **No new customer-facing wording was needed, so nothing is tagged
-`[COPY PENDING LEGAL REVIEW]`.** Nothing here approves, advances or closes anything; the DPIA's sign-off block and this plan's counsel questions are unchanged.
+the pending-legal-review tag.** Nothing here approves, advances or closes anything; the DPIA's sign-off block and this plan's counsel questions are unchanged.
 Nothing was run, and CI cannot be read from here: what follows is read from the merged code and the merged builders' reports.
 
 1. **Ending a session now stops an already-issued access token** (Decision Log #500; B-305, PR #755). §4.1 and §4.2 said an access token stays valid for up to
@@ -105,7 +105,7 @@ Nothing was run, and CI cannot be read from here: what follows is read from the 
 
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-11 against `origin/main` (`e6bcf0e`) for the founder decisions recorded as Decision
 Log #490 to #494. The item list with source files is in `docs/dpia-incident-retention-restored-2026-11-11-report.md`. **New wording in this file is tagged
-`[COPY PENDING LEGAL REVIEW]` where it is customer-facing; most of it is internal.** Nothing here approves, advances or closes anything; the DPIA's sign-off block
+the pending-legal-review tag where it is customer-facing; most of it is internal.** Nothing here approves, advances or closes anything; the DPIA's sign-off block
 and this plan's counsel questions are unchanged except where stated.
 
 | # | Fact | Where it changed in this file |
@@ -125,7 +125,7 @@ about and by children than v0.3 assumed (§8.4, Q21). Nothing was added to prote
 
 *Draft for counsel review, not approved, not legal advice.* Refreshed 2026-11-11 against `origin/main` (`0e440bf`) for the
 founder decisions of 2026-11-10 and 2026-11-11. The item list with source files is in `docs/incident-plan-v0.3-report.md`.
-**New customer-facing wording in this file is tagged `[COPY PENDING LEGAL REVIEW]`.** Build-register row **B-206** (evidence
+**New customer-facing wording in this file is tagged with the pending-legal-review tag.** Build-register row **B-206** (evidence
 set-aside, CSAM and statutory reporting) **stays with counsel and is not touched**; this plan only points to it.
 
 | # | Fact | Where it changed in this file |
@@ -195,7 +195,7 @@ plus Nigeria's NDPA 2023, with the US and EU as live questions). **[v0.7 CHANGED
 *Draft for counsel review, not approved, not legal advice.*
 
 Read from `services/api/prisma/schema.prisma` and the code on 2026-10-31. "At rest" below means what the **application** does;
-whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **not verified** (the Neon and Upstash accounts exist, the R2 buckets do not yet; nothing was run against them) **[v0.8 CHANGED — runbook]**.
+whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **not verified** (the Neon, Upstash and R2 accounts and buckets exist; nothing was run against them) **[v0.12 CHANGED, accounts live, 2026-11-23]** **[v0.8 CHANGED — runbook]**.
 
 | Data | Where | Protection in the code | What a leak of it alone means |
 |---|---|---|---|
@@ -227,7 +227,7 @@ Facts a responder needs, all read from the repo: **[v0.3 CHANGED — v0.2 said t
 /admin/action-log` now exists (PR #607, `admin-action-log/README.md`, Decision Log #464): a superadmin reads every row, any other
 admin only their own, and an admin who is not child-safety-vetted never sees rows about a minor or a guardian-notice action, so
 an engineering or moderator responder cannot assume they see the whole trail; a full export is still a database query.]** **no bulk-email or broadcast tool exists** (email
-goes out per event through `RegistrationEmailService` templates); Sentry is **inactive** until a real `SENTRY_DSN` is set, and
+goes out per event through `RegistrationEmailService` templates); the deployed API holds the Sentry `SENTRY_DSN` (EU data region) in staging and production, but the product has not launched, so it collects nothing from real use **[v0.12 CHANGED, accounts live, 2026-11-23]**, and **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 today only two code paths report to it (the global and auth rate limiters failing open).
 
 ---
@@ -257,8 +257,8 @@ enquiry or a message) are **outside this plan** and belong in the safeguarding /
 the escalation trail on `Report`). They are listed so a responder who finds one mid-incident knows to hand it over, not to fold it
 into the breach clock. `[OPEN]`, counsel: is a separate safeguarding-incident plan needed (§12, Q14)?
 
-**Reporting channels into the plan (what exists today):** the Sentry alerts on the `rate_limiter` tag (inactive until the DSN is
-real; launch-gate check B-267 (c)); a processor's own breach notice; a user, guardian or researcher writing to
+**Reporting channels into the plan (what exists today):** the Sentry alerts on the `rate_limiter` tag (the deployed API holds the DSN but no alert rule is
+set up yet **[v0.14 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]**; launch-gate check B-267 (c)); a processor's own breach notice; a user, guardian or researcher writing to
 `support@soccernity.com`; a moderator or admin noticing an anomaly; a failed boot with a refusal message in the Render log.
 There is no security.txt or monitored vulnerability-disclosure address today `[OPEN — founder]`.
 
@@ -367,21 +367,21 @@ system.** Where a tool does not exist, §4.9 says so.
   per 15 minutes per account-and-IP pair; 20 per 24 hours per account; per-IP ceiling), admin login 5 per 15 minutes per IP,
   guardian-withdrawal 5 per 15 minutes. All numbers are environment variables in `render.yaml` and can be tightened by redeploy.
 - **Fail-open with Sentry report** when Redis is down (`rate_limiter=global` / `rate_limiter=auth`; **[v0.6 CHANGED — #500, B-305]** and the session-revocation check, tags `session_revocation=user` / `admin`, which also fails open). **No alert reaches anyone
-  until `SENTRY_DSN` is real and an alert rule exists (B-267 (c)).** The admin login is *not* fail-closed (Decision Log #433).
+  until an alert rule exists (B-267 (c)); the deployed API already holds `SENTRY_DSN`.** The admin login is *not* fail-closed (Decision Log #433).
 - Accounts: a moderator can suspend (`suspended`, not reversible by the user) or delete a user (`PATCH /admin/users/:id`);
   a held account is handled by `AccountHold`. **[v0.3 CHANGED — suspension by this route now requires a reason category (400
   without one) and emails the person; see §4.10.]**
 
 ### 4.7 Switch off a feature
 - Uploads: with no object store configured, upload routes answer 503 and nothing else breaks; video uploads answer 503 when
-  ffmpeg is absent. **[v0.7 CHANGED — #527, B-322, PR #801]** The API now runs from a Docker image that includes ffmpeg and ffprobe; proven locally only, a real Render deploy is not proven. Removing the `S3_*` / `REKOGNITION_*` values and redeploying is the existing off switch for media.
+  ffmpeg is absent. **[v0.7 CHANGED — #527, B-322, PR #801]** The API now runs from a Docker image that includes ffmpeg and ffprobe; proven locally; the API is now deployed on Render in staging and production, but video processing there is not confirmed. Removing the `S3_*` / `REKOGNITION_*` values and redeploying is the existing off switch for media. **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 - **[v0.6 CHANGED — Decision Log #501, B-306, PR #756]** **`MEDIA_UPLOADS_ENABLED` is now a per-feature switch for user uploads.** It is read on every call. In production uploads work only when it is exactly `true`; elsewhere they work unless it is exactly `false`; Render sets `NODE_ENV=production` on staging too, so both start **off**. With it off, `POST /media/uploads`, its confirm step, and the avatar and cover uploads refuse with a coded 403 `media_uploads_disabled` before any file is read or stored. It does **not** hide or remove media that already exists, and does not stop reading, deleting, reporting a file, the staff upload route, or posts without media. Changing it is a Render environment change. The founder sets it to `true` only after counsel answers B-206; this plan does not decide B-206 and does not say what the answer should be. **[v0.7 CHANGED — #524, #529]** (v0.6 text kept above) The founder decided that uploads go on at launch and that B-206 no longer waits for counsel; the launch condition is runbook step 8.7 (the reporting path tried once on staging, and video working on staging). **`MEDIA_UPLOADS_ENABLED` is the incident off switch**: set it to `false` and redeploy (a Render environment change). The founder accepts launching before hash-matching exists as his own risk, not as a view of counsel. It still does not hide or remove media that already exists.
 - Email: an unusable `WEB_APP_BASE_URL` stops verification, guardian-consent and withdrawal emails from being sent at all.
 - There is **no maintenance mode, no read-only mode and no per-feature kill switch** in the code **[v0.6 CHANGED — B-306: except the uploads switch above]**. Taking the API down means
   suspending the Render service `[PLACEHOLDER: who holds the Render login]`.
 
 ### 4.8 Processor contact routes (to be filled on account creation)
-Contact routes below are **placeholders**, the accounts exist for most processors (the R2 buckets and AWS do not yet) but nothing here was tested **[v0.8 CHANGED — runbook]**, and the vendors' current security /
+Contact routes below are **placeholders**, the accounts exist for most processors (the R2 buckets and an AWS account now exist too) but nothing here was tested **[v0.8 CHANGED — runbook]**, and the vendors' current security /
 breach contacts were not looked up. Record the account owner, the support tier and the security-contact route when each account is
 opened.
 
@@ -391,9 +391,9 @@ opened.
 | Neon (Postgres, London eu-west-2, not the EU) **[v0.9 CHANGED, #536, #541]** | The whole database, backups, branches | `[PLACEHOLDER: support route; point-in-time restore window]` |
 | Upstash (Redis, London eu-west-2, not the EU, free plan) **[v0.9 CHANGED, #536, #541]** | Refresh tokens (hashed), reset / verification tokens, counters | `[PLACEHOLDER]`, free plan has no SLA (Decision Log #439) |
 | Postmark (email) | Recipient addresses and message bodies in transit / activity logs | `[PLACEHOLDER]` |
-| Sentry (EU region) **[v0.9 CHANGED, #536, #541]** | Error events (today: none) | `[PLACEHOLDER]`. DSN not real; scrubbing of request bodies is a DPIA R11 proposal, not done |
+| Sentry (EU region) **[v0.9 CHANGED, #536, #541]** | Error events (today: none) | `[PLACEHOLDER]`. the deployed API holds the DSN (staging and production), but nothing is collected from real use; scrubbing of request bodies is a DPIA R11 proposal, not done | **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 | Cloudflare R2 (media, EU jurisdiction buckets; public address media.soccernity.com, proxied by Cloudflare from the start, Decision Log #541; also edge if added, Decision Log #424) **[v0.9 CHANGED, #536, #541]** | Images and videos of children | `[PLACEHOLDER]` |
-| Amazon Web Services (Rekognition image check) | Frames / images sent for classification | `[PLACEHOLDER]`, opt-out of AI-services data use is a founder launch step |
+| Amazon Web Services (Rekognition image check) | Frames / images sent for classification | `[PLACEHOLDER]`, the AWS Organizations opt-out of AI-services data use was set before the key was configured (founder statement, 2026-11-23) **[v0.14 CHANGED, AWS opt-out set, Sentry DSN held, both environments deployed, 2026-11-23]** |
 | Stripe (card verification) | Card data and the PaymentIntent for under-13 US guardians | `[PLACEHOLDER]` |
 | MaxMind (GeoLite2 download only) | No user data (local database) | n/a |
 | GitHub | Source code, CI; the repository is public (Decision Log #441 (e)) | `[PLACEHOLDER]`, a secret ever committed is treated as exposed and must be rotated |
@@ -421,7 +421,7 @@ opened.
   staff tool to **restore** removed content other than overturning the removing report's appeal, and, **[v0.6 CHANGED — B-292, PR #731]** (v0.5: "no staff-recorded appeal yet (B-292 is decided, not built)") a **staff-recorded appeal** now exists (`POST /admin/moderation/reports/:id/appeal`: only for a report whose action was `user_suspended`, with a written reason, inside the same 30-day window; the recorder and the original actioner may not decide it), but there is no staff tool to undo a wrong `content_removed` other than the appeal route. A responder who removed or suspended in error has a manual reinstatement (accounts) or the appeal route (content, and a suspension made on a report). Content removal can only be recorded **on a report**: a responder
   without an existing report must have one filed first (`[UNVERIFIED]`, an admin cannot submit a report from the admin
   console; inferred from the routes).
-- **Sentry, Postmark, Upstash alerting, Render, Neon: none live.** This plan cannot be exercised until they are.
+- **Sentry, Postmark, Upstash alerting, Render, Neon: set up, and the API is deployed in staging and production, but none carries real use.** This plan cannot be exercised until they do. **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 
 ### 4.10 Content removal and suspension: what each does when used as containment **[v0.3 CHANGED — new section]**
 
@@ -701,7 +701,7 @@ account hold (#459).
 | Email-change and recovery requests **[v0.2 CHANGED]** | Postgres `EmailChangeRequest`, `TwoFactorRecoveryRequest` | Note the rows and states for the affected accounts before cancelling or deleting anything. Ended recovery rows are removed 30 days after they end. |
 | Media | R2 `private-media/` and `post-media/` | Object list and access logs if enabled `[UNVERIFIED]`. |
 | Repository history | GitHub | Commit hashes; a secret ever committed is treated as exposed. |
-| Sentry events | Sentry | Inactive until the DSN is real. |
+| Sentry events | Sentry | The deployed API holds the DSN in staging and production, but the product has not launched, so nothing is collected from real use yet. | **[v0.13 CHANGED, Rekognition key configured and API deployed, 2026-11-23]**
 | Email activity | Postmark | Message activity, bounces. |
 | Screenshots / chat | Responders | Name files with date and time; do not store children's data in chat tools. |
 
@@ -715,7 +715,7 @@ account hold (#459).
 - **Rejected media and CSAM:** **[v0.6 CHANGED — B-283, PR #608]** (v0.5: "rejected files are kept private and never deleted") a rejected file's private object is deleted on every path that removes its database row (a post deleted by a live account, a deleted upload, the quarantine and unattached purges, account anonymisation and the account purge), unless the uploader is under an active admin hold or the post has a report that is not yet closed; a moderator's Reject itself deletes nothing. A daily sweep for stray objects with no row exists but needs a list permission on the storage key (B-207), so it may find none until that is granted. What counts as evidence, and any statutory duty, is **not decided and open under counsel (B-206)**; user uploads are off by default in production until it is answered (§4.7). The handling of material that may
   be illegal is **undecided and open under counsel**. **[v0.7 CHANGED — #524, #525, #526, #529, #530]** (v0.6 text kept above) **Uploads go on at launch** with `MEDIA_UPLOADS_ENABLED` as the off switch, and **a suspected-illegal-imagery path is built** (next bullet). The legal side stays open for counsel and is non-blocking: whether the law requires proactive detection, per-country duties, receiving bodies and deadlines, evidence retention beyond 365 days, and platform duties to children (Q11, Q22). **Detection (IWF Image Intercept first, Hive as the fallback) is built after launch and is NOT BUILT**; the founder accepts launching before hash-matching exists as his own risk, not a view of counsel. A responder who finds possible CSAM must not copy, forward or view it
   further and goes to counsel at once.
-- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel and should not expect a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
+- **[v0.7 CHANGED — #525, #526, #529, #530; new paragraph]** **A file that has been set aside as suspected illegal imagery.** *Draft for counsel review, not approved, not legal advice.* A responder does **not** delete it: no sweep, upload deletion, account deletion, anonymisation or purge removes the file or its `SuspectedIllegalMedia` record until `preserveUntil` (default 365 days from the set-aside time), and the record holds no foreign keys so it survives the row it describes. A responder does **not** open it unless they are child-safety-vetted; a non-vetted admin cannot reach it through the admin routes, and the review model is decided (#430): only vetted staff open such files. **Filing with a receiving body is made by a vetted admin outside the platform; the platform records only that it was filed or not filed and never contacts an authority or a vendor.** **Until the founder registers with a receiving body there is no prepared route to file (#529)**, so a responder who finds a set-aside file during an incident takes the facts to the founder and counsel and does not expect a filing path. For a profile picture or a cover the protection is file-level only: the person can still delete the picture or the account. Staff welfare and vetting is the founder's HR duty (a founder statement; no Decision Log entry for it was found). Nothing here is a statutory-reporting procedure; that is open for counsel (Q11, Q22).
 
 ### 8.4 Old evidence and the retention clocks **[v0.3 CHANGED — new section]**
 
@@ -875,18 +875,18 @@ product**; no variant of the automatic email exists. Sent by hand from `support@
 confirmed is the owner's, **not** necessarily the address on file.
 ```
 Subject: Your Soccernity account has been paused
-[COPY PENDING LEGAL REVIEW]
+
 
 Hi [first name],
 
 We have paused your Soccernity account while we look into a security problem. This is not because of anything you did wrong.
-[COPY PENDING LEGAL REVIEW]
+
 
 If you got an email from us saying your account was suspended for breaking our community rules, please ignore that reason: it
-was sent automatically and does not apply here. [COPY PENDING LEGAL REVIEW]
+was sent automatically and does not apply here.
 
 We will write again when your account is back, or you can reach us at [PLACEHOLDER contact]. We will never ask for your password.
-[COPY PENDING LEGAL REVIEW]
+
 ```
 For a minor, the guardian's version follows §10.2 and is checked against the withhold flag first (§7.5). Whether this note is
 needed, and what may be promised about points, `[OPEN — Q20]`.
@@ -899,7 +899,7 @@ needed, and what may be promised about points, `[OPEN — Q20]`.
 They are listed so the founder and counsel see what the plan depends on; each is a separate register item.
 
 - Real accounts and contacts for each processor (§4.8) and a written owner for each login.
-- A real `SENTRY_DSN` and alert rules on `rate_limiter` (B-267 (c)); an on-call route that rings a human.
+- Alert rules on `rate_limiter` (B-267 (c)); an on-call route that rings a human.
 - `TRUST_PROXY_HOPS` verified so IP-based limits and country derivation see real client IPs (B-267 (b)).
 - Upstash plan decision (Decision Log #439): a Redis outage stops sign-in, refresh, reset and verification, and is not a breach.
 - The R2 public-address rule that keeps `private-media/` private, proven by a refused request (B-265).
@@ -913,7 +913,7 @@ They are listed so the founder and counsel see what the plan depends on; each is
 *Draft for counsel review, not approved, not legal advice.* **Nothing in this list is decided. Options are set out with their
 trade-offs; the draft deliberately does not pick one.**
 
-**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.16, DPIA v0.8, plan v0.6 or the tagged
+**[v0.7 CHANGED — the counsel list]** *Draft for counsel review, not approved, not legal advice.* Counsel has not yet seen legal copy v0.24, DPIA v0.16, plan v0.14 or the
 strings. **Only the rows marked A below go to counsel**; B, C and D rows are kept so nothing is lost and so counsel can see what the founder has already decided. Where
 a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition and the founder is asked to say (`docs/incident-plan-v07-report.md`).
 
@@ -934,10 +934,10 @@ a row is marked *NOT ASSIGNED* the Decision Log did not support a disposition an
 | **Q4** | **[v0.7 DISPOSITION: A — no decision recorded]** Is a **leaked database copy without the encryption key** a notifiable breach, and would the Art. 34(3)(a) "unintelligible" exception apply to the date of birth (encrypted) but not to email, name, `isMinor` and messages (not encrypted)? What if the key may also have leaked? |
 | **Q5** | **[v0.7 DISPOSITION: A — no decision on a breach notice to guardians (#456 covers security actions, not breaches)]** **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? **[v0.2 CHANGED — still open. #456 tells guardians of security actions, not of breaches; see §7.5.]** **[v0.8 CHANGED — #534, Q18 folded in]** *Sub-point (from Q18): does the "withhold guardian notices" flag (#458) also stop a **breach** notice to that guardian, and who decides, given the reason is visible only to child-safety-vetted admins (§7.5)? Q5 stays open for counsel (A).* |
 | **Q6** | **[v0.7 DISPOSITION: A — no decision recorded]** For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
-| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; not re-checked against legal copy v0.16]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
+| **Q7** | **[v0.7 DISPOSITION: A — no decision recorded; checked against legal copy v0.24 on 2026-11-23, which still reads the same]** Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
 | **Q8** | **[v0.7 DISPOSITION: A — no decision recorded (the 6 and 7-year report range is recorded as counsel-approved, #490; the rest is open)]** Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. **[v0.3 CHANGED — also versus the report retention periods in §8.4 (6 years; 7 years for a minor **[v0.4 CHANGED — #490]**; v0.3 said 12 months and 6), which run independently of any incident.]** |
 | **Q9** | **[v0.7 DISPOSITION: D — a build and authorisation question; no decision recorded and nothing contradicts the founder's reading]** Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
-| **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged `[COPY PENDING LEGAL REVIEW]` in the platform's manifest, and no counsel position is recorded here. |
+| **Q10** | **[v0.7 DISPOSITION: B — Decision Log #456 (founder, 2026-11-01); counsel's view not recorded]** **[v0.2 CHANGED — SETTLED, no longer open under counsel for this question.]** Decision Log **#438 / B-263**: is a guardian told when a minor's sign-in is locked? **Settled by Decision Log #456 (founder, 2026-11-01): yes**, the guardian is emailed when a minor's sign-in lock trips, at most once per account per 24 hours (built, `LoginLockoutNotifier`; `guardian-security-notice/README.md`). See §7.5. This draft records the decision and takes no view on it; wording is plain copy tagged with the pending-legal-review tag in the platform's manifest, and no counsel position is recorded here. |
 | **Q11** | **[v0.7 DISPOSITION: A — non-blocking (#524, #532); now includes the suspected-illegal-imagery duties: police and statutory reports, receiving bodies and deadlines per country (the founder will not register before uploads go on, #529)]** Who else is told: police, insurers, the platform's processors' own regulators? Obligations to report suspected child-safety crimes? **[v0.7 CHANGED — #524, #529, #532]** Includes, and is merged with, the statutory-reporting duties for suspected illegal imagery in Q22(b); non-blocking for launch. |
 | **Q12** | **[v0.7 DISPOSITION: A — no decision recorded]** Is one-person incident leadership acceptable at launch, or must a second named responder exist? Does counsel require a **data-protection officer** (UK GDPR Art. 37; NDPA's DPO duty for controllers of major importance, GAID Art. 11), thresholds not verified here. |
 | **Q13** | **[v0.7 DISPOSITION: A — no decision recorded]** Nigeria: does the NDPA require Soccernity to register as a controller "of major importance"? That decides some reporting duties (GAID Arts. 8 to 9). Not assessed. |

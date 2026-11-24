@@ -1,0 +1,8 @@
+legal-copy-draft-tos-privacy-policy lines 1378 headings 63 NOT APPROVED 4 [PROPOSAL 58 [OPEN 25 DISPOSITION 58
+sprint-1-dpia-outline-draft lines 2143 headings 59 NOT APPROVED 2 [PROPOSAL 28 [OPEN 11 DISPOSITION 56
+incident-response-and-breach-notification-plan-draft lines 1032 headings 57 NOT APPROVED 3 [PROPOSAL 6 [OPEN 22 DISPOSITION 32
+dpia-addendum-post-media-draft lines 995 headings 48 NOT APPROVED 2 [PROPOSAL 2 [OPEN 6 DISPOSITION 44
+legal-copy-part-c-post-media-draft lines 286 headings 19 NOT APPROVED 9 [PROPOSAL 12 [OPEN 14 DISPOSITION 22
+dpia-addendum-contest-view-data-draft lines 486 headings 28 NOT APPROVED 9 [PROPOSAL 2 [OPEN 3 DISPOSITION 23
+legal-copy-part-c-view-data-draft lines 197 headings 16 NOT APPROVED 9 [PROPOSAL 6 [OPEN 5 DISPOSITION 12
+cloudflare-processor-and-cross-border-draft lines 540 headings 38 NOT APPROVED 9 [PROPOSAL 7 [OPEN 8 DISPOSITION 18

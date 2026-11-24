@@ -1,4 +1,5 @@
-/* Suspected illegal imagery (B-206; backend PR #800). NO Figma frame exists: everything reuses moderation.css
+/* Suspected illegal imagery (B-206; backend PR #800). The list, the detail and the set-aside action and dialog are all drawn
+ * (L, D and SA frames); everything reuses moderation.css
  * (mod-*, hi-*, ce-*) and the username-reviews table pattern. Tokens only; the alert colour is not used. */
 
 .si-consequences {
