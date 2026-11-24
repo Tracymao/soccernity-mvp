@@ -1,5 +1,6 @@
 // "Suspected illegal imagery" -- the confirmation dialog on the media-review item page (build-register B-206; backend
-// PR #800, POST /admin/media-review/:id/suspected-illegal). NO Figma frame exists for this action: it reuses the
+// PR #800, POST /admin/media-review/:id/suspected-illegal). Drawn as SA-1 to SA-5 (dialog states), with SA-6 to SA-8
+// for what the page shows afterwards; it reuses the
 // RecordAppealDialog / HoldDialog shell (mod-scrim, mod-dialog, useDialogFocus) and says plainly what will happen.
 //
 // The reason is required (10 to 500 characters, trimmed). Refusals are told apart by the server's stable `code`:

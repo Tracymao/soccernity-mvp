@@ -19,8 +19,8 @@ The third button on the four item frames is labelled "Suspected illegal imagery"
 - SA-8 `7101:68108` restricted notice: a full-width `Card — Restricted` (`7106:68253`, cloned from `7075:66265`) above the Details card, with the exact `VettingRestrictedNotice` text (title "Restricted: child-safety vetting required", the code's body with its curly apostrophe). The earlier callout `7101:68281` was removed and the Details panel is back to the Picture item layout (529 high); the action row stays wrapped with the third button, as in the code. The prototype link on the disabled Cancel of SA-3 (`7094:67552`) was removed because the code disables Cancel while submitting
 - Notes frame `7102:68239` (7 notes)
 
-## Prototype links (9, read back)
-Picture third button to SA-1; Profile third button to SA-5; Cancel `7092:67225`, `7094:67363`, `7094:67552`, `7094:67744` to Picture; Cancel `7097:67883` to Profile; Confirm `7094:67364` to SA-6; Confirm `7097:67884` to SA-7. Reactions are on instances only.
+## Prototype links (8, read back)
+Picture third button to SA-1; Profile third button to SA-5; Cancel `7092:67225`, `7094:67363`, `7094:67744` to Picture; Cancel `7097:67883` to Profile; Confirm `7094:67364` to SA-6; Confirm `7097:67884` to SA-7. Reactions are on instances only.
 
 ## Standing check (Decision Log #404 item 14)
 Top-level nodes 1,894 to 1,903 (+9: 8 SA frames and the notes frame). Hash of the original ids unchanged (`1105885003`). 0 overlaps. 8 unbound fills, all the inherited Admin Shell `Rectangle 223` (Decision Log #199). Nothing deleted.

@@ -21,7 +21,7 @@
 // the text claims only what is known.
 //
 // Suspected illegal imagery (B-206; backend PR #800). A post or contest file also has a third action beside Approve and
-// Reject: "Suspected illegal imagery" (NO Figma frame exists; it reuses the Reject dialog's shell). It is offered only
+// Reject: "Suspected illegal imagery" (drawn as the third button on the item frames, with the dialog and result states as SA-1 to SA-8, SA-1 7092:67168). It is offered only
 // when the signed-in admin could use it: when the admin session is present and says the admin is NOT child-safety
 // vetted, the button is not drawn at all. With no session provider (a test mounting the page alone) the server decides,
 // and its coded 403 child_safety_vetting_required shows the existing restricted notice. Once a record exists the page

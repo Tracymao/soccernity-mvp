@@ -1,4 +1,4 @@
-// Small pieces the Suspected illegal imagery screens share (B-206). No Figma frame exists for these screens.
+// Small pieces the Suspected illegal imagery screens share (B-206). The screens are drawn (list L1 to L7, detail D1 to D14).
 import type { ReactNode } from "react";
 import { statusLabel } from "../../api/suspectedIllegal";
 

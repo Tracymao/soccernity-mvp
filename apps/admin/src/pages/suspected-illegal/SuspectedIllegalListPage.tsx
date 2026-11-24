@@ -1,5 +1,5 @@
-// Suspected illegal imagery -- the list (B-206; backend PR #800, GET /admin/suspected-illegal-media). NO Figma frame
-// exists: this reuses the Username reviews list pattern (status filter with Apply, a table, "Load more", empty,
+// Suspected illegal imagery -- the list (B-206; backend PR #800, GET /admin/suspected-illegal-media). Drawn as L1 to
+// L7 (L1 7074:64435); built from the Username reviews list pattern (status filter with Apply, a table, "Load more", empty,
 // loading and error states). Route /moderation/suspected-illegal, reached from the Media review page.
 //
 // Only a child-safety-vetted moderator or superadmin may read it. The server decides: a non-vetted admin gets the
