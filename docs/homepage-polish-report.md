@@ -11,7 +11,7 @@ Branch `fix/homepage-polish`. Decision Log #563, register Section 126, B-327 (bu
 ## Verification
 - `tsc --noEmit` 0; eslint clean; Vitest 162 files / 2,107 tests passed.
 - `npm run build:release` exit 0; check:pending-copy: OK, no tagged text in the production builds.
-- Screenshots (`docs/homepage-polish-screens/`, real Chrome, API intercepted): no cover media 120px at 1440, 96px at 390; cover 300px at both widths, same look as before; error case renders no featured block; no horizontal overflow (scrollWidth equals viewport). Headline wraps to three balanced lines at 390.
+- Screenshots (taken in real Chrome with the API intercepted during the PR; not committed to the repo): no cover media 120px at 1440, 96px at 390; cover 300px at both widths, same look as before; error case renders no featured block; no horizontal overflow (scrollWidth equals viewport). Headline wraps to three balanced lines at 390.
 - Grep: old phrases appear only in the test absence assertions.
 
 ## Records and count fix
