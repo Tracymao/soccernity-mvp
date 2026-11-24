@@ -796,6 +796,13 @@ services:
         value: https://api.staging.soccernity.com
       - key: VITE_MEDIA_BASE_URL
         value: https://media.staging.soccernity.com
+      # Search-engine indexing is OFF until the founder flips it at the launch gate: set VITE_SITE_INDEXABLE to "true" and
+      # VITE_SITE_URL to the https site origin (no path), then redeploy. Both are read at BUILD time, so a change needs a rebuild.
+      # Anything but the exact string "true" builds a noindex page and a Disallow robots.txt. "true" without a valid origin fails the build.
+      - key: VITE_SITE_INDEXABLE
+        value: "false"
+      - key: VITE_SITE_URL
+        sync: false
       # Pins the Node version of the static-site BUILD (Decision Log #540). Same version the API image uses (Decision Log #527).
       # A plain value, not a secret. Without it Render picks its own default Node for the build.
       - key: NODE_VERSION
@@ -887,6 +894,13 @@ services:
         value: https://api.soccernity.com
       - key: VITE_MEDIA_BASE_URL
         value: https://media.soccernity.com
+      # Search-engine indexing is OFF until the founder flips it at the launch gate: set VITE_SITE_INDEXABLE to "true" and
+      # VITE_SITE_URL to the https site origin (no path), then redeploy. Both are read at BUILD time, so a change needs a rebuild.
+      # Anything but the exact string "true" builds a noindex page and a Disallow robots.txt. "true" without a valid origin fails the build.
+      - key: VITE_SITE_INDEXABLE
+        value: "false"
+      - key: VITE_SITE_URL
+        sync: false
       # Pins the Node version of the static-site BUILD (Decision Log #540). Same version the API image uses (Decision Log #527).
       # A plain value, not a secret. Without it Render picks its own default Node for the build.
       - key: NODE_VERSION

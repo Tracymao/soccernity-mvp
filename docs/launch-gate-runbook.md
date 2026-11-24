@@ -425,6 +425,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, no tagged string remains (step
 | 8.5 Video / ffmpeg (Docker image; checked in 6.15) | Agent | B-306, B-322 | |
 | 8.6 ADMIN_2FA_ENFORCED = true | Founder | B-267 (j) | |
 | 8.7 MEDIA_UPLOADS_ENABLED (after the two-part launch condition: 6.14, 6.15) | Founder | B-306, B-267 (l), B-206 | |
+| 8.10 Search indexing: set VITE_SITE_INDEXABLE=true and VITE_SITE_URL on the PRODUCTION web static site, then rebuild (stays off until then) | Founder | B-326, B-267 | |
 | 9.1-9.7 Go live | Founder, agent | B-090 | |
 | 10.1-10.3 Smoke tests | Founder, QA | B-090 | |
 | 12.1 Dependabot re-enabled | Founder | B-267 (f) | |
