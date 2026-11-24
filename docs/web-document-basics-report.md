@@ -1,6 +1,6 @@
 # Web document basics (CH-H2)
 
-Branch `feat/web-document-basics`. Decision Log #556, register Section 123, B-325.
+Branch `feat/web-document-basics`. Decision Log #557, register Section 124, B-326.
 
 ## What was built
 - `apps/web/vite-plugins/documentBasics.ts` (+ unit test): rewrites `index.html` and emits `robots.txt` (no `robots.txt` in `public/`).
@@ -8,7 +8,7 @@ Branch `feat/web-document-basics`. Decision Log #556, register Section 123, B-32
 - `VITE_SITE_INDEXABLE` exactly `true`: no noindex, robots.txt `Allow: /`, canonical link and og:url from `VITE_SITE_URL` (origin plus `/`). Missing or non-https-origin (path, query, hash, credentials) makes the build fail.
 - `index.html`: title unchanged, meta description, Open Graph (type, site_name, title, description), `twitter:card` summary, SVG favicon, 32px PNG, 180px apple-touch-icon, `theme-color` `#282E65` (brand navy; my choice).
 - `render.yaml`: `VITE_SITE_INDEXABLE` ("false") and `VITE_SITE_URL` (`sync: false`) on the two web static sites only, with a comment that the founder sets both at the launch gate and a rebuild is needed.
-- Records: Decision Log #556 (docx, earlier rows verified text-identical), register Section 123 and B-325, runbook one-page checklist line 8.10.
+- Records: Decision Log #557 (docx, earlier rows verified text-identical), register Section 124 and B-326, runbook one-page checklist line 8.10.
 
 ## Favicon artwork
 The full header logo mark (`src/assets/icons/soccernity-logo-mark.svg`, green ball over navy bubble), copied to `public/favicon.svg` with sizing attributes removed. PNGs rendered with sharp. Judged readable at 32px.
@@ -24,4 +24,4 @@ The full header logo mark (`src/assets/icons/soccernity-logo-mark.svg`, green ba
 ## Not matching / follow-ups
 - No `og:image`: needs a design.
 - A non-existent path still returns `index.html` with status 200 (SPA fallback); not changed.
-- CH-H1 had not merged when this was written, so numbers are #556 / Section 123 / B-325; renumber if it lands first.
+- CH-H1 merged first and took #556, Section 123 and B-325, so this uses #557, Section 124 and B-326.
