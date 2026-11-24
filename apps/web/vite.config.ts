@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { legalCopyPlugin } from "./vite-plugins/legalCopy";
+import { documentBasicsPlugin } from "./vite-plugins/documentBasics";
 
 // See MVP Build Plan Section 5 for the stack decision this implements.
 //
@@ -13,7 +14,7 @@ import { legalCopyPlugin } from "./vite-plugins/legalCopy";
 // components and dispatch form events in a Node test run;
 // @testing-library/react is the render/query/fireEvent harness.
 export default defineConfig({
-  plugins: [react(), legalCopyPlugin()],
+  plugins: [react(), legalCopyPlugin(), documentBasicsPlugin()],
   test: {
     environment: "jsdom",
     // B-246: resets the in-memory session between tests.
