@@ -1,89 +1,54 @@
-// Home -- the logged-out marketing landing page.
-//
-// Figma source: canonical frame 5204:6728 ("Home Page Desktop -- Premium
-// Light, Sprint 2 Pass 2"), "Soccernity-MVP" file (weZWWqggy9j13eX8bhFgs6).
-// Decision Log #46 confirms 5204:6728 is the canonical homepage;
-// Decision Log #152 confirms "/" is exclusively the logged-out marketing
-// page and that logged-in users route to the Community feed instead --
-// there is no separate authenticated-homepage design, and none is built
-// here.
+// Home: the logged-out marketing landing page.
 //
 // ROUTING: this component IS the "/" index route (see src/app/router.tsx).
-// If a session token exists (getStoredAccessToken()), it redirects to
-// /community -- the authenticated feed -- rather than rendering the
-// marketing page. Otherwise it renders the marketing page as-is. Session
-// is read directly via src/lib/session.ts, the same way every other
-// converted page does it (no AuthContext exists yet -- see that file's
-// header comment).
+// Decision Log #152: "/" is exclusively the logged-out marketing page, and
+// a signed-in visitor goes to the Community feed instead. If a session
+// token exists (getStoredAccessToken()), HomePage redirects to /community
+// and renders nothing else, so a signed-in visitor makes NO API requests
+// from here. Otherwise it renders MarketingHome, which owns the data reads
+// (hooks cannot follow an early return, hence the split). Session is read
+// directly via src/lib/session.ts, the same way every other converted page
+// does it.
 //
-// EVERYTHING BELOW THE NAVBAR IS STATIC. Per the frame's own annotation
-// zone (5214:6805) and Decision Log #6: there is no fixtures, news, or
-// points/appearance data source anywhere in Build Plan Section 4, so the
-// fixtures strip, talent clips, trending stories and the hero's live
-// fixture card are all illustrative dummy content hardcoded to match the
-// Figma frame -- deliberately NOT wired to anything, the same discipline
-// ProfilePage.tsx applies to its own unbacked Posts/Media tabs. Club
-// crests are rendered typographically (club-initial badges), also per the
-// frame -- the crest-licensing question is sidestepped by design.
+// REAL DATA (founder decision, 2026-11-24, Decision Log #556). Two public
+// reads fire once on mount, with the same plain useEffect pattern Sports
+// Hub and Blog use (results are ignored after unmount, no library):
+//   - listFixtures(todayIso())  -> GET /sports/fixtures?date=  (api/sports.ts)
+//     One call feeds BOTH the hero card and the "Matches today" strip.
+//   - listArticles()            -> GET /articles               (api/blog.ts)
+//     One call feeds the "Latest" section (the first article is featured,
+//     the next three are the side list).
+// Fixture order: live first, then scheduled by kickoff ascending, then
+// finished by kickoff descending, then postponed and cancelled last. The
+// strip shows the first 4. The hero card shows the first live, scheduled
+// or finished match (never postponed or cancelled), or no card at all.
+// States: while fixtures load the strip shows 4 skeleton cards and the hero
+// card is absent; an empty day shows one sentence linking to Sports Hub; a
+// fixtures error hides the whole strip and the hero card; the hero copy
+// then takes the full width. Articles: loading shows skeletons, an empty
+// list or an error hides the whole Latest section.
+// Nothing invented is shown: no grassroots data, no reading time, no view
+// counts or popularity ranking. The "Why Soccernity" pillars, the closing
+// CTA and the footer (rendered by FooterLayout, Decision Log #213) are
+// unchanged.
 //
-// Breadth retouch (docs/homepage-breadth-retouch-report.md): the hero
-// fixture card now shows one Sports Hub fixture (Chelsea/Liverpool, the
-// same illustrative match used across the Sprint 4 Sports Hub redesign
-// per Decision Log #321) alongside the original grassroots fixture,
-// rather than grassroots alone -- still fully illustrative, same
-// Decision Log #6 reasoning. The closing CTA is relabelled "Register
-// your team" and stays pointed at /signup (the resolved answer to the
-// prior dead-CTA question -- GET /teams stays JwtAuthGuard-only, browsing
-// was never the fix; registering after signing up is).
+// DIVERGENCE FROM FIGMA: the canonical frame 5204:6728 (Decision Log #46)
+// still draws hardcoded sample fixtures, a Talents clips section and a
+// "Trending" stories block. By founder decision of 2026-11-24 the code
+// deliberately differs: it shows real Sports Hub fixtures and real Blog
+// stories, and the Talents section is removed. The Figma frame is NOT
+// updated by this change. Club crests: a real logo when the API supplies a
+// safe one, else the club's first letter (the same rule Sports Hub uses).
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";
+import { listFixtures, type MatchListItem, type MatchPhase } from "../api/sports";
+import { listArticles, type ArticleSummary } from "../api/blog";
+import { formatDate } from "../lib/formatDate";
+import { safeImageUrl } from "../lib/safeImageUrl";
 import { getStoredAccessToken } from "../lib/session";
+import { formatKickoffTime, monogramFor, phaseLabel, todayIso } from "./sports-hub/format";
+import CoverMedia from "./blog/CoverMedia";
 import "./HomePage.css";
-
-interface Fixture {
-  league: string;
-  status: string;
-  statusKind: "live" | "ft" | "upcoming";
-  home: { name: string; initials: string; score: string };
-  away: { name: string; initials: string; score: string };
-  venue: string;
-}
-
-// Hardcoded to match Figma frame 5204:6728's "Today's Fixtures" module.
-// Illustrative only -- no fixtures endpoint exists (Decision Log #6).
-const FIXTURES: Fixture[] = [
-  {
-    league: "Lagos Sunday League",
-    status: "LIVE",
-    statusKind: "live",
-    home: { name: "Ikoyi Rovers FC", initials: "IK", score: "2" },
-    away: { name: "Surulere United", initials: "SU", score: "1" },
-    venue: "Teslim Balogun Stadium · 78'",
-  },
-  {
-    league: "Rivers Amateur Div 1",
-    status: "LIVE",
-    statusKind: "live",
-    home: { name: "Port Harcourt Blues", initials: "PO", score: "0" },
-    away: { name: "Aba Warriors", initials: "AB", score: "0" },
-    venue: "Alfred Diete-Spiff · 34'",
-  },
-  {
-    league: "Lagos Sunday League",
-    status: "FT",
-    statusKind: "ft",
-    home: { name: "Yaba Athletic", initials: "YA", score: "3" },
-    away: { name: "Ojota Rangers", initials: "OJ", score: "2" },
-    venue: "Yaba College Ground · Full time",
-  },
-  {
-    league: "Northern Grassroots Cup",
-    status: "17:30",
-    statusKind: "upcoming",
-    home: { name: "Kaduna City FC", initials: "KA", score: "–" },
-    away: { name: "Jos Highlanders", initials: "JO", score: "–" },
-    venue: "Ahmadu Bello Stadium · Today",
-  },
-];
 
 const PILLARS = [
   {
@@ -103,29 +68,246 @@ const PILLARS = [
   },
 ];
 
-const TALENT_CLIPS = [
-  { club: "IKOYI ROVERS FC", title: "Free-kick routine that won the Lagos derby", meta: "Midfielder · 17", length: "0:48" },
-  { club: "SURULERE UNITED", title: "Back-post header in the 89th minute", meta: "Forward · 19", length: "1:12" },
-  { club: "PORT HARCOURT BLUES", title: "Goal-line clearance to keep it level", meta: "Defender · 16", length: "0:36" },
-];
+const STRIP_SIZE = 4;
+const SIDE_STORY_COUNT = 3;
 
-const TOP_STORIES = [
-  { rank: "01", title: "Kane joins the 250 club with a trademark finish", meta: "Premier League · 3 days ago" },
-  { rank: "02", title: "Arsenal's title push tested by a resurgent Newcastle", meta: "Premier League · 4 days ago" },
-  { rank: "03", title: "Grassroots cup final draws a record crowd in Surulere", meta: "Grassroots · 5 days ago" },
-];
+type Loadable<T> = { status: "loading" } | { status: "error" } | { status: "ready"; items: T[] };
 
-export default function HomePage() {
-  // Decision Log #152: a signed-in visitor to "/" goes to the feed, not
-  // the marketing page. `replace` so the marketing page isn't left in
-  // history for the back button to land on.
-  if (getStoredAccessToken()) {
-    return <Navigate to="/community" replace />;
+// Display order: live, then scheduled (soonest first), then finished (most
+// recent first), then postponed and cancelled. Stable within a group.
+function statusGroup(status: MatchPhase): number {
+  if (status === "live") return 0;
+  if (status === "scheduled") return 1;
+  if (status === "finished") return 2;
+  return 3;
+}
+
+export function sortFixtures(items: MatchListItem[]): MatchListItem[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const ga = statusGroup(a.item.status);
+      const gb = statusGroup(b.item.status);
+      if (ga !== gb) return ga - gb;
+      const ta = Date.parse(a.item.kickoffTime);
+      const tb = Date.parse(b.item.kickoffTime);
+      if (ga === 2 && ta !== tb) return tb - ta;
+      if (ga !== 0 && ta !== tb) return ta - tb;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+}
+
+function pillClass(status: MatchPhase): string {
+  if (status === "live") return "home-pill home-pill--live";
+  if (status === "finished") return "home-pill home-pill--ft";
+  return "home-pill home-pill--upcoming";
+}
+
+function matchLine(match: MatchListItem): string {
+  const finished = match.status === "finished";
+  if (match.venue) return finished ? `${match.venue} · Full time` : match.venue;
+  return finished ? "Full time" : `Kickoff ${formatKickoffTime(match.kickoffTime)}`;
+}
+
+function scoreText(score: number | null): string {
+  return score === null ? "–" : String(score);
+}
+
+function Crest({ name, logo, small }: { name: string; logo: string | null; small?: boolean }) {
+  const size = small ? " home-badge--sm" : "";
+  const safeLogo = safeImageUrl(logo);
+  if (safeLogo) {
+    return <img className={`home-badge home-badge--img${size}`} src={safeLogo} alt="" aria-hidden="true" />;
   }
+  return (
+    <span className={`home-badge${size}`} aria-hidden="true">
+      {monogramFor(name)}
+    </span>
+  );
+}
+
+function TeamRows({ match, small, muteAway }: { match: MatchListItem; small?: boolean; muteAway?: boolean }) {
+  return (
+    <>
+      <div className="home-team-row">
+        <Crest name={match.homeTeam.name} logo={match.homeTeam.logo} small={small} />
+        <span className="home-team-row__name">{match.homeTeam.name}</span>
+        <span className="home-team-row__score">{scoreText(match.homeScore)}</span>
+      </div>
+      <div className="home-team-row">
+        <Crest name={match.awayTeam.name} logo={match.awayTeam.logo} small={small} />
+        <span className={`home-team-row__name${muteAway ? " home-team-row__name--muted" : ""}`}>
+          {match.awayTeam.name}
+        </span>
+        <span className={`home-team-row__score${muteAway ? " home-team-row__score--muted" : ""}`}>
+          {scoreText(match.awayScore)}
+        </span>
+      </div>
+    </>
+  );
+}
+
+function HeroMatchCard({ match }: { match: MatchListItem }) {
+  return (
+    <Link to={`/sports-hub/matches/${match.id}`} className="home-hero__card">
+      <div className="home-fixture-card__meta">
+        <span className="home-fixture-card__league">{match.competition}</span>
+        <span className={pillClass(match.status)}>{phaseLabel(match)}</span>
+      </div>
+      <div className="home-fixture-card__teams">
+        <TeamRows match={match} />
+      </div>
+      <div className="home-hairline" />
+      <p className="home-fixture-card__venue">{matchLine(match)}</p>
+    </Link>
+  );
+}
+
+function FixtureStrip({ state }: { state: Loadable<MatchListItem> }) {
+  if (state.status === "error") return null;
+  return (
+    <section className="home-section" aria-labelledby="home-fixtures-title">
+      <div className="home-section__head">
+        <div>
+          <p className="home-eyebrow">TODAY'S FIXTURES</p>
+          <h2 id="home-fixtures-title" className="home-section__title">
+            Matches today
+          </h2>
+        </div>
+        <Link to="/sports-hub" className="home-section__link home-section__link--outline">
+          View all fixtures &rarr;
+        </Link>
+      </div>
+      {state.status === "loading" ? (
+        <div className="home-fixture-grid" aria-busy="true">
+          {Array.from({ length: STRIP_SIZE }, (_, i) => (
+            <div key={i} className="home-fixture home-skeleton" data-testid="fixture-skeleton" />
+          ))}
+        </div>
+      ) : state.items.length === 0 ? (
+        <p className="home-empty">
+          No matches today. See <Link to="/sports-hub">all fixtures on Sports Hub</Link>.
+        </p>
+      ) : (
+        <div className="home-fixture-grid">
+          {state.items.slice(0, STRIP_SIZE).map((match) => (
+            <Link key={match.id} to={`/sports-hub/matches/${match.id}`} className="home-fixture">
+              <div className="home-fixture__meta">
+                <span className="home-fixture__league">{match.competition}</span>
+                <span className={pillClass(match.status)}>{phaseLabel(match)}</span>
+              </div>
+              <div className="home-fixture__teams">
+                <TeamRows match={match} small />
+              </div>
+              <div className="home-hairline" />
+              <p className="home-fixture__venue">{matchLine(match)}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LatestStories({ state }: { state: Loadable<ArticleSummary> }) {
+  if (state.status === "error") return null;
+  if (state.status === "ready" && state.items.length === 0) return null;
+
+  const loading = state.status === "loading";
+  const featured = state.status === "ready" ? state.items[0] : null;
+  const side = state.status === "ready" ? state.items.slice(1, 1 + SIDE_STORY_COUNT) : [];
+
+  return (
+    <section className="home-section home-section--surface" aria-labelledby="home-latest-title">
+      <div className="home-section__head">
+        <div>
+          <p className="home-eyebrow">LATEST</p>
+          <h2 id="home-latest-title" className="home-section__title">
+            From the Blog
+          </h2>
+        </div>
+        <Link to="/blog" className="home-section__link home-section__link--navy">
+          See more stories &rarr;
+        </Link>
+      </div>
+      <div className="home-editorial" aria-busy={loading || undefined}>
+        {featured ? (
+          <article className="home-featured">
+            <div className="home-featured__mediawrap">
+              <CoverMedia coverImage={featured.coverImage} className="home-featured__media" />
+              <span className="home-pill home-pill--tag home-pill--tag-green home-featured__tag">
+                {featured.category.name}
+              </span>
+            </div>
+            <div className="home-featured__body">
+              <h3 className="home-featured__title">
+                <Link to={`/blog/${featured.id}`}>{featured.title}</Link>
+              </h3>
+              <p className="home-featured__excerpt">{featured.excerpt}</p>
+              <p className="home-featured__meta">
+                {featured.author} · {formatDate(featured.publishedAt)}
+              </p>
+            </div>
+          </article>
+        ) : (
+          <div className="home-featured home-skeleton home-skeleton--featured" data-testid="article-skeleton" />
+        )}
+        <aside className="home-story-list">
+          {loading
+            ? Array.from({ length: SIDE_STORY_COUNT }, (_, i) => (
+                <div key={i} className="home-story home-skeleton home-skeleton--story" data-testid="article-skeleton" />
+              ))
+            : side.map((article) => (
+                <Link key={article.id} to={`/blog/${article.id}`} className="home-story">
+                  <CoverMedia coverImage={article.coverImage} className="home-story__thumb" />
+                  <div className="home-story__text">
+                    <p className="home-story__title">{article.title}</p>
+                    <p className="home-story__meta">
+                      {article.category.name} · {formatDate(article.publishedAt)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function MarketingHome() {
+  const [fixtures, setFixtures] = useState<Loadable<MatchListItem>>({ status: "loading" });
+  const [articles, setArticles] = useState<Loadable<ArticleSummary>>({ status: "loading" });
+
+  useEffect(() => {
+    let active = true;
+    listFixtures(todayIso())
+      .then((page) => {
+        if (active) setFixtures({ status: "ready", items: sortFixtures(page.items) });
+      })
+      .catch(() => {
+        if (active) setFixtures({ status: "error" });
+      });
+    listArticles()
+      .then((page) => {
+        if (active) setArticles({ status: "ready", items: page.items });
+      })
+      .catch(() => {
+        if (active) setArticles({ status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const heroMatch =
+    fixtures.status === "ready"
+      ? (fixtures.items.find((m) => m.status === "live" || m.status === "scheduled" || m.status === "finished") ?? null)
+      : null;
 
   return (
     <div className="home">
-      <section className="home-hero">
+      <section className={`home-hero${heroMatch ? "" : " home-hero--solo"}`}>
         <div className="home-hero__copy">
           <span className="home-eyebrow home-eyebrow--on-navy">
             <span className="home-eyebrow__dot" aria-hidden="true" />
@@ -144,94 +326,15 @@ export default function HomePage() {
             <Link to="/signup" className="home-btn home-btn--primary">
               Create your profile
             </Link>
-            <Link to="/signup" className="home-btn home-btn--ghost-on-navy">
+            <Link to="/sports-hub" className="home-btn home-btn--ghost-on-navy">
               Explore fixtures
             </Link>
           </div>
         </div>
-
-        {/* Illustrative "live across Soccernity" card -- no fixtures data
-            source exists (Decision Log #6). Hardcoded to match the Figma
-            frame's two-section split (Sports Hub + Grassroots). */}
-        <div className="home-hero__card" aria-hidden="true">
-          <div className="home-fixture-card__section">
-            <div className="home-fixture-card__meta">
-              <span className="home-pill home-pill--section-tag">SPORTS HUB</span>
-              <span className="home-fixture-card__league">Premier League&nbsp;&nbsp;·&nbsp;&nbsp;Live</span>
-            </div>
-            <div className="home-fixture-card__teams">
-              <div className="home-team-row">
-                <span className="home-badge">CH</span>
-                <span className="home-team-row__name">Chelsea</span>
-                <span className="home-team-row__score">3</span>
-              </div>
-              <div className="home-team-row">
-                <span className="home-badge">LI</span>
-                <span className="home-team-row__name home-team-row__name--muted">Liverpool</span>
-                <span className="home-team-row__score home-team-row__score--muted">1</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="home-hairline" />
-
-          <div className="home-fixture-card__section">
-            <div className="home-fixture-card__meta">
-              <span className="home-pill home-pill--section-tag">GRASSROOTS</span>
-              <span className="home-fixture-card__league">Lagos Sunday League&nbsp;&nbsp;·&nbsp;&nbsp;Matchday 12</span>
-            </div>
-            <div className="home-fixture-card__teams">
-              <div className="home-team-row">
-                <span className="home-badge">IK</span>
-                <span className="home-team-row__name">Ikoyi Rovers FC</span>
-                <span className="home-team-row__score">2</span>
-              </div>
-              <div className="home-team-row">
-                <span className="home-badge">SU</span>
-                <span className="home-team-row__name home-team-row__name--muted">Surulere United</span>
-                <span className="home-team-row__score home-team-row__score--muted">1</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="home-hairline" />
-
-          <p className="home-fixture-card__venue">
-            Plus Bants, Blog stories and the community around every match.
-          </p>
-        </div>
+        {heroMatch ? <HeroMatchCard match={heroMatch} /> : null}
       </section>
 
-      <section className="home-section">
-        <div className="home-section__head">
-          <div>
-            <p className="home-eyebrow">TODAY'S FIXTURES</p>
-            <h2 className="home-section__title">Matches happening right now</h2>
-          </div>
-          <span className="home-section__link home-section__link--outline">View all fixtures &rarr;</span>
-        </div>
-        <div className="home-fixture-grid">
-          {FIXTURES.map((f) => (
-            <article key={`${f.home.name}-${f.away.name}`} className="home-fixture">
-              <div className="home-fixture__meta">
-                <span className="home-fixture__league">{f.league}</span>
-                <span className={`home-pill home-pill--${f.statusKind}`}>{f.status}</span>
-              </div>
-              <div className="home-fixture__teams">
-                {[f.home, f.away].map((team) => (
-                  <div key={team.name} className="home-team-row">
-                    <span className="home-badge home-badge--sm">{team.initials}</span>
-                    <span className="home-team-row__name">{team.name}</span>
-                    <span className="home-team-row__score">{team.score}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="home-hairline" />
-              <p className="home-fixture__venue">{f.venue}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      <FixtureStrip state={fixtures} />
 
       <section className="home-section home-section--surface home-section--center">
         <div className="home-section__head-centered">
@@ -257,70 +360,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="home-section">
-        <div className="home-section__head">
-          <div>
-            <p className="home-eyebrow">TALENTS</p>
-            <h2 className="home-section__title">Clips from this weekend</h2>
-          </div>
-          <span className="home-section__link home-section__link--outline">See all talents &rarr;</span>
-        </div>
-        <div className="home-clip-grid">
-          {TALENT_CLIPS.map((c) => (
-            <article key={c.title} className="home-clip">
-              <div className="home-clip__media" aria-hidden="true">
-                <span className="home-clip__play">&#9658;</span>
-                <span className="home-clip__length">{c.length}</span>
-              </div>
-              <div className="home-clip__body">
-                <span className="home-pill home-pill--tag">{c.club}</span>
-                <p className="home-clip__title">{c.title}</p>
-                <p className="home-clip__meta">{c.meta}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="home-section home-section--surface">
-        <div className="home-section__head">
-          <div>
-            <p className="home-eyebrow">TRENDING</p>
-            <h2 className="home-section__title">What football is talking about</h2>
-          </div>
-          <span className="home-section__link home-section__link--navy">See more stories &rarr;</span>
-        </div>
-        <div className="home-editorial">
-          <article className="home-featured">
-            <div className="home-featured__media" aria-hidden="true">
-              <span className="home-pill home-pill--tag home-pill--tag-green">PREMIER LEAGUE</span>
-            </div>
-            <div className="home-featured__body">
-              <h3 className="home-featured__title">
-                Zaha double helps Crystal Palace ease past Villa for first Premier League win
-              </h3>
-              <p className="home-featured__excerpt">
-                Wilfried Zaha scored twice as Crystal Palace claimed their first league win of the season, easing the
-                early pressure on a side that had taken just two points from their opening four fixtures.
-              </p>
-              <p className="home-featured__meta">Soccernity Sports Desk · 2 days ago · 4 min read</p>
-            </div>
-          </article>
-          <aside className="home-story-list">
-            <p className="home-eyebrow">TOP STORIES TODAY</p>
-            {TOP_STORIES.map((s) => (
-              <div key={s.rank} className="home-story">
-                <span className="home-story__thumb" aria-hidden="true" />
-                <div className="home-story__text">
-                  <span className="home-pill home-pill--rank">{s.rank}</span>
-                  <p className="home-story__title">{s.title}</p>
-                  <p className="home-story__meta">{s.meta}</p>
-                </div>
-              </div>
-            ))}
-          </aside>
-        </div>
-      </section>
+      <LatestStories state={articles} />
 
       <section className="home-closing">
         <p className="home-eyebrow home-eyebrow--on-navy">GET STARTED</p>
@@ -348,4 +388,15 @@ export default function HomePage() {
           Decision Log #213. */}
     </div>
   );
+}
+
+export default function HomePage() {
+  // Decision Log #152: a signed-in visitor to "/" goes to the feed, not
+  // the marketing page. `replace` so the marketing page isn't left in
+  // history for the back button to land on. MarketingHome is never
+  // mounted for them, so no request is made.
+  if (getStoredAccessToken()) {
+    return <Navigate to="/community" replace />;
+  }
+  return <MarketingHome />;
 }
