@@ -54,7 +54,7 @@ const PILLARS = [
   {
     index: "01",
     title: "Grassroots first",
-    body: "Most players never appear in any official record anywhere. Soccernity starts with the Sunday leagues, school pitches and informal teams no database has ever counted.",
+    body: "Much of the game is played outside any official record. Soccernity starts with the Sunday leagues, school pitches and informal teams that rarely get one.",
   },
   {
     index: "02",
@@ -234,7 +234,13 @@ function LatestStories({ state }: { state: Loadable<ArticleSummary> }) {
       <div className="home-editorial" aria-busy={loading || undefined}>
         {featured ? (
           <article className="home-featured">
-            <div className="home-featured__mediawrap">
+            <div
+              className={
+                featured.coverImage
+                  ? "home-featured__mediawrap"
+                  : "home-featured__mediawrap home-featured__mediawrap--no-cover"
+              }
+            >
               <CoverMedia coverImage={featured.coverImage} className="home-featured__media" />
               <span className="home-pill home-pill--tag home-pill--tag-green home-featured__tag">
                 {featured.category.name}
@@ -340,9 +346,7 @@ function MarketingHome() {
         <div className="home-section__head-centered">
           <p className="home-eyebrow">WHY SOCCERNITY</p>
           <h2 className="home-section__title">
-            Football's biggest league is the one
-            <br />
-            nobody keeps records for.
+            So much of football happens where no one keeps the record.
           </h2>
           <p className="home-section__sub">
             Soccernity is built for the players outside the academy system, and for the fans, coaches and

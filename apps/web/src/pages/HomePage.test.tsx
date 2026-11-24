@@ -88,8 +88,11 @@ describe("HomePage: static content", () => {
     renderAt("/");
     expect(screen.getByText(/deserves a record/i)).not.toBeNull();
     expect(screen.getByText(/where the whole game lives/i)).not.toBeNull();
-    expect(screen.getByRole("heading", { name: /nobody keeps records for/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /where no one keeps the record/i })).not.toBeNull();
     expect(screen.getByText("Grassroots first")).not.toBeNull();
+    expect(screen.queryByText(/nobody keeps records for/i)).toBeNull();
+    expect(document.body.textContent).not.toContain("no database has ever counted");
+    expect(document.body.textContent).not.toContain("never appear in any official record anywhere");
     expect(screen.getByText("A community around your game")).not.toBeNull();
     expect(screen.getByText(/the professional game, live\./i)).not.toBeNull();
     expect(screen.getByRole("heading", { name: /start the record you should/i })).not.toBeNull();
@@ -286,6 +289,23 @@ describe("HomePage: fixtures", () => {
   });
 });
 
+describe("HomePage: featured placeholder", () => {
+  it("marks the featured media as no-cover only when the article has no cover image", async () => {
+    vi.mocked(listArticles).mockResolvedValue(page([article(1), article(2)]));
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Story title 1" });
+    expect(document.querySelector(".home-featured__mediawrap--no-cover")).not.toBeNull();
+    cleanup();
+    vi.mocked(listArticles).mockResolvedValue(
+      page([article(1, { coverImage: { url: "data:image/gif;base64,R0lGODlhAQABAAAAACw=", type: "image" } as ArticleSummary["coverImage"] }), article(2)]),
+    );
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Story title 1" });
+    expect(document.querySelector(".home-featured__mediawrap")).not.toBeNull();
+    expect(document.querySelector(".home-featured__mediawrap--no-cover")).toBeNull();
+  });
+});
+
 describe("HomePage: Latest from the blog", () => {
   it("shows the first article as featured and the next three in the side list", async () => {
     vi.mocked(listArticles).mockResolvedValue(
@@ -345,7 +365,7 @@ describe("HomePage: Latest from the blog", () => {
     renderAt("/");
     await waitFor(() => expect(screen.queryAllByTestId("article-skeleton").length).toBe(0));
     expect(screen.queryByText("From the Blog")).toBeNull();
-    expect(screen.getByRole("heading", { name: /nobody keeps records for/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /where no one keeps the record/i })).not.toBeNull();
   });
 });
 
