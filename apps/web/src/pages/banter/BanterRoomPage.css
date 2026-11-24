@@ -1,5 +1,5 @@
-/* Banter Room (BanterRoomPage.tsx) -- no Figma frame exists for this
- * screen, see that file's own header comment. Layout deliberately
+/* Banter Room (BanterRoomPage.tsx) -- the room page is drawn (see
+ * BanterRoomPage.tsx's own header comment for the frame ids). Layout deliberately
  * mirrors clubs/ClubsPage.css's ".clubs-fan" section (identity block,
  * divider, one section) since it's the same "header + one real content
  * section below" shape. Light theme --sn-* tokens only, no new colour. */

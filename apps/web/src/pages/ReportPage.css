@@ -1,5 +1,6 @@
-/* ReportPage.tsx — no Figma frame exists for this (see that file's own
- * header comment); built plainly, matching the visual vocabulary the
+/* ReportPage.tsx — drawn as "Report - Public page" (6947:39713 to
+ * 6947:40905, desktop and mobile, five states each, B-284; see
+ * ReportPage.tsx's own header comment); built plainly, matching the visual vocabulary the
  * other organiser-style forms in this app already use (GrassrootsPage.css'
  * register-team form, accountActions.css) rather than reusing either
  * file directly, since this page belongs to neither of those domains.

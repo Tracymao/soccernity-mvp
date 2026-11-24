@@ -1,12 +1,8 @@
 // Banter Room -- a single room's feed + posting. Route: /banter/:roomId.
 //
-// NO Figma frame exists for this screen -- the Bants frames this file's
-// sibling BanterPage.tsx converts (2256:6802 / 2448:2179) only ever show
-// the room LIST, never a room's own feed. Built plain and flagged, same
-// "no dedicated screen exists" precedent ClubFanPage.tsx / EditProfileModal
-// established for their own unbacked corners -- necessary because
-// join/leave and posting-in-a-room (BanterModule, Decision Log #275/#276)
-// need somewhere to actually happen once api/banter.ts exists.
+// The room page is drawn: mobile "Bants - Room Page - ..." (6998:54688,
+// 6999:54768 and the M1 to M7 family) and desktop 7002:55068. The sibling
+// BanterPage.tsx converts the room LIST frames (2256:6802 / 2448:2179).
 //
 // B-117 (Decision Log #403 item 16, #404 item 10): Bants is an OPEN FORUM.
 // Any eligible signed-in account may post and comment in a room whether or
