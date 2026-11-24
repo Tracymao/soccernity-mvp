@@ -95,7 +95,9 @@ describe("HomePage: static content", () => {
     expect(document.body.textContent).not.toContain("never appear in any official record anywhere");
     expect(screen.getByText("A community around your game")).not.toBeNull();
     expect(screen.getByText(/the professional game, live\./i)).not.toBeNull();
-    expect(screen.getByRole("heading", { name: /start the record you should/i })).not.toBeNull();
+    const closing = screen.getByRole("heading", { name: /start the record you should/i });
+    expect(closing).not.toBeNull();
+    expect(closing.querySelector("br")).toBeNull();
     expect(screen.queryByText("COMMUNITY FEED")).toBeNull();
     await waitFor(() => expect(listFixtures).toHaveBeenCalled());
   });

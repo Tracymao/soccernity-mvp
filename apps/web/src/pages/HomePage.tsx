@@ -369,9 +369,7 @@ function MarketingHome() {
       <section className="home-closing">
         <p className="home-eyebrow home-eyebrow--on-navy">GET STARTED</p>
         <h2 className="home-closing__title">
-          Start the record you should
-          <br />
-          have had all along.
+          Start the record you should have had all along.
         </h2>
         <p className="home-closing__sub">
           Free to join. Create your profile, follow the football you love, and register your team when you're ready

@@ -595,6 +595,7 @@ a.home-story:focus-visible .home-story__title {
   color: #fff;
   letter-spacing: -1px;
   margin: 0;
+  text-wrap: balance;
 }
 
 .home-closing__sub {
