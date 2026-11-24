@@ -472,6 +472,17 @@ a.home-fixture:focus-visible {
   padding: 24px;
 }
 
+/* No cover image: a short tinted strip instead of the 300px block. */
+.home-featured__mediawrap--no-cover .home-featured__media {
+  height: 120px;
+}
+
+@media (max-width: 600px) {
+  .home-featured__mediawrap--no-cover .home-featured__media {
+    height: 96px;
+  }
+}
+
 .home-featured__tag {
   position: absolute;
   top: 24px;
