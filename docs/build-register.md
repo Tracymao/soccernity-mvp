@@ -568,7 +568,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 - Test suites were not run for this document (docs only).
 - Effort and sequencing inside a wave were not estimated; waves give order and reasons only.
 
-## 7. Decision Log #367-#556 coverage
+## 7. Decision Log #367-#562 coverage
 
 | Decision Log | Referenced by | Build work? |
 |---|---|---|
@@ -739,7 +739,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #532 | B-206, B-208 | Yes (2026-11-17); founder decision: only unresolved legal questions go to counsel; the legal-duties question stays on the list and does not block launch; NOT YET EXECUTED (later PRs refresh the drafts and build a counsel pack). See Section 102. |
 | #533 | B-206, B-321 | Yes (2026-11-17); founder decision 2026-11-15, recorded now: only vetted, authorised staff may open set-aside files; staff welfare and vetting are the founder's HR duty, not a question for counsel; the founder will cooperate fully if the law requires more; counsel's view not recorded. See Section 103. |
 | #534 | B-206, B-208, B-321 | Yes (2026-11-17); founder decision applying #532: five pack questions removed, the 365-day figure kept out of the public legal copy, ten items recorded as founder or engineering housekeeping (NOT decided, owners named); NOT YET EXECUTED (D6 to D9). See Section 103. |
-| #538 | B-232 | Yes (2026-11-21); founder decision: header navigation icons rest at opacity 0.7 (was 0.55); hover, focus and active stay 1; BUILT in apps/web `Header.css` (R101); the Figma navbar still draws 0.55 and needs the next Figma pass |
+| #538 | B-232 | Yes (2026-11-21); founder decision: header navigation icons rest at opacity 0.7 (was 0.55); hover, focus and active stay 1; BUILT in apps/web `Header.css` (R101); the Figma navbar still draws 0.55 and needs the next Figma pass [2026-11-24 CORRECTION: that Figma statement was wrong; no node is drawn at 0.55 and no Figma pass is needed, see Section 125] |
 | #539 | B-124, B-208 | Yes (2026-11-21); six plain-fact strings untagged after their claims were checked in code (resend verification, rate limit, Age Gate DOB and country lines, register-step DOB line, upload-checked line); manifest 150 to 144 rows, tagged places 206 to 200; counsel sheet S1 to S144 (R101) |
 | #540 | B-179, B-180 | Yes (2026-11-21); `NODE_VERSION=22.22.0` plain value on the four static sites in `render.yaml`, the same version the API image uses (#527); resolves the Node pin question for the static builds (R101) |
 | #541 | B-088, B-265, B-180 | Yes (2026-11-21); runbook corrections from staging: the media custom domain is always proxied; step 6.8 parts 1 to 3 passed on staging; step 4.6 passed; Postmark pending approval delivers only to same-domain addresses and is a launch gate; step 6.5 note on an unverified adult (R101) |
@@ -749,6 +749,10 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #547 | B-324, B-232 | Yes (2026-11-21); no third-party image host at launch: `safeImageUrl` in apps/web; user media not guarded; crests from our own storage after launch is B-324 |
 | #556 | B-325 | Yes (2026-11-24); logged-out homepage reads real Sports Hub fixtures and Blog stories, invented content removed; deliberate divergence from Figma frame 5204:6728 |
 | #548 | B-088, B-265, B-180 | Yes (2026-11-21); R2 wildcards in the static sites' CSP replaced by the exact account host; `VITE_MEDIA_BASE_URL` added to the web sites |
+| #559 | B-206, B-321 | Yes (2026-11-24); suggested receiving bodies shown at launch, pending counsel; no code or Figma change |
+| #560 | B-206, B-321 | Yes (2026-11-24); D13 restricted wording follows the code; drawn in Figma gaps F |
+| #561 | none | Figma only (2026-11-24); 27 Match Centre mobile state frames, PRs G and H; no code |
+| #562 | none | No (2026-11-24); 404 page design proposal, NOT approved, NOT built |
 
 ## 8. Updates 2026-10-14 (contest spec, decline cap, DOB correction, hosting, Section 6 answers)
 
@@ -5176,7 +5180,7 @@ None stated by the founder beyond #507 and #508 themselves. I read the four repo
 (vi) **B-116 is not proven.** The cause fix is in the unit suite; the default worker count is unchanged; no clean full-suite run at the default count was recorded. If the founder wants certainty: two quiet full runs and, if they fail, a worker cap in `services/api/package.json`.
 (vii) **Other stale-looking rows, NOT edited:** B-196's tail ('the crop STEP UI is B-210, not built'; the crop dialog was built by FC6 and FC7 per their bullets); Section 68 item 10 (the web fonts, same point as B-046); and any 'PR opened, not merged' line for PRs merged earlier that was not swept. I did not check these against the code.
 (viii) **Uploads off is handled differently in two places.** The composers show 'Uploads aren't available right now'; the profile picture and cover control shows the server sentence 'Uploads are not available right now.' with Try again. Whether to align them is not decided.
-(ix) **Stale on-canvas Figma notes** (`6664:27284`, `6664:27301`, `6698:26187`) still say the feed carousel shows 6 finalists in 2 pages; pass X did not edit them.
+(ix) **Stale on-canvas Figma notes** (`6664:27284`, `6664:27301`, `6698:26187`) still say the feed carousel shows 6 finalists in 2 pages; pass X did not edit them. [2026-11-24 RESOLVED: they were updated in pass Y (docs/figma-pass-y-report.md) and now say 9 finalists in 3 pages of 3. See Section 125, including a note on differing node ids.]
 (x) **Test debt that remains.** `tsc -p e2e` reports one error in spec 34 (before and after PR #772); the Playwright suite is still not in CI; spec 16 pinned and spec 17 cannot share a run; spec 06's fix was measured on one machine with one worker; the Bants attachment PR saw an unexplained test-side timing (the spec now polls).
 
 ### 96d. Statements these changes make stale (named, not edited)
@@ -5666,7 +5670,7 @@ This section records what changed in this PR. It decides nothing beyond what the
 
 ### 106a. What changed, one line each
 
-- **Nav icon opacity (#538).** `apps/web/src/layout/Header.css`: resting icon opacity 0.55 to 0.7; hover, focus and active stay 1. Tests updated. **For the next Figma pass:** the navbar components still draw 0.55.
+- **Nav icon opacity (#538).** `apps/web/src/layout/Header.css`: resting icon opacity 0.55 to 0.7; hover, focus and active stay 1. Tests updated. **For the next Figma pass:** the navbar components still draw 0.55. [2026-11-24 CORRECTION: wrong. The navbar set 2824:4309 was checked: no node is drawn at 0.55 and all primary-nav icons are drawn at full strength with no inactive state. No Figma change is needed. See Section 125.]
 - **Write refusals (#542).** New `pages/community/writeRefusal.tsx` classifies a refused post or comment by the server's error code (`FeedApiError` now carries `code`): the guardian code shows the existing guardian message with the `/guardian-consent` link; `email_verification_required` shows "Verify your email to post." (comments: "to comment.") linking `/verify-email/prompt`; any other 403 shows "You can't do that right now." Used by `PostComposer` and `PostCard`. The new messages are not tagged. Searched for other bare-403-to-guardian mappings: none left in apps/web (community-groups and grassroots helpers test 403 plus the message text; account information and club picker already read codes; admin 403 handlers are role or vetting specific).
 - **Untagged plain-fact copy (#539).** Six strings on four screens lost the tag after each claim was checked in the code (see the report). Manifest rows 150 to 144 (web 99 to 93, admin 51); tagged places 206 to 200 (web 155 to 149, admin 51); counsel strings sheet S1 to S144, docx rebuilt with `docs/counsel-pack-build.py`; runbook counts updated. `npm run check:pending-copy` still fails by design.
 - **Runbook corrections (#541).** Media custom domain always proxied; 6.8 parts 1 to 3 passed on staging 2026-11-21 (part 4, cross-bucket copy, still unproven); 4.6 passed; Postmark pending approval and the new launch gate; 6.5 unverified-adult note.
@@ -5687,7 +5691,7 @@ This section records what changed in this PR. It decides nothing beyond what the
 ### 106d. Statements this makes stale (named, not edited)
 
 - Any text that still says 150 manifest rows, 206 tagged places, or "196" (an older runbook figure that was already out of date); S1 to S150 in older reports.
-- The navbar opacity 0.55 in Figma notes.
+- The navbar opacity 0.55 in Figma notes. [2026-11-24: this was a wrong statement, not a stale one; corrected in Section 125.]
 
 ### 106e. Reconciliation (arithmetic)
 
@@ -5800,3 +5804,14 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 - Decision Log #557 (adopted default, veto-able): the web app is NOT indexable by default in every environment. Only the exact build-time value VITE_SITE_INDEXABLE=true makes it indexable, and then VITE_SITE_URL must be an https origin with no path or the build fails. render.yaml carries both variables on the two web static sites only (VITE_SITE_INDEXABLE "false", VITE_SITE_URL sync: false). B-326 added. Report: docs/web-document-basics-report.md.
 - Founder step at the launch gate: set VITE_SITE_INDEXABLE=true and VITE_SITE_URL=https://soccernity.com on the production web static site and rebuild.
 - 326 B-IDs, 146 gap frames unchanged.
+
+## 125. Updates 2026-11-24 (UI/UX batch records: Figma gaps F, G and H; Decision Log #559 to #562; one correction; no new B-ID; docs only)
+
+- Decision Log #559 (founder): suggested receiving bodies show on the suspected-illegal filing screens at launch, before counsel answers, pending-counsel line and tags as built; nothing is sent. Extends #524 to #528. Dated pointers added on #524 and #525.
+- Decision Log #560 (founder): D13 (restricted) follows the code (`VettingRestrictedNotice`); redrawn in Figma gaps F (PR #886).
+- Decision Log #561 (founder): the Match Centre mobile loading, error, empty and not-found states are drawn (27 frames, PRs #887 and #888). Mobile only; ratings and expected-goals sub-section states not drawn. The PR H report says the PR G frames probably carry a dark-bar fill defect (G-6 and G-8 inspected); NOT fixed.
+- Decision Log #562: 404 page proposal, four frames, NOT approved and NOT built. The blocked-profile and private-post not-found frames (6738:30391, 6738:30526, 7015:58735, 7015:58744) still show the old wording; reuse of NotFoundPage for those states is OPEN.
+- CORRECTION to #538 (and Section 106 and the R101 report): on 2026-11-24 the Figma navbar set 2824:4309 and its variants were checked; no node is drawn at 0.55 opacity and all primary-nav icons are drawn at full strength with no inactive state. The earlier note that Figma still shows 0.55 was wrong. No Figma change is needed. Founder-stated; not re-read in Figma by this pass.
+- RESOLVED: item (ix) of Section 98 (stale on-canvas notes 6664:27284, 6664:27301, 6698:26187 saying 6 finalists in 2 pages). Per the founder they were updated in pass Y and now say 9 finalists in 3 pages of 3. Discrepancy NOT resolved by this pass: the pass Y report and the CLAUDE.md pass Y bullet name the edited notes as 6664:27292, 6664:27303, 6698:26188 and 6698:26192, which differ from the ids in item (ix). Not checked in Figma.
+- docs/figma-admin-suspected-illegal-report.md section 7 carries a dated note that the D13 wording and the receiving-bodies question are resolved (#559, #560).
+- 326 B-IDs and 146 gap frames unchanged. Decision Log #557 and #558 have no Section 7 row (not added by their PRs); not added here.
