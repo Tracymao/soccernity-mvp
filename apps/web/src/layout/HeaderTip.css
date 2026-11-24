@@ -1,0 +1,25 @@
+/* Decision Log #566: name label under a desktop header icon. Colours reference
+ * the CSS custom properties from src/theme/applyTheme.ts. */
+.sn-header-tip {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: #fff;
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .sn-header-tip {
+    display: block;
+  }
+}

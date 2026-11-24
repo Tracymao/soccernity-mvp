@@ -68,6 +68,7 @@ import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
 import NavDrawer from "./NavDrawer";
 import HeaderAvatarFace from "./HeaderAvatarFace";
+import { useHeaderTip } from "./HeaderTip";
 import "./Header.css";
 
 export default function Header() {
@@ -85,11 +86,20 @@ export default function Header() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const accountRef = useRef<HTMLDivElement>(null);
+  // Decision Log #566: desktop-only name label under the nav icons, Messages and
+  // the avatar (see HeaderTip.tsx). Nothing on mobile.
+  const headerTip = useHeaderTip(!isMobile);
+  const hideTip = headerTip.hide;
 
   // Close any open overlay when the route changes or the session ends.
   useEffect(() => {
     setMenuOpen(false);
   }, [location.key, hasSession]);
+
+  // No "Account" label while the account menu is open.
+  useEffect(() => {
+    if (menuOpen) hideTip();
+  }, [menuOpen, hideTip]);
 
   // Desktop account dropdown: close on a click outside the avatar + menu
   // wrapper (Decision Log #106). Mounted only while open, so no listener
@@ -200,6 +210,7 @@ export default function Header() {
                   <NavLink
                     to={item.to}
                     aria-label={item.label}
+                    {...headerTip.bind(item.label)}
                     className={({ isActive }) =>
                       isActive ? "sn-header__nav-link sn-header__nav-link--active" : "sn-header__nav-link"
                     }
@@ -234,7 +245,7 @@ export default function Header() {
                 messages half of Decision Log #166. Notifications (the
                 account-dropdown row) stays inert -- separate module, no
                 apps/web conversion yet. */}
-            <Link to="/messages" className="sn-header__messages" aria-label="Messages">
+            <Link to="/messages" className="sn-header__messages" aria-label="Messages" {...headerTip.bind("Messages")}>
               <img src={messagesIcon} alt="" width={26} height={25} />
             </Link>
             <button
@@ -244,6 +255,7 @@ export default function Header() {
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
+              {...headerTip.bind("Account", menuOpen)}
             >
               <HeaderAvatarFace profile={profile} />
               {unreadCount > 0 && <span className="sn-header__avatar-dot" aria-hidden="true" />}
@@ -289,6 +301,7 @@ export default function Header() {
           unreadCount={unreadCount}
         />
       )}
+      {headerTip.node}
     </header>
   );
 }
