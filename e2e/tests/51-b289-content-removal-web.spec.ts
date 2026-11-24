@@ -265,7 +265,7 @@ test.describe.serial('a comment and a post a moderator removed', () => {
     await loginViaUi(other, author.email);
     await other.waitForURL((url) => !/\/login$/.test(url.pathname));
     await other.goto(`/posts/${removedPostId}`);
-    await expect(other.getByText(/Post not found/)).toBeVisible();
+    await expect(other.getByRole('heading', { name: 'We can’t find that page' })).toBeVisible();
     await expect(other.getByTestId('removed-placeholder')).toHaveCount(0);
     await expect(other.getByText(/removed/i)).toHaveCount(0);
     await other.close();

@@ -9,7 +9,7 @@
 // What it shows: the post in the ordinary PostCard (real like / comment / save / follow / report,
 // the "Contest post" label for an entry), with the comment thread open straight away and a video
 // played inline. A final entry is a 404 for everyone but its author until the reveal, and a Block
-// hides an author in both directions; both are the same generic "Post not found", so nothing here
+// hides an author in both directions; both are the same generic 404 page (NotFoundPage), so nothing here
 // distinguishes a hidden post from a missing one.
 //
 // Not here: any engagement count of a finalist video is a normal PostCard count (likes and comments
@@ -21,6 +21,7 @@ import { FeedApiError, getPostById, isRemovedPost, type FeedPost } from "../api/
 import RemovedPlaceholder from "../components/removed/RemovedPlaceholder";
 import { REMOVED_POST_TEXT } from "../components/removed/removedContent";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import NotFoundPage from "./NotFoundPage";
 import PostCard from "./community/PostCard";
 import "./community/CommunityPage.css";
 import "./PostPage.css";
@@ -91,11 +92,7 @@ export default function PostPage() {
           </Link>
         </div>
       )}
-      {state === "not-found" && (
-        <div className="community-status" role="status">
-          Post not found. <Link to="/community">Back to Community</Link>
-        </div>
-      )}
+      {state === "not-found" && <NotFoundPage />}
       {state === "error" && (
         <div className="community-status community-status--error" role="alert">
           Couldn&rsquo;t load this post. Please try again shortly.

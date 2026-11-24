@@ -147,7 +147,7 @@ test.describe.serial('Public profile', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page, stranger.email);
     await page.goto(`/posts/${postId}`);
-    await expect(page.getByText(/Post not found/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'We can’t find that page' })).toBeVisible();
     await expect(page.getByText(/private/i)).toHaveCount(0);
     await shot(page, '07-hidden-post-desktop');
     const missing = await api('GET', `/posts/00000000-0000-4000-8000-000000000000`, { token: stranger.token });
