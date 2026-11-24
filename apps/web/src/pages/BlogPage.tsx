@@ -33,14 +33,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { listArticles, listCategories, type ArticleSummary, type Category } from "../api/blog";
+import { formatDate } from "../lib/formatDate";
 import CoverMedia from "./blog/CoverMedia";
 import "./blog/BlogPage.css";
 
 type LoadState = "loading" | "loaded" | "error";
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 function ArticleTimestamp({ publishedAt }: { publishedAt: string }) {
   return (
