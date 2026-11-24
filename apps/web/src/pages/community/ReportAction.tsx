@@ -5,7 +5,7 @@
 // description (required only for "Other"). Figma: "Report — In-app form" frames 6946:40232 to 6946:40796
 // (docs/figma-report-reason-categories.md) — a dialog over the page with the category radio list, the details
 // field, a send error, and a "Reported, thanks" confirmation. The small target menu that picks post-or-user
-// first has no frame and stays as it was.
+// first is drawn as G6-1 (desktop 7116:69268) and G6-2 (mobile 7116:69318) and is unchanged.
 //
 // POST /reports (services/api moderation module, JwtAuthGuard only — reachable even for a restricted-pending
 // minor, since reporting abuse directed at you must always be possible).
