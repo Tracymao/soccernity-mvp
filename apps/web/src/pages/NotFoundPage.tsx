@@ -17,19 +17,22 @@ export default function NotFoundPage() {
 
   return (
     <section className="not-found">
-      <p className="not-found__code" aria-hidden="true">
-        404
-      </p>
-      <h1 className="not-found__title">We can’t find that page</h1>
-      <p className="not-found__body">
-        The link may be wrong, or the page may have moved. Here are some places to go instead.
-      </p>
-      <Link to={homeTo} className="not-found__button">
-        Back to home
-      </Link>
-      <div className="not-found__links">
-        <Link to="/sports-hub">Sports Hub</Link>
-        <Link to="/contact">Contact us</Link>
+      <div className="not-found__column">
+        <p className="not-found__code" aria-hidden="true">
+          404
+        </p>
+        <h1 className="not-found__title">We can’t find that page</h1>
+        <p className="not-found__body">
+          The link may be wrong, or the page may have moved. Here are some
+          places to go instead.
+        </p>
+        <Link to={homeTo} className="not-found__button">
+          Back to home
+        </Link>
+        <div className="not-found__links">
+          <Link to="/sports-hub">Sports Hub</Link>
+          <Link to="/contact">Contact us</Link>
+        </div>
       </div>
     </section>
   );
