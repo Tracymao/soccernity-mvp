@@ -2,7 +2,7 @@
 
 **Soccernity: draft documents and one list of questions for counsel**
 
-*Pack version 1.6, prepared 2026-11-23 on branch `copy/optout-dsn-environments`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
+*Pack version 1.7, prepared 2026-11-23 on branch `copy/pack-q16-optout`. Every document in this pack is a DRAFT: NOT APPROVED, NOT LEGAL ADVICE. This pack decides nothing for the founder or for counsel.*
 
 ## 1. Cover page
 
@@ -142,7 +142,7 @@ There are **71 questions**, numbered Q1 to Q71, in eight groups. Each question a
 
 **Q16.** Is Amazon Web Services an acceptable processor for children's images, and what contract and what opt-out (AWS may use inputs to improve its services unless the account opts out) is needed?
 
-- *Why it matters:* The founder set out to set the opt-out before any key was configured; the AWS account exists and the check key is now configured, but whether the opt-out was set is not confirmed.
+- *Why it matters:* The founder set the opt-out before any key was configured (founder statement, 2026-11-23); the AWS account exists and the check key is configured.
 - *Label:* Needed before the documents are signed: the Policy names AWS and must describe the opt-out.
 - *Sources:* Post-media addendum v0.6, section 12 question 7; Post-media Part C v0.3, note at line 142.
 
