@@ -24,7 +24,7 @@
 //
 // The "Manage Account" panel (Change Password / Deactivate / Delete) is drawn
 // as G5-3 7127:70207 (collapsed), G5-4 7127:70241 (Change Password), G5-5
-// 7127:70284 (mismatch error), G5-6 7127:70330 (success), G5-7 7127:70375
+// 7127:70284 (mismatch error), G5-10 7132:70207 (too short), G5-6 7127:70330 (success), G5-7 7127:70375
 // (Deactivate confirm), G5-8 7127:70414 (Delete confirm) and G5-9 7127:70453
 // (password required). Same approach ClubPickerStep.tsx
 // flagged for its own step ("No dedicated Figma screen exists...
