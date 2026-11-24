@@ -1,6 +1,6 @@
 /* Cover image picker (Decision Log #334, resolved) — CreateArticlePage.tsx.
- * No Figma frame exists for this control (see CoverImagePicker.tsx's own
- * header comment); built plain, reusing pages/content/content.css's
+ * Drawn as G4-2 to G4-5 (see CoverImagePicker.tsx's own header comment);
+ * built reusing pages/content/content.css's
  * `--sn-*` token vocabulary and `.ac-btn`/`.ac-hint`/`.ac-loading`/
  * `.ac-error` classes rather than inventing a parallel set. Light mode
  * only. */

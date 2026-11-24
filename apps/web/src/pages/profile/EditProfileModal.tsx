@@ -18,12 +18,16 @@
 //     shows or sends.
 //   - Date of birth: read-only, set at the Age Gate (#367).
 //
-// `phone` is a real, wired field that the Figma frame does NOT include at
-// all -- kept (flagged) because it is fully functional server-side.
+// `phone` is a real, wired field that the original Figma frame did not include;
+// the Phone field is now drawn as G5-1 desktop (7126:70207) and G5-2 mobile
+// (7126:70221). Kept because it is fully functional server-side.
 //
-// "Manage Account" (Change Password / Deactivate / Delete) has NO Figma
-// screen anywhere in this file -- same real design gap ClubPickerStep.tsx
-// already flagged for its own step ("No dedicated Figma screen exists...
+// The "Manage Account" panel (Change Password / Deactivate / Delete) is drawn
+// as G5-3 7127:70207 (collapsed), G5-4 7127:70241 (Change Password), G5-5
+// 7127:70284 (mismatch error), G5-6 7127:70330 (success), G5-7 7127:70375
+// (Deactivate confirm), G5-8 7127:70414 (Delete confirm) and G5-9 7127:70453
+// (password required). Same approach ClubPickerStep.tsx
+// flagged for its own step ("No dedicated Figma screen exists...
 // built plain, matching [the app's] existing... visual style rather than a
 // divergent one-off look"). Built the same way here: plain, using this
 // page's own existing field/button styling, not invented design language.

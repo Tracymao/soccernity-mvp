@@ -8,20 +8,23 @@
 // from the cover image field below.
 //
 // Excerpt (Decision Log #333, resolved by feat/article-excerpt-field) —
-// a real, optional field, not on the original Figma frame. Left blank,
+// a real, optional field, not on the original Figma frame, now drawn in G4-1 to G4-8
+// (G4-1 7122:69271 to G4-8 7122:70459). Left blank,
 // the public Blog feed falls back to a computed truncation of the body
 // (services/api's own excerpt.util.ts); the fallback is unaffected by
 // this addition.
 //
 // Cover image (Decision Log #334, resolved by feat/article-cover-image)
-// — a real, optional field, also not on the original Figma frame (see
+// — a real, optional field, also not on the original Figma frame, now drawn in G4-1 to G4-8
+// (G4-1 7122:69271 to G4-8 7122:70459) (see
 // CoverImagePicker.tsx's own header comment). A PICKER, not an uploader
 // — reuses the already-shipped Media library (GET /admin/media) rather
 // than adding a new upload flow inline; distinct from the still-disabled
 // inline attachment control above.
 //
-// No Figma frame designs a publish/draft choice on this screen (the
-// original "Submit Post" button just POSTs, and CreateArticleDto's own
+// The Save as Draft / Publish pair is drawn in G4-1 to G4-8 (G4-1 7122:69271;
+// G4-6 saving 7122:70123; G4-7 publishing 7122:70291; G4-8 submit error
+// 7122:70459). (The original "Submit Post" button just POSTs, and CreateArticleDto's own
 // `status` is optional, defaulting server-side to 'draft') — the single
 // button is split into two ("Save as Draft" / "Publish") rather than
 // inventing a checkbox, matching this project's established "no design

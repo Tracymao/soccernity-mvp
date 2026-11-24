@@ -1,7 +1,11 @@
 // "Post options" for a post the viewer authored: manage comment settings and
-// delete. No Figma frame exists for this (a file-wide search found no
-// post-level own-content menu), so it is built plainly with the same inline
-// disclosure pattern ReportAction uses, and the same inline two-step confirm
+// delete. The own-post "Post options" menu, the comment settings and the
+// delete confirmation are drawn as G2-1 to G2-9 (G2-1 7119:69271 trigger;
+// G2-2 7119:69321 menu; G2-3 7119:69378 settings; G2-4 7119:69439 settings
+// error; G2-5 7119:69503 confirm delete; G2-6 7119:69560 deleting; G2-7
+// 7119:69617 delete error; G2-8 7119:69677 mobile menu; G2-9 7119:69734
+// mobile confirm delete). It is built with the same inline disclosure
+// pattern ReportAction uses, and the same inline two-step confirm
 // apps/admin's Users screen uses for an irreversible action.
 //
 // Delete is a real hard delete: it removes the post AND every comment, like
