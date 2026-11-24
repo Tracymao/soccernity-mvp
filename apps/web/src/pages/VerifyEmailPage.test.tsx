@@ -115,6 +115,15 @@ describe("VerifyEmailPage", () => {
     renderVerifyPage();
 
     expect(await screen.findByText(/approval still pending/i)).not.toBeNull();
+    // Founder-approved wording (2026-11-24), exact strings.
+    expect(
+      screen.getByText("Your email address is confirmed. Your account stays restricted until your guardian approves it."),
+    ).not.toBeNull();
+    expect(screen.getByText("You won’t be asked to verify it again.")).not.toBeNull();
+    expect(
+      screen.getByText("Profile, direct messages and posting stay switched off until your guardian approves."),
+    ).not.toBeNull();
+    expect(screen.queryByText(/Some features stay switched off/i)).toBeNull();
     // Never claims full/ordinary access.
     expect(screen.queryByText("Email verified")).toBeNull();
     expect(screen.queryByRole("link", { name: /continue to soccernity/i })).toBeNull();
