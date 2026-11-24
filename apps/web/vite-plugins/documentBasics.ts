@@ -51,15 +51,30 @@ export function robotsTxt(basics: DocumentBasics): string {
   return basics.indexable ? "User-agent: *\nAllow: /\n" : "User-agent: *\nDisallow: /\n";
 }
 
+export const SHARE_IMAGE_PATH = "/share-image.png";
+export const SHARE_IMAGE_ALT = "Soccernity. Where the whole game lives.";
+
 export function documentBasicsTags(basics: DocumentBasics): HtmlTagDescriptor[] {
   if (!basics.indexable) {
     return [
       { tag: "meta", attrs: { name: "robots", content: "noindex, nofollow" }, injectTo: "head" },
+      { tag: "meta", attrs: { name: "twitter:card", content: "summary" }, injectTo: "head" },
     ];
   }
+  // A social crawler needs an absolute image URL, so the image tags exist only here, with the canonical.
+  const image = `${new URL(basics.canonicalUrl!).origin}${SHARE_IMAGE_PATH}`;
+  const meta = (attrs: Record<string, string>): HtmlTagDescriptor => ({ tag: "meta", attrs, injectTo: "head" });
   return [
     { tag: "link", attrs: { rel: "canonical", href: basics.canonicalUrl! }, injectTo: "head" },
-    { tag: "meta", attrs: { property: "og:url", content: basics.canonicalUrl! }, injectTo: "head" },
+    meta({ property: "og:url", content: basics.canonicalUrl! }),
+    meta({ property: "og:image", content: image }),
+    meta({ property: "og:image:type", content: "image/png" }),
+    meta({ property: "og:image:width", content: "1200" }),
+    meta({ property: "og:image:height", content: "630" }),
+    meta({ property: "og:image:alt", content: SHARE_IMAGE_ALT }),
+    meta({ name: "twitter:card", content: "summary_large_image" }),
+    meta({ name: "twitter:image", content: image }),
+    meta({ name: "twitter:image:alt", content: SHARE_IMAGE_ALT }),
   ];
 }
 
