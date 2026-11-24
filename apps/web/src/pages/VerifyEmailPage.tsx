@@ -37,15 +37,10 @@
 // time of the check; CLAUDE.md's own documented history, PR #107, lists
 // it as a founder-blocked, never-designed product decision). The state is
 // now drawn as G1-1 "Web - Verify Email - Guardian approval pending -
-// Desktop" (7114:68249) and G1-2, the mobile version (7114:68291), but
-// that drawing does not make it founder-approved. The
-// `verified-pending-consent` block below is still a CONSERVATIVE INTERIM
-// DESIGN, built from the code, not a founder-approved Figma-sourced
-// screen -- see its own inline
-// comment further down for the full detail, matching this project's
-// established "flagged, not invented as if real" discipline (see e.g.
-// EditProfileModal.tsx's disabled unbacked fields, or how ClubPickerStep
-// was flagged before it had a real Figma screen).
+// Desktop" (7114:68249) and G1-2, the mobile version (7114:68291), and
+// was approved by the founder on 2026-11-24 with wording changes
+// (Decision Log #38). The `verified-pending-consent` copy matches those
+// frames word for word.
 //
 // RECOVERY-AFFORDANCE GAP -- RESOLVED (Decision Log #37,
 // sprint-2/verify-email-support-and-consent-view): the founder has
@@ -84,19 +79,18 @@ const WHAT_HAPPENS_NEXT = [
 ];
 
 // PENDING-CONSENT-MINOR STATE content -- see this file's own header
-// comment for why this whole branch is a conservative, non-Figma-sourced
-// interim design (Decision Log #38). Deliberately distinct from
+// comment (Decision Log #38). Deliberately distinct from
 // WHAT_HAPPENS_NEXT above, not a copy of it with one row swapped -- this
 // state must never claim the same "you're all set" framing the ordinary
 // Verified state uses.
 const PENDING_CONSENT_STEPS = [
   {
     title: "Your email address is confirmed",
-    body: "You will not be asked to verify this address again.",
+    body: "You won’t be asked to verify it again.",
   },
   {
     title: "Your account is still restricted",
-    body: "Your guardian has not yet approved your account. Some features stay switched off until they do.",
+    body: "Profile, direct messages and posting stay switched off until your guardian approves.",
   },
   {
     title: "Check your live status any time",
@@ -219,9 +213,9 @@ export default function VerifyEmailPage() {
           </>
         )}
 
-        {/* CONSERVATIVE INTERIM DESIGN -- drawn as G1-1 and G1-2 (7114:68249,
-            7114:68291), but still not founder-approved (see this file's own
-            header comment, Decision Log #38).
+        {/* Drawn as G1-1 and G1-2 (7114:68249, 7114:68291) and approved by
+            the founder on 2026-11-24 (see this file's own header comment,
+            Decision Log #38).
             Deliberately reuses the ordinary Verified state's icon/card/
             button scaffolding and CSS classes -- the email genuinely was
             verified, so the same success icon is honest here -- but the
@@ -240,8 +234,7 @@ export default function VerifyEmailPage() {
             <div className="verify-header">
               <h1 className="verify-heading">Email verified, approval still pending</h1>
               <p className="verify-subheading">
-                Your email address is confirmed, but your account is still waiting on your guardian&rsquo;s
-                approval. It stays restricted until they approve it.
+                Your email address is confirmed. Your account stays restricted until your guardian approves it.
               </p>
             </div>
             <div className="verify-card">
