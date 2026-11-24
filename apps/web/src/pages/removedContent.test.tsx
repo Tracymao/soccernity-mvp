@@ -201,7 +201,7 @@ describe("the post page for a removed post (M5, D4)", () => {
   it("anyone else still gets the one generic 'Post not found', never the notice", async () => {
     vi.mocked(getPostById).mockRejectedValue(new FeedApiError("Post not found", { status: 404 }));
     renderAt();
-    expect(await screen.findByText(/Post not found/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "We can’t find that page" })).toBeTruthy();
     expect(screen.queryByTestId("removed-placeholder")).toBeNull();
     expect(screen.queryByText(/removed/i)).toBeNull();
   });

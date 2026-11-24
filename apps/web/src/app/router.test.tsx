@@ -70,7 +70,7 @@ describe("router — rendered footer presence", () => {
 
   it("a genuinely unmatched path 404s AND renders the site footer", async () => {
     await renderAt("/no-such-page-xyz");
-    expect(screen.getByRole("heading", { name: /page not found/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /can.t find that page/i })).not.toBeNull();
     expect(screen.getByRole("contentinfo")).not.toBeNull();
   });
 

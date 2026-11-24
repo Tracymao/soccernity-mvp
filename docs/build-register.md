@@ -754,7 +754,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #559 | B-206, B-321 | Yes (2026-11-24); suggested receiving bodies shown at launch, pending counsel; no code or Figma change |
 | #560 | B-206, B-321 | Yes (2026-11-24); D13 restricted wording follows the code; drawn in Figma gaps F |
 | #561 | none | Figma only (2026-11-24); 27 Match Centre mobile state frames, PRs G and H; no code |
-| #562 | none | No (2026-11-24); 404 page design proposal, NOT approved, NOT built |
+| #562 | none | No (2026-11-24); 404 page design proposal, NOT approved, NOT built [Dated note 2026-11-24: approved by the founder and BUILT, see #565 and Section 129.] |
 | #563 | B-327 | Yes (2026-11-24); smaller no-cover placeholder on the homepage featured story, softer pillar and headline claims; apps/web only |
 
 ## 8. Updates 2026-10-14 (contest spec, decline cap, DOB correction, hosting, Section 6 answers)
@@ -5835,3 +5835,9 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 - The six PNGs under `docs/homepage-polish-screens/` that PR #890 committed by mistake are removed (the directory is gone), and the one line of `docs/homepage-polish-report.md` that pointed at them now says the screenshots were taken in real Chrome during the PR and are not committed.
 - The hard `<br />` in the closing headline of `apps/web/src/pages/HomePage.tsx` is removed and `.home-closing__title` gets `text-wrap: balance` in `HomePage.css`, so the headline no longer wraps as "Start the record you / should / have had all along." at 390px. One test assertion added (the heading has no `<br>`). No copy wording changed.
 - This belongs to B-327. B-ID count stays 328, gap frames 146, no Decision Log row added (#563 stands).
+
+## 129. Updates 2026-11-24 (404 page approved and built; Decision Log #565; apps/web and docs; no new B-ID)
+
+- The founder approved the 404 design frames F-1 to F-4 (7141:70207, 7141:70548, 7141:70383, 7141:70635; Notes 7142:70445) on 2026-11-24. `apps/web/src/pages/NotFoundPage.tsx` is rebuilt from them: a "404" label (aria-hidden), the only h1 "We can’t find that page", the paragraph, a "Back to home" button link and two text links (Sports Hub, Contact us). "Back to home" goes to /community when signed in and / when signed out, read from the in-memory session (no API call).
+- The missing, blocked-profile and private-post states render the same page: `OtherProfilePage` already did, and `PostPage`'s "not-found" branch now renders `NotFoundPage` (the old "Post not found. Back to Community" is gone). The "removed" and "error" branches are unchanged. Any earlier register text saying the 404 page has no frame or is not built is superseded by this section.
+- B-ID count stays 328, gap frames 146. Report: `docs/not-found-page-report.md`.

@@ -96,7 +96,7 @@ describe("PostPage (where a Final week tile opens)", () => {
   it("a hidden or missing post is one generic 'Post not found'", async () => {
     vi.mocked(getPostById).mockRejectedValue(new FeedApiError("Post not found", { status: 404 }));
     renderAt();
-    expect(await screen.findByText(/Post not found/)).not.toBeNull();
+    expect(await screen.findByRole("heading", { name: "We can’t find that page" })).not.toBeNull();
     expect(screen.queryByText("Contest post")).toBeNull();
   });
 
