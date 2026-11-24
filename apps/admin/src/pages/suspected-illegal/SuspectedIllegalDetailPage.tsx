@@ -1,5 +1,5 @@
 // Suspected illegal imagery -- one record (B-206; backend PR #800, GET /admin/suspected-illegal-media/:id, POST
-// .../:id/filed and .../:id/not-filed). NO Figma frame exists: this reuses the username-review detail layout
+// .../:id/filed and .../:id/not-filed). Drawn as D1 to D14 (D1 7077:65267); built from the username-review detail layout
 // (mod-card, key/value rows) and the moderation form styles. Route /moderation/suspected-illegal/:id.
 //
 // WHAT THIS PAGE IS NOT: it never contacts anyone. A report to a receiving body is made by a person with that body,
