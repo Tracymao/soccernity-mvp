@@ -4,15 +4,15 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import SportsHubPage from "./SportsHubPage";
-import { SportsApiError, type MatchSummary, type MatchesPage } from "../api/sports";
+import SportsHubPage, { groupLeagues } from "./SportsHubPage";
+import { SportsApiError, type League, type MatchSummary, type MatchesPage } from "../api/sports";
 
 vi.mock("../api/sports", async () => {
   const actual = await vi.importActual<typeof import("../api/sports")>("../api/sports");
-  return { ...actual, listLiveScores: vi.fn(), listFixtures: vi.fn() };
+  return { ...actual, listLiveScores: vi.fn(), listFixtures: vi.fn(), listLeagues: vi.fn() };
 });
 
-import { listLiveScores, listFixtures } from "../api/sports";
+import { listLiveScores, listFixtures, listLeagues } from "../api/sports";
 import { clearSession } from "../test/session";
 
 function team(id: string, name: string) {
@@ -45,6 +45,11 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listLiveScores).mockReset().mockResolvedValue(page([]));
   vi.mocked(listFixtures).mockReset().mockResolvedValue(page([]));
+  vi.mocked(listLeagues).mockReset().mockResolvedValue([]);
+});
+
+const lg = (id: string, name: string, rank: number | null, country: string | null = null): League => ({
+  id, name, rank, country, logo: null,
 });
 
 function renderPage() {
@@ -108,48 +113,50 @@ describe("SportsHubPage", () => {
     expect(await screen.findByRole("alert")).not.toBeNull();
   });
 
-  it("derives the league sidebar from loaded matches and filters by clicking one", async () => {
+  it("lists leagues from GET /sports/leagues and filters by clicking one", async () => {
+    vi.mocked(listLeagues).mockResolvedValue([lg("39", "Premier League", 1, "England"), lg("61", "Ligue 1", 6, "France")]);
     vi.mocked(listLiveScores)
-      .mockResolvedValueOnce(
-        page([
-          match({ id: "m1", league: { id: "39", name: "Premier League", season: "2026", round: null } }),
-          match({
-            id: "m2",
-            league: { id: "61", name: "Ligue 1", season: "2026", round: null },
-            homeTeam: team("hp2", "PSG"),
-            awayTeam: team("ap2", "Marseille"),
-          }),
-        ]),
-      )
-      .mockResolvedValueOnce(page([match({ id: "m1", league: { id: "39", name: "Premier League", season: "2026", round: null } })]));
+      .mockResolvedValueOnce(page([match({ id: "m1" })]))
+      .mockResolvedValueOnce(page([match({ id: "m2", league: { id: "61", name: "Ligue 1", season: "2026", round: null } })]));
 
     renderPage();
     await screen.findByText("Liverpool");
 
-    expect(screen.getByRole("button", { name: "Premier League" })).not.toBeNull();
+    expect(await screen.findByRole("button", { name: "Premier League" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Ligue 1" })).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Ligue 1" }));
 
     await screen.findByText("Ligue 1", { selector: "p.sh-section-title" });
     expect(listLiveScores).toHaveBeenLastCalledWith({ league: "61" });
-    // The sidebar itself still lists BOTH leagues (accumulated), even
-    // though the visible match list is now filtered to just one.
     expect(screen.getByRole("button", { name: "Premier League" })).not.toBeNull();
   });
 
+  it("shows ranked leagues under Top competitions, then countries A to Z, keeping All leagues", async () => {
+    vi.mocked(listLeagues).mockResolvedValue([
+      lg("1", "Premier League", 1, "England"),
+      lg("2", "Zebra Cup", null, "Zambia"),
+      lg("3", "Alpha League", null, "Algeria"),
+      lg("4", "Mystery League", null, null),
+    ]);
+    renderPage();
+    await screen.findByRole("button", { name: "Premier League" });
+    expect(screen.getByRole("button", { name: /all leagues/i })).not.toBeNull();
+    const labels = Array.from(document.querySelectorAll("li.sh-league-group")).map((e) => e.textContent);
+    expect(labels).toEqual(["Top competitions", "Algeria", "Zambia", "Other"]);
+  });
+
+  it("keeps the sidebar empty and the matches visible when the league list fails", async () => {
+    vi.mocked(listLeagues).mockRejectedValue(new Error("boom"));
+    vi.mocked(listLiveScores).mockResolvedValueOnce(page([match()]));
+    renderPage();
+    await screen.findByText("Liverpool");
+    expect(document.querySelectorAll("li.sh-league-group").length).toBe(0);
+  });
+
   it("filters the league sidebar itself by the search box (client-side)", async () => {
-    vi.mocked(listLiveScores).mockResolvedValueOnce(
-      page([
-        match({ id: "m1", league: { id: "39", name: "Premier League", season: "2026", round: null } }),
-        match({
-          id: "m2",
-          league: { id: "78", name: "Bundesliga", season: "2026", round: null },
-          homeTeam: team("hp2", "Bayern"),
-          awayTeam: team("ap2", "Dortmund"),
-        }),
-      ]),
-    );
+    vi.mocked(listLeagues).mockResolvedValue([lg("39", "Premier League", 1, "England"), lg("78", "Bundesliga", 2, "Germany")]);
+    vi.mocked(listLiveScores).mockResolvedValueOnce(page([match()]));
 
     renderPage();
     await screen.findByRole("button", { name: "Bundesliga" });
@@ -193,5 +200,25 @@ describe("SportsHubPage", () => {
 
     expect(screen.queryByText(/has not yet selected a sports-data vendor/i)).toBeNull();
     expect(screen.getByText("Most Recent Stories")).not.toBeNull();
+  });
+});
+
+describe("groupLeagues", () => {
+  it("puts ranked leagues first in server order and sorts countries A to Z", () => {
+    const groups = groupLeagues([
+      lg("1", "A", 1, "England"),
+      lg("2", "B", 2, "Spain"),
+      lg("3", "C", null, "Brazil"),
+      lg("4", "D", null, "Argentina"),
+      lg("5", "E", null, "Brazil"),
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(["Top competitions", "Argentina", "Brazil"]);
+    expect(groups[0].leagues.map((l) => l.id)).toEqual(["1", "2"]);
+    expect(groups[2].leagues.map((l) => l.id)).toEqual(["3", "5"]);
+  });
+
+  it("omits Top competitions when nothing is ranked and returns nothing for no leagues", () => {
+    expect(groupLeagues([lg("1", "A", null, "Chile")]).map((g) => g.label)).toEqual(["Chile"]);
+    expect(groupLeagues([])).toEqual([]);
   });
 });
