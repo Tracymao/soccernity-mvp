@@ -1,0 +1,116 @@
+/* The minimal video player (R112). Brand tokens only; controls sit over the video on a soft navy scrim. */
+.vp {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  line-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--sn-brand-navy);
+  /* A very small clip must still leave room for the controls: the play target in the middle and the 44px mute
+     button in the corner never overlap. The clip is centred on the navy ground. */
+  min-width: min(100%, 180px);
+  min-height: 140px;
+}
+.vp__video {
+  margin: 0 auto;
+}
+.vp--fill {
+  display: block;
+  width: 100%;
+}
+.vp__video {
+  display: block;
+  max-width: 100%;
+}
+.vp--fill .vp__video {
+  width: 100%;
+}
+
+.vp__surface {
+  position: absolute;
+  inset: 0 0 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.vp__play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(40, 46, 101, 0.65);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.vp[data-paused="true"] .vp__play {
+  opacity: 1;
+}
+
+.vp__mute {
+  position: absolute;
+  right: 6px;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(40, 46, 101, 0.65);
+  color: #fff;
+  cursor: pointer;
+}
+
+.vp__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24px;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+  touch-action: none;
+}
+.vp__track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.35);
+  transition: height 0.12s ease;
+}
+.vp__bar:hover .vp__track,
+.vp__bar:focus-visible .vp__track {
+  height: 5px;
+}
+.vp__fill {
+  height: 100%;
+  background: var(--sn-brand-green);
+}
+
+.vp__surface:focus-visible,
+.vp__mute:focus-visible,
+.vp__bar:focus-visible {
+  outline: 3px solid var(--sn-brand-green);
+  outline-offset: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp__play,
+  .vp__track {
+    transition: none;
+  }
+}

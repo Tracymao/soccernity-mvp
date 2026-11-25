@@ -148,3 +148,7 @@
   font-size: 12px;
   color: var(--sn-text-secondary);
 }
+
+.videos-modal__video .vp__video {
+  max-height: 70vh;
+}

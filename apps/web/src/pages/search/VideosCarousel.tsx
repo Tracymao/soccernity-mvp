@@ -21,6 +21,7 @@
 // last real value; nothing is guessed or incremented locally.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FeedApiError, getFeed, recordPostView, type FeedPost } from "../../api/feed";
+import VideoPlayer from "../../components/VideoPlayer/VideoPlayer";
 import { firstVideoUrl } from "../../lib/media";
 import { getStoredAccessToken } from "../../lib/session";
 import playIcon from "../../assets/icons/play-circle.svg";
@@ -191,7 +192,9 @@ export default function VideosCarousel() {
             <button type="button" className="videos-modal__close" onClick={close} aria-label="Close video">
               ×
             </button>
-            <video className="videos-modal__video" src={active.url} controls autoPlay playsInline />
+            <div className="videos-modal__video">
+              <VideoPlayer src={active.url} autoPlay fill videoLabel={`Video by ${active.authorName}`} />
+            </div>
             <p className="videos-modal__meta">
               <strong>{active.authorName}</strong> · {viewsLabel(active.viewCount)}
             </p>
