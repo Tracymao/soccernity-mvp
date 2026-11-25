@@ -55,7 +55,8 @@
 // "composer row → search field").
 import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
+import { buildLoginLink } from "../lib/returnTo";
 import {
   searchAll,
   searchUsers,
@@ -121,6 +122,8 @@ export default function SearchTrendingPage() {
   // Decision Log #568 (code-only): the page reads and writes the `q` URL parameter so the header
   // search box (and a shared link) can open a search.
   const [searchParams, setSearchParams] = useSearchParams();
+  // Decision Log #571 (code-only): the logged-out prompt sends the visitor to log in and back here.
+  const location = useLocation();
   const urlQuery = searchParams.get("q") ?? "";
   const [queryInput, setQueryInput] = useState(urlQuery);
   const [activeQuery, setActiveQuery] = useState("");
@@ -240,7 +243,8 @@ export default function SearchTrendingPage() {
   if (!token || !decoded) {
     return (
       <div className="search-page-status" role="status">
-        Log in to search Soccernity. <Link to="/login">Log in</Link>
+        Log in to search Soccernity.{" "}
+        <Link to={buildLoginLink(location.pathname + location.search)}>Log in</Link>
       </div>
     );
   }

@@ -49,6 +49,7 @@ vi.mock("../api/search", async () => {
 
 import { searchAll, searchUsers, searchClubs, searchPosts } from "../api/search";
 import { seedSession, clearSession } from "../test/session";
+import { buildLoginLink } from "../lib/returnTo";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -334,6 +335,20 @@ describe("SearchTrendingPage -- q URL parameter", () => {
     fireEvent.change(field(), { target: { value: "c" } });
     await waitFor(() => expect(screen.getByTestId("url").textContent).toBe("/search"));
     expect(searchAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("logged out: the Log in link carries the current search (Decision Log #571)", async () => {
+    renderPage("/search?q=man%20utd");
+    const link = screen.getByRole("link", { name: "Log in" });
+    expect(link.getAttribute("href")).toBe(buildLoginLink("/search?q=man%20utd"));
+    expect(link.getAttribute("href")).toBe("/login?returnTo=%2Fsearch%3Fq%3Dman%2520utd");
+    await new Promise((r) => setTimeout(r, 400));
+    expect(searchAll).not.toHaveBeenCalled();
+  });
+
+  it("logged out on plain /search: the link carries /search", () => {
+    renderPage("/search");
+    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe(buildLoginLink("/search"));
   });
 
   it("logged out with ?q= still shows the log-in prompt and makes no search call", async () => {
