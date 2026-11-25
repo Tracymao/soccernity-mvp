@@ -26,3 +26,16 @@ export const DEFAULT_HIGHLIGHTS_CACHE_TTL_SECONDS = 10 * 60; // 10 min — new h
 // league in one request, so refreshing per-date (not per-match) is what actually keeps this
 // rate-limit-conscious.
 export type MatchPhase = 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled';
+
+// League ordering (league-priority.constants.ts). League metadata (country, logo) is refreshed from
+// Highlightly's Leagues endpoint at most once a day, only when a league on screen has no metadata yet,
+// and never more than this many pages per refresh. SHAPE UNVERIFIED against the live API (no key here).
+export const DEFAULT_LEAGUE_META_MAX_PAGES = 10;
+export const LEAGUE_META_PAGE_SIZE = 100;
+export const LEAGUE_META_LOCK_TTL_SECONDS = 24 * 60 * 60;
+// GET /sports/results/recent looks back at most this many days for the latest day with finished matches.
+export const SPORTS_RESULTS_LOOKBACK_DAYS = 7;
+// Matches read into memory for one ranked page (a day or all live matches; far below this in practice).
+export const SPORTS_RANKED_READ_CAP = 2000;
+export const SPORTS_STATUS_FILTERS = ['scheduled', 'live', 'finished'] as const;
+export type SportsStatusFilter = (typeof SPORTS_STATUS_FILTERS)[number];

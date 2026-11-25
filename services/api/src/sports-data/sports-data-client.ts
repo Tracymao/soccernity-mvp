@@ -48,6 +48,25 @@ export interface RawLeagueRef {
   logo?: string | null;
 }
 
+// One entry of GET /leagues. Shape is from Highlightly's public docs and has NOT been checked against a
+// live response: country is read defensively (an object with name/code, or absent).
+export interface RawLeagueMeta {
+  id: string | number;
+  name: string;
+  logo?: string | null;
+  country?: { name?: string | null; code?: string | null } | null;
+}
+
+export interface RawLeaguesPage {
+  items: RawLeagueMeta[];
+  totalCount?: number;
+}
+
+export interface ListLeaguesParams {
+  limit?: number;
+  offset?: number;
+}
+
 export interface RawVenue {
   name?: string | null;
   city?: string | null;
@@ -241,6 +260,7 @@ export class SportsDataNotFoundError extends Error {
 
 export abstract class SportsDataClient {
   abstract getMatches(params: ListMatchesParams): Promise<RawMatchesPage>;
+  abstract getLeagues(params: ListLeaguesParams): Promise<RawLeaguesPage>;
   abstract getMatchById(externalRef: string): Promise<RawMatch>;
   abstract getMatchStatistics(externalRef: string): Promise<RawTeamStatistics[]>;
   abstract getMatchLineups(externalRef: string): Promise<RawLineups>;
