@@ -19,13 +19,13 @@ describe("Footer", () => {
     );
   }
 
-  it("renders the canonical footer content: wordmark, 6 socials, 3 legal links, copyright", () => {
+  it("renders the canonical footer content: wordmark, 4 socials, 3 legal links, copyright", () => {
     renderFooter();
 
     const footer = screen.getByRole("contentinfo");
     expect(within(footer).getByText("Soccernity")).toBeTruthy();
 
-    for (const label of ["facebook", "instagram", "twitter", "Tik Tok", "YouTube", "LinkedIn"]) {
+    for (const label of ["facebook", "twitter", "Tik Tok", "YouTube"]) {
       expect(within(footer).getByText(label)).toBeTruthy();
     }
     // "Privacy Settings" removed to match Decision Log #222 (sprint-2/privacy-settings-to-code).
@@ -45,8 +45,28 @@ describe("Footer", () => {
     ]) {
       expect(within(footer).getByRole("link", { name: label }).getAttribute("href")).toBe(href);
     }
-    // Three legal links plus "Report a concern"; the social icons stay non-interactive.
-    expect(within(footer).getAllByRole("link")).toHaveLength(4);
+    // Three legal links, "Report a concern" and the four social links.
+    expect(within(footer).getAllByRole("link")).toHaveLength(8);
+  });
+
+  it("links the four social icons to the founder's accounts in a new tab; Instagram and LinkedIn are not shown (Decision Log #567)", () => {
+    renderFooter();
+    const footer = screen.getByRole("contentinfo");
+    const expected: Record<string, string> = {
+      facebook: "https://www.facebook.com/soccernity",
+      twitter: "https://x.com/soccernity",
+      "Tik Tok": "https://www.tiktok.com/@soccernity",
+      YouTube: "https://www.youtube.com/@soccernity",
+    };
+    for (const [label, href] of Object.entries(expected)) {
+      const link = within(footer).getByRole("link", { name: `${label} (opens in a new tab)` });
+      expect(link.getAttribute("href")).toBe(href);
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toContain("noopener");
+      expect(link.getAttribute("rel")).toContain("noreferrer");
+    }
+    expect(within(footer).queryByText(/instagram/i)).toBeNull();
+    expect(within(footer).queryByText("LinkedIn")).toBeNull();
   });
 
   it("links 'Report a concern' to the real /report page", () => {

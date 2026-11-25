@@ -651,3 +651,77 @@ describe("Header -- icon name labels (Decision Log #566)", () => {
     await expectNoTip();
   });
 });
+
+// Decision Log #568 (code-only): the desktop search box is live. Enter (2+ characters after trim)
+// goes to /search?q=...; signed-in and logged-out visitors alike (/search decides what to show).
+describe("Header -- desktop search box (Decision Log #568)", () => {
+  function FullLocationProbe() {
+    const location = useLocation();
+    return <div data-testid="where">{location.pathname + location.search}</div>;
+  }
+  function renderAt(path = "/community") {
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <Header />
+        <FullLocationProbe />
+      </MemoryRouter>,
+    );
+  }
+  const where = () => screen.getByTestId("where").textContent;
+  function submit(text: string) {
+    const box = screen.getByRole("searchbox", { name: "Search Soccernity" });
+    fireEvent.change(box, { target: { value: text } });
+    fireEvent.submit(box.closest("form")!);
+  }
+
+  describe.each([
+    ["signed out", false],
+    ["signed in", true],
+  ])("%s", (_label, signedIn) => {
+    beforeEach(() => {
+      setViewport(1200);
+      if (signedIn) {
+        seedSession(decodableToken());
+        vi.mocked(getUser).mockResolvedValue(BASE_PROFILE);
+        vi.mocked(getUnreadCount).mockResolvedValue(0);
+      }
+    });
+
+    it("is enabled and Enter with 2+ characters goes to /search?q=", () => {
+      renderAt();
+      const box = screen.getByRole("searchbox", { name: "Search Soccernity" }) as HTMLInputElement;
+      expect(box.disabled).toBe(false);
+      submit("ab");
+      expect(where()).toBe("/search?q=ab");
+    });
+
+    it("does nothing for one character, or whitespace", () => {
+      renderAt();
+      submit("a");
+      expect(where()).toBe("/community");
+      submit("   ");
+      expect(where()).toBe("/community");
+    });
+
+    it("trims and encodes the query", () => {
+      renderAt();
+      submit("  man utd & co  ");
+      expect(where()).toBe("/search?q=man%20utd%20%26%20co");
+    });
+  });
+
+  it("shows the q of /search in the box and is empty on other routes", async () => {
+    renderAt("/search?q=salah");
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("salah");
+    cleanup();
+    renderAt("/community");
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+  });
+
+  it("mobile still has no search box, only the search icon link", () => {
+    setViewport(600);
+    renderAt("/");
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.getByRole("link", { name: "Search" }).getAttribute("href")).toBe("/search");
+  });
+});
