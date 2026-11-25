@@ -60,6 +60,25 @@
   gap: 5px;
 }
 
+.sn-footer__social-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sn-footer__social-link:hover {
+  opacity: 0.8;
+}
+
+.sn-footer__social-link:focus-visible {
+  outline: 2px solid var(--sn-brand-green);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .sn-footer__social img {
   display: block;
   width: 24px;

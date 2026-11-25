@@ -55,7 +55,7 @@
 // "composer row → search field").
 import { safeImageUrl } from "../lib/safeImageUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import {
   searchAll,
   searchUsers,
@@ -118,8 +118,14 @@ export default function SearchTrendingPage() {
 
   const [activeFilter, setActiveFilter] = useState<FilterChip>("for-you");
 
-  const [queryInput, setQueryInput] = useState("");
+  // Decision Log #568 (code-only): the page reads and writes the `q` URL parameter so the header
+  // search box (and a shared link) can open a search.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
+  const [queryInput, setQueryInput] = useState(urlQuery);
   const [activeQuery, setActiveQuery] = useState("");
+  // The last query this page itself ran; lets the URL -> input effect ignore our own URL writes.
+  const lastRunRef = useRef("");
   const [searchState, setSearchState] = useState<SearchState>("idle");
   const [results, setResults] = useState<SearchAllResult | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -131,7 +137,20 @@ export default function SearchTrendingPage() {
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
+    lastRunRef.current = trimmed;
     setActiveQuery(trimmed);
+    // Keep the URL in step (replace, no history entry); drop q when there is no usable query.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        const wanted = trimmed.length >= 2 ? trimmed : null;
+        if (next.get("q") === wanted) return prev;
+        if (wanted === null) next.delete("q");
+        else next.set("q", wanted);
+        return next;
+      },
+      { replace: true },
+    );
     // Mirrors the server's own minimum (SearchQueryDto / normalizeQuery,
     // 2 chars after trim) — skip the call entirely rather than let every
     // one- or zero-character keystroke round-trip a guaranteed 400.
@@ -151,21 +170,33 @@ export default function SearchTrendingPage() {
       setSearchError(err instanceof SearchApiError ? err.message : "Couldn't search right now.");
       setSearchState("error");
     }
-  }, []);
+  }, [setSearchParams]);
+
+  // A new q in the URL that this page did not write (a search from the header box) fills the field;
+  // the debounced effect below then runs the search.
+  useEffect(() => {
+    if (urlQuery.trim() !== lastRunRef.current && urlQuery.trim() !== queryInput.trim()) {
+      setQueryInput(urlQuery);
+    }
+    // Only a change of the URL value should trigger this, not typing.
+  }, [urlQuery]);
 
   // Debounced re-query as the user types (300ms — a real server round
   // trip, not a local filter, same "stop typing then search" feel
   // GrassrootsPage.tsx's own city filter and BanterPage.tsx's own room
   // search already use).
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signedIn = Boolean(token && decoded);
   useEffect(() => {
+    // Logged out: the page only shows its log-in prompt, so no search call is made (Decision Log #568).
+    if (!signedIn) return;
     if (queryInput.trim() === activeQuery) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => runSearch(queryInput), 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [queryInput, activeQuery, runSearch]);
+  }, [queryInput, activeQuery, runSearch, signedIn]);
 
   async function loadMoreUsers() {
     if (!results?.users.nextCursor || loadingMore.users) return;
