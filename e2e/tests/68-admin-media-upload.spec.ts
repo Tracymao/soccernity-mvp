@@ -109,7 +109,9 @@ test.describe.serial('POST /admin/media/upload', () => {
     expect(row.type).toBe('image');
     expect(row.size).toBe(png.length);
     expect(row.url).toBe(body.url);
-    expect(row.key).toMatch(new RegExp(`^media/${editor.id}/[0-9a-f-]{36}-${name.replace(/\./g, '\\.')}$`));
+    expect(row.key.startsWith(`media/${editor.id}/`)).toBe(true);
+    expect(row.key.endsWith(`-${name}`)).toBe(true);
+    expect(row.key.slice(`media/${editor.id}/`.length, row.key.length - `-${name}`.length)).toMatch(/^[0-9a-f-]{36}$/);
     expect(row.url.endsWith(row.key)).toBe(true);
 
     // Object: in the public bucket, not the private one, same bytes and type.
