@@ -236,6 +236,9 @@ services:
       # SPORTS_DATA_MAX_REFRESH_PAGES: code default
       - key: SPORTS_DATA_MAX_REFRESH_PAGES
         value: "1"
+      # SPORTS_DATA_MAX_LEAGUE_META_PAGES: code default
+      - key: SPORTS_DATA_MAX_LEAGUE_META_PAGES
+        value: "10"
       # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
       # STAGING: S3_BUCKET is the PUBLIC bucket (soccernity-staging-public, served by S3_PUBLIC_BASE_URL, https://media.staging.soccernity.com); S3_PRIVATE_BUCKET is
       # the PRIVATE one (soccernity-staging-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
@@ -599,6 +602,9 @@ services:
       # SPORTS_DATA_MAX_REFRESH_PAGES: code default
       - key: SPORTS_DATA_MAX_REFRESH_PAGES
         value: "1"
+      # SPORTS_DATA_MAX_LEAGUE_META_PAGES: code default
+      - key: SPORTS_DATA_MAX_LEAGUE_META_PAGES
+        value: "10"
       # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
       # PRODUCTION: S3_BUCKET is the PUBLIC bucket (soccernity-media-public, served by S3_PUBLIC_BASE_URL, https://media.soccernity.com); S3_PRIVATE_BUCKET is
       # the PRIVATE one (soccernity-media-private, no public address of any kind). Both are in the EU jurisdiction, so S3_ENDPOINT is
