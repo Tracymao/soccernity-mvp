@@ -37,12 +37,14 @@
 // "Most Recent Stories" stays illustrative sample content -- no
 // news/story endpoint exists (see ./sports-hub/sportsHubData.ts).
 import { safeImageUrl } from "../lib/safeImageUrl";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   listLiveScores,
   listFixtures,
+  listLeagues,
   SportsApiError,
+  type League,
   type MatchListItem,
 } from "../api/sports";
 import { useAccessToken } from "../lib/AuthContext";
@@ -53,11 +55,6 @@ import "./sports-hub/SportsHubPage.css";
 
 type ViewMode = "live" | "today";
 type LoadState = "loading" | "loaded" | "error";
-
-interface LeagueOption {
-  id: string;
-  name: string;
-}
 
 function TeamCrest({ name, logo }: { name: string; logo: string | null }) {
   const safeLogo = safeImageUrl(logo);
@@ -106,6 +103,29 @@ function MatchRow({ match: m, signedIn }: { match: MatchListItem; signedIn: bool
   );
 }
 
+// Ranked leagues first under "Top competitions" (server order, which is rank order), then the rest
+// grouped by country name A to Z (server order kept inside a country); no country goes last as "Other".
+const TOP_LABEL = "Top competitions";
+const NO_COUNTRY_LABEL = "Other";
+
+export function groupLeagues(items: League[]): { label: string; leagues: League[] }[] {
+  const top = items.filter((l) => l.rank !== null);
+  const byCountry = new Map<string, League[]>();
+  for (const l of items) {
+    if (l.rank !== null) continue;
+    const key = l.country ?? NO_COUNTRY_LABEL;
+    byCountry.set(key, [...(byCountry.get(key) ?? []), l]);
+  }
+  const countries = Array.from(byCountry.keys())
+    .filter((k) => k !== NO_COUNTRY_LABEL)
+    .sort((a, b) => a.localeCompare(b));
+  if (byCountry.has(NO_COUNTRY_LABEL)) countries.push(NO_COUNTRY_LABEL);
+  return [
+    ...(top.length ? [{ label: TOP_LABEL, leagues: top }] : []),
+    ...countries.map((label) => ({ label, leagues: byCountry.get(label)! })),
+  ];
+}
+
 export default function SportsHubPage() {
   const signedIn = useAccessToken() !== null;
   const [viewMode, setViewMode] = useState<ViewMode>("live");
@@ -118,19 +138,22 @@ export default function SportsHubPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
-  // Accumulated across every load (see header comment) so the sidebar
-  // stays browsable once a league filter narrows `matches` down.
-  const [knownLeagues, setKnownLeagues] = useState<LeagueOption[]>([]);
+  // League list for the sidebar: GET /sports/leagues, in the server's order (ranked leagues first).
+  const [leagues, setLeagues] = useState<League[]>([]);
 
-  function mergeKnownLeagues(items: MatchListItem[]) {
-    setKnownLeagues((prev) => {
-      const map = new Map(prev.map((l) => [l.id, l.name]));
-      for (const m of items) {
-        if (m.league.id && m.league.name) map.set(m.league.id, m.league.name);
-      }
-      return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-    });
-  }
+  useEffect(() => {
+    let active = true;
+    listLeagues()
+      .then((items) => {
+        if (active) setLeagues(items);
+      })
+      .catch(() => {
+        // The sidebar simply stays empty; matches still load.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const load = useCallback(async (mode: ViewMode, league: string | null) => {
     setLoadState("loading");
@@ -141,7 +164,6 @@ export default function SportsHubPage() {
           : await listFixtures(todayIso(), league ? { league } : undefined);
       setMatches(page.items);
       setCursor(page.nextCursor);
-      mergeKnownLeagues(page.items);
       setLoadState("loaded");
     } catch {
       setLoadState("error");
@@ -165,7 +187,6 @@ export default function SportsHubPage() {
           : await listFixtures(todayIso(), { ...(leagueFilter ? { league: leagueFilter } : {}), cursor });
       setMatches((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
-      mergeKnownLeagues(page.items);
     } catch (err) {
       setLoadMoreError(err instanceof SportsApiError ? err.message : "Couldn't load more matches.");
     } finally {
@@ -174,10 +195,11 @@ export default function SportsHubPage() {
   }
 
   const filteredLeagueOptions = leagueSearch.trim()
-    ? knownLeagues.filter((l) => l.name.toLowerCase().includes(leagueSearch.trim().toLowerCase()))
-    : knownLeagues;
+    ? leagues.filter((l) => l.name.toLowerCase().includes(leagueSearch.trim().toLowerCase()))
+    : leagues;
+  const leagueGroups = groupLeagues(filteredLeagueOptions);
 
-  const selectedLeagueName = leagueFilter ? knownLeagues.find((l) => l.id === leagueFilter)?.name : null;
+  const selectedLeagueName = leagueFilter ? leagues.find((l) => l.id === leagueFilter)?.name : null;
 
   function emptyMessage(): string {
     if (selectedLeagueName) {
@@ -212,16 +234,23 @@ export default function SportsHubPage() {
               All leagues
             </button>
           </li>
-          {filteredLeagueOptions.map((league) => (
-            <li key={league.id}>
-              <button
-                type="button"
-                className={leagueFilter === league.id ? "sh-league sh-league--active" : "sh-league"}
-                onClick={() => setLeagueFilter(league.id)}
-              >
-                {league.name}
-              </button>
-            </li>
+          {leagueGroups.map((group) => (
+            <Fragment key={group.label}>
+              <li className="sh-league-group" role="presentation">
+                {group.label}
+              </li>
+              {group.leagues.map((league) => (
+                <li key={league.id}>
+                  <button
+                    type="button"
+                    className={leagueFilter === league.id ? "sh-league sh-league--active" : "sh-league"}
+                    onClick={() => setLeagueFilter(league.id)}
+                  >
+                    {league.name}
+                  </button>
+                </li>
+              ))}
+            </Fragment>
           ))}
           {filteredLeagueOptions.length === 0 && <li className="sh-league-empty">No leagues match that search.</li>}
         </ul>
