@@ -5902,3 +5902,8 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 - Numbering: the task assumed Decision Log #568 and #569, but main already holds #569 (sports league ranking) and #570 (home hero live card), so this record is #571. Section 136, not 133, for the same reason (Sections 133 to 135 exist).
 - Privacy check: the static sites send `Referrer-Policy: no-referrer` (stricter than strict-origin-when-cross-origin) and `apps/web` has no Sentry, so nothing was changed.
 - 332 B-IDs (41 with gap frames + 291 without), 146 gap frames. W9 62 to 63. Section 7 now runs to #571 (there are still no Section 7 rows for #569 and #570; not added here, not in scope). The Section 3 W9 list was already behind (it ends at B-325 and does not list B-329 to B-331); only B-332 was appended and the '(58)' count there is unchanged. Report: `docs/login-return-to-report.md`.
+
+
+## 137. Updates 2026-11-25 (Figma only: Today's Fixtures text aligned with the shipped code; no Decision Log row; no new B-ID, no counter changes)
+
+Heading "Matches today", scheduled-card footers "Kickoff HH:MM", note `5214:6828` rewritten, FS-1 layer renamed. Leftover Grassroots-named layers are listed, not renamed. Report: `docs/figma-fixtures-text-align-report.md`.
