@@ -43,7 +43,16 @@ export interface TeamRef {
 export interface MatchSummary {
   id: string;
   competition: string;
-  league: { id: string | null; name: string | null; season: string | null; round: string | null };
+  // `rank` (1-based place on the league popularity list, null = unranked) and `country` come from the
+  // league-ranking API change; typed optional so an older response still types.
+  league: {
+    id: string | null;
+    name: string | null;
+    season: string | null;
+    round: string | null;
+    rank?: number | null;
+    country?: string | null;
+  };
   venue: string | null;
   kickoffTime: string;
   status: MatchPhase;
@@ -315,12 +324,40 @@ export async function listLiveScores(options?: { league?: string; cursor?: strin
 // (YYYY-MM-DD).
 export async function listFixtures(
   date: string,
-  options?: { league?: string; cursor?: string },
+  options?: { league?: string; cursor?: string; status?: "scheduled" | "live" | "finished"; limit?: number },
 ): Promise<MatchesPage> {
   const params = new URLSearchParams({ date });
   if (options?.league) params.set("league", options.league);
+  if (options?.status) params.set("status", options.status);
+  if (options?.limit) params.set("limit", String(options.limit));
   if (options?.cursor) params.set("cursor", options.cursor);
   return get<MatchesPage>(`/sports/fixtures?${params.toString()}`, { withCredentials: true });
+}
+
+// GET /sports/results/recent -- finished matches of the most recent day that has any (server looks
+// back a few days), in league order. `date` is null and `items` empty when there is none.
+export interface RecentResults {
+  date: string | null;
+  items: MatchListItem[];
+}
+
+export async function listRecentResults(options?: { limit?: number }): Promise<RecentResults> {
+  const qs = options?.limit ? `?limit=${options.limit}` : "";
+  return get<RecentResults>(`/sports/results/recent${qs}`, { withCredentials: true });
+}
+
+// GET /sports/leagues -- distinct leagues in cached match data, server-ordered (ranked leagues first).
+export interface League {
+  id: string;
+  name: string;
+  country: string | null;
+  logo: string | null;
+  rank: number | null;
+}
+
+export async function listLeagues(): Promise<League[]> {
+  const res = await get<{ items: League[] }>("/sports/leagues");
+  return res.items;
 }
 
 // GET /sports/matches/:id

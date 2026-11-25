@@ -24,6 +24,7 @@
 // The forfeit pop-ups run here too, as on the Contest details page (#404 item 4).
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
+import VideoPlayer from "../components/VideoPlayer/VideoPlayer";
 import {
   ContestApiError,
   castVote,
@@ -214,7 +215,9 @@ export default function ContestVotingPage() {
                   return (
                     <li key={entry.entryId} className="voting-entry">
                       {video ? (
-                        <video className="voting-entry__media" src={video} controls preload="metadata" />
+                        <div className="voting-entry__media">
+                          <VideoPlayer src={video} fill />
+                        </div>
                       ) : image ? (
                         <img className="voting-entry__media" src={image} alt="" />
                       ) : null}

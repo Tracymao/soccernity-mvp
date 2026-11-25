@@ -6,6 +6,7 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListLiveScoresQueryDto } from './dto/list-live-scores-query.dto';
+import { ListRecentResultsQueryDto } from './dto/list-recent-results-query.dto';
 import { MatchKickoffService } from './match-kickoff.service';
 import { SportsService } from './sports.service';
 
@@ -52,6 +53,27 @@ export class SportsMatchesController {
   ) {
     res.vary('Authorization');
     return this.sportsService.listFixtures(query, user?.sub);
+  }
+
+  // Finished matches of the most recent day with any (look back 7 days), DB only. Static path segment, so
+  // no clash with ':id'. Same optional-auth shape as the siblings (the kickoff-alert flag is per caller).
+  @Get('results/recent')
+  @UseGuards(OptionalJwtAuthGuard)
+  async recentResults(
+    @Query() query: ListRecentResultsQueryDto,
+    @CurrentUser() user: AccessTokenPayload | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.vary('Authorization');
+    return this.sportsService.listRecentResults(query, user?.sub);
+  }
+
+  // Distinct leagues in cached match data with country, logo and rank. No per-caller data, so it is
+  // public and cacheable for a few minutes.
+  @Get('leagues')
+  async leagues(@Res({ passthrough: true }) res: Response) {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return this.sportsService.listLeagues();
   }
 
   // Deliberately AFTER 'live-scores'/'fixtures' above but that's irrelevant here — those are

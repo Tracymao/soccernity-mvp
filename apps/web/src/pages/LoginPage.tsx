@@ -33,16 +33,18 @@
 // two-column layout that sizes itself against the 90px Top Bar; it does
 // not repeat the Top Bar's wordmark.
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { AuthApiError, isTwoFactorChallenge, login, type LoginResponse } from "../api/auth";
 import { storeSession } from "../lib/session";
-import { routeForNextStep } from "../lib/onboarding";
+import { ONBOARDING_ROUTES, routeForNextStep } from "../lib/onboarding";
+import { safeReturnTo } from "../lib/returnTo";
 import TwoFactorCodePrompt from "./twoFactor/TwoFactorCodePrompt";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [staySignedIn, setStaySignedIn] = useState(false);
@@ -66,7 +68,15 @@ export default function LoginPage() {
     // the Restricted Pending page on EVERY login (never /community), an
     // unverified account on the verify prompt, an incomplete profile on
     // Create Profile.
-    navigate(routeForNextStep(result.user.nextStep));
+    const base = routeForNextStep(result.user.nextStep);
+
+    // Decision Log #571 (code-only): a visitor sent here from the search prompt goes back to their
+    // search. Only an allow-listed value (see lib/returnTo.ts) is ever used, and only when the
+    // account is fully onboarded: a minor awaiting consent, an unverified account or an incomplete
+    // profile always goes to its onboarding page first. Both sign-in paths (password and the
+    // two-factor code step) end here, so both behave the same.
+    const returnTo = safeReturnTo(searchParams.get("returnTo"));
+    navigate(returnTo !== null && base === ONBOARDING_ROUTES.home ? returnTo : base);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

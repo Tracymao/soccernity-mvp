@@ -10,51 +10,48 @@
 // directly via src/lib/session.ts, the same way every other converted page
 // does it.
 //
-// REAL DATA (founder decision, 2026-11-24, Decision Log #556). Two public
-// reads fire once on mount, with the same plain useEffect pattern Sports
-// Hub and Blog use (results are ignored after unmount, no library):
-//   - listFixtures(todayIso())  -> GET /sports/fixtures?date=  (api/sports.ts)
-//     One call feeds BOTH the hero card and the "Matches today" strip.
-//   - listArticles()            -> GET /articles               (api/blog.ts)
-//     One call feeds the "Latest" section (the first article is featured,
-//     the next three are the side list).
-// Fixture order: live first, then scheduled by kickoff ascending, then
-// finished by kickoff descending, then postponed and cancelled last. The
-// strip shows the first 4. The hero card shows the first live, scheduled
-// or finished match (never postponed or cancelled), or no card at all.
-// States: while fixtures load the strip shows 4 skeleton cards and the hero
-// card is absent; an empty day shows one sentence linking to Sports Hub; a
-// fixtures error hides the whole strip and the hero card; the hero copy
-// then takes the full width. Articles: loading shows skeletons, an empty
-// list or an error hides the whole Latest section.
+// REAL DATA (Decision Log #556; hero card and strip rules Decision Log #570).
+// Public reads with a plain useEffect (results are ignored after unmount):
+//   - hero card: GET /sports/live-scores + GET /sports/fixtures?date=today&
+//     status=finished, grouped by league into at most 3 tabs (HomeHeroCard.tsx).
+//     Fetched on mount, then every 60 s only while the page is visible and the
+//     card shows a live match. No live and no finished match today, or a failed
+//     request, means NO card and the hero copy takes the full width.
+//   - "Today's Fixtures" strip: GET /sports/fixtures?date=today&status=
+//     scheduled, server league order, first 4, never live. When nothing is
+//     scheduled it shows the most recent results (GET /sports/results/recent)
+//     under "LATEST RESULTS"; when there are none either, the empty sentence;
+//     an error hides the strip; loading shows 4 skeletons.
+//   - listArticles() -> GET /articles feeds "Latest" (first article featured,
+//     next three in the side list); empty or error hides the section.
 // Nothing invented is shown: no grassroots data, no reading time, no view
 // counts or popularity ranking. The "Why Soccernity" pillars, the closing
 // CTA and the footer (rendered by FooterLayout, Decision Log #213) are
 // unchanged.
 //
-// DIVERGENCE FROM FIGMA: the canonical frame 5204:6728 (Decision Log #46)
-// still draws hardcoded sample fixtures, a Talents clips section and a
-// "Trending" stories block. By founder decision of 2026-11-24 the code
-// deliberately differs: it shows real Sports Hub fixtures and real Blog
-// stories, and the Talents section is removed. The Figma frame is NOT
-// updated by this change. Club crests: a real logo when the API supplies a
-// safe one, else the club's first letter (the same rule Sports Hub uses).
-import { useEffect, useState } from "react";
+// FIGMA: the hero card and the strip now follow the new frames (Figma PR
+// #902, home hero live-scores card). Elsewhere the page still differs from the
+// canonical frame 5204:6728 (Decision Log #46): there is no Talents clips
+// section and the stories are real Blog articles (founder decision
+// 2026-11-24). Club crests: a real logo when the API supplies a safe one,
+// else the club's first letter (the same rule Sports Hub uses).
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router";
-import { listFixtures, type MatchListItem, type MatchPhase } from "../api/sports";
+import { listFixtures, listLiveScores, listRecentResults, type MatchListItem, type MatchPhase } from "../api/sports";
 import { listArticles, type ArticleSummary } from "../api/blog";
 import { formatDate } from "../lib/formatDate";
 import { safeImageUrl } from "../lib/safeImageUrl";
 import { getStoredAccessToken } from "../lib/session";
 import { formatKickoffTime, monogramFor, phaseLabel, todayIso } from "./sports-hub/format";
 import CoverMedia from "./blog/CoverMedia";
+import { HeroCard, HeroSkeleton, buildHeroLeagues, type HeroLeague } from "./HomeHeroCard";
 import "./HomePage.css";
 
 const PILLARS = [
   {
     index: "01",
     title: "Grassroots first",
-    body: "Most players never appear in any official record anywhere. Soccernity starts with the Sunday leagues, school pitches and informal teams no database has ever counted.",
+    body: "Much of the game is played outside any official record. Soccernity starts with the Sunday leagues, school pitches and informal teams that rarely get one.",
   },
   {
     index: "02",
@@ -72,31 +69,6 @@ const STRIP_SIZE = 4;
 const SIDE_STORY_COUNT = 3;
 
 type Loadable<T> = { status: "loading" } | { status: "error" } | { status: "ready"; items: T[] };
-
-// Display order: live, then scheduled (soonest first), then finished (most
-// recent first), then postponed and cancelled. Stable within a group.
-function statusGroup(status: MatchPhase): number {
-  if (status === "live") return 0;
-  if (status === "scheduled") return 1;
-  if (status === "finished") return 2;
-  return 3;
-}
-
-export function sortFixtures(items: MatchListItem[]): MatchListItem[] {
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort((a, b) => {
-      const ga = statusGroup(a.item.status);
-      const gb = statusGroup(b.item.status);
-      if (ga !== gb) return ga - gb;
-      const ta = Date.parse(a.item.kickoffTime);
-      const tb = Date.parse(b.item.kickoffTime);
-      if (ga === 2 && ta !== tb) return tb - ta;
-      if (ga !== 0 && ta !== tb) return ta - tb;
-      return a.index - b.index;
-    })
-    .map((entry) => entry.item);
-}
 
 function pillClass(status: MatchPhase): string {
   if (status === "live") return "home-pill home-pill--live";
@@ -148,31 +120,23 @@ function TeamRows({ match, small, muteAway }: { match: MatchListItem; small?: bo
   );
 }
 
-function HeroMatchCard({ match }: { match: MatchListItem }) {
-  return (
-    <Link to={`/sports-hub/matches/${match.id}`} className="home-hero__card">
-      <div className="home-fixture-card__meta">
-        <span className="home-fixture-card__league">{match.competition}</span>
-        <span className={pillClass(match.status)}>{phaseLabel(match)}</span>
-      </div>
-      <div className="home-fixture-card__teams">
-        <TeamRows match={match} />
-      </div>
-      <div className="home-hairline" />
-      <p className="home-fixture-card__venue">{matchLine(match)}</p>
-    </Link>
-  );
-}
+type StripState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; items: MatchListItem[]; latest: boolean };
 
-function FixtureStrip({ state }: { state: Loadable<MatchListItem> }) {
+const REFRESH_MS = 60_000;
+
+function FixtureStrip({ state }: { state: StripState }) {
   if (state.status === "error") return null;
+  const latest = state.status === "ready" && state.latest;
   return (
     <section className="home-section" aria-labelledby="home-fixtures-title">
       <div className="home-section__head">
         <div>
-          <p className="home-eyebrow">TODAY'S FIXTURES</p>
+          <p className="home-eyebrow">{latest ? "LATEST RESULTS" : "TODAY'S FIXTURES"}</p>
           <h2 id="home-fixtures-title" className="home-section__title">
-            Matches today
+            {latest ? "Latest results" : "Matches today"}
           </h2>
         </div>
         <Link to="/sports-hub" className="home-section__link home-section__link--outline">
@@ -234,7 +198,13 @@ function LatestStories({ state }: { state: Loadable<ArticleSummary> }) {
       <div className="home-editorial" aria-busy={loading || undefined}>
         {featured ? (
           <article className="home-featured">
-            <div className="home-featured__mediawrap">
+            <div
+              className={
+                featured.coverImage
+                  ? "home-featured__mediawrap"
+                  : "home-featured__mediawrap home-featured__mediawrap--no-cover"
+              }
+            >
               <CoverMedia coverImage={featured.coverImage} className="home-featured__media" />
               <span className="home-pill home-pill--tag home-pill--tag-green home-featured__tag">
                 {featured.category.name}
@@ -275,19 +245,52 @@ function LatestStories({ state }: { state: Loadable<ArticleSummary> }) {
   );
 }
 
+type HeroState = { status: "loading" } | { status: "hidden" } | { status: "ready"; leagues: HeroLeague[] };
+
 function MarketingHome() {
-  const [fixtures, setFixtures] = useState<Loadable<MatchListItem>>({ status: "loading" });
+  const [strip, setStrip] = useState<StripState>({ status: "loading" });
+  const [hero, setHero] = useState<HeroState>({ status: "loading" });
   const [articles, setArticles] = useState<Loadable<ArticleSummary>>({ status: "loading" });
+  const hasLive = useRef(false);
 
   useEffect(() => {
     let active = true;
-    listFixtures(todayIso())
-      .then((page) => {
-        if (active) setFixtures({ status: "ready", items: sortFixtures(page.items) });
-      })
-      .catch(() => {
-        if (active) setFixtures({ status: "error" });
-      });
+    const today = todayIso();
+
+    async function loadHero() {
+      try {
+        const [live, finished] = await Promise.all([
+          listLiveScores(),
+          listFixtures(today, { status: "finished", limit: 50 }),
+        ]);
+        if (!active) return;
+        const leagues = buildHeroLeagues(live.items, finished.items);
+        hasLive.current = leagues.some((l) => l.hasLive);
+        setHero(leagues.length === 0 ? { status: "hidden" } : { status: "ready", leagues });
+      } catch {
+        if (!active) return;
+        hasLive.current = false;
+        setHero((prev) => (prev.status === "ready" ? prev : { status: "hidden" }));
+      }
+    }
+
+    async function loadStrip() {
+      try {
+        const scheduled = await listFixtures(today, { status: "scheduled", limit: STRIP_SIZE });
+        if (!active) return;
+        if (scheduled.items.length > 0) {
+          setStrip({ status: "ready", items: scheduled.items, latest: false });
+          return;
+        }
+        const recent = await listRecentResults({ limit: STRIP_SIZE });
+        if (active) setStrip({ status: "ready", items: recent.items, latest: recent.items.length > 0 });
+      } catch {
+        if (active) setStrip({ status: "error" });
+      }
+    }
+
+    void loadHero();
+    void loadStrip();
     listArticles()
       .then((page) => {
         if (active) setArticles({ status: "ready", items: page.items });
@@ -295,19 +298,22 @@ function MarketingHome() {
       .catch(() => {
         if (active) setArticles({ status: "error" });
       });
+
+    // Refresh the card every 60 s, only while the tab is visible and a match is live.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible" && hasLive.current) void loadHero();
+    }, REFRESH_MS);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
   }, []);
 
-  const heroMatch =
-    fixtures.status === "ready"
-      ? (fixtures.items.find((m) => m.status === "live" || m.status === "scheduled" || m.status === "finished") ?? null)
-      : null;
+  const showCard = hero.status !== "hidden";
 
   return (
     <div className="home">
-      <section className={`home-hero${heroMatch ? "" : " home-hero--solo"}`}>
+      <section className={`home-hero${showCard ? "" : " home-hero--solo"}`}>
         <div className="home-hero__copy">
           <span className="home-eyebrow home-eyebrow--on-navy">
             <span className="home-eyebrow__dot" aria-hidden="true" />
@@ -331,18 +337,17 @@ function MarketingHome() {
             </Link>
           </div>
         </div>
-        {heroMatch ? <HeroMatchCard match={heroMatch} /> : null}
+        {hero.status === "loading" ? <HeroSkeleton /> : null}
+        {hero.status === "ready" ? <HeroCard leagues={hero.leagues} /> : null}
       </section>
 
-      <FixtureStrip state={fixtures} />
+      <FixtureStrip state={strip} />
 
       <section className="home-section home-section--surface home-section--center">
         <div className="home-section__head-centered">
           <p className="home-eyebrow">WHY SOCCERNITY</p>
           <h2 className="home-section__title">
-            Football's biggest league is the one
-            <br />
-            nobody keeps records for.
+            So much of football happens where no one keeps the record.
           </h2>
           <p className="home-section__sub">
             Soccernity is built for the players outside the academy system, and for the fans, coaches and
@@ -365,9 +370,7 @@ function MarketingHome() {
       <section className="home-closing">
         <p className="home-eyebrow home-eyebrow--on-navy">GET STARTED</p>
         <h2 className="home-closing__title">
-          Start the record you should
-          <br />
-          have had all along.
+          Start the record you should have had all along.
         </h2>
         <p className="home-closing__sub">
           Free to join. Create your profile, follow the football you love, and register your team when you're ready

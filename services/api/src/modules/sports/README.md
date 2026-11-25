@@ -306,3 +306,15 @@ Scope: kickoff only. Goal, half-time and full-time alerts need live polling and 
 - **Budget.** The refresh uses its own lock key, `sports:refresh:kickoff-watch:<date>`, on the scheduled TTL, not the live-scores key. Sharing the live key would have cost one `/matches` call per minute for today, about 1,440 a day, against the 100/day free tier. The watch costs at most one call per watched date per scheduled TTL (6h by default).
 - **Known limit.** A postponement announced inside that 6h window can be missed. A due match whose stale row still says `scheduled` could fire a kickoff notification for a match that is in fact postponed. Tune `SPORTS_SCHEDULED_CACHE_TTL_SECONDS` if this matters before a live-polling decision. A subscription made after kickoff fires on the next tick, including for a finished match.
 - **Frontend follow-up.** `match_kickoff` has no icon-disc treatment in Figma yet. That needs a `figma-screen-builder` pass (DL #279 covered seven other types), then `figma-to-code`.
+
+
+## League ranking and country ordering (2026-11-25)
+
+Built by `feat/sports-league-ranking`. Full detail, ranked list and unverified entries: `docs/sports-league-ranking-report.md`.
+
+- Public match shape gains `league.rank` and `league.country`.
+- `GET /sports/fixtures` (optional `status=scheduled|live|finished`) and `GET /sports/live-scores` order by league priority (`league-priority.constants.ts`), then live, scheduled, finished within a league. The order is applied before pagination; the cursor is an opaque `{id, offset}`.
+- `GET /sports/results/recent?limit=`: finished matches of the latest day with any (back at most 7 days), database only.
+- `GET /sports/leagues`: distinct cached leagues with metadata, same order, 5-minute cache.
+- League metadata lives in `SportsLeague`, filled from Highlightly `/leagues` at most once a day (one lock key per UTC day, at most `SPORTS_DATA_MAX_LEAGUE_META_PAGES` = 10 calls). Failure leaves the country null and never fails a fixtures read.
+- UNVERIFIED against real Highlightly: every ranked name and country, and the `/leagues` response shape.

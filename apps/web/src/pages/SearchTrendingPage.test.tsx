@@ -5,7 +5,7 @@
 // live is services/api's own e2e layer's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Link, useLocation } from "react-router";
 import SearchTrendingPage from "./SearchTrendingPage";
 import { SearchApiError, type SearchAllResult } from "../api/search";
 
@@ -49,6 +49,7 @@ vi.mock("../api/search", async () => {
 
 import { searchAll, searchUsers, searchClubs, searchPosts } from "../api/search";
 import { seedSession, clearSession } from "../test/session";
+import { buildLoginLink } from "../lib/returnTo";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -89,9 +90,9 @@ beforeEach(() => {
   vi.mocked(getSuggestedUsers).mockResolvedValue({ items: [] });
 });
 
-function renderPage() {
+function renderPage(path = "/search") {
   render(
-    <MemoryRouter initialEntries={["/search"]}>
+    <MemoryRouter initialEntries={[path]}>
       <SearchTrendingPage />
     </MemoryRouter>,
   );
@@ -271,5 +272,89 @@ describe("SearchTrendingPage", () => {
 
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(screen.getByRole("alert").textContent).toMatch(/q must be at least 2 characters/i);
+  });
+});
+
+// Decision Log #568 (code-only): the page reads the q URL parameter.
+describe("SearchTrendingPage -- q URL parameter", () => {
+  const field = () => screen.getByLabelText(/search players, clubs, posts/i) as HTMLInputElement;
+
+  it("pre-fills the field from ?q= and runs the search once", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(searchAll).mockResolvedValue(emptyResults());
+    renderPage("/search?q=salah");
+    expect(field().value).toBe("salah");
+    await waitFor(() => expect(searchAll).toHaveBeenCalledWith("salah"));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(searchAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-runs the search when q changes while mounted (a search from the header)", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(searchAll).mockResolvedValue(emptyResults());
+    function Harness() {
+      const loc = useLocation();
+      return (
+        <>
+          <Link to="/search?q=kane">go</Link>
+          <div data-testid="url">{loc.pathname + loc.search}</div>
+          <SearchTrendingPage />
+        </>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={["/search?q=salah"]}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(searchAll).toHaveBeenCalledWith("salah"));
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(searchAll).toHaveBeenCalledWith("kane"));
+    expect(field().value).toBe("kane");
+    await new Promise((r) => setTimeout(r, 400));
+    expect(searchAll).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("url").textContent).toBe("/search?q=kane");
+  });
+
+  it("writes typed queries back to the URL, and drops q for a short query", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(searchAll).mockResolvedValue(emptyResults());
+    function Probe() {
+      const loc = useLocation();
+      return <div data-testid="url">{loc.pathname + loc.search}</div>;
+    }
+    render(
+      <MemoryRouter initialEntries={["/search"]}>
+        <Probe />
+        <SearchTrendingPage />
+      </MemoryRouter>,
+    );
+    fireEvent.change(field(), { target: { value: "chelsea" } });
+    await waitFor(() => expect(screen.getByTestId("url").textContent).toBe("/search?q=chelsea"));
+    expect(field().value).toBe("chelsea");
+    fireEvent.change(field(), { target: { value: "c" } });
+    await waitFor(() => expect(screen.getByTestId("url").textContent).toBe("/search"));
+    expect(searchAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("logged out: the Log in link carries the current search (Decision Log #571)", async () => {
+    renderPage("/search?q=man%20utd");
+    const link = screen.getByRole("link", { name: "Log in" });
+    expect(link.getAttribute("href")).toBe(buildLoginLink("/search?q=man%20utd"));
+    expect(link.getAttribute("href")).toBe("/login?returnTo=%2Fsearch%3Fq%3Dman%2520utd");
+    await new Promise((r) => setTimeout(r, 400));
+    expect(searchAll).not.toHaveBeenCalled();
+  });
+
+  it("logged out on plain /search: the link carries /search", () => {
+    renderPage("/search");
+    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe(buildLoginLink("/search"));
+  });
+
+  it("logged out with ?q= still shows the log-in prompt and makes no search call", async () => {
+    renderPage("/search?q=salah");
+    expect(screen.getByText(/log in to search soccernity/i)).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 400));
+    expect(searchAll).not.toHaveBeenCalled();
   });
 });

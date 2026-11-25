@@ -21,7 +21,7 @@ Each string was untagged only after its claim was read in the code. The founder 
 
 ## 1. What each item did
 
-1. **Nav opacity (#538).** `Header.css` resting 0.55 to 0.7; hover, focus and active stay 1; tests updated. **For the next Figma pass:** the navbar components still draw 0.55.
+1. **Nav opacity (#538).** `Header.css` resting 0.55 to 0.7; hover, focus and active stay 1; tests updated. **For the next Figma pass:** the navbar components still draw 0.55. [2026-11-24 CORRECTION: wrong. The Figma navbar set 2824:4309 was checked: no node is drawn at 0.55 and no Figma change is needed. See Decision Log #538.]
 2. **Write refusals (#542).** `FeedApiError` now carries `code`. New `writeRefusal.tsx` (`classifyWriteRefusal`, `WriteRefusalNotice`): guardian code gives the existing guardian message and the `/guardian-consent` link; `email_verification_required` gives "Verify your email to post." (comments: "to comment.") linking `/verify-email/prompt`; any other 403 gives "You can't do that right now." Used by `PostComposer` and `PostCard`. New messages are not tagged. 14 new tests (`writeRefusal.test.tsx` 11, `feed.errors.test.ts` 3) plus two updated.
 3. **Untagged copy (#539).** See section 0.
 4. **Runbook (#541).** (a) media custom domain always proxied; (b) 6.8 parts 1 to 3 passed on staging 2026-11-21, part 4 (cross-bucket copy) still unproven; (c) 4.6 passed; (d) Postmark pending approval delivers only to addresses on the same domain, a launch gate; (e) 6.5 note on an unverified adult.

@@ -72,10 +72,11 @@ describe('SportsService kickoffAlert flag', () => {
     it('is true for the matches the signed-in caller subscribed to and false for the rest', async () => {
       const { service } = build(['m1', 'm3'], ROWS);
       const page = await call(service, 'user-1');
+      // League ordering puts the live match (m3) first, then the scheduled ones by kickoff.
       expect(page.items.map((i) => [i.id, i.kickoffAlert])).toEqual([
+        ['m3', true],
         ['m1', true],
         ['m2', false],
-        ['m3', true],
       ]);
     });
 
@@ -85,7 +86,7 @@ describe('SportsService kickoffAlert flag', () => {
       expect(page.items.every((i) => i.kickoffAlert === false)).toBe(true);
       expect(matchSubscription.findMany).toHaveBeenCalledTimes(1);
       expect(matchSubscription.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', externalRef: { in: ['m1', 'm2', 'm3'] } },
+        where: { userId: 'user-1', externalRef: { in: ['m3', 'm1', 'm2'] } },
         select: { externalRef: true },
       });
     });
@@ -129,7 +130,7 @@ describe('SportsService kickoffAlert flag', () => {
     const { service } = build(['m1'], ROWS);
     const a = await service.listFixtures({ date: '2026-09-16' } as never, 'user-1');
     const b = await service.listFixtures({ date: '2026-09-16' } as never, undefined);
-    expect(a.items[0].kickoffAlert).toBe(true);
-    expect(b.items[0].kickoffAlert).toBe(false);
+    expect(a.items.find((i) => i.id === 'm1')?.kickoffAlert).toBe(true);
+    expect(b.items.find((i) => i.id === 'm1')?.kickoffAlert).toBe(false);
   });
 });

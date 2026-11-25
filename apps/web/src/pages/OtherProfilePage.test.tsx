@@ -107,13 +107,13 @@ describe("OtherProfilePage", () => {
   it("a person who has blocked the viewer sees the SAME generic not-found page as a missing profile", async () => {
     vi.mocked(getPublicProfile).mockRejectedValue(new UsersApiError("User not found", { status: 404 }));
     renderAt("/users/blocker");
-    await screen.findByRole("heading", { name: "Page not found" });
+    await screen.findByRole("heading", { name: "We can’t find that page" });
     const blockedView = document.body.innerHTML;
     cleanup();
 
     vi.mocked(getPublicProfile).mockRejectedValue(new UsersApiError("User not found", { status: 404 }));
     renderAt("/users/no-such-user");
-    await screen.findByRole("heading", { name: "Page not found" });
+    await screen.findByRole("heading", { name: "We can’t find that page" });
     expect(document.body.innerHTML).toBe(blockedView);
     expect(document.body.textContent).not.toMatch(/block/i);
   });

@@ -448,7 +448,7 @@ describe("Display, Language & Region section", () => {
 
   it("a deeper unmatched path under the now-built Display section 404s, not the old placeholder", async () => {
     await renderAt("/settings/display/foo");
-    expect(screen.getByRole("heading", { name: /page not found/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /can.t find that page/i })).not.toBeNull();
   });
 });
 

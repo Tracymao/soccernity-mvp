@@ -16,9 +16,10 @@
 //
 // The three legal links are real links: /terms and /privacy render the draft legal copy
 // (pages/legal/LegalPage.tsx) and /contact is the Contact Us form (pages/ContactPage.tsx, B-047).
-// The social icons stay non-interactive: Soccernity has no published social accounts to link to, and
-// rendering them as links would fabricate a destination. The social icon SVGs carry their brand-green fill
-// baked in, the same convention nav-blog.svg etc. already use.
+// The social icons are links to the founder's accounts (Decision Log #567, code-only): four live links
+// opening in a new tab; Instagram and LinkedIn have no account yet, so they have no href and are not shown.
+// Plain links only: no scripts, embeds or third-party requests (R106 unaffected). The social icon SVGs carry
+// their brand-green fill baked in, the same convention nav-blog.svg etc. already use.
 //
 // "Report a concern" (added alongside ReportPage.tsx) IS a real,
 // navigating link -- unlike the legal-links row above, /report exists
@@ -35,13 +36,14 @@ import socialYoutube from "../assets/icons/social-youtube.svg";
 import socialLinkedin from "../assets/icons/social-linkedin.svg";
 import "./Footer.css";
 
-// Labels are verbatim from the Figma frame's own text nodes.
-const SOCIALS: { label: string; icon: string }[] = [
-  { label: "facebook", icon: socialFacebook },
+// Labels are verbatim from the Figma frame's own text nodes. An entry is rendered only if it has an href;
+// adding an account later is a one-line change.
+const SOCIALS: { label: string; icon: string; href?: string }[] = [
+  { label: "facebook", icon: socialFacebook, href: "https://www.facebook.com/soccernity" },
   { label: "instagram", icon: socialInstagram },
-  { label: "twitter", icon: socialTwitter },
-  { label: "Tik Tok", icon: socialTiktok },
-  { label: "YouTube", icon: socialYoutube },
+  { label: "twitter", icon: socialTwitter, href: "https://x.com/soccernity" },
+  { label: "Tik Tok", icon: socialTiktok, href: "https://www.tiktok.com/@soccernity" },
+  { label: "YouTube", icon: socialYoutube, href: "https://www.youtube.com/@soccernity" },
   { label: "LinkedIn", icon: socialLinkedin },
 ];
 
@@ -64,10 +66,18 @@ export default function Footer() {
       </div>
 
       <ul className="sn-footer__socials">
-        {SOCIALS.map((s) => (
+        {SOCIALS.filter((s) => s.href).map((s) => (
           <li key={s.label} className="sn-footer__social">
-            <img src={s.icon} alt="" width={24} height={24} />
-            <span>{s.label}</span>
+            <a
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${s.label} (opens in a new tab)`}
+              className="sn-footer__social-link"
+            >
+              <img src={s.icon} alt="" width={24} height={24} />
+              <span>{s.label}</span>
+            </a>
           </li>
         ))}
       </ul>

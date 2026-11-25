@@ -4,22 +4,22 @@
 // page makes (api/sports, api/blog) are mocked, as SportsHubPage.test.tsx
 // and BlogPage.test.tsx do.
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router";
 import type { ArticleSummary } from "../api/blog";
 import type { MatchListItem } from "../api/sports";
-import HomePage, { sortFixtures } from "./HomePage";
+import HomePage from "./HomePage";
 
 vi.mock("../api/sports", async () => {
   const actual = await vi.importActual<typeof import("../api/sports")>("../api/sports");
-  return { ...actual, listFixtures: vi.fn() };
+  return { ...actual, listFixtures: vi.fn(), listLiveScores: vi.fn(), listRecentResults: vi.fn() };
 });
 vi.mock("../api/blog", async () => {
   const actual = await vi.importActual<typeof import("../api/blog")>("../api/blog");
   return { ...actual, listArticles: vi.fn() };
 });
 
-import { listFixtures } from "../api/sports";
+import { listFixtures, listLiveScores, listRecentResults } from "../api/sports";
 import { listArticles } from "../api/blog";
 import { seedSession, clearSession } from "../test/session";
 
@@ -31,7 +31,7 @@ function match(overrides: Partial<MatchListItem> = {}): MatchListItem {
   return {
     id: "m1",
     competition: "Premier League",
-    league: { id: "39", name: "Premier League", season: "2026", round: "Matchday 5" },
+    league: { id: "39", name: "Premier League", season: "2026", round: "Matchday 5", rank: 1, country: "England" },
     venue: "Anfield",
     kickoffTime: "2026-09-16T15:00:00.000Z",
     status: "live",
@@ -63,9 +63,29 @@ const page = <T,>(items: T[]) => ({ items, nextCursor: null });
 afterEach(cleanup);
 beforeEach(() => {
   clearSession();
-  vi.mocked(listFixtures).mockReset().mockResolvedValue(page<MatchListItem>([]));
+  serve({});
   vi.mocked(listArticles).mockReset().mockResolvedValue(page<ArticleSummary>([]));
 });
+
+interface Served {
+  live?: MatchListItem[];
+  finished?: MatchListItem[];
+  scheduled?: MatchListItem[];
+  recent?: MatchListItem[];
+}
+
+// Serves the four public reads the page makes, by the status asked for.
+function serve(s: Served) {
+  vi.mocked(listLiveScores).mockReset().mockResolvedValue(page(s.live ?? []));
+  vi.mocked(listFixtures)
+    .mockReset()
+    .mockImplementation(async (_d: string, o?: { status?: string }) =>
+      page(o?.status === "finished" ? (s.finished ?? []) : o?.status === "scheduled" ? (s.scheduled ?? []) : []),
+    );
+  vi.mocked(listRecentResults)
+    .mockReset()
+    .mockResolvedValue({ date: "2026-09-15", items: s.recent ?? [] });
+}
 
 function renderAt(path: string) {
   return render(
@@ -88,11 +108,16 @@ describe("HomePage: static content", () => {
     renderAt("/");
     expect(screen.getByText(/deserves a record/i)).not.toBeNull();
     expect(screen.getByText(/where the whole game lives/i)).not.toBeNull();
-    expect(screen.getByRole("heading", { name: /nobody keeps records for/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /where no one keeps the record/i })).not.toBeNull();
     expect(screen.getByText("Grassroots first")).not.toBeNull();
+    expect(screen.queryByText(/nobody keeps records for/i)).toBeNull();
+    expect(document.body.textContent).not.toContain("no database has ever counted");
+    expect(document.body.textContent).not.toContain("never appear in any official record anywhere");
     expect(screen.getByText("A community around your game")).not.toBeNull();
     expect(screen.getByText(/the professional game, live\./i)).not.toBeNull();
-    expect(screen.getByRole("heading", { name: /start the record you should/i })).not.toBeNull();
+    const closing = screen.getByRole("heading", { name: /start the record you should/i });
+    expect(closing).not.toBeNull();
+    expect(closing.querySelector("br")).toBeNull();
     expect(screen.queryByText("COMMUNITY FEED")).toBeNull();
     await waitFor(() => expect(listFixtures).toHaveBeenCalled());
   });
@@ -107,11 +132,14 @@ describe("HomePage: static content", () => {
     await waitFor(() => expect(listArticles).toHaveBeenCalled());
   });
 
-  it("makes both reads once on mount", async () => {
+  it("reads live scores, today's finished and scheduled matches, and articles once on mount", async () => {
     renderAt("/");
-    await waitFor(() => expect(listFixtures).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listFixtures).toHaveBeenCalledTimes(2));
+    expect(listLiveScores).toHaveBeenCalledTimes(1);
     expect(listArticles).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(listFixtures).mock.calls[0][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const calls = vi.mocked(listFixtures).mock.calls;
+    expect(calls.map((c) => c[1]?.status).sort()).toEqual(["finished", "scheduled"]);
+    expect(calls[0][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("shows no invented content", async () => {
@@ -125,164 +153,348 @@ describe("HomePage: static content", () => {
   });
 });
 
-describe("HomePage: fixtures", () => {
-  it("shows the first live match in the hero card, linked to its match page", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(
-      page([
-        match({ id: "sched", status: "scheduled", statusDetail: null, homeScore: null, awayScore: null, kickoffTime: "2026-09-16T18:00:00.000Z" }),
-        match({ id: "live1", status: "live", venue: "Anfield" }),
-      ]),
-    );
+const sched = (id: string, over: Partial<MatchListItem> = {}) =>
+  match({ id, status: "scheduled", statusDetail: null, homeScore: null, awayScore: null, ...over });
+const fin = (id: string, over: Partial<MatchListItem> = {}) =>
+  match({ id, status: "finished", statusDetail: null, ...over });
+const lg = (id: string, name: string, rank: number | null) => ({ id, name, season: "2026", round: null, rank, country: "X" });
+
+function heroCard(): HTMLElement {
+  return document.querySelector("section.home-hero-card") as HTMLElement;
+}
+async function findHero(): Promise<HTMLElement> {
+  return await waitFor(() => {
+    const el = heroCard();
+    if (!el) throw new Error("no hero card yet");
+    return el;
+  });
+}
+const tabNames = (card: HTMLElement) => within(card).queryAllByRole("tab").map((t) => t.getAttribute("title"));
+
+describe("HomePage: hero card", () => {
+  it("shows today's matches with the live pill and a linked row", async () => {
+    serve({ live: [match({ id: "live1", statusDetail: "67'" })], finished: [fin("f1")] });
     renderAt("/");
-    const card = await waitFor(() => {
-      const el = document.querySelector("a.home-hero__card");
-      if (!el) throw new Error("no hero card yet");
-      return el as HTMLElement;
-    });
-    expect(card.getAttribute("href")).toBe("/sports-hub/matches/live1");
-    expect(within(card).getByText("Premier League")).not.toBeNull();
-    expect(within(card).getByText("Second half")).not.toBeNull();
-    expect(within(card).getByText("Liverpool")).not.toBeNull();
-    expect(within(card).getByText("Chelsea")).not.toBeNull();
-    expect(within(card).getByText("1")).not.toBeNull();
-    expect(within(card).getByText("3")).not.toBeNull();
-    expect(within(card).getByText("Anfield")).not.toBeNull();
-    expect(card.getAttribute("aria-hidden")).toBeNull();
+    const card = await findHero();
+    expect(within(card).getByRole("heading", { name: "Today’s matches" })).not.toBeNull();
+    expect(within(card).getByText("1 live now")).not.toBeNull();
+    expect(within(card).getByText("67'")).not.toBeNull();
+    expect(within(card).getByText("FT")).not.toBeNull();
+    const hrefs = Array.from(card.querySelectorAll("a.home-hero-row")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(["/sports-hub/matches/live1", "/sports-hub/matches/f1"]);
+    expect(within(card).getByText("Plus Bants, Blog stories and the community around every match.")).not.toBeNull();
+    expect(within(card).getByRole("link", { name: /view all scores/i }).getAttribute("href")).toBe("/sports-hub");
     expect(document.querySelector(".home-hero--solo")).toBeNull();
   });
 
-  it("sorts live, then scheduled by kickoff ascending, then finished latest first, then postponed and cancelled", () => {
-    const items = [
-      match({ id: "cancelled", status: "cancelled", kickoffTime: "2026-09-16T12:00:00.000Z" }),
-      match({ id: "fin-early", status: "finished", kickoffTime: "2026-09-16T10:00:00.000Z" }),
-      match({ id: "sched-late", status: "scheduled", kickoffTime: "2026-09-16T20:00:00.000Z" }),
-      match({ id: "postponed", status: "postponed", kickoffTime: "2026-09-16T11:00:00.000Z" }),
-      match({ id: "fin-late", status: "finished", kickoffTime: "2026-09-16T13:00:00.000Z" }),
-      match({ id: "live", status: "live", kickoffTime: "2026-09-16T14:00:00.000Z" }),
-      match({ id: "sched-soon", status: "scheduled", kickoffTime: "2026-09-16T16:00:00.000Z" }),
-    ];
-    expect(sortFixtures(items).map((m) => m.id)).toEqual([
-      "live",
-      "sched-soon",
-      "sched-late",
-      "fin-late",
-      "fin-early",
-      "postponed",
-      "cancelled",
-    ]);
+  it("falls back to Live when the live match has no minute", async () => {
+    serve({ live: [match({ statusDetail: null })] });
+    renderAt("/");
+    const card = await findHero();
+    expect(card.querySelector(".home-hero-pill--live")?.textContent).toBe("Live");
   });
 
-  it("renders the strip in that order and shows at most 4 cards", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(
-      page([
-        match({ id: "f1", status: "finished", kickoffTime: "2026-09-16T09:00:00.000Z", homeTeam: team("1", "Finished FC") }),
-        match({ id: "s1", status: "scheduled", statusDetail: null, homeScore: null, awayScore: null, kickoffTime: "2026-09-16T17:00:00.000Z", homeTeam: team("2", "Sched Town") }),
-        match({ id: "l1", status: "live", homeTeam: team("3", "Live United") }),
-        match({ id: "s2", status: "scheduled", statusDetail: null, homeScore: null, awayScore: null, kickoffTime: "2026-09-16T19:00:00.000Z", homeTeam: team("4", "Later City") }),
-        match({ id: "p1", status: "postponed", statusDetail: null, homeScore: null, awayScore: null, homeTeam: team("5", "Postponed Rovers") }),
-      ]),
-    );
+  it("shows no live pill, dot or live label when nothing is live", async () => {
+    serve({ finished: [fin("f1")] });
+    renderAt("/");
+    const card = await findHero();
+    expect(card.querySelector(".home-hero-livepill")).toBeNull();
+    expect(card.querySelector(".home-hero-livepill__dot")).toBeNull();
+    expect(card.querySelector(".home-hero-pill--live")).toBeNull();
+    expect(within(card).queryByText(/^live( now)?$|live now/i)).toBeNull();
+  });
+
+  it("shows a single league as a line under the title, with no tabs", async () => {
+    serve({ live: [match()] });
+    renderAt("/");
+    const card = await findHero();
+    expect(within(card).queryAllByRole("tab").length).toBe(0);
+    expect(card.querySelector(".home-hero-card__league")?.textContent).toBe("Premier League");
+  });
+
+  it("orders tabs in server rank order, with the finished-only league after", async () => {
+    serve({
+      live: [
+        match({ id: "b", league: lg("2", "La Liga", 3) }),
+        match({ id: "a", league: lg("1", "Premier League", 1) }),
+      ],
+      finished: [fin("c", { league: lg("3", "Serie A", 4) })],
+    });
+    renderAt("/");
+    const card = await findHero();
+    expect(tabNames(card)).toEqual(["Premier League", "La Liga", "Serie A"]);
+  });
+
+  it("opens on the highest-ranked league with a live match, else the first tab", async () => {
+    serve({
+      live: [match({ id: "la", league: lg("2", "La Liga", 3) })],
+      finished: [fin("pl", { league: lg("1", "Premier League", 1) })],
+    });
+    const { unmount } = renderAt("/");
+    let card = await findHero();
+    let selected = within(card).getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true");
+    expect(selected.map((t) => t.getAttribute("title"))).toEqual(["La Liga"]);
+    unmount();
+
+    serve({
+      finished: [fin("pl", { league: lg("1", "Premier League", 1) }), fin("la", { league: lg("2", "La Liga", 3) })],
+    });
+    renderAt("/");
+    card = await findHero();
+    selected = within(card).getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true");
+    expect(selected.map((t) => t.getAttribute("title"))).toEqual(["Premier League"]);
+  });
+
+  it("adds a More chip to Sports Hub when there are more than 3 leagues, and shows only 3 tabs", async () => {
+    serve({
+      finished: [1, 2, 3, 4].map((n) => fin(`m${n}`, { league: lg(String(n), `League ${n}`, n) })),
+    });
+    renderAt("/");
+    const card = await findHero();
+    expect(tabNames(card)).toEqual(["League 1", "League 2", "League 3"]);
+    expect(within(card).getByRole("link", { name: "More" }).getAttribute("href")).toBe("/sports-hub");
+  });
+
+  it("has no More chip with exactly 3 leagues", async () => {
+    serve({ finished: [1, 2, 3].map((n) => fin(`m${n}`, { league: lg(String(n), `League ${n}`, n) })) });
+    renderAt("/");
+    const card = await findHero();
+    expect(within(card).queryByRole("link", { name: "More" })).toBeNull();
+  });
+
+  it("shortens a long league name on the tab and keeps the full name as the title", async () => {
+    const long = "UEFA Champions League Qualification";
+    serve({
+      finished: [fin("a", { league: lg("1", long, 1) }), fin("b", { league: lg("2", "La Liga", 2) })],
+    });
+    renderAt("/");
+    const card = await findHero();
+    const tab = within(card).getByRole("tab", { name: long });
+    expect(tab.getAttribute("title")).toBe(long);
+    expect(tab.textContent!.length).toBeLessThanOrEqual(22);
+    expect(tab.textContent!.endsWith("…")).toBe(true);
+  });
+
+  it("fills each tab with at most 3 rows: live first, then finished newest first", async () => {
+    serve({
+      live: [match({ id: "l1" })],
+      finished: [
+        fin("old", { kickoffTime: "2026-09-16T09:00:00.000Z" }),
+        fin("new", { kickoffTime: "2026-09-16T13:00:00.000Z" }),
+        fin("mid", { kickoffTime: "2026-09-16T11:00:00.000Z" }),
+      ],
+    });
+    renderAt("/");
+    const card = await findHero();
+    const hrefs = Array.from(card.querySelectorAll("a.home-hero-row")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(["/sports-hub/matches/l1", "/sports-hub/matches/new", "/sports-hub/matches/mid"]);
+  });
+
+  it("shows the first 3 live matches when more than 3 are live", async () => {
+    serve({ live: [1, 2, 3, 4, 5].map((n) => match({ id: `l${n}` })) });
+    renderAt("/");
+    const card = await findHero();
+    expect(card.querySelectorAll("a.home-hero-row").length).toBe(3);
+    expect(within(card).getByText("5 live now")).not.toBeNull();
+  });
+
+  it("switches tab on click and with the arrow keys, keeping a roving tabindex", async () => {
+    serve({
+      finished: [
+        fin("pl", { league: lg("1", "Premier League", 1), homeTeam: team("h", "Home PL") }),
+        fin("la", { league: lg("2", "La Liga", 2), homeTeam: team("h2", "Home LL") }),
+      ],
+    });
+    renderAt("/");
+    const card = await findHero();
+    const tabs = within(card).getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1"]);
+    expect(within(card).getByText("Home PL")).not.toBeNull();
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(within(card).getByText("Home LL")).not.toBeNull();
+    expect(within(card).queryByText("Home PL")).toBeNull();
+    expect(tabs.map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0"]);
+    fireEvent.click(tabs[0]);
+    expect(within(card).getByText("Home PL")).not.toBeNull();
+    expect(within(card).getByRole("tabpanel")).not.toBeNull();
+  });
+
+  it("uses a real logo only when safe, else the first letter in a circle", async () => {
+    serve({
+      finished: [
+        fin("a", {
+          homeTeam: team("1", "Arsenal", null),
+          awayTeam: team("2", "Brighton", "https://evil.example/logo.png"),
+        }),
+      ],
+    });
+    renderAt("/");
+    const card = await findHero();
+    expect(Array.from(card.querySelectorAll(".home-hero-crest")).map((c) => c.textContent)).toEqual(["A", "B"]);
+    expect(card.querySelectorAll("img").length).toBe(0);
+  });
+
+  it("shows a skeleton card with 3 skeleton rows while loading", () => {
+    vi.mocked(listLiveScores).mockReset().mockReturnValue(new Promise(() => {}));
+    renderAt("/");
+    const sk = screen.getByTestId("hero-skeleton");
+    expect(sk.getAttribute("aria-busy")).toBe("true");
+    expect(sk.querySelectorAll(".home-hero-skel--row").length).toBe(3);
+    expect(document.querySelector(".home-hero--solo")).toBeNull();
+  });
+
+  it("hides the card and widens the hero copy when nothing is live or finished today", async () => {
+    serve({ scheduled: [sched("s1")] });
+    renderAt("/");
+    await screen.findByText("Matches today");
+    expect(heroCard()).toBeNull();
+    expect(screen.queryByTestId("hero-skeleton")).toBeNull();
+    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
+  });
+
+  it("hides the card when the request fails, with no error shown, and the page stays", async () => {
+    serve({});
+    vi.mocked(listLiveScores).mockRejectedValue(new Error("boom"));
+    renderAt("/");
+    await waitFor(() => expect(screen.queryByTestId("hero-skeleton")).toBeNull());
+    expect(heroCard()).toBeNull();
+    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
+    expect(screen.getByText(/deserves a record/i)).not.toBeNull();
+    expect(document.body.textContent).not.toMatch(/boom|error/i);
+  });
+});
+
+describe("HomePage: hero refresh", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("refreshes every 60 seconds only while a match is live and the page is visible", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serve({ live: [match()] });
+    renderAt("/");
+    await findHero();
+    expect(listLiveScores).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(listLiveScores).toHaveBeenCalledTimes(2);
+
+    const spy = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(listLiveScores).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  it("does not refresh when nothing is live, and a live pill goes when the match ends", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serve({ finished: [fin("f1")] });
+    renderAt("/");
+    await findHero();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(listLiveScores).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops the live pill after a refresh finds the match finished", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serve({ live: [match({ id: "x" })] });
+    renderAt("/");
+    const card = await findHero();
+    expect(within(card).getByText("1 live now")).not.toBeNull();
+    serve({ finished: [fin("x")] });
+    await vi.advanceTimersByTimeAsync(60_000);
+    await waitFor(() => expect(heroCard().querySelector(".home-hero-livepill")).toBeNull());
+    expect(within(heroCard()).getByText("FT")).not.toBeNull();
+  });
+});
+
+describe("HomePage: Today's Fixtures strip", () => {
+  it("shows scheduled matches only, in server order, at most 4, never live", async () => {
+    serve({
+      live: [match({ id: "l1", homeTeam: team("9", "Live United") })],
+      scheduled: [1, 2, 3, 4, 5].map((n) => sched(`s${n}`, { homeTeam: team(String(n), `Sched ${n}`) })),
+    });
     renderAt("/");
     await screen.findByText("Matches today");
     await waitFor(() => expect(document.querySelectorAll("a.home-fixture").length).toBe(4));
     const hrefs = Array.from(document.querySelectorAll("a.home-fixture")).map((a) => a.getAttribute("href"));
-    expect(hrefs).toEqual([
-      "/sports-hub/matches/l1",
-      "/sports-hub/matches/s1",
-      "/sports-hub/matches/s2",
-      "/sports-hub/matches/f1",
-    ]);
-    expect(screen.queryByText("Postponed Rovers")).toBeNull();
+    expect(hrefs).toEqual(["/sports-hub/matches/s1", "/sports-hub/matches/s2", "/sports-hub/matches/s3", "/sports-hub/matches/s4"]);
+    expect(screen.getByText("TODAY'S FIXTURES")).not.toBeNull();
+    expect(document.querySelector("a.home-fixture .home-pill--live")).toBeNull();
+    expect(vi.mocked(listRecentResults)).not.toHaveBeenCalled();
   });
 
-  it("never uses a postponed or cancelled match for the hero card", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(
-      page([match({ id: "p1", status: "postponed", statusDetail: null, homeScore: null, awayScore: null })]),
-    );
+  it("asks only for scheduled matches", async () => {
+    serve({ scheduled: [sched("s1")] });
     renderAt("/");
     await screen.findByText("Matches today");
-    expect(document.querySelector("a.home-hero__card")).toBeNull();
-    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
-    expect(document.querySelectorAll("a.home-fixture").length).toBe(1);
+    const scheduledCall = vi.mocked(listFixtures).mock.calls.find((c) => c[1]?.status === "scheduled");
+    expect(scheduledCall?.[1]).toMatchObject({ status: "scheduled", limit: 4 });
   });
 
-  it("links View all fixtures to /sports-hub", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(page([match()]));
+  it("falls back to the latest results with its own eyebrow and heading", async () => {
+    serve({ recent: [fin("r1", { homeTeam: team("1", "Recent FC") })] });
     renderAt("/");
-    await screen.findByText("Matches today");
+    await screen.findByText("Latest results");
+    expect(screen.getByText("LATEST RESULTS")).not.toBeNull();
+    expect(screen.queryByText("TODAY'S FIXTURES")).toBeNull();
+    expect(screen.getByText("Recent FC")).not.toBeNull();
     expect(hrefOf(/view all fixtures/i)).toBe("/sports-hub");
   });
 
-  it("shows the first letter of a club with no logo, and a dash for a missing score", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(
-      page([
-        match({
-          id: "nolog",
-          status: "scheduled",
-          statusDetail: null,
-          homeScore: null,
-          awayScore: null,
-          homeTeam: team("1", "Arsenal", null),
-          awayTeam: team("2", "Brighton", null),
-          kickoffTime: "2026-09-16T15:00:00.000Z",
-          venue: null,
-        }),
-      ]),
-    );
-    renderAt("/");
-    const card = await waitFor(() => {
-      const el = document.querySelector("a.home-hero__card");
-      if (!el) throw new Error("no hero card yet");
-      return el as HTMLElement;
-    });
-    const badges = Array.from(card.querySelectorAll(".home-badge")).map((b) => b.textContent);
-    expect(badges).toEqual(["A", "B"]);
-    expect(card.querySelectorAll("img").length).toBe(0);
-    expect(card.querySelectorAll(".home-team-row__score")[0].textContent).toBe("–");
-    expect(within(card).getByText(/^Kickoff \d{2}:\d{2}$/)).not.toBeNull();
-  });
-
-  it("shows Full time on a finished match with no venue", async () => {
-    vi.mocked(listFixtures).mockResolvedValue(page([match({ status: "finished", statusDetail: null, venue: null })]));
-    renderAt("/");
-    const card = await waitFor(() => {
-      const el = document.querySelector("a.home-hero__card");
-      if (!el) throw new Error("no hero card yet");
-      return el as HTMLElement;
-    });
-    expect(within(card).getByText("FT")).not.toBeNull();
-    expect(within(card).getByText("Full time")).not.toBeNull();
-  });
-
-  it("shows 4 skeleton cards while loading and no hero card", async () => {
-    vi.mocked(listFixtures).mockReturnValue(new Promise(() => {}));
-    renderAt("/");
-    expect(screen.getAllByTestId("fixture-skeleton").length).toBe(4);
-    const grid = screen.getAllByTestId("fixture-skeleton")[0].parentElement as HTMLElement;
-    expect(grid.getAttribute("aria-busy")).toBe("true");
-    expect(document.querySelector("a.home-hero__card")).toBeNull();
-    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
-  });
-
-  it("shows the empty sentence with a link to Sports Hub when there are no matches today", async () => {
+  it("shows the empty sentence when there is nothing scheduled and no recent results", async () => {
     renderAt("/");
     const text = await screen.findByText(/no matches today\./i);
     expect(text.textContent).toBe("No matches today. See all fixtures on Sports Hub.");
     expect(hrefOf(/all fixtures on sports hub/i)).toBe("/sports-hub");
-    expect(document.querySelector("a.home-hero__card")).toBeNull();
-    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
   });
 
-  it("hides the whole strip and the hero card when the fixtures read fails", async () => {
+  it("hides the whole strip when the read fails, and the page stays", async () => {
+    serve({});
     vi.mocked(listFixtures).mockRejectedValue(new Error("boom"));
     renderAt("/");
-    await waitFor(() => expect(screen.queryByText("Matches today")).toBeNull());
     await waitFor(() => expect(screen.queryAllByTestId("fixture-skeleton").length).toBe(0));
+    expect(screen.queryByText("Matches today")).toBeNull();
     expect(screen.queryByText("TODAY'S FIXTURES")).toBeNull();
     expect(screen.queryByRole("link", { name: /view all fixtures/i })).toBeNull();
-    expect(document.querySelector("a.home-hero__card")).toBeNull();
-    expect(document.querySelector(".home-hero--solo")).not.toBeNull();
     expect(screen.getByText(/deserves a record/i)).not.toBeNull();
+  });
+
+  it("shows 4 skeleton cards while loading", () => {
+    vi.mocked(listFixtures).mockReset().mockReturnValue(new Promise(() => {}));
+    vi.mocked(listLiveScores).mockReset().mockResolvedValue(page<MatchListItem>([]));
+    renderAt("/");
+    expect(screen.getAllByTestId("fixture-skeleton").length).toBe(4);
+    expect(screen.getAllByTestId("fixture-skeleton")[0].parentElement?.getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("shows the first letter of a club with no logo, and a dash for a missing score", async () => {
+    serve({
+      scheduled: [sched("nolog", { homeTeam: team("1", "Arsenal", null), awayTeam: team("2", "Brighton", null), venue: null })],
+    });
+    renderAt("/");
+    const card = await waitFor(() => {
+      const el = document.querySelector("a.home-fixture");
+      if (!el) throw new Error("no fixture yet");
+      return el as HTMLElement;
+    });
+    expect(Array.from(card.querySelectorAll(".home-badge")).map((b) => b.textContent)).toEqual(["A", "B"]);
+    expect(card.querySelectorAll("img").length).toBe(0);
+    expect(card.querySelectorAll(".home-team-row__score")[0].textContent).toBe("–");
+  });
+});
+
+
+describe("HomePage: featured placeholder", () => {
+  it("marks the featured media as no-cover only when the article has no cover image", async () => {
+    vi.mocked(listArticles).mockResolvedValue(page([article(1), article(2)]));
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Story title 1" });
+    expect(document.querySelector(".home-featured__mediawrap--no-cover")).not.toBeNull();
+    cleanup();
+    vi.mocked(listArticles).mockResolvedValue(
+      page([article(1, { coverImage: { url: "data:image/gif;base64,R0lGODlhAQABAAAAACw=", type: "image" } as ArticleSummary["coverImage"] }), article(2)]),
+    );
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Story title 1" });
+    expect(document.querySelector(".home-featured__mediawrap")).not.toBeNull();
+    expect(document.querySelector(".home-featured__mediawrap--no-cover")).toBeNull();
   });
 });
 
@@ -345,7 +557,7 @@ describe("HomePage: Latest from the blog", () => {
     renderAt("/");
     await waitFor(() => expect(screen.queryAllByTestId("article-skeleton").length).toBe(0));
     expect(screen.queryByText("From the Blog")).toBeNull();
-    expect(screen.getByRole("heading", { name: /nobody keeps records for/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /where no one keeps the record/i })).not.toBeNull();
   });
 });
 

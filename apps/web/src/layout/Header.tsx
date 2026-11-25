@@ -52,7 +52,7 @@
 // indicator already made) and the numeric badge on the account
 // dropdown / drawer's Notification(s) row (Figma's navy count-pill,
 // Decision Log #88).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
@@ -68,6 +68,7 @@ import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
 import NavDrawer from "./NavDrawer";
 import HeaderAvatarFace from "./HeaderAvatarFace";
+import { useHeaderTip } from "./HeaderTip";
 import "./Header.css";
 
 export default function Header() {
@@ -82,14 +83,42 @@ export default function Header() {
   const hasSession = Boolean(accessToken);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  // Desktop search box (Decision Log #568, code-only). The box mirrors the `q` of /search while that
+  // page is open and is empty on every other route.
+  const [searchText, setSearchText] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const accountRef = useRef<HTMLDivElement>(null);
+  // Decision Log #566: desktop-only name label under the nav icons, Messages and
+  // the avatar (see HeaderTip.tsx). Nothing on mobile.
+  const headerTip = useHeaderTip(!isMobile);
+  const hideTip = headerTip.hide;
+
+  useEffect(() => {
+    if (location.pathname === "/search") {
+      setSearchText(new URLSearchParams(location.search).get("q") ?? "");
+    } else {
+      setSearchText("");
+    }
+  }, [location.pathname, location.search]);
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = searchText.trim();
+    // Same 2-character minimum as GET /search; shorter does nothing.
+    if (trimmed.length < 2) return;
+    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+  }
 
   // Close any open overlay when the route changes or the session ends.
   useEffect(() => {
     setMenuOpen(false);
   }, [location.key, hasSession]);
+
+  // No "Account" label while the account menu is open.
+  useEffect(() => {
+    if (menuOpen) hideTip();
+  }, [menuOpen, hideTip]);
 
   // Desktop account dropdown: close on a click outside the avatar + menu
   // wrapper (Decision Log #106). Mounted only while open, so no listener
@@ -181,17 +210,19 @@ export default function Header() {
           are reached through the Navigation Drawer. */}
       {!isMobile && (
         <>
-          <div className="sn-header__search" role="search">
+          <form className="sn-header__search" role="search" onSubmit={handleSearchSubmit}>
             <img src={searchIcon} alt="" className="sn-header__search-icon" width={16} height={16} />
-            {/* Placeholder only -- no search functionality yet, out of scope for the app shell. */}
+            {/* Enter goes to /search?q=... for signed-in and logged-out visitors alike; /search itself
+                decides what a logged-out visitor sees (its log-in prompt). */}
             <input
               type="search"
               className="sn-header__search-input"
               placeholder="Search Soccernity"
               aria-label="Search Soccernity"
-              disabled
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
             />
-          </div>
+          </form>
 
           <nav className="sn-header__nav" aria-label="Primary">
             <ul className="sn-header__nav-list">
@@ -200,6 +231,7 @@ export default function Header() {
                   <NavLink
                     to={item.to}
                     aria-label={item.label}
+                    {...headerTip.bind(item.label)}
                     className={({ isActive }) =>
                       isActive ? "sn-header__nav-link sn-header__nav-link--active" : "sn-header__nav-link"
                     }
@@ -234,7 +266,7 @@ export default function Header() {
                 messages half of Decision Log #166. Notifications (the
                 account-dropdown row) stays inert -- separate module, no
                 apps/web conversion yet. */}
-            <Link to="/messages" className="sn-header__messages" aria-label="Messages">
+            <Link to="/messages" className="sn-header__messages" aria-label="Messages" {...headerTip.bind("Messages")}>
               <img src={messagesIcon} alt="" width={26} height={25} />
             </Link>
             <button
@@ -244,6 +276,7 @@ export default function Header() {
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
+              {...headerTip.bind("Account", menuOpen)}
             >
               <HeaderAvatarFace profile={profile} />
               {unreadCount > 0 && <span className="sn-header__avatar-dot" aria-hidden="true" />}
@@ -289,6 +322,7 @@ export default function Header() {
           unreadCount={unreadCount}
         />
       )}
+      {headerTip.node}
     </header>
   );
 }

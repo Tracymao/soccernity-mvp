@@ -268,7 +268,7 @@ describe("the ordinary not-found state", () => {
   it("a 404 for the profile is the one generic Page not found, with no hint about privacy", async () => {
     vi.mocked(getPublicProfile).mockRejectedValue(new UsersApiError("User not found", { status: 404 }));
     renderAt();
-    expect(await screen.findByText(/page not found/i)).not.toBeNull();
+    expect(await screen.findByText(/can’t find that page/i)).not.toBeNull();
     expect(screen.queryByText(/private/i)).toBeNull();
     expect(screen.queryByText(/follow/i)).toBeNull();
   });

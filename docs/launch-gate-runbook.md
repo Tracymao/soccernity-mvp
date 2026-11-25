@@ -228,7 +228,7 @@ There is no undo command; undo is another rotation. **Not run against a real Ren
 - Run: `npm test` in `e2e/` (one worker; about 40 minutes on the founder's Windows machine). **Do not run two at once**: they share fixed ports (API 3100, web 5273, admin 5274, fake object store 3191, fake Rekognition 3192) and one scratch database `soccernity_qa` that each run drops and recreates, and they use Redis database 5.
 - The run rewrites about 290 tracked screenshots under `docs/`. Restore them with `git checkout -- docs/`.
 - **Clean looks like:** 0 failed; the only skips are by design: spec 15 (one fresh-API test), spec 16 (8 tests, only run from day 25 of a month; or run it with `QA_TEST_CLOCK_ISO=2026-11-26T10:00:00Z QA_TEST_CLOCK_ADVANCE=1 npx playwright test 16-fc8-final-week` alone), spec 17 (2 single-phase tests), spec 24 (1 test that needs 2FA enforcement). The latest recorded whole runs: 534 passed, 1 failed (a spec defect in 37-b058, since repaired), 12 skipped by design (PR #774). The register's "180 tests" (B-219) is out of date.
-- **The run must also exercise `POST /admin/media/upload`** (the staff upload): no Playwright spec covers it today (B-267 (e)); QA writes or runs one before launch.
+- **The run must also exercise `POST /admin/media/upload`** (the staff upload): `e2e/tests/68-admin-media-upload.spec.ts` covers it (B-267 (e)); it is part of the full run.
 - A same-site run on the real domains (B-267 (a)) is separate from the local run and is not yet written down as a procedure: UNKNOWN (QUESTION F19).
 
 **6.11 Launch checks not yet recorded.** WHO: QA. ROW: B-221, B-106, B-055. (a) B-221: the guardian withdrawal page check. The pass condition is met in code but **no run is recorded**, so it is not recorded as passed; run it and write the result down. (b) B-106 and B-055: one QA pass of the six frames that were never inspected: `5802:9183`, `5815:8948`, `5542:7344`, `5542:7695`, `5803:8917`, `2896:4837` (Figma node ids). Decided (Decision Log #462) to be done once, at the launch gate.
@@ -425,7 +425,7 @@ Do not start until: Parts 5 to 7 are GATE-passed, no tagged string remains (step
 | 8.5 Video / ffmpeg (Docker image; checked in 6.15) | Agent | B-306, B-322 | |
 | 8.6 ADMIN_2FA_ENFORCED = true | Founder | B-267 (j) | |
 | 8.7 MEDIA_UPLOADS_ENABLED (after the two-part launch condition: 6.14, 6.15) | Founder | B-306, B-267 (l), B-206 | |
-| 8.10 Search indexing: set VITE_SITE_INDEXABLE=true and VITE_SITE_URL on the PRODUCTION web static site, then rebuild (stays off until then) | Founder | B-326, B-267 | |
+| 8.10 Search indexing: set VITE_SITE_INDEXABLE=true and VITE_SITE_URL on the PRODUCTION web static site, then rebuild (stays off until then; the social share image tags switch on together with these two settings) | Founder | B-326, B-267 | |
 | 9.1-9.7 Go live | Founder, agent | B-090 | |
 | 10.1-10.3 Smoke tests | Founder, QA | B-090 | |
 | 12.1 Dependabot re-enabled | Founder | B-267 (f) | |

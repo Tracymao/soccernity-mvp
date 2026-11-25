@@ -79,6 +79,7 @@ Not linked: rows on L2 to L7; back links on L2 to L7 ("← Media review" leaves 
 
 - D13's body wording needs confirming against the code.
 - Whether suggestions may ship before counsel answers is a founder call.
+- [2026-11-24 RESOLVED: D13 was redrawn to match the code (Decision Log #560, Figma gaps F). The receiving-bodies question is decided: suggestions show at launch, pending counsel (Decision Log #559).]
 - Stale "NO Figma frame exists" comments, not edited (code is out of scope): `apps/admin/src/pages/media-review/MediaReviewItemPage.tsx:24`, `.../media-review/SetAsideDialog.tsx:2`, `.../media-review/suspectedIllegal.css:1`, `.../suspected-illegal/SuspectedIllegalDetailPage.tsx:2`, `.../suspected-illegal/SuspectedIllegalListPage.tsx:1`.
 
 ## 8. Standing check

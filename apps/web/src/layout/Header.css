@@ -51,6 +51,11 @@
   background-color: var(--sn-green-tint-12);
 }
 
+.sn-header__search:focus-within {
+  outline: 2px solid var(--sn-brand-green);
+  outline-offset: 2px;
+}
+
 .sn-header__search-icon {
   flex-shrink: 0;
   opacity: 0.6;
