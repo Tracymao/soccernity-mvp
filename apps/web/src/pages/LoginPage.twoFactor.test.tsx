@@ -2,7 +2,7 @@
 // for the code, finishes with POST /auth/login/two-factor, and only then stores the session.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import LoginPage from "./LoginPage";
 import type { LoginResponse } from "../api/auth";
 
@@ -33,11 +33,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderLogin() {
+function SearchProbe() {
+  const loc = useLocation();
+  return <p data-testid="search-url">{loc.pathname + loc.search}</p>;
+}
+
+function renderLogin(url = "/login") {
   render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/search" element={<SearchProbe />} />
         <Route path="/community" element={<p>community page</p>} />
       </Routes>
     </MemoryRouter>,
@@ -169,3 +175,28 @@ describe("LoginPage, lost-device recovery", () => {
   });
 });
 
+
+// Decision Log #571 (code-only): the two-factor step ends in the same place as the password step.
+describe("LoginPage returnTo, two-factor sign-in", () => {
+  async function finishWithCode() {
+    vi.mocked(login).mockResolvedValue(CHALLENGE);
+    vi.mocked(completeTwoFactorLogin).mockResolvedValue(SESSION);
+    submitPassword();
+    await screen.findByRole("heading", { name: "Enter the 6-digit code" });
+    fireEvent.change(screen.getByLabelText("Digit 1 of 6"), { target: { value: "482017" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  }
+
+  it("a safe returnTo lands on the search after the code is accepted", async () => {
+    renderLogin("/login?returnTo=%2Fsearch%3Fq%3Dsalah");
+    await finishWithCode();
+    expect((await screen.findByTestId("search-url")).textContent).toBe("/search?q=salah");
+  });
+
+  it("an unsafe returnTo lands on /community", async () => {
+    renderLogin("/login?returnTo=https%3A%2F%2Fevil.example");
+    await finishWithCode();
+    expect(await screen.findByText("community page")).not.toBeNull();
+    expect(screen.queryByTestId("search-url")).toBeNull();
+  });
+});
