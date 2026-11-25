@@ -1,7 +1,7 @@
 // One picture or video of a post, as the bare element (moved out of PostMedia.tsx so the sensitive-media
 // wrapper can reuse it; unchanged behaviour for every existing caller).
-import type { SyntheticEvent } from "react";
 import type { FeedPostMedia } from "../../api/feed";
+import VideoPlayer from "../../components/VideoPlayer/VideoPlayer";
 
 interface Props {
   kind: FeedPostMedia["kind"];
@@ -17,19 +17,14 @@ interface Props {
 export default function MediaElement({ kind, src, playVideo, onLoadError, onLoaded, onDuration }: Props) {
   if (kind === "video") {
     return (
-      <video
-        className="post__media-video"
+      <VideoPlayer
         src={src}
-        controls
+        videoClassName="post__media-video"
         preload={playVideo || onLoaded ? "metadata" : "none"}
-        playsInline
-        aria-label="Video attached to this post"
-        onError={onLoadError}
+        videoLabel="Video attached to this post"
+        onLoadError={onLoadError}
         onLoadedData={onLoaded}
-        onLoadedMetadata={(event: SyntheticEvent<HTMLVideoElement>) => {
-          const seconds = event.currentTarget.duration;
-          if (onDuration && Number.isFinite(seconds)) onDuration(seconds);
-        }}
+        onDuration={onDuration}
       />
     );
   }

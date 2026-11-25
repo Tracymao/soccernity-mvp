@@ -116,3 +116,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.voting-entry__media .vp__video {
+  max-height: 420px;
+  object-fit: cover;
+}
