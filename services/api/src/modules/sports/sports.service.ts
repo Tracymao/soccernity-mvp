@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MatchData, Prisma } from '@prisma/client';
+import { MatchData, Prisma, SportsLeague } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ListHighlightsParams,
@@ -18,19 +18,26 @@ import {
 } from '../../sports-data/sports-data-client';
 import { SportsDataBudgetExhaustedError } from '../../sports-data/sports-data.errors';
 import { SportsRefreshLock } from '../../sports-data/sports-refresh-lock';
-import { decodeMatchCursor, encodeMatchCursor } from './cursor.util';
+import { decodeRankedCursor, encodeRankedCursor } from './cursor.util';
+import { compareLeagues, leagueRank } from './league-priority.constants';
 import { deriveMomentum, MomentumChart } from './momentum.util';
 import {
   DEFAULT_BOX_SCORE_LIVE_CACHE_TTL_SECONDS,
   DEFAULT_FINISHED_CACHE_TTL_SECONDS,
   DEFAULT_H2H_CACHE_TTL_SECONDS,
   DEFAULT_HIGHLIGHTS_CACHE_TTL_SECONDS,
+  DEFAULT_LEAGUE_META_MAX_PAGES,
+  LEAGUE_META_LOCK_TTL_SECONDS,
+  LEAGUE_META_PAGE_SIZE,
   DEFAULT_LIVE_CACHE_TTL_SECONDS,
   DEFAULT_SCHEDULED_CACHE_TTL_SECONDS,
   DEFAULT_STANDINGS_CACHE_TTL_SECONDS,
   MatchPhase,
   SPORTS_DEFAULT_PAGE_SIZE,
   SPORTS_MAX_PAGE_SIZE,
+  SPORTS_RANKED_READ_CAP,
+  SPORTS_RESULTS_LOOKBACK_DAYS,
+  SportsStatusFilter,
 } from './sports.constants';
 import {
   FieldAvailability,
@@ -44,6 +51,9 @@ import {
 import { GetStandingsQueryDto } from './dto/get-standings-query.dto';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListLiveScoresQueryDto } from './dto/list-live-scores-query.dto';
+import { ListRecentResultsQueryDto } from './dto/list-recent-results-query.dto';
+
+const LEAGUES_CACHE_MS = 5 * 60 * 1000;
 
 // ---------- Public response shapes (returned to callers — never the Raw* Highlightly wire shape) ----------
 
@@ -56,7 +66,16 @@ export interface PublicTeamRef {
 export interface PublicMatchSummary {
   id: string;
   competition: string;
-  league: { id: string | null; name: string | null; season: string | null; round: string | null };
+  // `rank` (1-based position on the league popularity list, null = not ranked) and `country` (null when
+  // league metadata is not cached yet) were added by the league-ranking PR; both additive.
+  league: {
+    id: string | null;
+    name: string | null;
+    season: string | null;
+    round: string | null;
+    rank: number | null;
+    country: string | null;
+  };
   venue: string | null;
   kickoffTime: string;
   status: MatchPhase;
@@ -78,6 +97,25 @@ export type PublicMatchListItem = PublicMatchSummary & { kickoffAlert: boolean }
 export interface PublicMatchesPage {
   items: PublicMatchListItem[];
   nextCursor: string | null;
+}
+
+// GET /sports/results/recent: the finished matches of the most recent day that has any (look back at
+// most SPORTS_RESULTS_LOOKBACK_DAYS days). `date` is null and `items` empty when there is none.
+export interface PublicRecentResults {
+  date: string | null;
+  items: PublicMatchListItem[];
+}
+
+export interface PublicLeague {
+  id: string;
+  name: string;
+  country: string | null;
+  logo: string | null;
+  rank: number | null;
+}
+
+export interface PublicLeaguesResponse {
+  items: PublicLeague[];
 }
 
 export interface PublicStatisticItem {
@@ -385,6 +423,8 @@ export class SportsService {
   private readonly highlightsTtl: number;
   private readonly boxScoreLiveTtl: number;
   private readonly maxRefreshPages: number;
+  private readonly maxLeagueMetaPages: number;
+  private leaguesCache: { at: number; value: PublicLeaguesResponse } | null = null;
   private readonly provider: SportsDataProvider;
 
   constructor(
@@ -407,6 +447,8 @@ export class SportsService {
     // the endpoint's own documented max `limit`), but spending unboundedly many requests refreshing
     // ONE date would defeat the entire point of the per-date refresh-lock design. See README.
     this.maxRefreshPages = config.get<number>('SPORTS_DATA_MAX_REFRESH_PAGES') ?? 1;
+
+    this.maxLeagueMetaPages = config.get<number>('SPORTS_DATA_MAX_LEAGUE_META_PAGES') ?? DEFAULT_LEAGUE_META_MAX_PAGES;
 
     this.provider = resolveSportsDataProvider(config.get<string>('SPORTS_DATA_PROVIDER'));
     if (this.provider !== IMPLEMENTED_SPORTS_DATA_PROVIDER) {
@@ -516,11 +558,19 @@ export class SportsService {
     return items.map((item) => ({ ...item, kickoffAlert: refs.has(item.id) }));
   }
 
-  private toPublicMatchSummary(row: MatchData): PublicMatchSummary {
+  private toPublicMatchSummary(row: MatchData, meta?: Map<string, SportsLeague>): PublicMatchSummary {
+    const country = (row.leagueId ? meta?.get(row.leagueId)?.countryName : null) ?? null;
     return {
       id: row.externalRef,
       competition: row.competition,
-      league: { id: row.leagueId, name: row.leagueName, season: row.season, round: row.round },
+      league: {
+        id: row.leagueId,
+        name: row.leagueName,
+        season: row.season,
+        round: row.round,
+        rank: leagueRank({ id: row.leagueId, name: row.leagueName, country }),
+        country,
+      },
       venue: row.venue,
       kickoffTime: row.kickoffTime.toISOString(),
       status: row.status as MatchPhase,
@@ -569,13 +619,15 @@ export class SportsService {
     }
   }
 
-  // GET /sports/fixtures?date=&league=&cursor=&limit=
+  // GET /sports/fixtures?date=&league=&status=&cursor=&limit=
   async listFixtures(query: ListFixturesQueryDto, viewerId?: string): Promise<PublicMatchesPage> {
     const today = new Date().toISOString().slice(0, 10);
     await this.refreshMatchesForDate(query.date, query.league, query.date === today);
+    const dayStart = new Date(`${query.date}T00:00:00.000Z`);
     return this.readMatchesPage({
-      kickoffTimeGte: new Date(`${query.date}T00:00:00.000Z`),
-      kickoffTimeLt: new Date(new Date(`${query.date}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000),
+      kickoffTimeGte: dayStart,
+      kickoffTimeLt: new Date(dayStart.getTime() + 24 * 60 * 60 * 1000),
+      status: query.status,
       leagueId: query.league,
       cursor: query.cursor,
       limit: query.limit,
@@ -590,13 +642,178 @@ export class SportsService {
   async listLiveScores(query: ListLiveScoresQueryDto, viewerId?: string): Promise<PublicMatchesPage> {
     const today = new Date().toISOString().slice(0, 10);
     await this.refreshMatchesForDate(today, query.league, true);
-    return this.readMatchesPage({ status: 'live', leagueId: query.league, cursor: query.cursor, limit: query.limit, viewerId });
+    return this.readMatchesPage({
+      status: 'live',
+      leagueId: query.league,
+      cursor: query.cursor,
+      limit: query.limit,
+      viewerId,
+    });
+  }
+
+  // GET /sports/results/recent?limit= — DB only, never calls Highlightly (the finished rows are
+  // whatever earlier fixtures reads already cached). Finds the most recent UTC day, at most
+  // SPORTS_RESULTS_LOOKBACK_DAYS back, that has any finished match, and returns that day's finished
+  // matches ordered by league priority, then kickoff newest first.
+  async listRecentResults(query: ListRecentResultsQueryDto, viewerId?: string): Promise<PublicRecentResults> {
+    const limit = Math.min(query.limit ?? SPORTS_DEFAULT_PAGE_SIZE, SPORTS_MAX_PAGE_SIZE);
+    const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const earliest = new Date(todayStart.getTime() - SPORTS_RESULTS_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+    const tomorrow = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const latest = await this.prisma.matchData.findFirst({
+      where: { status: 'finished', kickoffTime: { gte: earliest, lt: tomorrow } },
+      orderBy: [{ kickoffTime: 'desc' }, { id: 'desc' }],
+      select: { kickoffTime: true },
+    });
+    if (!latest) return { date: null, items: [] };
+
+    const date = latest.kickoffTime.toISOString().slice(0, 10);
+    const dayStart = new Date(`${date}T00:00:00.000Z`);
+    const rows = await this.prisma.matchData.findMany({
+      where: {
+        status: 'finished',
+        kickoffTime: { gte: dayStart, lt: new Date(dayStart.getTime() + 24 * 60 * 60 * 1000) },
+      },
+      orderBy: [{ kickoffTime: 'asc' }, { id: 'asc' }],
+      take: SPORTS_RANKED_READ_CAP,
+    });
+    const meta = await this.loadLeagueMeta(rows.map((r) => r.leagueId), false);
+    const sorted = this.sortRanked(rows, meta).slice(0, limit);
+    const items = await this.withKickoffAlerts(
+      sorted.map((row) => this.toPublicMatchSummary(row, meta)),
+      viewerId,
+    );
+    return { date, items };
+  }
+
+  // GET /sports/leagues — the distinct leagues present in cached match data joined with league
+  // metadata, ordered like every other ranked list. In-process cache for LEAGUES_CACHE_MS.
+  async listLeagues(): Promise<PublicLeaguesResponse> {
+    if (this.leaguesCache && Date.now() - this.leaguesCache.at < LEAGUES_CACHE_MS) {
+      return this.leaguesCache.value;
+    }
+    const rows = await this.prisma.matchData.findMany({
+      where: { leagueId: { not: null } },
+      distinct: ['leagueId'],
+      select: { leagueId: true, leagueName: true },
+      orderBy: { leagueId: 'asc' },
+      take: SPORTS_RANKED_READ_CAP,
+    });
+    const meta = await this.loadLeagueMeta(rows.map((r) => r.leagueId), true);
+    const entries: Array<{ ref: { id: string; name: string; country: string | null }; league: PublicLeague }> = [];
+    for (const r of rows) {
+      if (r.leagueId === null) continue;
+      const m = meta.get(r.leagueId);
+      const name = r.leagueName ?? m?.name ?? r.leagueId;
+      const country = m?.countryName ?? null;
+      entries.push({
+        ref: { id: r.leagueId, name, country },
+        league: {
+          id: r.leagueId,
+          name,
+          country,
+          logo: m?.logo ?? null,
+          rank: leagueRank({ id: r.leagueId, name, country }),
+        },
+      });
+    }
+    entries.sort((a, b) => compareLeagues(a.ref, b.ref));
+    const value: PublicLeaguesResponse = { items: entries.map((e) => e.league) };
+    this.leaguesCache = { at: Date.now(), value };
+    return value;
+  }
+
+  // League metadata (country, logo) lives in SportsLeague. Missing metadata is filled from
+  // Highlightly at most once a day (one lock key per UTC day) and at most `maxLeagueMetaPages` calls
+  // per refresh, only when `allowRefresh` and at least one league on screen has none. Every failure
+  // (Redis, budget, network, a changed response shape) is swallowed: the caller just gets fewer
+  // entries and a league without a country is ranked and sorted as "country unknown". Match
+  // endpoints NEVER fail because of league metadata.
+  private async loadLeagueMeta(
+    leagueIds: Array<string | null>,
+    allowRefresh: boolean,
+  ): Promise<Map<string, SportsLeague>> {
+    const ids = [...new Set(leagueIds.filter((id): id is string => id !== null))];
+    const result = new Map<string, SportsLeague>();
+    if (ids.length === 0) return result;
+    try {
+      const read = () => this.prisma.sportsLeague.findMany({ where: { leagueId: { in: ids } } });
+      let rows = await read();
+      if (allowRefresh && rows.length < ids.length && (await this.refreshLeagueMetadata())) {
+        rows = await read();
+      }
+      for (const row of rows) result.set(row.leagueId, row);
+    } catch (err) {
+      this.logger.warn(`League metadata unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return result;
+  }
+
+  // Returns true when this call fetched at least one league and wrote it.
+  private async refreshLeagueMetadata(): Promise<boolean> {
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const acquired = await this.refreshLock.tryAcquire(`sports:refresh:leagues:${day}`, LEAGUE_META_LOCK_TTL_SECONDS);
+      if (!acquired) return false;
+      let wrote = false;
+      let offset = 0;
+      for (let page = 0; page < this.maxLeagueMetaPages; page += 1) {
+        const result = await this.client.getLeagues({ limit: LEAGUE_META_PAGE_SIZE, offset });
+        const valid = result.items.filter((l) => l && l.id != null && l.name);
+        await Promise.all(
+          valid.map((l) => {
+            const data = {
+              name: String(l.name),
+              countryName: l.country?.name ?? null,
+              countryCode: l.country?.code ?? null,
+              logo: l.logo ?? null,
+              fetchedAt: new Date(),
+            };
+            return this.prisma.sportsLeague.upsert({
+              where: { leagueId: String(l.id) },
+              update: data,
+              create: { leagueId: String(l.id), ...data },
+            });
+          }),
+        );
+        if (valid.length > 0) wrote = true;
+        const fetchedSoFar = offset + result.items.length;
+        if (!result.totalCount || fetchedSoFar >= result.totalCount || result.items.length === 0) break;
+        offset = fetchedSoFar;
+      }
+      return wrote;
+    } catch (err) {
+      this.logger.warn(`League metadata refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
+  // League priority, then within a league: live (kickoff asc), scheduled and the rest (kickoff asc),
+  // finished (kickoff desc); id breaks ties so the order is total and stable.
+  private sortRanked(rows: MatchData[], meta: Map<string, SportsLeague>): MatchData[] {
+    const ref = (row: MatchData) => ({
+      id: row.leagueId,
+      name: row.leagueName,
+      country: (row.leagueId ? meta.get(row.leagueId)?.countryName : null) ?? null,
+    });
+    const group = (row: MatchData) => (row.status === 'live' ? 0 : row.status === 'finished' ? 2 : 1);
+    return [...rows].sort((a, b) => {
+      const byLeague = compareLeagues(ref(a), ref(b));
+      if (byLeague !== 0) return byLeague;
+      const ga = group(a);
+      const gb = group(b);
+      if (ga !== gb) return ga - gb;
+      const dt = a.kickoffTime.getTime() - b.kickoffTime.getTime();
+      if (dt !== 0) return ga === 2 ? -dt : dt;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
   }
 
   private async readMatchesPage(params: {
     kickoffTimeGte?: Date;
     kickoffTimeLt?: Date;
-    status?: MatchPhase;
+    status?: SportsStatusFilter;
     leagueId?: string;
     cursor?: string;
     limit?: number;
@@ -609,27 +826,32 @@ export class SportsService {
     if (params.kickoffTimeLt) conditions.push({ kickoffTime: { lt: params.kickoffTimeLt } });
     if (params.status) conditions.push({ status: params.status });
     if (params.leagueId) conditions.push({ leagueId: params.leagueId });
-    if (params.cursor) {
-      const cursor = decodeMatchCursor(params.cursor);
-      conditions.push({
-        OR: [{ kickoffTime: { gt: cursor.kickoffTime } }, { kickoffTime: cursor.kickoffTime, id: { gt: cursor.id } }],
-      });
-    }
+    const cursor = params.cursor ? decodeRankedCursor(params.cursor) : null;
 
+    // The league order is computed in memory (rank is not a column), so the page is cut from the
+    // fully sorted list; the cursor is the last returned id plus its position. Bounded by
+    // SPORTS_RANKED_READ_CAP (one day, or every live match: far below it in practice).
     const rows = await this.prisma.matchData.findMany({
       where: conditions.length > 0 ? { AND: conditions } : undefined,
       orderBy: [{ kickoffTime: 'asc' }, { id: 'asc' }],
-      take: limit + 1,
+      take: SPORTS_RANKED_READ_CAP,
     });
+    const meta = await this.loadLeagueMeta(rows.map((r) => r.leagueId), true);
+    const sorted = this.sortRanked(rows, meta);
 
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    let start = 0;
+    if (cursor) {
+      const at = sorted.findIndex((r) => r.id === cursor.id);
+      start = at >= 0 ? at + 1 : Math.min(cursor.offset ?? 0, sorted.length);
+    }
+    const pageRows = sorted.slice(start, start + limit);
     const items = await this.withKickoffAlerts(
-      pageRows.map((row) => this.toPublicMatchSummary(row)),
+      pageRows.map((row) => this.toPublicMatchSummary(row, meta)),
       params.viewerId,
     );
     const last = pageRows[pageRows.length - 1];
-    const nextCursor = hasMore && last ? encodeMatchCursor({ kickoffTime: last.kickoffTime, id: last.id }) : null;
+    const hasMore = start + limit < sorted.length;
+    const nextCursor = hasMore && last ? encodeRankedCursor({ id: last.id, offset: start + pageRows.length }) : null;
 
     return { items, nextCursor };
   }
@@ -667,7 +889,8 @@ export class SportsService {
     }
 
     if (!row) throw new NotFoundException('Match not found');
-    const [summary] = await this.withKickoffAlerts([this.toPublicMatchSummary(row)], viewerId);
+    const meta = await this.loadLeagueMeta([row.leagueId], false);
+    const [summary] = await this.withKickoffAlerts([this.toPublicMatchSummary(row, meta)], viewerId);
     return summary;
   }
 
@@ -930,6 +1153,9 @@ export class SportsService {
         name: raw.league?.name ?? null,
         season: raw.league?.season != null ? String(raw.league.season) : null,
         round: raw.round ?? null,
+        // Head-to-head meetings carry no cached league metadata: rank by id/name only, country unknown.
+        rank: leagueRank({ id: raw.league ? String(raw.league.id) : null, name: raw.league?.name ?? null, country: null }),
+        country: null,
       },
       venue: formatVenue(raw.venue),
       kickoffTime: new Date(raw.date).toISOString(),

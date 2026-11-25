@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import {
   ListHighlightsParams,
   ListMatchesParams,
+  ListLeaguesParams,
   RawHighlight,
+  RawLeagueMeta,
+  RawLeaguesPage,
   RawHighlightsPage,
   RawLineups,
   RawMatch,
@@ -120,6 +123,15 @@ export class HighlightlyClient extends SportsDataClient {
     const body = await this.request<{ data?: RawMatch[]; pagination?: { totalCount?: number } }>('/matches', {
       date: params.date,
       leagueId: params.leagueId,
+      limit: params.limit,
+      offset: params.offset,
+    });
+    return { items: body.data ?? [], totalCount: body.pagination?.totalCount };
+  }
+
+  // GET /leagues?limit=&offset= — league metadata (country, logo). Wrapper {data, pagination} like /matches.
+  async getLeagues(params: ListLeaguesParams): Promise<RawLeaguesPage> {
+    const body = await this.request<{ data?: RawLeagueMeta[]; pagination?: { totalCount?: number } }>('/leagues', {
       limit: params.limit,
       offset: params.offset,
     });

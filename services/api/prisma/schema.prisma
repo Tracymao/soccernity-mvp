@@ -2238,6 +2238,20 @@ model AdminActionLog {
 //     standings table covers an entire competition's worth of matches. Same "whole document
 //     overwrite" reasoning applies to ITS contents (an ordered array of every team's row) — Section
 //     4.6 never asks "give me just Arsenal's row", it asks for the whole table.
+// League metadata for the Sports API (founder decision 2026-11-25): MatchData holds only a league id and
+// name, so country and logo come from here, filled from Highlightly's Leagues endpoint by a refresh that
+// runs at most once a day (a daily Redis lock) with a hard cap on calls. A genuine addition beyond Section
+// 3. Keyed by Highlightly's league id as a plain string (no foreign key: a match may reference a league
+// that was never fetched). Never required: fixtures must work with this table empty.
+model SportsLeague {
+  leagueId    String   @id
+  name        String
+  countryName String?
+  countryCode String?
+  logo        String?
+  fetchedAt   DateTime @default(now())
+}
+
 model MatchData {
   id          String   @id @default(uuid())
   externalRef String   @unique

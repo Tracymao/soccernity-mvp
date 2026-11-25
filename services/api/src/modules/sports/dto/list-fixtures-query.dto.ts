@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
-import { SPORTS_MAX_PAGE_SIZE } from '../sports.constants';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { SPORTS_MAX_PAGE_SIZE, SPORTS_STATUS_FILTERS, SportsStatusFilter } from '../sports.constants';
 
 // GET /sports/fixtures?date=&league=&cursor=&limit= — NO AUTH REQUIRED (Section 4.6; matches this
 // codebase's SportsHubPage.tsx own already-shipped "no login gate" precedent, same category as the
@@ -15,6 +15,11 @@ export class ListFixturesQueryDto {
   @IsString()
   @MaxLength(64)
   league?: string;
+
+  // Optional status filter (league-ranking PR). Absent = every status, as before.
+  @IsOptional()
+  @IsIn(SPORTS_STATUS_FILTERS)
+  status?: SportsStatusFilter;
 
   @IsOptional()
   @IsString()

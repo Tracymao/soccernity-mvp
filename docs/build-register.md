@@ -5888,3 +5888,6 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 
 - Figma only, founder decisions 2026-11-25: the logged-out Home hero card becomes a white live-scores card (league tabs, three rows, live pill, footer link) and Today's Fixtures drops Grassroots and gains a latest-results fallback. 10 new frames (HC-2 to HC-8, FS-3, FS-4, Notes), HC-1 and FS-1/FS-2 edited in place, 4 links to Sports Hub. Frame ids, defaults and the standing check are in `docs/figma-home-hero-card-report.md`.
 - 331 B-IDs, 146 gap frames, unchanged. No Decision Log row. The Annotation Zone note `5214:6828` is stale and was not edited.
+
+## 134. Updates 2026-11-25 (sports league ranking and country ordering; Decision Log #569; backend and docs only; no new B-ID, no counter changes)
+- Sports API orders matches by a founder-set league priority list and country, adds `league.rank` and `league.country`, a `status` filter on fixtures, `GET /sports/results/recent` and `GET /sports/leagues`, and a `SportsLeague` metadata table filled from Highlightly within budget. Recorded as Decision Log #569. BUILT, awaiting founder check of the order on staging. All ranked names and countries and the `/leagues` response shape are UNVERIFIED against real Highlightly. Report: `docs/sports-league-ranking-report.md`.
