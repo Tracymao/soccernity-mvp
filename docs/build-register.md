@@ -5883,3 +5883,8 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 
 - Decided by the founder on 2026-11-24 and built in `apps/web`, recorded as Decision Log #567 (footer socials, B-330) and #568 (header search live, B-331). Footer: facebook, twitter, Tik Tok and YouTube are real links to the founder-supplied addresses, opening in a new tab; Instagram and LinkedIn are not shown (no accounts). Header: Enter in the desktop search box with two or more characters opens `/search?q=`, signed in or not; `/search` reads q and keeps the log-in prompt for a logged-out visitor.
 - 331 B-IDs (41 with gap frames + 290 without), 146 gap frames. W9 60 to 62. Section 7 now runs to #568. Report: `docs/footer-socials-header-search-report.md`.
+
+## 133. Updates 2026-11-25 (Home hero live-scores card and Today's Fixtures redrawn; Figma and docs only; no counter changes)
+
+- Figma only, founder decisions 2026-11-25: the logged-out Home hero card becomes a white live-scores card (league tabs, three rows, live pill, footer link) and Today's Fixtures drops Grassroots and gains a latest-results fallback. 10 new frames (HC-2 to HC-8, FS-3, FS-4, Notes), HC-1 and FS-1/FS-2 edited in place, 4 links to Sports Hub. Frame ids, defaults and the standing check are in `docs/figma-home-hero-card-report.md`.
+- 331 B-IDs, 146 gap frames, unchanged. No Decision Log row. The Annotation Zone note `5214:6828` is stale and was not edited.
