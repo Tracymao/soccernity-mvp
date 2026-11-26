@@ -4,7 +4,7 @@ Branch `feat/design-foundations-tokens`, from origin/main `b8c97b8` (unchanged a
 
 ## Handshake
 - Open PRs: none (`gh pr list --state open` returned `[]`). No remote branch for the parallel Figma PR "Design foundations (Figma only)" was found, so it is not named; the values here must be compared with it when it appears.
-- Next free register section: 139. Decision Log: last row #571, so this is #572.
+- Next free register section: 139 when built; renumbered to 140 at merge. Decision Log: last row was #571 when built; main later took #572 (Figma foundations), so this is #573 and register Section 140.
 
 ## What was added
 - `packages/shared/src/tokens/index.ts`: exported `radius`, `typeScale`, `fontFamily`, `elevation`, `motion` and types. Existing exports untouched.
