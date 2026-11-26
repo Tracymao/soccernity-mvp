@@ -94,13 +94,11 @@ function write(text = "What a goal") {
 }
 
 describe("composer — attach controls", () => {
-  it("offers a picture and a video control, enabled, and the tagged 'checked' line", () => {
+  it("offers a picture and a video control, enabled, and no note about the check under the empty tray", () => {
     renderComposer();
     expect((screen.getByRole("button", { name: /picture/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /video/i }) as HTMLButtonElement).disabled).toBe(false);
-    expect(
-      screen.getByText("Everything you upload is checked before other people can see it."),
-    ).not.toBeNull();
+    expect(screen.queryByText(/Everything you upload is checked/)).toBeNull();
     // The poll affordance is gone and so is the old "arrive with a later media release" note.
     expect(screen.queryByText(/later media release/i)).toBeNull();
   });

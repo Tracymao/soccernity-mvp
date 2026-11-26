@@ -102,7 +102,7 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
   test('1. the author attaches files in the browser and publishes while they are still being checked', async ({ page }) => {
     await signIn(page, uploader.email);
     await page.goto('/community');
-    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toBeVisible();
+    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toHaveCount(0);
 
     await composeWith(page, png('clear.png', WIDTH_CLEAR), TEXT.clear, 'picture-input');
     posts.clear = await postId(uploader.userId, TEXT.clear);

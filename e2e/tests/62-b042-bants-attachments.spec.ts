@@ -72,7 +72,7 @@ test.describe.serial('B-042: Bants room composer takes pictures and video', () =
     await expect(page.getByRole('button', { name: /attach photo\/video/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Picture/ })).toBeEnabled();
     await expect(page.getByRole('button', { name: /Video/ })).toBeEnabled();
-    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toBeVisible();
+    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toHaveCount(0);
 
     const text = `Bants picture ${RUN}`;
     await page.getByPlaceholder(/say something to/i).fill(text);

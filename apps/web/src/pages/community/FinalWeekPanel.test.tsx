@@ -14,7 +14,15 @@ vi.mock("../../api/postMedia", async () => {
   return { ...actual, createUpload: vi.fn(), putFile: vi.fn(), confirmUpload: vi.fn(), getUpload: vi.fn(), deleteUpload: vi.fn() };
 });
 import { submitFinalEntry } from "../../api/contest";
-import { confirmUpload, createUpload, deleteUpload, getUpload, putFile, type PostMediaView } from "../../api/postMedia";
+import {
+  PostMediaApiError,
+  confirmUpload,
+  createUpload,
+  deleteUpload,
+  getUpload,
+  putFile,
+  type PostMediaView,
+} from "../../api/postMedia";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -92,7 +100,29 @@ describe("FinalWeekPanel", () => {
     renderPanel();
     expect(screen.queryByLabelText("Video link")).toBeNull();
     expect(screen.getByRole("button", { name: /choose a video/i })).not.toBeNull();
-    expect(screen.getByText(/stays hidden from everyone but you until the reveal\./)).not.toBeNull();
+    expect(screen.queryByText(/Everything you upload is checked/)).toBeNull();
+    expect(screen.queryByText(/stays hidden from everyone but you until the reveal\./)).toBeNull();
+    expect(screen.getByText(/MP4, WebM or MOV, up to 100 MB and 120 seconds\./)).not.toBeNull();
+  });
+
+  it("still says an approved final video is hidden from everyone else until the day-25 reveal", async () => {
+    vi.mocked(confirmUpload).mockResolvedValue(view({ status: "approved" }));
+    renderPanel();
+    chooseVideo();
+    expect(
+      await screen.findByText("Your video is hidden from everyone but you until the reveal at 00:00 on day 25."),
+    ).not.toBeNull();
+    expect(screen.queryByText(/Everything you upload is checked/)).toBeNull();
+  });
+
+  it("says uploads aren't available when they are switched off", async () => {
+    vi.mocked(createUpload).mockRejectedValueOnce(
+      new PostMediaApiError("Uploads are not available right now.", { status: 403, code: "media_uploads_disabled" }),
+    );
+    renderPanel();
+    chooseVideo();
+    expect(await screen.findByText(/Uploads aren’t available right now\./)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /choose a video/i })).toBeNull();
   });
 
   it("Submit stays disabled until there is a caption AND an uploaded video", async () => {
