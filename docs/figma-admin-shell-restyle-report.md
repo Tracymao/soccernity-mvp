@@ -7,7 +7,7 @@ The "Admin Shell" component set `6014:12948` (12 variants, 295 instances) was re
 - Nav rows: Web/ Nav label (15 Medium), active row Nav label active (15 Semi Bold), radius md, active row navy fill with on-navy text.
 - Rail, logo, profile block, Create and Log Out buttons: radius sm/md, existing tokens.
 - Search bar (component set `6926:35951`): white surface, 1px inactive border, radius md, 740x44.
-- Typography moved to the Web/ text styles (Body 14, Caption 12, Title).
+- Typography: 204 of 228 shell text nodes are bound to Web/ text styles (nav labels Web/Nav label and Web/Nav label active, Create and Log Out Web/Body large, search placeholder Web/Body). 24 are intentionally unbound: the 12 logo wordmarks (artwork) and the 12 profile names (mixed style runs). Fix-up of #915: it had bound 48 of 228.
 - Two new frames below the canvas: `7204:71662` component states (1440x776, y 361100) and `7205:71662` behaviour spec (1440x496, y 362000): hover 150ms, reduced motion shows the end state at once, and 8 rules (row actions never hidden behind hover, sticky header never covers content, one-line status chips, charts not hue-only, empty tables show a message and an action, active nav exposes aria-current, focus ring 2px navy offset 2px, 44px minimum height and 12px minimum text).
 
 ## Structure lock (verified, numbers only)
@@ -27,3 +27,4 @@ The "Admin Shell" component set `6014:12948` (12 variants, 295 instances) was re
 
 ## Not verified
 Five of the six planned screenshots, the Contest and Users variants by eye, and CI (unreadable from here). Nothing was run beyond Figma reads. All values are defaults for the founder to veto.
+Checked only in the fix-up: states frame 7204:71662 (hover fills navy 8% / 90%, real Moderation icon in the five nav examples, focus rings, 42 of 42 text nodes styled), Users variant by eye, contrast over the shell set and states frame (lowest 5.01:1, none under 4.5:1; frame opacity on the disabled swatches is not composited, so those two are not independently proven), 8 structure signatures (after values only, no before values were captured, so match/mismatch is unproven), top-level count 2,003 and id hash 2519744380 unchanged. Held investigations frames exist: 6647:23351, 6647:23603, 6647:23831, 6647:24060 (not changed).

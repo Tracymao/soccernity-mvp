@@ -5946,3 +5946,7 @@ The Section 1 wave membership paragraphs were checked against the Waves table an
 - **W11:** paragraph header said (31); the Waves table and the main table both say 33. Added B-326 and B-328 at the end of the list. Header is now (33).
 - Short names for the six added IDs are derived (the main-table rows carry none): lower-case slugs of the first words of each row title.
 - No wave was left unfixed; the Waves table and the main table agree for all 13 waves. B-IDs stay 332 and gap frames stay 146. No Decision Log row, no Section 7 row.
+
+## 144. Updates 2026-11-26 (admin shell restyle fix-up in Figma; no new B-ID; docs only)
+
+This is a fix to PR #915's typography and states frame, not new work. The Admin Shell set now binds 204 of 228 text nodes to Web/ text styles (24 intentionally unbound: 12 logo wordmarks, 12 profile names). States frame `7204:71662`: hover fills use existing navy at 8% and 90%, the nav examples carry the real Moderation icon, focus rings are fully visible. Structure unchanged: top-level nodes 2,003, id hash unchanged. Contrast lowest 5.01:1. Decision Log #574 stays the last number in this register (the Build Plan docx was not opened). Report: `docs/figma-admin-shell-restyle-report.md`.
