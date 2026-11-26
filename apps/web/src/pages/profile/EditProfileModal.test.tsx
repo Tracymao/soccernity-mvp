@@ -184,6 +184,21 @@ describe("EditProfileModal -- Username (profile/username-column-and-display-conv
     expect(vi.mocked(updateUser).mock.calls[0][2]).toMatchObject({ username: "goalie_9" });
   });
 
+  it("shows the account email read-only with a Change email link, and never sends it (Decision Log #576)", async () => {
+    vi.mocked(updateUser).mockResolvedValueOnce(USER);
+    renderWith(USER);
+    const email = screen.getByLabelText("Email") as HTMLInputElement;
+    expect(email.readOnly).toBe(true);
+    expect(email.value).toBe("adeniyi@example.com");
+    expect(screen.getByRole("link", { name: "Change email" }).getAttribute("href")).toBe(
+      "/settings/account/information/change-email",
+    );
+    fireEvent.change(usernameInput(), { target: { value: "goalie_9" } });
+    save();
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateUser).mock.calls[0][2]).not.toHaveProperty("email");
+  });
+
   it("does not send a username at all when it was not changed (fallback-to-displayName users are untouched)", async () => {
     vi.mocked(updateUser).mockResolvedValueOnce(USER);
     renderWith(USER);

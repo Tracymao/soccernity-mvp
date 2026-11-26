@@ -26,6 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { getUser, getFollowers, getFollowing, UsersApiError, type UserProfile, type FollowUserSummary } from "../api/users";
 import { countryName } from "../lib/countries";
+import { splitDisplayName } from "./profile/profileFields";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
 import PinnedEntry from "./community/PinnedEntry";
@@ -148,6 +149,8 @@ export default function ProfilePage() {
     );
   }
 
+  const firstName = splitDisplayName(profile.displayName).firstName;
+
   return (
     <div className="profile-page">
       {/* The owner always sees their own cover and picture, including one still
@@ -166,10 +169,9 @@ export default function ProfilePage() {
           <div className="profile-header__top">
             <div>
               <h1 className="profile-header__name">{profile.publicName}</h1>
-              {/* No @username/handle field exists on the User model --
-                  email shown instead as the closest real identity data,
-                  flagged as a departure from the Figma frame's @handle. */}
-              <p className="profile-header__meta">{profile.email}</p>
+              {/* The line under the name is the first name. The account email lives in Edit Profile
+                  (read-only, with a link to Change email). Decision Log #576; code-only. */}
+              {firstName && <p className="profile-header__meta">{firstName}</p>}
               <p className="profile-header__meta">
                 Member since{" "}
                 {new Date(profile.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}

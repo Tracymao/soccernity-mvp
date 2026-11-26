@@ -357,6 +357,17 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
             </div>
 
             <div className="edit-profile-field">
+              <label className="edit-profile-field__label" htmlFor="edit-profile-email">
+                Email
+              </label>
+              <input id="edit-profile-email" readOnly aria-readonly="true" value={user.email} />
+              <p className="edit-profile-field__hint">
+                This address can&rsquo;t be edited here.{" "}
+                <Link to="/settings/account/information/change-email">Change email</Link>
+              </p>
+            </div>
+
+            <div className="edit-profile-field">
               <label className="edit-profile-field__label" htmlFor="edit-profile-phone">
                 Phone
               </label>
