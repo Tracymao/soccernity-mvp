@@ -28,6 +28,8 @@ On a phone the Sports Hub league sidebar sat at the top at full length, so the l
 - Full web vitest: 2,255 passed, 2 failed, in two files (a focus assertion in the Change Password page test, and a 5-second timeout in a source-scanning test in `MatchCentrePage.test.tsx`). Both files were re-run alone: 61 of 61 passed. Neither file was changed here.
 - `npm run build:release`: passed, including the pending-copy check.
 
+CI's first run failed on the same Change Password focus assertion. It is a timing race in that test: the page focuses the field in an effect that can run after the error text appears. The test now waits for the focus; the page is unchanged.
+
 ## Real browser
 
 The built app was served locally and driven in the installed Windows Chrome through Playwright, with the API intercepted (40 sample leagues, 3 live matches), viewport height 844. 33 of 33 checks passed.
