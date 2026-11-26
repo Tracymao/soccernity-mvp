@@ -5988,3 +5988,9 @@ Figma and docs only. The Users, Articles, Categories and Add Category frames now
 Founder, 2026-11-26: pages need a loader so reloading and navigating stop looking like a glitch. Built as CH-H14, web only: a static splash from the first paint, a branded splash during session restore, a thin top progress bar on navigation that appears only when a page's requests take longer than about 120ms and ignores background polling, spinners and skeletons in place of raw loading text (the old wording is kept as screen-reader text), a soft fade-in when a page arrives, and reduced-motion fallbacks. The Content-Security-Policy is unchanged. No API, backend, routing path, data fetching or caching change. Details: `docs/page-loader-report.md`.
 
 Numbering: Decision Log #579 and #580 are cited by Sections 149 and 150 (Figma passes) but have no row in the docx table or Section 7, so this entry takes #581. The Waves table total read 333 while the wave rows summed to 334 before this change; it now reads 335, matching the rows.
+
+## 152. Updates 2026-11-26 (admin list pages restyled in code, and Inter for admin body text; no new B-ID; Decision Log #582)
+
+Code only, step 2d of the premium UI pass: no Figma, schema, API or copy change. The shipped code is the source of truth and Figma was aligned first (#920 to #924). The Users, Articles, Categories and Add Category pages now carry the premium restyle with the existing colours and the Foundations radius and motion tokens; pages sharing the `us-*` and `ac-*` classes change with them.
+
+Founder decision 2026-11-26: the admin body font moves from Montserrat to Inter; page titles and the wordmark stay Montserrat. Not checked in a browser. Report: `docs/admin-lists-premium-code-report.md`.
