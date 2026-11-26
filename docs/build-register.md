@@ -5974,3 +5974,9 @@ Founder decision 2026-11-26: users are not told that a picture or video is being
 Standing founder rule 2026-11-26: the shipped code is the source of truth for Figma. Figma shows what the shipped admin renders.
 
 Figma and docs only. The shell was measured by rendering the shipped CSS: the nav sits 74px higher, Log Out and the search bar moved, the profile block is replaced by the code's initials circle, the active marker is 4x20, and the search placeholder reads "Search Soccernity". Report: `docs/figma-admin-shell-align-report.md`. Part 2 (list frames) follows.
+
+## 150. Updates 2026-11-26 (admin list pages aligned in Figma to the shipped code, part 2 of 2; no new B-ID; Decision Log #580)
+
+Founder rules of 2026-11-26: the shipped code is the source of truth for Figma (standing); Delete is a secondary navy outline button, like View and Block, with no red anywhere.
+
+Figma and docs only. The Users, Articles, Categories and Add Category frames now follow the code layout: content x302 to x1399, a page row with text tabs and the page buttons, the note on Users, and a left-aligned "Load more". The patterns frame follows the code's retry, empty and confirm patterns. Report: `docs/figma-admin-lists-align-report.md`. Admin code will adopt Inter in the later admin code PR.
