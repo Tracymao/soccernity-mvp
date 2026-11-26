@@ -22,6 +22,19 @@
   gap: 12px;
 }
 
+/* League drop-down (Decision Log #584, code-only). Above 960px the toggle is not displayed and
+ * the panel is a plain column with the sidebar's own gap; the 960px block at the end shows the
+ * toggle and honours the collapsed class. */
+.sh-sidebar__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sh-league-toggle {
+  display: none;
+}
+
 .sh-search {
   display: flex;
   align-items: center;
@@ -326,6 +339,65 @@
 @media (max-width: 960px) {
   .sh-page {
     grid-template-columns: 1fr;
+  }
+
+  .sh-sidebar {
+    padding: 12px;
+  }
+
+  .sh-league-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sn-text-primary);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sh-league-toggle:focus-visible {
+    outline: 2px solid var(--sn-brand-navy);
+    outline-offset: 2px;
+  }
+
+  .sh-league-toggle__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .sh-league-toggle__label {
+    font: 600 13px "Inter", sans-serif;
+    color: var(--sn-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .sh-league-toggle__current {
+    font: 600 15px "Inter", sans-serif;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sh-league-toggle__chevron {
+    flex: none;
+    transition: transform var(--sn-duration-base) var(--sn-ease-standard);
+  }
+
+  .sh-league-toggle[aria-expanded="true"] .sh-league-toggle__chevron {
+    transform: rotate(180deg);
+  }
+
+  .sh-sidebar__panel--collapsed {
+    display: none;
   }
 
   .sh-match {

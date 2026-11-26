@@ -2,6 +2,7 @@
 // Mocks src/api/sports.ts, same convention as GrassrootsPage.test.tsx.
 // No session gate to seed -- every SportsService route is public.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import SportsHubPage, { groupLeagues } from "./SportsHubPage";
@@ -141,7 +142,7 @@ describe("SportsHubPage", () => {
     ]);
     renderPage();
     await screen.findByRole("button", { name: "Premier League" });
-    expect(screen.getByRole("button", { name: /all leagues/i })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "All leagues" })).not.toBeNull();
     const labels = Array.from(document.querySelectorAll("li.sh-league-group")).map((e) => e.textContent);
     expect(labels).toEqual(["Top competitions", "Algeria", "Zambia", "Other"]);
   });
@@ -200,6 +201,90 @@ describe("SportsHubPage", () => {
 
     expect(screen.queryByText(/has not yet selected a sports-data vendor/i)).toBeNull();
     expect(screen.getByText("Most Recent Stories")).not.toBeNull();
+  });
+});
+
+// Decision Log #584. jsdom applies no stylesheet, so "hidden" is asserted through the collapsed
+// class and the CSS file itself; the rendered behaviour is checked in a real browser.
+describe("SportsHubPage league drop-down", () => {
+  const toggle = () => screen.getByRole("button", { name: /^Leagues/ });
+  const panel = () => document.getElementById("sh-league-panel")!;
+  const collapsed = () => panel().classList.contains("sh-sidebar__panel--collapsed");
+
+  async function renderWithLeagues() {
+    vi.mocked(listLeagues).mockResolvedValue([lg("39", "Premier League", 1, "England"), lg("61", "Ligue 1", 6, "France")]);
+    renderPage();
+    await screen.findByRole("button", { name: "Ligue 1" });
+  }
+
+  it("starts collapsed, with the search box and list inside the controlled region", async () => {
+    await renderWithLeagues();
+
+    expect(toggle().getAttribute("type")).toBe("button");
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(toggle().getAttribute("aria-controls")).toBe("sh-league-panel");
+    expect(toggle().textContent).toBe("LeaguesAll leagues");
+    expect(collapsed()).toBe(true);
+    expect(panel().contains(screen.getByLabelText("Search league"))).toBe(true);
+    expect(panel().contains(screen.getByText("Sort by league"))).toBe(true);
+    expect(panel().contains(screen.getByRole("button", { name: "Ligue 1" }))).toBe(true);
+    expect(panel().contains(toggle())).toBe(false);
+  });
+
+  it("opens and closes from the toggle", async () => {
+    await renderWithLeagues();
+
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(collapsed()).toBe(false);
+
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(collapsed()).toBe(true);
+  });
+
+  it("collapses after a league is picked, shows the selection and moves focus to the toggle", async () => {
+    await renderWithLeagues();
+
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole("button", { name: "Ligue 1" }));
+
+    expect(collapsed()).toBe(true);
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(toggle().textContent).toBe("LeaguesLigue 1");
+    expect(document.activeElement).toBe(toggle());
+    await screen.findByText("No live matches in Ligue 1 right now.");
+    expect(listLiveScores).toHaveBeenLastCalledWith({ league: "61" });
+
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole("button", { name: "All leagues" }));
+
+    expect(collapsed()).toBe(true);
+    expect(toggle().textContent).toBe("LeaguesAll leagues");
+  });
+
+  it("stays open while the person searches", async () => {
+    await renderWithLeagues();
+
+    fireEvent.click(toggle());
+    fireEvent.change(screen.getByLabelText("Search league"), { target: { value: "ligue" } });
+
+    expect(screen.queryByRole("button", { name: "Premier League" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Ligue 1" })).not.toBeNull();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(collapsed()).toBe(false);
+  });
+
+  it("hides the toggle on desktop and applies the collapsed class only at 960px and below", () => {
+    const css = readFileSync("src/pages/sports-hub/SportsHubPage.css", "utf8").replace(/\r\n/g, "\n");
+    const parts = css.split("@media (max-width: 960px)");
+    expect(parts).toHaveLength(2);
+    const [desktop, narrow] = parts;
+
+    expect(desktop).toMatch(/\.sh-league-toggle \{\s*display: none;\s*\}/);
+    expect(desktop).not.toContain("sh-sidebar__panel--collapsed");
+    expect(narrow).toMatch(/\.sh-league-toggle \{\s*display: flex;[^}]*min-height: 44px;/);
+    expect(narrow).toMatch(/\.sh-sidebar__panel--collapsed \{\s*display: none;\s*\}/);
   });
 });
 
