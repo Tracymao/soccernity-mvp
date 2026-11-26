@@ -34,10 +34,15 @@
 // list IS a plain client-side substring filter over that accumulated
 // league list (matching the original UI), not a second server call.
 //
+// At 960px and below the league sidebar is a drop-down, closed on every load and closed again
+// when a league is picked (Decision Log #584, code-only). Only the open/closed flag is state:
+// the collapsed class takes effect inside the media query in SportsHubPage.css, so the desktop
+// sidebar is never hidden, whatever the flag says.
+//
 // "Most Recent Stories" stays illustrative sample content -- no
 // news/story endpoint exists (see ./sports-hub/sportsHubData.ts).
 import { safeImageUrl } from "../lib/safeImageUrl";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   listLiveScores,
@@ -132,6 +137,8 @@ export default function SportsHubPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("live");
   const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const [leagueSearch, setLeagueSearch] = useState("");
+  const [leaguesOpen, setLeaguesOpen] = useState(false);
+  const leagueToggleRef = useRef<HTMLButtonElement>(null);
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [matches, setMatches] = useState<MatchListItem[]>([]);
@@ -202,6 +209,16 @@ export default function SportsHubPage() {
 
   const selectedLeagueName = leagueFilter ? leagues.find((l) => l.id === leagueFilter)?.name : null;
 
+  // Picking a league closes the drop-down so the scores are in view. The button that was pressed
+  // is about to be hidden, so focus moves to the toggle (on desktop the toggle is not displayed
+  // and the browser ignores the focus call).
+  function chooseLeague(id: string | null) {
+    setLeagueFilter(id);
+    if (!leaguesOpen) return;
+    setLeaguesOpen(false);
+    leagueToggleRef.current?.focus();
+  }
+
   function emptyMessage(): string {
     if (selectedLeagueName) {
       return viewMode === "live"
@@ -214,47 +231,75 @@ export default function SportsHubPage() {
   return (
     <div className="sh-page">
       <aside className="sh-sidebar">
-        <div className="sh-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            placeholder="Search league"
-            aria-label="Search league"
-            value={leagueSearch}
-            onChange={(e) => setLeagueSearch(e.target.value)}
-          />
-        </div>
-        <p className="sh-sidebar__title">Sort by league</p>
-        <ul className="sh-league-list">
-          <li>
-            <button
-              type="button"
-              className={leagueFilter === null ? "sh-league sh-league--active" : "sh-league"}
-              onClick={() => setLeagueFilter(null)}
-            >
-              All leagues
-            </button>
-          </li>
-          {leagueGroups.map((group) => (
-            <Fragment key={group.label}>
-              <li className="sh-league-group" role="presentation">
-                {group.label}
-              </li>
-              {group.leagues.map((league) => (
-                <li key={league.id}>
-                  <button
-                    type="button"
-                    className={leagueFilter === league.id ? "sh-league sh-league--active" : "sh-league"}
-                    onClick={() => setLeagueFilter(league.id)}
-                  >
-                    {league.name}
-                  </button>
+        <button
+          type="button"
+          ref={leagueToggleRef}
+          className="sh-league-toggle"
+          aria-expanded={leaguesOpen}
+          aria-controls="sh-league-panel"
+          onClick={() => setLeaguesOpen((open) => !open)}
+        >
+          <span className="sh-league-toggle__text">
+            <span className="sh-league-toggle__label">Leagues</span>
+            <span className="sh-league-toggle__current">{selectedLeagueName ?? "All leagues"}</span>
+          </span>
+          <svg className="sh-league-toggle__chevron" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+            <path
+              d="M5 7.5l5 5 5-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <div
+          id="sh-league-panel"
+          className={leaguesOpen ? "sh-sidebar__panel" : "sh-sidebar__panel sh-sidebar__panel--collapsed"}
+        >
+          <div className="sh-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              placeholder="Search league"
+              aria-label="Search league"
+              value={leagueSearch}
+              onChange={(e) => setLeagueSearch(e.target.value)}
+            />
+          </div>
+          <p className="sh-sidebar__title">Sort by league</p>
+          <ul className="sh-league-list">
+            <li>
+              <button
+                type="button"
+                className={leagueFilter === null ? "sh-league sh-league--active" : "sh-league"}
+                onClick={() => chooseLeague(null)}
+              >
+                All leagues
+              </button>
+            </li>
+            {leagueGroups.map((group) => (
+              <Fragment key={group.label}>
+                <li className="sh-league-group" role="presentation">
+                  {group.label}
                 </li>
-              ))}
-            </Fragment>
-          ))}
-          {filteredLeagueOptions.length === 0 && <li className="sh-league-empty">No leagues match that search.</li>}
-        </ul>
+                {group.leagues.map((league) => (
+                  <li key={league.id}>
+                    <button
+                      type="button"
+                      className={leagueFilter === league.id ? "sh-league sh-league--active" : "sh-league"}
+                      onClick={() => chooseLeague(league.id)}
+                    >
+                      {league.name}
+                    </button>
+                  </li>
+                ))}
+              </Fragment>
+            ))}
+            {filteredLeagueOptions.length === 0 && <li className="sh-league-empty">No leagues match that search.</li>}
+          </ul>
+        </div>
       </aside>
 
       <main className="sh-main">
