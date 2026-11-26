@@ -24,13 +24,7 @@ body,
 
 body {
   margin: 0;
-  font-family:
-    "Montserrat",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: var(--sn-font-ui, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   background-color: var(--sn-background-page);
   color: var(--sn-text-primary);
 }
@@ -42,4 +36,11 @@ a {
 
 button {
   font-family: inherit;
+}
+
+/* Titles keep Montserrat; everything else is Inter (founder decision
+ * 2026-11-26). */
+.admin-page-header__title,
+.admin-shell__wordmark {
+  font-family: var(--sn-font-display);
 }
