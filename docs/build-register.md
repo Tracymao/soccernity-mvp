@@ -5915,3 +5915,7 @@ Hero card chips relabelled so all four fit, pillar cards equal height, Moderatio
 ## 139. Updates 2026-11-26 (Figma only: design foundations; Decision Log #572; no new B-ID, no counter changes)
 
 Radius, type, elevation and motion scales as variables, styles and one reference frame (`7188:71447`). No existing screen, style effect or code changed. 332 B-IDs, 146 gap frames, unchanged. Report: `docs/figma-foundations-report.md`.
+
+## 140. Updates 2026-11-26 (design foundations tokens in code; Decision Log #573; no new B-ID)
+
+Radius, type, elevation and motion tokens added to `packages/shared` with `foundations.css` imported by `apps/web` and `apps/admin`, plus one reduced-motion switch. No existing stylesheet migrated, no visual change. Values are founder-approved defaults (veto-able) and must match the Figma foundations pass (Section 139, Decision Log #572). Report: `docs/design-foundations-tokens-report.md`.
