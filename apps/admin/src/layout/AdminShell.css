@@ -18,10 +18,12 @@
    * is the same call AdminShell/Admin-shell work in Figma made (Decision
    * Log #199). */
   background-color: rgba(40, 46, 101, 0.12);
+  border-right: 1px solid var(--sn-icon-inactive);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
+/* No sticky header exists. If one is ever added it must not cover content. */
 
 .admin-shell__brand {
   display: flex;
@@ -95,24 +97,64 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 0 12px;
 }
 
 .admin-nav__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 260px;
-  padding: 10px;
-  background-color: var(--sn-background-surface);
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--sn-radius-md);
+  background-color: transparent;
   color: var(--sn-text-primary);
   font-weight: 500;
-  font-size: 20px;
+  font-size: var(--sn-text-nav-size);
+  line-height: var(--sn-text-nav-line);
+  text-decoration: none;
   cursor: pointer;
+  transition:
+    background-color var(--sn-duration-fast) var(--sn-ease-standard),
+    color var(--sn-duration-fast) var(--sn-ease-standard),
+    outline-color var(--sn-duration-fast) var(--sn-ease-standard);
 }
 
-.admin-nav__item--active {
+.admin-nav__item:hover {
+  background-color: rgba(40, 46, 101, 0.08);
+}
+
+.admin-nav__item:active {
+  background-color: rgba(40, 46, 101, 0.15);
+}
+
+.admin-nav__item:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.admin-nav__item--active,
+.admin-nav__item--active:hover,
+.admin-nav__item--active:active {
   background-color: var(--sn-brand-navy);
   color: var(--sn-text-on-navy);
+  font-weight: 600;
+}
+
+/* Leading indicator so the active state is not colour-only. */
+.admin-nav__item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 4px;
+  height: 20px;
+  transform: translateY(-50%);
+  border-radius: 0 2px 2px 0;
+  background-color: var(--sn-text-on-navy);
 }
 
 .admin-nav__icon {
@@ -161,7 +203,7 @@
 }
 
 .admin-nav__label {
-  line-height: normal;
+  line-height: var(--sn-text-nav-line);
 }
 
 /* ---- Content region ------------------------------------------------- */
@@ -182,14 +224,32 @@
 }
 
 .admin-shell__logout {
-  height: 39px;
+  height: 44px;
   padding: 0 18px;
-  border: none;
-  border-radius: 4px;
-  background-color: var(--sn-brand-navy);
-  color: var(--sn-text-on-navy);
-  font-size: 18px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: var(--sn-radius-md);
+  background-color: transparent;
+  color: var(--sn-brand-navy);
+  font-size: var(--sn-text-body-lg-size);
+  font-weight: 400;
   cursor: pointer;
+  transition:
+    background-color var(--sn-duration-fast) var(--sn-ease-standard),
+    color var(--sn-duration-fast) var(--sn-ease-standard),
+    outline-color var(--sn-duration-fast) var(--sn-ease-standard);
+}
+
+.admin-shell__logout:hover {
+  background-color: rgba(40, 46, 101, 0.08);
+}
+
+.admin-shell__logout:active {
+  background-color: rgba(40, 46, 101, 0.15);
+}
+
+.admin-shell__logout:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
 }
 
 .admin-shell__content {

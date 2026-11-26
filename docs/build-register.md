@@ -5950,3 +5950,7 @@ The Section 1 wave membership paragraphs were checked against the Waves table an
 ## 144. Updates 2026-11-26 (admin shell restyle fix-up in Figma; no new B-ID; docs only)
 
 This is a fix to PR #915's typography and states frame, not new work. The Admin Shell set now binds 204 of 228 text nodes to Web/ text styles (24 intentionally unbound: 12 logo wordmarks, 12 profile names). States frame `7204:71662`: hover fills use existing navy at 8% and 90%, the nav examples carry the real Moderation icon, focus rings are fully visible. Structure unchanged: top-level nodes 2,003, id hash unchanged. Contrast lowest 5.01:1. Decision Log #574 stays the last number in this register (the Build Plan docx was not opened). Report: `docs/figma-admin-shell-restyle-report.md`.
+
+## 145. Updates 2026-11-26 (admin shell restyle, code half; no new B-ID; Decision Log #575)
+
+Code half of the admin shell restyle (Figma half: sections 143 and 144). Visual only: nav rows (44px, hover, pressed, focus, active with a leading indicator), Log Out as a secondary button, Create as a primary button, and the search bar on a white surface with a 1px border. Colours are unchanged and the structure of every admin page, including the Moderation Queue tab strip, is untouched. Adds a shared `nav` type step (15/20). Not verified in a browser. Details: `docs/admin-shell-restyle-code-report.md`.

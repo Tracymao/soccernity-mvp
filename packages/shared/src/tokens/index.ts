@@ -83,6 +83,8 @@ export const typeScale = {
   caption: { size: 12, line: 16 },
   bodySm: { size: 13, line: 20 },
   body: { size: 14, line: 22 },
+  /** Admin sidebar nav labels. */
+  nav: { size: 15, line: 20 },
   bodyLg: { size: 16, line: 24 },
   lead: { size: 18, line: 28 },
   titleSm: { size: 20, line: 28 },
