@@ -6029,3 +6029,14 @@ Six numbers were named in "Updates" sections but had no row in the Decision Log 
 - #582 from Section 152 (founder decision on the body font; code only).
 
 All six sections add no B-ID. No counter changes: no new B-ID and no wave count change; B-rows, the Waves table and the Register size paragraph are untouched. The out-of-order #556 row stays where it is. The sentence in Section 153 saying #582 has no row is now out of date (older sections are not edited). Report: `docs/decision-log-gaps-574-582-report.md`.
+
+## 156. Updates 2026-11-26 (admin list status pills capitalised; Decision Log #585; docs only for the register, no new B-ID)
+
+| Decision Log | Decision | Decided by | Status |
+|---|---|---|---|
+| #585 | Admin list pills capitalised in code to match Figma; other admin pages follow in their group passes. | Founder, 2026-11-26 | Built for the `.us-pill` (users) and `.ac-pill` (articles, categories) rules. |
+
+- Changed: `apps/admin/src/pages/users/users.css` and `apps/admin/src/pages/content/content.css`, `text-transform: lowercase` to `capitalize`. `.us-pill--plain` stays `none`.
+- Not changed: contest, media, moderation and settings pill styles.
+- `capitalize` upper-cases every word, so Guardian-notice pills on the user detail page (`.us-pill` without `--plain`) now show in Title Case.
+- The #585 row is recorded here only; it is not yet in the Build Plan docx Decision Log.
