@@ -29,3 +29,39 @@ Page fill #f4f5fb; title Web/Title navy; white table card radius 12; header band
 - The last Categories row hairline may extend slightly past the card.
 - Original-id hash not recomputed against a stored baseline; Moderation Queue and shell geometry were read, not compared to a stored baseline.
 - Structure check against the before-snapshot was only partly done.
+
+## Amendment 2026-11-26: layout follows code (x300, 1100 wide)
+Founder rule: shipped code is the truth for layout too. In code `.us-page`/`.ac-page` is a flex column, gap 20px, max-width 1100px inside the content area (starts x300). Order in code: title row, search row, note/action row (tabs left, Create/Add right), table.
+
+### Old and new positions (frame coordinates; also in `docs/figma-admin-lists-positions.json`)
+| Frame | Item | Old | New |
+|---|---|---|---|
+| Users 917:218 | title | x428 y135 | x300 y129 |
+| | tabs | y about 236 | x300 y250 (342, 406) |
+| | link "Incorrect-details reports" | overlapped/clipped | x1250 y252, right edge 1400 |
+| | table card | x428 w912 y236 | x300 w1100 y294 |
+| Articles 123:56 | title / tabs / table | x428 w912 y236 | x300 y129 / y250 / x300 w1100 y294 |
+| Categories 128:488 | title / tabs / table | x428 w912 | x300 y129 / y250 / x300 w1100 y294 |
+| Add Category 138:93 | title / back link / card | x428 w912 | x300 y129 / x300 y250 / x300 w1100 y294 |
+
+Row cells and header texts were scaled from 912 to 1100 wide (x offsets under 30 kept, row buttons shifted +188, other columns scaled). Row heights, chips, fills and styles unchanged.
+
+### What was redone
+The earlier restyle was done at the old x428/912 positions. Positions were changed afterwards on the same frames; nothing else was redone. The Admin Shell instances were not touched.
+
+### Verification (read-only call)
+- Every visible non-shell child of all four frames sits within x300 to x1400, including nested children of the table cards and the Add Category card: 0 violations.
+- None overlaps the shell search bar area (x279 to 1300, y186 to 230): tabs start y250, tables y294.
+- Shell instances unchanged (one per frame, 1440x1184 at 0,0).
+- Standing check: top-level nodes 2,004; id hash 4245587728 (recomputed this session, no stored baseline to compare).
+
+### Shell versus code (not changed, for the separate shell PR)
+- Search bar: code renders it in page content under the title, from x300; the shell instance draws it at x279, 740 wide, y186 to 230.
+- Create/Add: code renders it in the page action row beside the tabs (y about 250, right edge x1400); the shell draws a Create button at x1177 y45 on the Log Out row.
+- Users: code also has a disabled "Add Member" stub next to the link and a note line; neither is drawn.
+- Add Category: code has the "Back to Categories" link above the header; Figma now has it at x300 y250.
+- Loading ("Loading users…") and empty cards ("No users", "Create the first one…", "Add the first one…") exist in code; only the patterns frame draws an empty table.
+
+### Not verified
+- No screenshot after the position change (not taken this session).
+- Code-spec comparison read from source only.
