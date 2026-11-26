@@ -5911,3 +5911,7 @@ Heading "Matches today", scheduled-card footers "Kickoff HH:MM", note `5214:6828
 ## 138. Updates 2026-11-25 (Figma only: hero card tabs, pillar card heights, Moderation Queue table; no Decision Log row; no new B-ID, no counter changes)
 
 Hero card chips relabelled so all four fit, pillar cards equal height, Moderation Queue table header full width with aligned columns, Filter button hugging its label (standalone, shell button hidden because instance sizes cannot be overridden), callout bar navy. Report: `docs/figma-defect-fix-1-report.md`.
+
+## 139. Updates 2026-11-26 (design foundations tokens; Decision Log #572; no new B-ID)
+
+Radius, type, elevation and motion tokens added to `packages/shared` with `foundations.css` imported by `apps/web` and `apps/admin`, plus one reduced-motion switch. No existing stylesheet migrated, no visual change. Values are founder-approved defaults (veto-able) and must match the Figma "Design foundations" PR. Report: `docs/design-foundations-tokens-report.md`.

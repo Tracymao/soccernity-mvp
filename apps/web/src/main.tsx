@@ -17,6 +17,7 @@ import "@fontsource/montserrat/latin-500.css";
 import "@fontsource/montserrat/latin-600.css";
 import "@fontsource/montserrat/latin-700.css";
 import "@fontsource/montserrat/latin-800.css";
+import "@soccernity/shared/src/tokens/foundations.css";
 import "./styles/global.css";
 
 // Sets --sn-* CSS custom properties from packages/shared's design tokens
