@@ -340,8 +340,8 @@
   font-size: 12px;
 }
 
-/* a page-level load error is a card, like the table */
-.ac-page > .ac-error {
+/* a list page's load error is a card, like the table; form pages keep the callout */
+.ac-page:not(:has(.ac-field)) > .ac-error {
   padding: 20px;
   border: 0;
   border-radius: var(--sn-radius-lg);
