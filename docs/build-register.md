@@ -5930,3 +5930,9 @@ Radius, type, elevation and motion tokens added to `packages/shared` with `found
 - Nothing existing changed: no older Section 7 row, the main table, the Waves table or the Register size paragraph. The out-of-order #556 row stays where it is. B-IDs (332) and gap frames (146) unchanged.
 - Superseded: the sentences in Section 136 saying #569 and #570 have no Section 7 row (older sections not edited).
 - Report only, not changed: the W9 paragraph in Section 1 headed 'B-IDs (58)' lists 59 IDs while the Waves table says W9 = 63. See `docs/register-section7-gaps-2-report.md`.
+
+## 142. Updates 2026-11-26 (admin shell restyled in Figma; Decision Log #574; no new B-ID)
+
+The Admin Shell component set `6014:12948` was restyled in place with existing colours and the new foundations, with a locked structure (8 structure signatures match, original-id hash unchanged, 0 overlaps). Two frames added below the canvas: component states `7204:71662` and behaviour spec `7205:71662`. Figma and docs only. See `docs/figma-admin-shell-restyle-report.md`.
+- Decision Log #574 (adopted default, veto-able): the restyle values and the eight behaviour rules in the spec frame.
+- Report only, not decided: the code's five Moderation tabs are not drawn as one strip in Figma; Section 141 may be numbered twice if the other docs PR also uses it (this section is 142 to avoid that).
