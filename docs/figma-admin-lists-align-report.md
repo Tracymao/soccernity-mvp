@@ -30,3 +30,19 @@ Figma and docs only. File `weZWWqggy9j13eX8bhFgs6`, page `0:1`. The shipped code
 
 ## Not verified
 The shipped pages were not rendered again for this pass; measurements are the brief's. Hover and pressed states of the new buttons were not drawn. No code, test or build was run.
+
+## Carry-over fixes
+
+A second Figma pass on 2026-11-26. It supersedes the Add Category search, load-error copy, empty heading size and "Load more" height points above.
+
+- "Load more" on Articles and Categories is now 92x29 with 12px text. Users stays 40 high. The patterns frame has no "Load more" button, only a label.
+- Patterns load error now reads "Something went wrong. Please try again." with the "Retry" button.
+- Patterns empty-state heading is 18px. It is detached from `Admin/Section heading`, because no 18px Semi Bold text style exists. The four list frames draw no empty-state heading.
+- Add Category: search bar at y198 (a top padding of 16 on the shell's header block in that frame only), input 39 high, Submit 90 wide (40 high).
+- Status pills were already capitalised in all list frames. No change.
+- Shell "KA" initials: unchanged. The file has no Inter Bold text style.
+- 24 hidden layers removed from the 12 shell variants ("Layer_3" and its hidden "Soccernity" text).
+- Standalone search bars in `5796:8635` and `5796:8753` moved to (302,182), 740x44.
+- The seven frames with the shell Create button were not touched.
+
+Checks: 2004 top-level nodes and id hash 2327422288, both unchanged. Moderation Queue content unchanged (300,45, 1100x620). Unbound solid fills identical before and after. No text overlaps the moved search bars; only that overlap was checked. Screenshots: Add Category before and after, patterns frame. Shell variants were not screenshotted.

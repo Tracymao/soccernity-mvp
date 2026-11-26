@@ -6040,3 +6040,7 @@ All six sections add no B-ID. No counter changes: no new B-ID and no wave count 
 - Not changed: contest, media, moderation and settings pill styles.
 - `capitalize` upper-cases every word, so Guardian-notice pills on the user detail page (`.us-pill` without `--plain`) now show in Title Case.
 - The #585 row is recorded here only; it is not yet in the Build Plan docx Decision Log.
+
+## 157. Updates 2026-11-26 (Figma carry-over fixes after the admin lists code PR; Decision Log #586; docs and Figma only, no new B-ID)
+
+Figma now matches the shipped admin list code: "Load more" 92x29 on Articles and Categories, patterns load-error copy and 18px empty heading, Add Category search at y198 with a 39px input and 90px Submit, 24 hidden shell layers removed, two standalone search bars moved to the shell position. Status pills needed no change. "KA" initials left unchanged (no Inter Bold text style). No app code changed. Report: docs/figma-admin-lists-align-report.md, "Carry-over fixes". Note: #585 is cited by Section 156 but has no row in the Decision Log table; it was not filled here.
