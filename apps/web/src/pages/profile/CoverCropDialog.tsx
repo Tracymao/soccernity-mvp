@@ -13,9 +13,8 @@
 // wording, untagged per Decision Log #412 item 5 -- it promises nothing about the
 // image check).
 //
-// The "checked automatically" sentence that the Figma frames close with is NOT
-// written here: it is the tagged string ProfileImageControl already owns (and
-// the manifest already lists), so the parent passes it in as `notice`.
+// The "checked automatically" sentence that the Figma frames close with is no
+// longer shown anywhere (passing checks are silent, CH-H13).
 //
 // K10 / FC7 (Decision Log #415 items 2 and 5): the zoom reads "1.4x" with "1x" and "3x"
 // under the ends of the track; the "too small" refusal carries the semantic/alert accent bar; and on
@@ -42,8 +41,6 @@ import "./CoverCropDialog.css";
 
 interface Props {
   file: File;
-  /** The tagged "checked automatically" sentence, rendered under the buttons as in the frames. */
-  notice: string;
   onSave: (cropped: Blob) => void;
   onCancel: () => void;
   /** Re-opens the file chooser (shown on the "too small" refusal). */
@@ -77,7 +74,7 @@ function formatZoom(zoom: number): string {
 }
 const KEY_STEP = 0.02; // fraction of the crop window moved per arrow key press
 
-export default function CoverCropDialog({ file, notice, onSave, onCancel, onChooseAnother }: Props) {
+export default function CoverCropDialog({ file, onSave, onCancel, onChooseAnother }: Props) {
   const imageRef = useRef<HTMLImageElement>(null);
   const windowRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
@@ -362,8 +359,6 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
                 Cancel
               </button>
             </div>
-
-            <p className="cover-crop__notice">{notice}</p>
           </>
         )}
       </div>

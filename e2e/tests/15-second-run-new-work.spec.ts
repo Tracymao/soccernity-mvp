@@ -78,7 +78,7 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
     await shot(page, 'create-profile-image-controls');
   });
 
-  test('uploading a picture: the page never gets stuck - it ends in Under review, or in a visible error with Try again', async ({ page }) => {
+  test('uploading a picture: the page never gets stuck - it ends in the quiet checking bar, or in a visible error with Try again', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'img2', displayName: 'Quinn Player' });
     await verifyEmailViaApi(a);
     await signIn(page, a.email);
@@ -87,10 +87,11 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
     await chooseGeneratedImage(page, 'profile-image-avatar-input', 400, 400);
     // Local runs have no object store configured, so the API answers 503. Either end state is a pass;
     // a spinner that never resolves is the defect.
-    await expect(avatar.getByRole('progressbar')).toHaveCount(0, { timeout: 20_000 });
-    const underReview = await avatar.getByText('Under review').count();
+    await expect(avatar.getByRole('progressbar', { name: /^Uploading/ })).toHaveCount(0, { timeout: 20_000 });
+    // CH-H13: a stored, still unchecked picture shows only a thin progress bar, no wording.
+    const checking = await avatar.getByRole('progressbar', { name: 'Checking picture' }).count();
     const errored = await avatar.getByRole('alert').count();
-    expect(underReview + errored).toBeGreaterThan(0);
+    expect(checking + errored).toBeGreaterThan(0);
     if (errored) {
       await expect(avatar.getByRole('button', { name: 'Try again' })).toBeVisible();
     }
@@ -141,7 +142,7 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
     expect(posted).toBe(false);
   });
 
-  test('Edit Profile renders every stored state: Under review, Approved (Replace / Remove), rejected with reason', async ({ page }) => {
+  test('Edit Profile renders every stored state: being checked (bar only), approved (Replace / Remove), rejected with reason', async ({ page }) => {
     const u = await verifiedAdult('img4');
     await signIn(page, u.email);
     await page.goto('/profile?edit=1');
@@ -155,15 +156,17 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
       data: { avatarUrl: 'https://example.test/a.png', avatarKey: 'qa/a.png', avatarStatus: 'pending', coverUrl: 'https://example.test/c.png', coverKey: 'qa/c.png', coverStatus: 'pending' },
     });
     await page.goto('/profile?edit=1');
-    await expect(avatar.getByText('Under review')).toBeVisible();
-    await expect(cover.getByText('Under review')).toBeVisible();
-    await shot(page, 'edit-profile-under-review');
+    await expect(avatar.getByRole('progressbar', { name: 'Checking picture' })).toBeVisible();
+    await expect(cover.getByRole('progressbar', { name: 'Checking cover photo' })).toBeVisible();
+    await expect(page.getByText('Under review')).toHaveCount(0);
+    await shot(page, 'edit-profile-checking');
 
     // approved
     await db().user.update({ where: { id: u.userId }, data: { avatarStatus: 'approved', coverStatus: 'approved' } });
     await page.goto('/profile?edit=1');
-    await expect(avatar.getByText('Approved')).toBeVisible();
     await expect(avatar.getByRole('button', { name: /Replace/ })).toBeVisible();
+    await expect(avatar.getByRole('progressbar')).toHaveCount(0);
+    await expect(avatar.getByText('Approved')).toHaveCount(0);
     await expect(avatar.getByRole('button', { name: /Remove/ })).toBeVisible();
     await shot(page, 'edit-profile-approved');
 
@@ -171,7 +174,7 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
     await avatar.getByRole('button', { name: /Remove/ }).click();
     await expect(avatar.getByRole('button', { name: /Keep/ })).toBeVisible();
     await avatar.getByRole('button', { name: /Keep/ }).click();
-    await expect(avatar.getByText('Approved')).toBeVisible();
+    await expect(avatar.getByRole('button', { name: /Replace/ })).toBeVisible();
 
     // rejected with reason on both
     await db().user.update({

@@ -10,7 +10,7 @@ import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { notificationBlockHiddenFilter } from './block-visibility.util';
 import { PROFILE_IMAGE_KINDS, ProfileImageKind } from '../users/user-image-review.service';
-import { POST_MEDIA_NOTIFICATION_TYPES } from '../post-media/post-media-review.constants';
+import { POST_MEDIA_APPROVED_NOTIFICATION_TYPE, POST_MEDIA_NOTIFICATION_TYPES } from '../post-media/post-media-review.constants';
 import { USERNAME_REVIEW_NOTIFICATION_TYPE, UsernameReviewOutcome } from '../username-review/username-review.constants';
 
 // The seven real MVP notification types — see schema.prisma's own comment
@@ -186,7 +186,8 @@ export class NotificationsService {
     const limit = Math.min(query.limit ?? NOTIFICATIONS_DEFAULT_PAGE_SIZE, NOTIFICATIONS_MAX_PAGE_SIZE);
 
     const hidden = await notificationBlockHiddenFilter(this.prisma, userId);
-    const base: Prisma.NotificationWhereInput = { userId, ...hidden };
+    // Decision Log #578 (CH-H13): an approved-media notification is never shown, old rows included.
+    const base: Prisma.NotificationWhereInput = { userId, type: { not: POST_MEDIA_APPROVED_NOTIFICATION_TYPE }, ...hidden };
     const where: Prisma.NotificationWhereInput = query.cursor
       ? { AND: [base, this.buildCursorFilter(query.cursor)] }
       : base;
@@ -221,7 +222,9 @@ export class NotificationsService {
     hiddenByBlock?: Prisma.NotificationWhereInput,
   ): Promise<number> {
     const hidden = hiddenByBlock ?? (await notificationBlockHiddenFilter(this.prisma, userId));
-    return this.prisma.notification.count({ where: { userId, read: false, ...hidden } });
+    return this.prisma.notification.count({
+      where: { userId, read: false, type: { not: POST_MEDIA_APPROVED_NOTIFICATION_TYPE }, ...hidden },
+    });
   }
 
   // PATCH /notifications/:id/read — marks one notification read.
@@ -261,7 +264,12 @@ export class NotificationsService {
   async markAllRead(userId: string): Promise<{ markedRead: number }> {
     // B-197: rows hidden by a Block are left untouched (and not counted).
     const result = await this.prisma.notification.updateMany({
-      where: { userId, read: false, ...(await notificationBlockHiddenFilter(this.prisma, userId)) },
+      where: {
+        userId,
+        read: false,
+        type: { not: POST_MEDIA_APPROVED_NOTIFICATION_TYPE },
+        ...(await notificationBlockHiddenFilter(this.prisma, userId)),
+      },
       data: { read: true },
     });
     return { markedRead: result.count };

@@ -360,8 +360,8 @@ describe('Removed post media e2e (B-290)', () => {
       expect(storage.has(f.pub)).toBe(false);
       expect(storage.has(f.priv)).toBe(true);
       expect(storage.keysWithPrefix('post-media/')).toEqual([]);
-      // the uploader is still told it was approved
-      expect(await prisma().notification.count({ where: { userId: f.u.id, type: 'post_media_approved', payloadRefId: f.mediaId } })).toBe(1);
+      // a passing check is silent: the uploader gets no notification
+      expect(await prisma().notification.count({ where: { userId: f.u.id, type: 'post_media_approved', payloadRefId: f.mediaId } })).toBe(0);
       // and the reconciler does not publish it either
       expect(await objects().reconcile()).toMatchObject({ published: 0 });
       expect(storage.has(f.pub)).toBe(false);

@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  POST_MEDIA_APPROVED_NOTIFICATION_TYPE,
   POST_MEDIA_REJECTED_NOTIFICATION_TYPE,
 } from './post-media-review.constants';
 import { MEDIA_REVIEW_CODES, postMediaError } from './post-media.errors';
@@ -58,10 +57,13 @@ export async function writeDecisionNotification(
   mediaId: string,
   outcome: 'approved' | 'rejected',
 ): Promise<void> {
+  // Approved is silent, code-only (Decision Log #578, CH-H13): a passing check tells the user nothing; the file
+  // just appears. Only a rejection is told. Signature and call sites are unchanged on purpose.
+  if (outcome === 'approved') return;
   await tx.notification.create({
     data: {
       userId: uploaderId,
-      type: outcome === 'approved' ? POST_MEDIA_APPROVED_NOTIFICATION_TYPE : POST_MEDIA_REJECTED_NOTIFICATION_TYPE,
+      type: POST_MEDIA_REJECTED_NOTIFICATION_TYPE,
       payloadRefId: mediaId,
     },
     select: { id: true },

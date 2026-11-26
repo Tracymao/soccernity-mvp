@@ -263,7 +263,7 @@ describe("PostCard — the author sees the same blur on their own post", () => {
   it("keeps the author's pending file blurred as well (drawn only through the signed link)", async () => {
     vi.mocked(getUpload).mockResolvedValue(view({ status: "pending", viewUrl: "https://private.test/signed/photo.jpg?sig=1" }));
     const { container } = renderCard(post({ authorId: "user-1", media: [{ id: "m1", kind: "image", viewUrl: "https://private.test/signed/photo.jpg?sig=1" }] }), "user-1");
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     const img = container.querySelector("img.post__media-img") as HTMLImageElement;
     expect(img.getAttribute("src")).toContain("private.test/signed");
     fireEvent.load(img);

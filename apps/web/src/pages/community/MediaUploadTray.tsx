@@ -2,10 +2,15 @@
 // draw (composer 02-10 desktop/mobile, contest final entry 02-05): uploading with progress and Cancel,
 // checking, approved, not approved with its reason, and the upload errors with Try again.
 //
+// Passing checks are silent (CH-H13): while a file is checked the person sees only the file name, a quiet
+// progress bar and Remove; once it passes, the file name and Remove (the Week 4 final entry also keeps the
+// reveal sentence, which is a contest rule, not a check result). Only a rejection says anything.
+//
 // The strings that say who can see an upload or what is checked were once tagged (Decision Log #412 item 5).
 // Cleared by the founder's review of 2026-11-22 (R108), no counsel review needed. Everything else is functional wording from the frames.
 import type { UploadItem } from "./useMediaUploads";
 import { POST_MEDIA_CODES } from "../../api/postMedia";
+import QuietProgress from "./QuietProgress";
 import "./MediaUpload.css";
 
 interface Props {
@@ -74,9 +79,7 @@ function TrayItem({
         <div className="media-item__body">
           <p className="media-item__name">{item.name}</p>
           {item.processing ? (
-            <p className="media-item__status" role="status">
-              Finishing up…
-            </p>
+            <QuietProgress label={`Checking ${noun(item)}`} />
           ) : (
             <>
               <div
@@ -108,11 +111,8 @@ function TrayItem({
       <li className="media-item" data-phase="checking">
         <Thumb item={item} />
         <div className="media-item__body">
-          <p className="media-item__name">
-            {item.name} <span className="media-chip">Checking</span>
-          </p>
-          <p className="media-item__hint">Checking… only you can see this until it has been checked.</p>
-          {item.kind === "video" && <p className="media-item__hint">Videos can take a little longer to check.</p>}
+          <p className="media-item__name">{item.name}</p>
+          <QuietProgress label={`Checking ${noun(item)}`} />
           {item.errorMessage && (
             <p className="media-item__error" role="alert">
               {item.errorMessage}
@@ -128,22 +128,15 @@ function TrayItem({
 
   if (item.phase === "approved") {
     return (
-      <li className="media-item" data-phase="approved">
+      <li className={variant === "final" ? "media-item media-item--final" : "media-item"} data-phase="approved">
         <Thumb item={item} />
         <div className="media-item__body">
-          <p className="media-item__name">
-            {item.name}{" "}
-            <span className="media-chip media-chip--ok">
-              {variant === "final" ? "Approved, waiting for the reveal" : "Approved"}
-            </span>
-          </p>
-          <p className="media-item__hint">
-            {variant === "final"
-              ? "Your video is hidden from everyone but you until the reveal at 00:00 on day 25."
-              : item.kind === "video"
-                ? "Your video can be seen with your post."
-                : "Your pictures can be seen with your post."}
-          </p>
+          <p className="media-item__name">{item.name}</p>
+          {variant === "final" && (
+            <p className="media-item__hint">
+              Your video is hidden from everyone but you until the reveal at 00:00 on day 25.
+            </p>
+          )}
         </div>
         <button type="button" className="media-item__action" onClick={() => void onRemove(item.key)}>
           Remove

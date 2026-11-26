@@ -327,7 +327,7 @@ describe("BanterRoomPage", () => {
     fireEvent.change(box, { target: { value: "Look at this" } });
     chooseFile("picture-input", "goal.png", "image/png");
 
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(createUpload).toHaveBeenCalledWith(expect.any(String), { contentType: "image/png", size: 5 });
     expect(confirmUpload).toHaveBeenCalledWith(expect.any(String), "m1");
 
@@ -340,7 +340,7 @@ describe("BanterRoomPage", () => {
     );
     expect(await screen.findByText("Look at this")).not.toBeNull();
     // Tray emptied and the text cleared, as in Create Post.
-    expect(screen.queryByText("Checking")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     expect((box as HTMLTextAreaElement).value).toBe("");
   });
 
@@ -365,7 +365,7 @@ describe("BanterRoomPage", () => {
     vi.mocked(confirmUpload).mockResolvedValue(mediaView());
     await openComposer();
     chooseFile("picture-input", "goal.png", "image/png");
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(postButton().disabled).toBe(true);
   });
 
@@ -375,11 +375,13 @@ describe("BanterRoomPage", () => {
     vi.mocked(getUpload).mockResolvedValue(mediaView({ status: "approved" }));
     await openComposer();
     chooseFile("picture-input", "goal.png", "image/png");
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 50);
     });
-    await screen.findByText("Approved");
+    await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull());
+    expect(screen.queryByText("Approved")).toBeNull();
+    expect(screen.queryByText(/Checking/)).toBeNull();
   });
 
   it("shows a rejected file with its reason, blocks Post, and Remove clears the block", async () => {
@@ -403,7 +405,7 @@ describe("BanterRoomPage", () => {
     vi.mocked(confirmUpload).mockResolvedValue(mediaView({ kind: "video", contentType: "video/mp4" }));
     await openComposer();
     chooseFile("video-input", "a.mp4", "video/mp4");
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     chooseFile("video-input", "b.mp4", "video/mp4");
     expect(screen.getByText("You can add one video to a post.")).not.toBeNull();
     expect(createUpload).toHaveBeenCalledTimes(1);
