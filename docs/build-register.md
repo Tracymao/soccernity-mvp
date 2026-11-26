@@ -5907,3 +5907,7 @@ The report-incorrect-details failure line on `GuardianConsentConfirmPage` now sh
 ## 137. Updates 2026-11-25 (Figma only: Today's Fixtures text aligned with the shipped code; no Decision Log row; no new B-ID, no counter changes)
 
 Heading "Matches today", scheduled-card footers "Kickoff HH:MM", note `5214:6828` rewritten, FS-1 layer renamed. Leftover Grassroots-named layers are listed, not renamed. Report: `docs/figma-fixtures-text-align-report.md`.
+
+## 138. Updates 2026-11-25 (Figma only: hero card tabs, pillar card heights, Moderation Queue table; no Decision Log row; no new B-ID, no counter changes)
+
+Hero card chips relabelled so all four fit, pillar cards equal height, Moderation Queue table header full width with aligned columns, Filter button hugging its label (standalone, shell button hidden because instance sizes cannot be overridden), callout bar navy. Report: `docs/figma-defect-fix-1-report.md`.
