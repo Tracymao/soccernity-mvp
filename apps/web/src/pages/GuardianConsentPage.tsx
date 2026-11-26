@@ -57,6 +57,7 @@ import { getUser } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { consentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "not-a-minor" | "error" | "no-session";
 
@@ -283,9 +284,7 @@ export default function GuardianConsentPage() {
     return (
       <div className="consent-page" style={consentThemeVars}>
         <div className="consent-page__column">
-          <p className="consent-status-message" role="status">
-            Loading your account status…
-          </p>
+          <LoadingState variant="page" className="consent-status-message" label="Loading your account status…" />
         </div>
       </div>
     );

@@ -18,6 +18,7 @@ import { UsersApiError, getBlockedUsers, unblockUser, type BlockedUserEntry } fr
 import { decodeAccessToken, getStoredAccessToken } from "../../lib/session";
 import { initialsFor } from "../profile/profileFields";
 import "./BlockedUsersPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 export default function BlockedUsersPage() {
   const token = getStoredAccessToken();
@@ -96,9 +97,7 @@ export default function BlockedUsersPage() {
       )}
 
       {!loadError && loading && items.length === 0 && (
-        <p className="settings-status" role="status">
-          Loading your blocked users…
-        </p>
+        <LoadingState variant="section" className="settings-status" label="Loading your blocked users…" />
       )}
 
       {!loadError && !loading && items.length === 0 && (

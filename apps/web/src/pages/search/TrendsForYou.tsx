@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getTrending, TrendingApiError, type TrendingHashtag } from "../../api/trending";
 import refreshIcon from "../../assets/icons/trends-refresh.svg";
 import moreIcon from "../../assets/icons/trends-more.svg";
+import LoadingState from "../../components/loading/LoadingState";
 
 // Figma shows seven rows; "See more" widens to a larger top-N (the server
 // caps `limit` at 50).
@@ -86,9 +87,7 @@ export default function TrendsForYou() {
       </header>
 
       {state === "loading" && items.length === 0 && (
-        <p className="trends-card__status" role="status">
-          Loading trends…
-        </p>
+        <LoadingState variant="section" className="trends-card__status" label="Loading trends…" />
       )}
 
       {state === "error" && (

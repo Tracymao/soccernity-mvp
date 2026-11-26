@@ -108,7 +108,9 @@ describe("SavedPostsTab", () => {
   it("shows an empty state when nothing is saved", async () => {
     vi.mocked(getSavedPosts).mockResolvedValueOnce({ items: [], nextCursor: null });
     renderTab();
-    expect((await screen.findByRole("status")).textContent).toMatch(/haven.t saved any posts yet/i);
+    // The loading state is a status too, so wait for the text, then check it is announced.
+    const empty = await screen.findByText(/haven.t saved any posts yet/i);
+    expect(empty.closest('[role="status"]')).not.toBeNull();
   });
 
   it("shows an error with a retry that loads the list when the first request fails", async () => {
@@ -168,7 +170,9 @@ describe("SavedPostsTab", () => {
 
     vi.mocked(unsavePost).mockResolvedValueOnce({ postId: "p1", saved: false });
     fireEvent.click(screen.getByRole("button", { name: /Saved/ }));
-    expect((await screen.findByRole("status")).textContent).toMatch(/haven.t saved any posts yet/i);
+    // The loading state is a status too, so wait for the text, then check it is announced.
+    const empty = await screen.findByText(/haven.t saved any posts yet/i);
+    expect(empty.closest('[role="status"]')).not.toBeNull();
   });
 
   it("keeps a card when the unsave request fails", async () => {

@@ -32,6 +32,7 @@ import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
 import { getStoredAccessToken } from "../lib/session";
 import ClubJoinButton from "./clubs/ClubJoinButton";
 import "./clubs/ClubsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -133,9 +134,7 @@ export default function ClubsPage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="clubs-status" role="status">
-          Loading clubs…
-        </p>
+        <LoadingState variant="section" className="clubs-status" label="Loading clubs…" />
       )}
 
       {loadState === "error" && (

@@ -38,6 +38,7 @@ import {
 import { getStoredAccessToken } from "../../lib/session";
 import { GUARDIAN_RELATIONSHIP_OPTIONS, type GuardianRelationship } from "../signup/types";
 import "./ChangeGuardianEmailPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "not-a-minor" | "error" | "no-session";
 
@@ -117,7 +118,7 @@ export default function ChangeGuardianEmailPage() {
   if (loadState === "loading") {
     return (
       <div className="cge" role="status">
-        <p className="cge__status">Loading your account status…</p>
+        <LoadingState variant="page" className="cge__status" label="Loading your account status…" />
       </div>
     );
   }

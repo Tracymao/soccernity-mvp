@@ -44,6 +44,7 @@ import { WriteRefusalNotice, specificWriteRefusal, type WriteRefusal } from "../
 import { searchUsers, SearchApiError, type SearchUserResult } from "../../api/search";
 import { getStoredAccessToken } from "../../lib/session";
 import "./MessagesPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
 
@@ -178,9 +179,7 @@ export default function NewConversationPage() {
       )}
 
       {searchState === "loading" && (
-        <p className="messages-status" role="status">
-          Searching…
-        </p>
+        <LoadingState variant="section" className="messages-status" label="Searching…" />
       )}
 
       {searchState === "error" && (

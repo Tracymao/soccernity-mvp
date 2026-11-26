@@ -56,6 +56,7 @@ import type { ClubSummary } from "../../api/clubs";
 import searchIcon from "../../assets/icons/club-picker-search.svg";
 import { clubPickerThemeVars } from "./clubPickerThemeVars";
 import "./ClubPickerStep.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 interface ClubPickerStepProps {
   accessToken: string;
@@ -183,7 +184,7 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
             </div>
           )}
 
-          {loading && <p className="club-picker__status">Loading clubs…</p>}
+          {loading && <LoadingState variant="section" className="club-picker__status" label="Loading clubs…" />}
 
           {loadError && (
             <p className="club-picker__item-error" role="alert">

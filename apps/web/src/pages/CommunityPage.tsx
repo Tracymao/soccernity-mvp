@@ -40,6 +40,7 @@ import FinalWeekCarousel from "./community/FinalWeekCarousel";
 import PostComposer from "./community/PostComposer";
 import CommunityMessages from "./community/messages/CommunityMessages";
 import "./community/CommunityPage.css";
+import { SkeletonList } from "../components/loading/Skeleton";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -177,9 +178,7 @@ export default function CommunityPage() {
         {token && <FinalWeekCarousel accessToken={token} />}
 
         {loadState === "loading" && (
-          <div className="community-status" role="status">
-            Loading your feed…
-          </div>
+          <SkeletonList shape="cards" label="Loading your feed…" />
         )}
 
         {loadState === "error" && (

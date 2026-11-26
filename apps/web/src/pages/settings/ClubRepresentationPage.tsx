@@ -24,6 +24,7 @@ import { listClubs, type ClubSummary } from "../../api/clubs";
 import { getUser, setRepresentedClub, UsersApiError } from "../../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../../lib/session";
 import "./ClubRepresentationPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -121,9 +122,7 @@ export default function ClubRepresentationPage() {
 
   if (loadState === "loading") {
     return (
-      <p className="club-rep__status" role="status">
-        Loading your clubs…
-      </p>
+      <LoadingState variant="page" className="club-rep__status" label="Loading your clubs…" />
     );
   }
 

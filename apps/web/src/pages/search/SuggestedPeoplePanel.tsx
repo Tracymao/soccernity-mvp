@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { followUser, getSuggestedUsers, unfollowUser, UsersApiError, type FollowUserSummary } from "../../api/users";
 import refreshIcon from "../../assets/icons/trends-refresh.svg";
+import LoadingState from "../../components/loading/LoadingState";
 
 // Figma shows three rows; "See more" widens to a larger top-N (the server
 // caps `limit` at 50).
@@ -150,9 +151,7 @@ export default function SuggestedPeoplePanel({ accessToken, currentUserId }: Sug
       </header>
 
       {state === "loading" && items.length === 0 && (
-        <p className="trends-card__status" role="status">
-          Loading suggestions…
-        </p>
+        <LoadingState variant="section" className="trends-card__status" label="Loading suggestions…" />
       )}
 
       {state === "error" && (

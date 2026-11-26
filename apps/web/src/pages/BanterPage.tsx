@@ -52,6 +52,7 @@ import {
 import ReportAction from "./community/ReportAction";
 import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
 import "./banter/BanterPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Category = "all" | "mine";
@@ -352,9 +353,7 @@ export default function BanterPage() {
         </div>
 
         {loadState === "loading" && (
-          <p className="banter-status banter-status--inline" role="status">
-            Loading rooms…
-          </p>
+          <LoadingState variant="section" className="banter-status banter-status--inline" label="Loading rooms…" />
         )}
 
         {loadState === "error" && (

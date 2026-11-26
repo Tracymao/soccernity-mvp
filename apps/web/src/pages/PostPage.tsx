@@ -25,6 +25,7 @@ import NotFoundPage from "./NotFoundPage";
 import PostCard from "./community/PostCard";
 import "./community/CommunityPage.css";
 import "./PostPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "removed" | "not-found" | "error";
 
@@ -80,9 +81,7 @@ export default function PostPage() {
       </div>
 
       {state === "loading" && (
-        <div className="community-status" role="status">
-          Loading…
-        </div>
+        <LoadingState variant="page" className="community-status" label="Loading…" />
       )}
       {state === "removed" && (
         <div className="post-page__removed" role="status">

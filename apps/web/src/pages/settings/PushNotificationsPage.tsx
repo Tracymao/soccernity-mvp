@@ -38,6 +38,7 @@ import {
 } from "../../lib/pushBrowser";
 import SettingToggle from "./SettingToggle";
 import "./SettingsNotificationsPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type View = "loading" | "load-error" | "unsupported" | "blocked" | "off" | "on";
 
@@ -175,9 +176,7 @@ export default function PushNotificationsPage() {
     return (
       <div className="settings-page">
         {header}
-        <p className="notif-state__line" role="status">
-          Loading your settings&hellip;
-        </p>
+        <LoadingState variant="section" className="notif-state__line" label="Loading your settings…" />
       </div>
     );
   }

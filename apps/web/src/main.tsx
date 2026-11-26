@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { applyTheme } from "./theme/applyTheme";
 import { installSilentRefresh } from "./lib/silentRefresh";
+import { installFetchActivity } from "./components/loading/activity";
 import { initSessionChannel } from "./lib/session";
 // Self-hosted fonts (@fontsource, latin subset): no request to Google Fonts or any font CDN, so the
 // site needs no extra font-src origin. Inter and Montserrat are the two families the Figma web frames
@@ -31,6 +32,10 @@ initSessionChannel();
 // B-017: transparent refresh of an expired access token for every API client
 // (now through the httpOnly refresh cookie, B-246).
 installSilentRefresh();
+
+// Page loader (Decision Log #581): counts requests in flight for the top progress bar.
+// Installed after silent refresh, so each API call is counted once.
+installFetchActivity();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -64,6 +64,7 @@ import {
 } from "../api/community-groups";
 import { getStoredAccessToken } from "../lib/session";
 import "./community-groups/CommunityGroupsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -284,9 +285,7 @@ export default function CommunityGroupsPage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="groups-status" role="status">
-          Loading groups…
-        </p>
+        <LoadingState variant="section" className="groups-status" label="Loading groups…" />
       )}
 
       {loadState === "error" && (
