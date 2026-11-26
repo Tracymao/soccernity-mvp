@@ -77,7 +77,7 @@ describe('NotificationsService', () => {
 
       expect(prisma.notification.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: CALLER },
+          where: { userId: CALLER, type: { not: 'post_media_approved' } },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 21,
         }),
@@ -112,7 +112,7 @@ describe('NotificationsService', () => {
         expect.objectContaining({
           where: {
             AND: [
-              { userId: CALLER },
+              { userId: CALLER, type: { not: 'post_media_approved' } },
               {
                 OR: [
                   { createdAt: { lt: new Date('2026-09-13T09:00:00Z') } },
@@ -481,6 +481,36 @@ describe('NotificationsService', () => {
       expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
     });
 
+    // Decision Log #578 (CH-H13): approved is silent; old rows are hidden from the list, the count and read-all.
+    it('excludes post_media_approved from the list, the unread count and read-all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.notification.count as jest.Mock).mockResolvedValue(0);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+      expect((prisma.notification.findMany as jest.Mock).mock.calls[0][0].where).toMatchObject({
+        userId: CALLER,
+        type: { not: 'post_media_approved' },
+      });
+      expect((prisma.notification.count as jest.Mock).mock.calls[0][0].where).toMatchObject({
+        userId: CALLER,
+        read: false,
+        type: { not: 'post_media_approved' },
+      });
+
+      (prisma.notification.count as jest.Mock).mockClear();
+      await service.getUnreadCount(CALLER);
+      expect((prisma.notification.count as jest.Mock).mock.calls[0][0].where.type).toEqual({
+        not: 'post_media_approved',
+      });
+
+      await service.markAllRead(CALLER);
+      expect((prisma.notification.updateMany as jest.Mock).mock.calls[0][0].where.type).toEqual({
+        not: 'post_media_approved',
+      });
+    });
+
     it('resolves to null data when the referenced entity is gone (orphaned payloadRefId)', async () => {
       const prisma = buildPrismaMock();
       (prisma.notification.findMany as jest.Mock).mockResolvedValue([
@@ -527,7 +557,7 @@ describe('NotificationsService', () => {
       const count = await service.getUnreadCount(CALLER);
 
       expect(count).toBe(5);
-      expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId: CALLER, read: false } });
+      expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId: CALLER, read: false, type: { not: 'post_media_approved' } } });
     });
   });
 
@@ -591,7 +621,7 @@ describe('NotificationsService', () => {
       const result = await service.markAllRead(CALLER);
 
       expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-        where: { userId: CALLER, read: false },
+        where: { userId: CALLER, read: false, type: { not: 'post_media_approved' } },
         data: { read: true },
       });
       expect(result).toEqual({ markedRead: 4 });
@@ -609,7 +639,7 @@ describe('NotificationsService', () => {
       const prisma = buildPrismaMock();
       const service = new NotificationsService(prisma);
       await service.listNotifications(CALLER, {});
-      expect((prisma.notification.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ userId: CALLER });
+      expect((prisma.notification.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ userId: CALLER, type: { not: 'post_media_approved' } });
       expect(prisma.conversation.findMany).not.toHaveBeenCalled();
       expect(prisma.fixture.findMany).not.toHaveBeenCalled();
     });
@@ -629,6 +659,7 @@ describe('NotificationsService', () => {
       const where = (prisma.notification.findMany as jest.Mock).mock.calls[0][0].where;
       expect(where).toEqual({
         userId: CALLER,
+        type: { not: 'post_media_approved' },
         NOT: {
           OR: [
             { type: 'follow', payloadRefId: { in: ['b-1', 'b-2'] } },

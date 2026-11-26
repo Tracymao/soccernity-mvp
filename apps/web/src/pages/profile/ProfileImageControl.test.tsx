@@ -44,18 +44,19 @@ describe("ProfileImageControl", () => {
     expect(screen.getByText("Add a Cover Photo (Optional)")).not.toBeNull();
   });
 
-  it("none: offers a choose button and the 'checked automatically' note", () => {
+  it("none: offers a choose button and no 'checked automatically' note", () => {
     renderControl();
     expect(screen.getByRole("button", { name: "Choose a picture" })).not.toBeNull();
-    expect(screen.getByText(/checked automatically/i)).not.toBeNull();
+    expect(screen.queryByText(/checked automatically/i)).toBeNull();
   });
 
-  it("uploads a chosen file and shows 'Under review' (a new upload is pending)", async () => {
+  it("uploads a chosen file and shows only the quiet bar (a new upload is pending)", async () => {
     const onChange = vi.fn();
     vi.mocked(uploadProfileImage).mockResolvedValue({ url: "https://img/x.png", status: "pending" });
     renderControl({ onChange });
     fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
+    expect(screen.queryByText("Under review")).toBeNull();
     expect(uploadProfileImage).toHaveBeenCalledWith(
       "t",
       "u1",
@@ -65,7 +66,7 @@ describe("ProfileImageControl", () => {
       expect.any(AbortSignal),
     );
     expect(onChange).toHaveBeenCalledWith({ url: "https://img/x.png", status: "pending" });
-    expect(screen.getByText(/only you can see this picture/i)).not.toBeNull();
+    expect(screen.queryByText(/only you can see this picture/i)).toBeNull();
   });
 
   it("rejects a wrong type locally and never calls the API", async () => {
@@ -197,9 +198,10 @@ describe("ProfileImageControl", () => {
     expect(container.textContent).not.toMatch(/COPY PENDING/);
   });
 
-  it("approved: shows the Approved pill", () => {
+  it("approved: shows no pill, note or bar", () => {
     renderControl({ image: { url: "u", status: "approved" } });
-    expect(screen.getByText("Approved")).not.toBeNull();
+    expect(screen.queryByText("Approved")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("remove asks for confirmation; Keep leaves the picture, Remove deletes it", async () => {
@@ -210,7 +212,7 @@ describe("ProfileImageControl", () => {
     expect(screen.getByText("Remove this picture?")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep picture" }));
     expect(deleteProfileImage).not.toHaveBeenCalled();
-    expect(screen.getByText("Under review")).not.toBeNull();
+    expect(screen.getByRole("progressbar", { name: /Checking/ })).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove picture" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove picture" }));
@@ -222,7 +224,7 @@ describe("ProfileImageControl", () => {
   it("the cover uses its own wording", () => {
     render(<ProfileImageControl kind="cover" accessToken="t" userId="u1" image={null} />);
     expect(screen.getByRole("button", { name: "Choose a cover photo" })).not.toBeNull();
-    expect(screen.getByText(/cover photos are checked automatically/i)).not.toBeNull();
+    expect(screen.queryByText(/checked automatically/i)).toBeNull();
   });
 });
 
@@ -258,7 +260,8 @@ describe("ProfileImageControl: cover crop step (B-210 / B-227)", () => {
     vi.mocked(uploadProfileImage).mockResolvedValue({ url: "u", status: "pending" });
     renderControl();
     fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
+    expect(screen.queryByText("Under review")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 

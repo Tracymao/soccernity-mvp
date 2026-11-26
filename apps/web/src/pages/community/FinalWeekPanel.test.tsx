@@ -102,7 +102,7 @@ describe("FinalWeekPanel", () => {
     fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
     expect(submit.disabled).toBe(true); // a caption alone is not enough
     chooseVideo();
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(submit.disabled).toBe(false);
     expect(createUpload).toHaveBeenCalledWith("t", { contentType: "video/mp4", size: 5 });
     expect(putFile).toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe("FinalWeekPanel", () => {
     const onSubmitted = renderPanel();
     fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
     chooseVideo();
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
     await waitFor(() => expect(submitFinalEntry).toHaveBeenCalledWith("t", { contentText: "my final", mediaId: "m1" }));
     await screen.findByText(/your final entry is in/i);
@@ -153,7 +153,7 @@ describe("FinalWeekPanel", () => {
     renderPanel();
     fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "late" } });
     chooseVideo();
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
     expect((await screen.findByRole("alert")).textContent).toBe("The upload window is closed.");
   });

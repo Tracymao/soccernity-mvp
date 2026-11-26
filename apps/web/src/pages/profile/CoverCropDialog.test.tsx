@@ -9,8 +9,6 @@ vi.mock("../../lib/imageCrop", async () => {
 });
 import { cropImageToBlob } from "../../lib/imageCrop";
 
-const NOTICE = "Cover photos are checked automatically before they appear on your profile.";
-
 beforeEach(() => {
   vi.mocked(cropImageToBlob).mockReset();
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
@@ -23,7 +21,6 @@ afterEach(() => {
 function renderDialog(overrides: Partial<ComponentProps<typeof CoverCropDialog>> = {}) {
   const props = {
     file: new File(["x"], "cover.png", { type: "image/png" }),
-    notice: NOTICE,
     onSave: vi.fn(),
     onCancel: vi.fn(),
     onChooseAnother: vi.fn(),
@@ -42,7 +39,7 @@ function loadImage(width: number, height: number) {
 }
 
 describe("CoverCropDialog", () => {
-  it("shows the crop step: title, window, zoom at 1.0x, preview, notice, Save and Cancel", () => {
+  it("shows the crop step: title, window, zoom at 1.0x, preview, Save and Cancel", () => {
     renderDialog();
     loadImage(1600, 1200);
     expect(screen.getByRole("dialog", { name: "Crop your cover photo" })).not.toBeNull();
@@ -50,7 +47,7 @@ describe("CoverCropDialog", () => {
     expect(screen.getByText("Drag to move")).not.toBeNull();
     expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("1.0x");
     expect(screen.getByTestId("cover-crop-preview")).not.toBeNull();
-    expect(screen.getByText(NOTICE)).not.toBeNull();
+    expect(screen.queryByText(/checked automatically/i)).toBeNull();
     expect((screen.getByRole("button", { name: "Save cover photo" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByRole("button", { name: "Cancel" })).not.toBeNull();
   });
@@ -216,7 +213,6 @@ describe("CoverCropDialog", () => {
       <StrictMode>
         <CoverCropDialog
           file={new File(["x"], "c.png", { type: "image/png" })}
-          notice={NOTICE}
           onSave={vi.fn()}
           onCancel={vi.fn()}
           onChooseAnother={vi.fn()}

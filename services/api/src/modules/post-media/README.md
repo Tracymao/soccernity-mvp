@@ -314,10 +314,11 @@ POST /admin/media-review/:id/reject  {reason}  pending or reported-approved -> r
 
 `status=pending` (the default) means "waiting for a decision". A decision is one transaction: the status (guarded in the
 `WHERE`, so two moderators acting at once cannot both win), the resolution of the open reports, and the uploader's `Notification`
-(`post_media_approved` / `post_media_rejected`, `payloadRefId` = the media id, reason NOT copied). A repeat or a decided item is
+for a REJECTION only (`post_media_rejected`, `payloadRefId` = the media id, reason NOT copied). A passing check is silent: no
+`post_media_approved` row is written, and old ones are left out of the list, the unread count and read-all. A repeat or a decided item is
 `409 already_decided`; an item the check has not finished with is `409 not_in_review_queue`. The admin action log
-(`media.approved`, `media.rejected`, target `post_media`) is written after the commit. The automatic check writes the same two
-notifications when it approves or rejects on its own.
+(`media.approved`, `media.rejected`, target `post_media`) is written after the commit. The automatic check writes the same
+rejection notification when it rejects on its own, and nothing when it approves.
 
 **What a moderator sees:** the uploader's public name and id (never email or real name), kind, size, age, why it is here
 (`sources`), the check's category labels, the open report count, and a 5-minute signed view link

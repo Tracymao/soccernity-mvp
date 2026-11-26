@@ -385,7 +385,7 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
     const clip = makeMp4();
     if (!clip) throw new Error('ffmpeg-static is not installed in e2e/: run `npm install` there (it is a devDependency).');
     await page.locator('#final-entry-video').setInputFiles(clip);
-    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('li[data-phase="checking"]').getByRole('progressbar', { name: /^Checking (picture|video)$/ })).toBeVisible({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Submit entry' }).click();
     await expect
       .poll(async () => db().contestEntry.count({ where: { roundId: nov.roundId(4), userId: finalist.userId } }))

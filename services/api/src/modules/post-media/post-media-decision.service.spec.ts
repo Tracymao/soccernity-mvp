@@ -74,10 +74,8 @@ describe('PostMediaDecisionService.approve', () => {
       },
     });
     expect(prisma.postMediaReport.updateMany).toHaveBeenCalledWith({ where: { mediaId: 'm1', resolvedAt: null }, data: { resolvedAt: NOW } });
-    expect(prisma.notification.create).toHaveBeenCalledWith({
-      data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
-      select: { id: true },
-    });
+    // Approved is silent (Decision Log #578): no notification is written.
+      expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   // B-257 (Decision Log #430 item 2): the file is copied to the PUBLIC prefix and the copy verified BEFORE
@@ -148,10 +146,8 @@ describe('PostMediaDecisionService.approve', () => {
       });
       // Everything else about the decision is unchanged: reports resolved, the uploader told "approved".
       expect(prisma.postMediaReport.updateMany).toHaveBeenCalled();
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
-        select: { id: true },
-      });
+      // Approved is silent (Decision Log #578): no notification is written.
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('pending file, LIVE post: published exactly as before', async () => {

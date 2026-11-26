@@ -278,7 +278,7 @@ describe('Media review queue e2e (B-037)', () => {
   // ---- decisions ---------------------------------------------------------------------------------
 
   describe('approve and reject', () => {
-    it('approve: the item is approved by a moderator, the uploader is notified, the action is logged, and a repeat is a 409 that adds nothing', async () => {
+    it('approve: the item is approved by a moderator, the uploader is told nothing, the action is logged, and a repeat is a 409 that adds nothing', async () => {
       const owner = await seedUser('owner');
       const mod = await adminAuth();
       const id = await uploadChecked(owner, SUGGESTIVE);
@@ -287,10 +287,9 @@ describe('Media review queue e2e (B-037)', () => {
       expect(res.body).toEqual({ id, outcome: 'approved', status: 'approved' });
       expect(await row(id)).toMatchObject({ status: 'approved', decisionSource: 'moderator', decidedBy: mod.id });
 
-      const notes = await notificationsOf(owner);
-      expect(notes.filter((n) => n.type === 'post_media_approved')).toEqual([
-        expect.objectContaining({ data: { media: { id, kind: 'image' } } }),
-      ]);
+      // A passing check is silent: no row is written at all.
+      expect(await notificationsOf(owner)).toEqual([]);
+      expect(await prisma().notification.count({ where: { userId: owner.id, type: 'post_media_approved' } })).toBe(0);
       const log = await prisma().adminActionLog.findMany({ where: { targetId: id } });
       expect(log).toEqual([expect.objectContaining({ adminId: mod.id, action: 'media.approved', targetType: 'post_media' })]);
 
@@ -298,7 +297,7 @@ describe('Media review queue e2e (B-037)', () => {
       expect(again.body.code).toBe('already_decided');
       const rejectAfter = await request(http()).post(`/admin/media-review/${id}/reject`).set(mod.auth).send({ reason: 'late' }).expect(409);
       expect(rejectAfter.body.code).toBe('already_decided');
-      expect((await notificationsOf(owner)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(1);
+      expect(await prisma().notification.count({ where: { userId: owner.id } })).toBe(0);
       expect(await prisma().adminActionLog.count({ where: { targetId: id } })).toBe(1);
     });
 
@@ -334,7 +333,7 @@ describe('Media review queue e2e (B-037)', () => {
       expect(await prisma().adminActionLog.count({ where: { targetId: id } })).toBe(1);
     });
 
-    it('two moderators acting at once: exactly one wins, one notification, one audit row', async () => {
+    it('two moderators acting at once: exactly one wins, one audit row, a notification only if the reject won', async () => {
       const owner = await seedUser('owner');
       const m1 = await adminAuth();
       const m2 = await adminAuth('superadmin');
@@ -344,7 +343,7 @@ describe('Media review queue e2e (B-037)', () => {
         request(http()).post(`/admin/media-review/${id}/reject`).set(m2.auth).send({ reason: 'race' }),
       ]);
       expect([a.status, b.status].sort()).toEqual([200, 409]);
-      expect((await notificationsOf(owner)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(1);
+      expect((await notificationsOf(owner)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(b.status === 200 ? 1 : 0);
       expect(await prisma().adminActionLog.count({ where: { targetId: id } })).toBe(1);
     });
 
@@ -452,7 +451,7 @@ describe('Media review queue e2e (B-037)', () => {
       expect((await row(media)).publishedAt).not.toBeNull();
       expect(await prisma().postMediaReport.count({ where: { mediaId: media, resolvedAt: null } })).toBe(0);
       await getPost(viewer, post).expect(200);
-      expect((await notificationsOf(author)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(1); // only the original auto-approval
+      expect((await notificationsOf(author)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(0); // neither the auto-approval nor the keep says anything
       expect(await prisma().adminActionLog.findFirstOrThrow({ where: { targetId: media } })).toMatchObject({ notes: 'kept after user reports' });
       // A user who reported before cannot report the same item again, even after it was resolved.
       const again = await request(http()).post(`/media/${media}/report`).set(reporters[0].auth).expect(200);
