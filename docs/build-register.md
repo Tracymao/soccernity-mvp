@@ -5919,3 +5919,9 @@ Radius, type, elevation and motion scales as variables, styles and one reference
 ## 140. Updates 2026-11-26 (design foundations tokens in code; Decision Log #573; no new B-ID)
 
 Radius, type, elevation and motion tokens added to `packages/shared` with `foundations.css` imported by `apps/web` and `apps/admin`, plus one reduced-motion switch. No existing stylesheet migrated, no visual change. Values are founder-approved defaults (veto-able) and must match the Figma foundations pass (Section 139, Decision Log #572). Report: `docs/design-foundations-tokens-report.md`.
+
+## 142. Updates 2026-11-26 (admin shell restyled in Figma; Decision Log #574; no new B-ID)
+
+The Admin Shell component set `6014:12948` was restyled in place with existing colours and the new foundations, with a locked structure (8 structure signatures match, original-id hash unchanged, 0 overlaps). Two frames added below the canvas: component states `7204:71662` and behaviour spec `7205:71662`. Figma and docs only. See `docs/figma-admin-shell-restyle-report.md`.
+- Decision Log #574 (adopted default, veto-able): the restyle values and the eight behaviour rules in the spec frame.
+- Report only, not decided: the code's five Moderation tabs are not drawn as one strip in Figma; Section 141 may be numbered twice if the other docs PR also uses it (this section is 142 to avoid that).
