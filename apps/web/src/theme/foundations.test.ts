@@ -37,6 +37,11 @@ describe("foundations.css matches the shared tokens", () => {
       Object.keys(typeScale).length * 2,
     );
   });
+  it("has the admin nav type step (15/20) in both CSS and the shared export", () => {
+    expect(typeScale.nav).toEqual({ size: 15, line: 20 });
+    expect(v["--sn-text-nav-size"]).toBe("15px");
+    expect(v["--sn-text-nav-line"]).toBe("20px");
+  });
   it("font stacks", () => {
     expect(v["--sn-font-ui"]).toBe(fontFamily.ui);
     expect(v["--sn-font-display"]).toBe(fontFamily.display);

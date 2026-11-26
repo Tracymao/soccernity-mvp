@@ -1,5 +1,5 @@
 /* Admin search bar (Figma `Admin Search Bar` 6926:35951). Light mode, --sn-* tokens only. 740 x 44, radius 8
- * (radius/md), green-tint fill, 2 px navy stroke when focused. */
+ * (radius/md), white surface, 1 px border, 2 px navy edge when focused. */
 
 .admin-search {
   display: flex;
@@ -16,14 +16,18 @@
   height: 44px;
   padding: 0 16px;
   box-sizing: border-box;
-  border-radius: 8px;
-  background-color: var(--sn-green-tint-12);
-  border: 2px solid transparent;
+  border-radius: var(--sn-radius-md);
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
   cursor: text;
+  transition: border-color var(--sn-duration-fast) var(--sn-ease-standard),
+    box-shadow var(--sn-duration-fast) var(--sn-ease-standard);
 }
 
+/* 2px navy edge without changing the bar size: 1px border plus 1px ring. */
 .admin-search__bar:focus-within {
   border-color: var(--sn-brand-navy);
+  box-shadow: 0 0 0 1px var(--sn-brand-navy);
 }
 
 .admin-search__icon {

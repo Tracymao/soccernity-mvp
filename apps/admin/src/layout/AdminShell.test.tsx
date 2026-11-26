@@ -96,4 +96,13 @@ describe("AdminShell", () => {
     await waitFor(() => expect(screen.queryByText("BACK AT LOGIN")).not.toBeNull());
     expect(logout).toHaveBeenCalledOnce();
   });
+
+  it("marks only the active nav row with aria-current=page", () => {
+    renderShell({ fullName: "Ada Lovelace", role: "moderator" });
+    const links = screen.getAllByRole("link").filter((l) => l.classList.contains("admin-nav__item"));
+    const current = links.filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0].getAttribute("href")).toBe("/dashboard");
+    expect(links.length).toBeGreaterThan(1);
+  });
 });

@@ -32,13 +32,30 @@
 }
 
 .admin-page-header__action {
-  height: 41px;
+  height: 44px;
   padding: 0 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--sn-radius-md);
   background-color: var(--sn-brand-navy);
   color: var(--sn-text-on-navy);
-  font-size: 18px;
+  font-size: var(--sn-text-body-lg-size);
   font-weight: 500;
   cursor: pointer;
+  transition:
+    opacity var(--sn-duration-fast) var(--sn-ease-standard),
+    outline-color var(--sn-duration-fast) var(--sn-ease-standard);
+}
+
+.admin-page-header__action:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.admin-page-header__action:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.admin-page-header__action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
