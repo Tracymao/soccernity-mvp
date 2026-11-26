@@ -86,6 +86,7 @@ import { useConversationActions } from "./actions/useConversationActions";
 import { useMessageActions } from "./actions/useMessageActions";
 import { firstNameOf, seenLabelMessageId } from "./actions/messageActionRules";
 import "./MessagesPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 
@@ -229,9 +230,7 @@ export default function ConversationPage() {
   if (loadState === "loading") {
     return (
       <div className="conversation-page">
-        <p className="messages-status" role="status">
-          Loading conversation…
-        </p>
+        <LoadingState variant="page" className="messages-status" label="Loading conversation…" />
       </div>
     );
   }

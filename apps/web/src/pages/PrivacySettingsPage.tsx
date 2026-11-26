@@ -70,6 +70,7 @@ import { getUser, type UserProfile } from "../api/users";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import PublicProfileRow from "./settings/PublicProfileRow";
 import "./settings/PrivacySettingsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type GuardianState =
@@ -151,9 +152,7 @@ export default function PrivacySettingsPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="privacy-status" role="status">
-        Loading your settings…
-      </div>
+      <LoadingState variant="page" className="privacy-status" label="Loading your settings…" />
     );
   }
 

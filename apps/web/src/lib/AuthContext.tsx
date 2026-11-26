@@ -6,8 +6,8 @@
 // POST /auth/refresh through the httpOnly cookie (silentRefresh.restoreSession)
 // and only then renders the app. Rendering the router first would flash the
 // signed-out chrome / the login prompt of every protected page for a signed-in
-// person. While it waits it shows the same plain "Loading…" status line the
-// pages use. A 401 / 403 with no cookie simply means "signed out" -- there is no
+// person. While it waits it shows the branded splash (SplashLoader, Decision
+// Log #581). A 401 / 403 with no cookie simply means "signed out" -- there is no
 // error state here, and restoreSession never throws.
 //
 // The token itself is NOT held in React state: it is the in-memory store of
@@ -19,6 +19,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { logoutSession } from "../api/auth";
+import SplashLoader from "../components/loading/SplashLoader";
 import {
   clearStoredSession,
   getStoredAccessToken,
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (active) setStatus("ready");
     };
     // A slow or cold API (a free Render instance takes tens of seconds to wake) must not hold every
-    // page, public ones included, on "Loading…": after RESTORE_GATE_MAX_MS the app renders signed out
+    // page, public ones included, on the splash: after RESTORE_GATE_MAX_MS the app renders signed out
     // and the refresh keeps going. If it succeeds later the session simply appears (the token store is
     // observable), exactly as if the person had signed in.
     const timer = setTimeout(release, RESTORE_GATE_MAX_MS);
@@ -95,11 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   if (status === "restoring") {
-    return (
-      <p role="status" style={{ margin: 0, padding: "32px", color: "var(--sn-text-secondary)" }}>
-        Loading…
-      </p>
-    );
+    return <SplashLoader />;
   }
 
   return <AuthStatusContext.Provider value={status}>{children}</AuthStatusContext.Provider>;

@@ -28,6 +28,7 @@ import { Link } from "react-router";
 import { BlogApiError, listArticles, type ArticleSummary } from "../../api/blog";
 import refreshIcon from "../../assets/icons/trends-refresh.svg";
 import timeIcon from "../../assets/icons/news-time.svg";
+import LoadingState from "../../components/loading/LoadingState";
 
 export const TRENDING_NEWS_COUNT = 3;
 
@@ -75,9 +76,7 @@ export default function TrendingNewsPanel() {
       </header>
 
       {state === "loading" && items.length === 0 && (
-        <p className="trends-card__status" role="status">
-          Loading news…
-        </p>
+        <LoadingState variant="section" className="trends-card__status" label="Loading news…" />
       )}
 
       {state === "error" && (

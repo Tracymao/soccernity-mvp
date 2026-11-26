@@ -61,6 +61,7 @@ import PinnedEntry from "./community/PinnedEntry";
 import { initialsFor } from "./profile/profileFields";
 import "./profile/ProfilePage.css";
 import "./profile/OtherProfilePage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
 
@@ -122,9 +123,7 @@ export default function OtherProfilePage() {
 
   if (state === "loading") {
     return (
-      <div className="profile-status-message" role="status">
-        Loading this profile…
-      </div>
+      <LoadingState variant="page" className="profile-status-message" label="Loading this profile…" />
     );
   }
   // The same page for a missing profile and for "you have been blocked".

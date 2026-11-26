@@ -24,6 +24,7 @@ import { Link } from "react-router";
 import { listTeams, leagueTypeLabel, GrassrootsApiError, type GrassrootsTeam } from "../api/grassroots";
 import { getStoredAccessToken } from "../lib/session";
 import "./grassroots/GrassrootsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -153,9 +154,7 @@ export default function GrassrootsPage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="grassroots-status" role="status">
-          Loading teams…
-        </p>
+        <LoadingState variant="section" className="grassroots-status" label="Loading teams…" />
       )}
 
       {loadState === "error" && (

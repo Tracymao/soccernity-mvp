@@ -52,6 +52,7 @@ import { RECENT_STORIES } from "./sports-hub/sportsHubData";
 import { matchHasStarted, monogramFor, phaseClass, phaseLabel, todayIso } from "./sports-hub/format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./sports-hub/KickoffAlertButton";
 import "./sports-hub/SportsHubPage.css";
+import { SkeletonList } from "../components/loading/Skeleton";
 
 type ViewMode = "live" | "today";
 type LoadState = "loading" | "loaded" | "error";
@@ -285,9 +286,7 @@ export default function SportsHubPage() {
         <p className="sh-section-title">{selectedLeagueName ?? "All matches"}</p>
 
         {loadState === "loading" && (
-          <p className="sh-page-status" role="status">
-            Loading matches…
-          </p>
+          <SkeletonList shape="rows" label="Loading matches…" />
         )}
 
         {loadState === "error" && (

@@ -36,6 +36,7 @@ import { listArticles, listCategories, type ArticleSummary, type Category } from
 import { formatDate } from "../lib/formatDate";
 import CoverMedia from "./blog/CoverMedia";
 import "./blog/BlogPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error";
 
@@ -239,9 +240,7 @@ export default function BlogPage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="blog-empty" role="status">
-          Loading articles&hellip;
-        </p>
+        <LoadingState variant="section" className="blog-empty" label="Loading articles…" />
       )}
 
       {loadState === "error" && (
@@ -255,9 +254,7 @@ export default function BlogPage() {
           <section className="blog-section">
             <h2 className="blog-section__title">Results for &ldquo;{search.trim()}&rdquo;</h2>
             {isSpecificCategoryLoading ? (
-              <p className="blog-empty" role="status">
-                Loading articles&hellip;
-              </p>
+              <LoadingState variant="section" className="blog-empty" label="Loading articles…" />
             ) : searchResults.length === 0 ? (
               <p className="blog-empty">No articles match that search.</p>
             ) : (
@@ -269,9 +266,7 @@ export default function BlogPage() {
             )}
           </section>
         ) : isSpecificCategoryLoading ? (
-          <p className="blog-empty" role="status">
-            Loading articles&hellip;
-          </p>
+          <LoadingState variant="section" className="blog-empty" label="Loading articles…" />
         ) : isSpecificCategoryError ? (
           <p className="blog-empty" role="alert">
             Couldn&rsquo;t load articles for this category. Please try again shortly.

@@ -76,6 +76,7 @@ import "./banter/BanterPage.css";
 import "./banter/BanterRoomPage.css";
 import "./banter/BanterRoomControls.css";
 import "./community/CommunityPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 type SectionState = "loading" | "loaded" | "error";
@@ -207,9 +208,7 @@ export default function BanterRoomPage() {
   if (loadState === "loading") {
     return (
       <div className="banter-room-page">
-        <p className="banter-status" role="status">
-          Loading room…
-        </p>
+        <LoadingState variant="page" className="banter-status" label="Loading room…" />
       </div>
     );
   }
@@ -349,9 +348,7 @@ export default function BanterRoomPage() {
         </form>
 
         {feedState === "loading" && (
-          <p className="banter-status" role="status">
-            Loading posts…
-          </p>
+          <LoadingState variant="section" className="banter-status" label="Loading posts…" />
         )}
         {feedState === "error" && (
           <p className="banter-status" role="alert">

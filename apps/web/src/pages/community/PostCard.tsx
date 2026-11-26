@@ -41,6 +41,7 @@ import ReportAction from "./ReportAction";
 import { classifyWriteRefusal, WriteRefusalNotice, type WriteRefusal } from "./writeRefusal";
 import RemovedPlaceholder from "../../components/removed/RemovedPlaceholder";
 import { REMOVED_COMMENT_TEXT } from "../../components/removed/removedContent";
+import LoadingState from "../../components/loading/LoadingState";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -412,7 +413,7 @@ export default function PostCard({
             </div>
             ),
           )}
-          {commentsLoading && <p className="community-status">Loading comments…</p>}
+          {commentsLoading && <LoadingState variant="section" className="community-status" label="Loading comments…" />}
           {!commentsLoading && comments.length === 0 && !commentError && (
             <p className="composer__note">No comments yet. Be the first.</p>
           )}

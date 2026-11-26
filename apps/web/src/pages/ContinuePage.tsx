@@ -9,6 +9,7 @@ import { Navigate } from "react-router";
 import { getUser } from "../api/users";
 import { routeForNextStep } from "../lib/onboarding";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import LoadingState from "../components/loading/LoadingState";
 
 type State = { kind: "loading" } | { kind: "go"; to: string } | { kind: "error" };
 
@@ -41,8 +42,6 @@ export default function ContinuePage() {
     );
   }
   return (
-    <p role="status" style={{ padding: "32px" }}>
-      Loading…
-    </p>
+    <LoadingState variant="page" label="Loading…" />
   );
 }

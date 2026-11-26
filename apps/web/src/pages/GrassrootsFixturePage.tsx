@@ -49,6 +49,7 @@ import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { isAwaitingConsent } from "./grassroots/errors";
 import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 type Mode = "view" | "score";
@@ -241,9 +242,7 @@ export default function GrassrootsFixturePage() {
 
   if (loadState === "loading") {
     return (
-      <div className="grassroots-status" role="status">
-        Loading fixture…
-      </div>
+      <LoadingState variant="page" className="grassroots-status" label="Loading fixture…" />
     );
   }
 

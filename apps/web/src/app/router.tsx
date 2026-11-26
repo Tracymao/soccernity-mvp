@@ -33,6 +33,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import AppShell from "../layout/AppShell";
 import FooterLayout from "../layout/FooterLayout";
 import AuthChrome from "../layout/AuthChrome";
+import RootLayout from "../layout/RootLayout";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
 import MatchCentrePage from "../pages/sports-hub/MatchCentrePage";
@@ -113,9 +114,7 @@ import ContactPage from "../pages/ContactPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
 
-// Exported separately from `router` so tests can mount the real route tree
-// via createMemoryRouter(routes, ...) without a browser history.
-export const routes: RouteObject[] = [
+const pageRoutes: RouteObject[] = [
   {
     // Core auth routes -- logo-only Top Bar, NOT the site Header. Pathless
     // layout route: children below resolve to /login, /signup, etc. See
@@ -457,5 +456,10 @@ export const routes: RouteObject[] = [
     ],
   },
 ];
+
+// Exported separately from `router` so tests can mount the real route tree
+// via createMemoryRouter(routes, ...) without a browser history. RootLayout
+// holds what every route shares (the page progress bar).
+export const routes: RouteObject[] = [{ element: <RootLayout />, children: pageRoutes }];
 
 export const router = createBrowserRouter(routes);

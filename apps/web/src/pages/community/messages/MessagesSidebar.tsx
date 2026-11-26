@@ -27,6 +27,7 @@ import msgCompose from "../../../assets/icons/msg-compose.svg";
 import msgUnreadDot from "../../../assets/icons/msg-unread-dot.svg";
 import msgMetaDot from "../../../assets/icons/msg-meta-dot.svg";
 import { initialsFor, relativeShort } from "./time";
+import LoadingState from "../../../components/loading/LoadingState";
 
 export type ListState = "loading" | "loaded" | "error";
 
@@ -89,9 +90,7 @@ export default function MessagesSidebar({
       <span className="msg-panel__chip">Inbox</span>
 
       {state === "loading" && (
-        <p className="msg-panel__status" role="status">
-          Loading your messages…
-        </p>
+        <LoadingState variant="section" className="msg-panel__status" label="Loading your messages…" />
       )}
 
       {state === "error" && (

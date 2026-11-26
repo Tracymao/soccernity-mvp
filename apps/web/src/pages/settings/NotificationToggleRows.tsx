@@ -5,6 +5,7 @@ import type { NotificationSettingKey } from "../../api/notificationSettings";
 import { useNotificationSettings } from "./useNotificationSettings";
 import SettingToggle from "./SettingToggle";
 import "./SettingsNotificationsPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 export interface ToggleRow {
   key: NotificationSettingKey;
@@ -29,9 +30,7 @@ export default function NotificationToggleRows({ rows, footnote }: { rows: Toggl
   }
   if (load === "loading" || !settings) {
     return (
-      <p className="notif-state__line" role="status">
-        Loading your settings&hellip;
-      </p>
+      <LoadingState variant="section" className="notif-state__line" label="Loading your settings…" />
     );
   }
 

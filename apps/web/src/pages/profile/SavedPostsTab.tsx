@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSavedPosts, type FeedPost } from "../../api/feed";
 import PostCard from "../community/PostCard";
 import "../community/CommunityPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error";
 
@@ -85,9 +86,7 @@ export default function SavedPostsTab({ accessToken, userId }: Props) {
 
   if (state === "loading") {
     return (
-      <p className="profile-empty-state" role="status">
-        Loading your saved posts…
-      </p>
+      <LoadingState variant="section" className="profile-empty-state" label="Loading your saved posts…" />
     );
   }
 

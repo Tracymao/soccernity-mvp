@@ -24,14 +24,17 @@
 // panels (LoginPage.css, SignupSplitScreen.css, ClubPickerStep.css), and
 // changing it here would break that math for no benefit.
 import { Outlet } from "react-router";
+import { usePageArrival } from "../components/loading/usePageArrival";
 import AuthTopBar from "./AuthTopBar";
 import "./AuthChrome.css";
 
 export default function AuthChrome() {
+  const arrival = usePageArrival();
+
   return (
     <div className="sn-auth-chrome">
       <AuthTopBar />
-      <main className="sn-auth-chrome__content">
+      <main className="sn-auth-chrome__content" {...arrival}>
         <Outlet />
       </main>
     </div>

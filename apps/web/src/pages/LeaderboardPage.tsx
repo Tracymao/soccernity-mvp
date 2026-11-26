@@ -55,6 +55,7 @@ import ContestBoard from "./leaderboard/ContestBoard";
 import { describeRankChange } from "./leaderboard/rankChange";
 import { COMPETITION_ROWS, initialsFor, type CompetitionType } from "./leaderboard/leaderboardData";
 import "./leaderboard/LeaderboardPage.css";
+import { SkeletonList } from "../components/loading/Skeleton";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type BoardTab = "overall" | "contest" | "competition";
@@ -220,9 +221,7 @@ export default function LeaderboardPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="lb-status" role="status">
-        Loading the leaderboard…
-      </div>
+      <SkeletonList shape="rows" label="Loading the leaderboard…" />
     );
   }
 

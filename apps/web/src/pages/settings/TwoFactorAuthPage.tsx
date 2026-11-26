@@ -53,6 +53,7 @@ import { getStoredAccessToken } from "../../lib/session";
 import TwoFactorCodeInput from "../twoFactor/TwoFactorCodeInput";
 import "./SettingsSecurityPage.css";
 import "../twoFactor/twoFactor.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type View =
   | { kind: "loading" }
@@ -294,9 +295,7 @@ export default function TwoFactorAuthPage() {
 
   if (view.kind === "loading") {
     body = (
-      <p className="settings-status" role="status">
-        Loading your two-factor settings&hellip;
-      </p>
+      <LoadingState variant="section" className="settings-status" label="Loading your two-factor settings…" />
     );
   } else if (view.kind === "load-error") {
     body = (

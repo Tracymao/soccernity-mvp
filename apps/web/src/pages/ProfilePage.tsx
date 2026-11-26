@@ -33,6 +33,7 @@ import PinnedEntry from "./community/PinnedEntry";
 import SavedPostsTab from "./profile/SavedPostsTab";
 import PrivateProfileNote from "./profile/PrivateProfileNote";
 import "./profile/ProfilePage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Tab = "posts" | "media" | "saved";
@@ -135,9 +136,7 @@ export default function ProfilePage() {
 
   if (loadState === "loading") {
     return (
-      <div className="profile-status-message" role="status">
-        Loading your profile…
-      </div>
+      <LoadingState variant="page" className="profile-status-message" label="Loading your profile…" />
     );
   }
 
@@ -229,7 +228,7 @@ export default function ProfilePage() {
               <li key={item.id}>{item.publicName}</li>
             ))}
           </ul>
-          {followLoading && <p className="profile-section__body">Loading…</p>}
+          {followLoading && <LoadingState variant="section" className="profile-section__body" label="Loading…" />}
           {followCursor && !followLoading && (
             <button type="button" className="profile-load-more" onClick={loadMoreFollow}>
               Load more

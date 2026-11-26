@@ -4,14 +4,17 @@
 // "for free" -- add a route in src/app/router.tsx as a child of the root
 // route and it renders inside <main> here automatically.
 import { Outlet } from "react-router";
+import { usePageArrival } from "../components/loading/usePageArrival";
 import Header from "./Header";
 import "./AppShell.css";
 
 export default function AppShell() {
+  const arrival = usePageArrival();
+
   return (
     <div className="sn-app-shell">
       <Header />
-      <main className="sn-app-shell__content">
+      <main className="sn-app-shell__content" {...arrival}>
         <Outlet />
       </main>
     </div>

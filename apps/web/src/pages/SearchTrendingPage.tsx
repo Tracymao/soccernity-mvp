@@ -75,6 +75,7 @@ import FixturesPanel from "./search/FixturesPanel";
 import SuggestedPeoplePanel from "./search/SuggestedPeoplePanel";
 import VideosCarousel from "./search/VideosCarousel";
 import "./search/SearchTrendingPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
 
@@ -298,9 +299,7 @@ export default function SearchTrendingPage() {
           )}
 
           {searchState === "loading" && (
-            <p className="search-page__status" role="status">
-              Searching…
-            </p>
+            <LoadingState variant="section" className="search-page__status" label="Searching…" />
           )}
 
           {searchState === "error" && (

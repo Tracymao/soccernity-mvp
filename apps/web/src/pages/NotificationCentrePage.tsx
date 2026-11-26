@@ -79,6 +79,7 @@ import notifImageAdd from "../assets/icons/notif-image-add.svg";
 import notifUsernameReview from "../assets/icons/notif-username-review.svg";
 import { USERNAME_REVIEW_APPROVED_REST, USERNAME_REVIEW_DECLINED_REST } from "./notifications/usernameReviewCopy";
 import "./notifications/NotificationCentrePage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Tab = "all" | "unread";
@@ -499,9 +500,7 @@ export default function NotificationCentrePage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="notif-status" role="status">
-          Loading notifications…
-        </p>
+        <LoadingState variant="section" className="notif-status" label="Loading notifications…" />
       )}
 
       {loadState === "error" && (

@@ -45,6 +45,7 @@ import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import GroupJoinButton from "./community-groups/GroupJoinButton";
 import GroupMemberRow from "./community-groups/GroupMemberRow";
 import "./community-groups/CommunityGroupsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 type SectionState = "loading" | "loaded" | "error";
@@ -130,9 +131,7 @@ export default function CommunityGroupPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="groups-status" role="status">
-        Loading group…
-      </div>
+      <LoadingState variant="page" className="groups-status" label="Loading group…" />
     );
   }
 
@@ -209,9 +208,7 @@ export default function CommunityGroupPage() {
         </div>
 
         {membersState === "loading" && (
-          <p className="groups-status" role="status">
-            Loading members…
-          </p>
+          <LoadingState variant="section" className="groups-status" label="Loading members…" />
         )}
         {membersState === "error" && (
           <p className="groups-status groups-status--error" role="alert">

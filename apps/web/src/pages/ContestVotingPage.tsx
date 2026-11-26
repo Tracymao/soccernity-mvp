@@ -41,6 +41,7 @@ import VoteToggle from "./contest/VoteToggle";
 import { londonClock, londonLongDate, ordinalPlace } from "./contest/contestTime";
 import "./contest/ContestPage.css";
 import "./contest/ContestVotingPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -151,9 +152,7 @@ export default function ContestVotingPage() {
   }
   if (loadState === "loading") {
     return (
-      <div className="contest-status" role="status">
-        Loading the entries…
-      </div>
+      <LoadingState variant="page" className="contest-status" label="Loading the entries…" />
     );
   }
   if (loadState === "error" || !current) {

@@ -60,6 +60,7 @@ import { useConversationActions } from "../../messages/actions/useConversationAc
 import { useMessageActions } from "../../messages/actions/useMessageActions";
 import { firstNameOf, seenLabelMessageId } from "../../messages/actions/messageActionRules";
 import { initialsFor, messageTimeLabel, TIME_LABEL_GAP_MS } from "./time";
+import LoadingState from "../../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found";
 
@@ -277,9 +278,7 @@ export default function ChatWindow({
 
       <div className="chat-window__list" ref={listRef}>
         {loadState === "loading" && (
-          <p className="chat-window__status" role="status">
-            Loading messages…
-          </p>
+          <LoadingState variant="section" className="chat-window__status" label="Loading messages…" />
         )}
 
         {loadState === "not-found" && (

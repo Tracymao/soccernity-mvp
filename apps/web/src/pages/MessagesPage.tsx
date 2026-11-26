@@ -27,6 +27,7 @@ import { REMOVED_MESSAGE_TEXT } from "../components/removed/removedContent";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import "./messages/MessagesPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -124,9 +125,7 @@ export default function MessagesPage() {
       </header>
 
       {loadState === "loading" && (
-        <p className="messages-status" role="status">
-          Loading your messages…
-        </p>
+        <LoadingState variant="section" className="messages-status" label="Loading your messages…" />
       )}
 
       {loadState === "error" && (
