@@ -5911,3 +5911,7 @@ Heading "Matches today", scheduled-card footers "Kickoff HH:MM", note `5214:6828
 ## 138. Updates 2026-11-25 (Figma only: hero card tabs, pillar card heights, Moderation Queue table; no Decision Log row; no new B-ID, no counter changes)
 
 Hero card chips relabelled so all four fit, pillar cards equal height, Moderation Queue table header full width with aligned columns, Filter button hugging its label (standalone, shell button hidden because instance sizes cannot be overridden), callout bar navy. Report: `docs/figma-defect-fix-1-report.md`.
+
+## 139. Updates 2026-11-26 (Figma only: design foundations; Decision Log #572; no new B-ID, no counter changes)
+
+Radius, type, elevation and motion scales as variables, styles and one reference frame (`7188:71447`). No existing screen, style effect or code changed. 332 B-IDs, 146 gap frames, unchanged. Report: `docs/figma-foundations-report.md`.
