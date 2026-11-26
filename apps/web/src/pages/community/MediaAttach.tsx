@@ -5,8 +5,8 @@
 // Decision Log #419; Figma pass Q composer frames 01-11); they were moved here, not changed, so the two
 // composers cannot drift. The state machine itself is useMediaUploads.ts.
 //
-// The note "Everything you upload is checked before other people can see it." was tagged; the tag was cleared by
-// the founder (R101, Decision Log #539) after the claim was checked in code (nothing is approved by default).
+// The standing note about the check, shown under an empty tray until now, was removed under Decision Log #583
+// (code-only; passing checks are silent, #578). The check itself and the visibility rules are unchanged.
 import { useRef, type ChangeEvent } from "react";
 import MediaUploadTray from "./MediaUploadTray";
 import type { useMediaUploads } from "./useMediaUploads";
@@ -78,7 +78,7 @@ export function MediaAttachButtons({ uploads, only }: ButtonsProps) {
   );
 }
 
-/** The tray of chosen files, then "Uploads aren't available right now" or the one-line note about the check. */
+/** The tray of chosen files, then "Uploads aren't available right now" when uploads are off. */
 export function MediaUploadStatus({ uploads }: { uploads: MediaUploads }) {
   return (
     <>
@@ -89,17 +89,11 @@ export function MediaUploadStatus({ uploads }: { uploads: MediaUploads }) {
         onRemove={uploads.remove}
         onRetry={uploads.retry}
       />
-      {uploads.uploadsUnavailable ? (
+      {uploads.uploadsUnavailable && (
         <p className="media-unavailable" role="status">
           <strong>Uploads aren&rsquo;t available right now.</strong> You can still post text. Try adding pictures or
           video again later.
         </p>
-      ) : (
-        uploads.items.length === 0 && (
-          <p className="composer__note">
-            Everything you upload is checked before other people can see it.
-          </p>
-        )
       )}
     </>
   );
