@@ -168,7 +168,7 @@
   line-height: 16px;
   font-weight: 500;
   color: var(--sn-brand-navy);
-  text-transform: lowercase;
+  text-transform: capitalize;
 }
 
 .us-pill--strong {
