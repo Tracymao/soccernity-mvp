@@ -5968,3 +5968,9 @@ Figma only, no code. Founder decision 2026-11-26 (Decision Log #577): the shippe
 ## 148. Updates 2026-11-26 (silent media checks; Decision Log #578; B-334)
 
 Founder decision 2026-11-26: users are not told that a picture or video is being checked or has passed. While it is checked the owner sees only a thin progress bar; an approved file simply appears where it was uploaded; only a rejected file gets the existing alert. The `post_media_approved` notification is no longer created, and older rows are left out of the list, the unread count and mark-all-read. Pending and rejected files stay visible to their owner only (Decision Log #411) and no visibility, status or review-queue rule changed. Section 147 cites a Decision Log #577 that has no row in the docx table or in Section 7, so this entry takes #578 and leaves #577 to that work. See `docs/silent-media-checks-report.md`.
+
+## 149. Updates 2026-11-26 (Admin Shell aligned in Figma to the shipped code, part 1 of 2; no new B-ID; Decision Log #579)
+
+Standing founder rule 2026-11-26: the shipped code is the source of truth for Figma. Figma shows what the shipped admin renders.
+
+Figma and docs only. The shell was measured by rendering the shipped CSS: the nav sits 74px higher, Log Out and the search bar moved, the profile block is replaced by the code's initials circle, the active marker is 4x20, and the search placeholder reads "Search Soccernity". Report: `docs/figma-admin-shell-align-report.md`. Part 2 (list frames) follows.
