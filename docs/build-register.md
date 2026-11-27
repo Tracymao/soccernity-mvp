@@ -6073,3 +6073,11 @@ Frames `5794:8635` and `6947:40930` restyled in place; structure, copy and order
 | # | Decision | Status |
 | --- | --- | --- |
 | 591 | The two Moderation Queue frames use the admin list premium system: existing colours, Foundations radius and type scale, 52px rows, 24px capitalised pills, no bulk actions (founder, 2026-11-26). | Done in Figma. Code restyle not part of this change. |
+
+## 163. Updates 2026-11-27 (Figma Report Detail and Appeal Review frames restyled to the premium standard; Decision Log #592; docs only)
+
+Frames `5796:8635`, `6947:41119`, `6947:41276` and `5796:8753` now use the same premium system as the admin lists and the Moderation Queue. Structure, fields, order, copy and buttons are unchanged. No application code changed and no new B-ID. Details: `docs/figma-admin-report-appeal-premium-report.md`.
+
+| # | Decision | Status |
+| --- | --- | --- |
+| 592 | Report Detail and Appeal Review follow the 2026 premium standard (radius, type and elevation scales; existing colours; capitalised pills and status text; alert colour only on the callout's left bar). Design only (founder, 2026-11-26). | Applied in Figma 2026-11-27 |
