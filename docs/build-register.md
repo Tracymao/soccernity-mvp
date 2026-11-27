@@ -6115,3 +6115,12 @@ Docs only, no new B-ID. Nine Report Detail variant frames rebuilt in Figma from 
 | # | Decision | Status |
 |---|---|---|
 | #596 | Report Detail variant frames follow the shipped `ReportDetailPage`; the four pre-B-295 target frames (7036:59847, 60017, 60187, 60357) are archived, hidden and not deleted. Message-target and hold/dialog frames are left for a later pass. | Resolved 2026-11-27 |
+
+## 168. Updates 2026-11-27 (Figma message-target Report Detail variants restyled to the shipped code and premium standard; Decision #597)
+
+Docs and Figma only, no app code, no new B-ID. Seven frames (7011:57551, 7041:61295, 7011:57728, 7027:59180, 7027:59472, 7045:62777, 7036:61393) now
+follow the shipped message report page; 7011:57380 is archived as superseded. Report: `docs/figma-admin-report-variants-2-premium-report.md`.
+
+| # | Decision | Status |
+|---|---|---|
+| 597 | Message-target Report Detail variants are drawn from the shipped code by cloning the premium blocks. 7011:57380 is archived as identical in state to 7041:61295 (2026-11-27 precedent). | Applied in Figma; the archive is a judgement call the founder can reverse. |
