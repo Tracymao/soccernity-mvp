@@ -6089,3 +6089,13 @@ Frames `6647:23351`, `6647:23603`, `6647:23831`, `6647:24060` only. No app code 
 | # | Decision | Status |
 | --- | --- | --- |
 | 593 | Held Investigations frames follow the shipped page structure (founder, 2026-11-26) with premium-system styling. The shipped `.hi-*` CSS still differs (input radius 6, 13px cells, uppercase header). | Done in Figma; code unchanged |
+
+## 165. Updates 2026-11-27 (Figma Media review frames restyled to the shipped code and premium standard; Decision #594)
+
+- The eight Media review frames (queue 6851:29675, 6851:30038, 6851:30333; item 6852:30003, 6852:30323, 6852:30658; reject dialog 6852:30985, 6852:31327) now follow the shipped admin code structure and the premium values. Figma and docs only; no app code; no new B-ID.
+- Detail, archived layers and what was not matched: `docs/figma-admin-media-review-premium-report.md`.
+- Not in this pass: profile-picture and cover-photo frames (6972:*) and the suspected-illegal frames.
+
+| Decision Log | Decision | Status |
+|---|---|---|
+| #594 | Media review frames: structure follows the shipped code, design follows the premium system (single-column item page, Reject first in the dialog, navy for destructive actions). The dialog note is not a legal string (founder). | Decided (founder); applied in Figma 2026-11-27 |
