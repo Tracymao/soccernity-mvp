@@ -6049,3 +6049,7 @@ Figma now matches the shipped admin list code: "Load more" 92x29 on Articles and
 
 - The eight Incorrect-details reports frames (`6737:27844`, `6738:27962`, `6738:28144`, `6738:28328`, `6738:28510`, `6738:28693`, `6738:29952`, `6738:30173`) now match `IncorrectDetailsReportsPage.tsx` and `users.css`. No application code changed; no new B-ID.
 - Report: `docs/figma-admin-incorrect-details-align-report.md`.
+
+## 159. Updates 2026-11-27 (Figma Moderation Queue frames aligned to the shipped admin code; Decision Log #588; docs and Figma only)
+
+Frames `5794:8635` and `6947:40930` now match the shipped admin code. Figma-only items (Export Queue, Filter, tab counts, preview and name content, the Appeal routing callout) were hidden; the three missing tabs were added. Pill text is capitalised ahead of the M1 code PR. No new B-ID. Report: `docs/figma-admin-moderation-queue-align-report.md`.
