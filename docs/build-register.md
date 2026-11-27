@@ -6053,3 +6053,9 @@ Figma now matches the shipped admin list code: "Load more" 92x29 on Articles and
 ## 159. Updates 2026-11-27 (Figma Moderation Queue frames aligned to the shipped admin code; Decision Log #588; docs and Figma only)
 
 Frames `5794:8635` and `6947:40930` now match the shipped admin code. Figma-only items (Export Queue, Filter, tab counts, preview and name content, the Appeal routing callout) were hidden; the three missing tabs were added. Pill text is capitalised ahead of the M1 code PR. No new B-ID. Report: `docs/figma-admin-moderation-queue-align-report.md`.
+
+## 160. Updates 2026-11-27 (Figma Report Detail frames aligned to the shipped admin code; Decision Log #589; docs only)
+
+- Frames `5796:8635`, `6947:41119` and `6947:41276` now match the shipped admin Report Detail page. Figma-only items are hidden and renamed "ARCHIVED - ...". Variant frames not touched. No new B-ID, no app code.
+- Open follow-up: Figma shows Status "Open"; the code renders "open" until the M1 code PR.
+- Report: `docs/figma-admin-report-detail-align-report.md`.
