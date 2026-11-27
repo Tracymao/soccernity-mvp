@@ -6107,3 +6107,11 @@ The eight Contact enquiries frames (list, empty, load error, detail, escalated, 
 | # | Decision | Status |
 | --- | --- | --- |
 | 595 | Contact enquiries frames in Figma follow the shipped code for structure and copy, and the premium system for design. The "[COPY PENDING LEGAL REVIEW]" tags are gone from these frames because the shipped code has none; this is not a record of legal review. | Applied 2026-11-27 (docs and Figma only) |
+
+## 167. Updates 2026-11-27 (Figma Report Detail variants restyled to the shipped code and premium standard; Decision #596)
+
+Docs only, no new B-ID. Nine Report Detail variant frames rebuilt in Figma from the canonical 5796:8635 blocks; four superseded frames archived (founder decision, 2026-11-27). Detail: `docs/figma-admin-report-variants-1-premium-report.md`.
+
+| # | Decision | Status |
+|---|---|---|
+| #596 | Report Detail variant frames follow the shipped `ReportDetailPage`; the four pre-B-295 target frames (7036:59847, 60017, 60187, 60357) are archived, hidden and not deleted. Message-target and hold/dialog frames are left for a later pass. | Resolved 2026-11-27 |
