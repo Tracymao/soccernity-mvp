@@ -6099,3 +6099,11 @@ Frames `6647:23351`, `6647:23603`, `6647:23831`, `6647:24060` only. No app code 
 | Decision Log | Decision | Status |
 |---|---|---|
 | #594 | Media review frames: structure follows the shipped code, design follows the premium system (single-column item page, Reject first in the dialog, navy for destructive actions). The dialog note is not a legal string (founder). | Decided (founder); applied in Figma 2026-11-27 |
+
+## 166. Updates 2026-11-27 (Figma Contact enquiries frames restyled to the shipped code and premium standard; Decision #595; docs only, no new B-ID)
+
+The eight Contact enquiries frames (list, empty, load error, detail, escalated, report from a contact enquiry, two escalate dialogs) now follow the shipped admin code structure and the 2026 premium values. No app code changed. Detail: `docs/figma-admin-contact-enquiries-premium-report.md`.
+
+| # | Decision | Status |
+| --- | --- | --- |
+| 595 | Contact enquiries frames in Figma follow the shipped code for structure and copy, and the premium system for design. The "[COPY PENDING LEGAL REVIEW]" tags are gone from these frames because the shipped code has none; this is not a record of legal review. | Applied 2026-11-27 (docs and Figma only) |
