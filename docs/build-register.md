@@ -6065,3 +6065,11 @@ Frames `5794:8635` and `6947:40930` now match the shipped admin code. Figma-only
 - Frame `5796:8753` now matches the shipped Appeal Review page. Figma-only layers are hidden and renamed `ARCHIVED - …`; none were deleted. Variant frames `6672:29059` and `6870:30808` are unchanged.
 - No application code changed and no new B-ID.
 - Detail: `docs/figma-admin-appeal-review-align-report.md`.
+
+## 162. Updates 2026-11-27 (Figma Moderation Queue frames restyled to the premium standard; Decision Log #591; docs only)
+
+Frames `5794:8635` and `6947:40930` restyled in place; structure, copy and order unchanged. No code, no new B-ID. Detail: `docs/figma-admin-moderation-queue-premium-report.md`.
+
+| # | Decision | Status |
+| --- | --- | --- |
+| 591 | The two Moderation Queue frames use the admin list premium system: existing colours, Foundations radius and type scale, 52px rows, 24px capitalised pills, no bulk actions (founder, 2026-11-26). | Done in Figma. Code restyle not part of this change. |
