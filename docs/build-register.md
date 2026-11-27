@@ -6081,3 +6081,11 @@ Frames `5796:8635`, `6947:41119`, `6947:41276` and `5796:8753` now use the same 
 | # | Decision | Status |
 | --- | --- | --- |
 | 592 | Report Detail and Appeal Review follow the 2026 premium standard (radius, type and elevation scales; existing colours; capitalised pills and status text; alert colour only on the callout's left bar). Design only (founder, 2026-11-26). | Applied in Figma 2026-11-27 |
+
+## 164. Updates 2026-11-27 (Figma Held Investigations frames restyled to the shipped code and premium standard; Decision Log #593; docs and Figma only, no new B-ID)
+
+Frames `6647:23351`, `6647:23603`, `6647:23831`, `6647:24060` only. No app code changed. Detail: `docs/figma-admin-held-investigations-premium-report.md`.
+
+| # | Decision | Status |
+| --- | --- | --- |
+| 593 | Held Investigations frames follow the shipped page structure (founder, 2026-11-26) with premium-system styling. The shipped `.hi-*` CSS still differs (input radius 6, 13px cells, uppercase header). | Done in Figma; code unchanged |
