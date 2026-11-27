@@ -48,7 +48,7 @@ The frames grew from 1184 to 1801–1952, which would have collided with the row
 
 ## Notes frame
 
-Three texts in `7116:69255` were wrong and were rewritten: the card's placement (it said after Report details), the saving style (it said reduced opacity) and the restricted card reference, and the "stale code comment" item (the comment has since been updated). The fourth item now records the actioned state and the `.mod-error` difference.
+Three texts in `7116:69255` were wrong and were rewritten: (1) the card's placement (it said after Report details); (2) the saving style (it said reduced opacity) and the restricted card reference; (3) the "stale code comment" item (the comment has since been updated), which now records the actioned state and the `.mod-error` difference. The prototype-links item is unchanged.
 
 ## Dropped extras (not rendered by the code)
 
