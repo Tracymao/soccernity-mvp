@@ -6132,3 +6132,9 @@ Docs and Figma only; no app code, no new B-ID. Seven frames: 6870:30620, 6672:28
 | # | Date | Decision | Status |
 |---|---|---|---|
 | #598 | 2026-11-27 | The seven hold-related Moderation frames now follow the shipped admin code: a Hold status row (not a card), the shipped dialog copy, and no "[COPY PENDING LEGAL REVIEW]" tag where the code has none. The removed tags are listed in the report for founder review. | Done (Figma and docs) |
+
+## 170. Updates 2026-11-27 (Figma Suspend and Record-appeal Report Detail frames restyled to the shipped code and premium standard; Decision Log #599)
+
+- Restyled `7042:61845`, `7042:61926`, `7042:61998`, `7044:62187`, `7044:62269`, `7044:62352`, `7044:62498`, `7044:62425`. Frame ids unchanged; old layers hidden and prefixed `ARCHIVED `. Figma and docs only. Report: `docs/figma-admin-suspend-appeal-premium-report.md`.
+- **Decision Log #599:** code is the source of truth for these states. The vetting-required states are page states with no dialog; a post report shows no post preview rows; the 11 "[COPY PENDING LEGAL REVIEW]" tags are not carried into the restyled frames.
+- Open for the single Moderation code PR (after the whole family is restyled): `.mod-callout-error` stroke and bar, callout radius, capitalised status text, textarea styling.
