@@ -6138,3 +6138,8 @@ Docs and Figma only; no app code, no new B-ID. Seven frames: 6870:30620, 6672:28
 - Restyled `7042:61845`, `7042:61926`, `7042:61998`, `7044:62187`, `7044:62269`, `7044:62352`, `7044:62498`, `7044:62425`. Frame ids unchanged; old layers hidden and prefixed `ARCHIVED `. Figma and docs only. Report: `docs/figma-admin-suspend-appeal-premium-report.md`.
 - **Decision Log #599:** code is the source of truth for these states. The vetting-required states are page states with no dialog; a post report shows no post preview rows; the 11 "[COPY PENDING LEGAL REVIEW]" tags are not carried into the restyled frames.
 - Open for the single Moderation code PR (after the whole family is restyled): `.mod-callout-error` stroke and bar, callout radius, capitalised status text, textarea styling.
+## 171. Updates 2026-11-27 (Figma Bants room reactivation Report Detail frames G3-1 to G3-9 restyled to the shipped code and premium standard; Decision Log #600)
+
+- Restyled `7115:68271`, `68463`, `68655`, `68839`, `69025`, `69211`, `69406`, `69601`, `69783`. Frame ids unchanged; old layers hidden and prefixed `ARCHIVED `. The nine now sit in one row, with the notes frame `7116:69255` after them. Figma and docs only. Report: `docs/figma-admin-room-reactivation-premium-report.md`.
+- **Decision Log #600:** code is the source of truth for these states. The page is drawn as an actioned report (Action taken "Room deactivated"); error lines use the restyled Error callout; the 9 "[COPY PENDING LEGAL REVIEW]" tags are not carried into the restyled frames.
+- Open for the single Moderation code PR: `.mod-error` (1px navy border today) and `mod-pill--outline` (grey today, drawn navy for "Active").
