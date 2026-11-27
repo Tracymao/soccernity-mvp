@@ -79,6 +79,7 @@ import notifImageAdd from "../assets/icons/notif-image-add.svg";
 import notifUsernameReview from "../assets/icons/notif-username-review.svg";
 import { USERNAME_REVIEW_APPROVED_REST, USERNAME_REVIEW_DECLINED_REST } from "./notifications/usernameReviewCopy";
 import "./notifications/NotificationCentrePage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Tab = "all" | "unread";
@@ -130,7 +131,7 @@ function linkFor(n: Notification): string | null {
   if (n.type === "profile_image_rejected" && "image" in n.data) return "/profile?edit=1";
   // The file-decision rows (FC10, B-240): the author's post is on their Community feed, where the post card
   // shows the file's status and, for a rejected file, the reason.
-  if ((n.type === "post_media_approved" || n.type === "post_media_rejected") && "media" in n.data) return "/community";
+  if (n.type === "post_media_rejected" && "media" in n.data) return "/community";
   // The username-review outcome (B-139): the create-profile screen shows the result; a reinstated user is
   // routed on from there by the server's own onboarding state.
   if (n.type === "username_review_decided" && "usernameReview" in n.data) return "/create-profile";
@@ -208,12 +209,9 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       const noun = data && "image" in data && data.image === "cover" ? "cover photo" : "picture";
       return { subject: `Your ${noun}`, rest: " wasn’t approved. See why in Edit Profile" };
     }
-    case "post_media_approved":
     case "post_media_rejected": {
       const noun = data && "media" in data && data.media.kind === "video" ? "video" : "picture";
-      return n.type === "post_media_approved"
-        ? { subject: `Your ${noun}`, rest: " was approved" }
-        : { subject: `Your ${noun}`, rest: " wasn’t approved. See why on your post" };
+      return { subject: `Your ${noun}`, rest: " wasn’t approved. See why on your post" };
     }
     case "username_review_decided": {
       const approved = data && "usernameReview" in data && data.usernameReview.outcome === "reinstated";
@@ -244,10 +242,15 @@ const KNOWN_TYPES = new Set([
   "match_kickoff",
   "age_milestone",
   "profile_image_rejected",
-  "post_media_approved",
   "post_media_rejected",
   "username_review_decided",
 ]);
+
+// "Passing checks are silent" (CH-H13): an approved-media notification is never shown, even if a stale
+// server still sends one. It is dropped here so it cannot fall through to the generic row.
+function isShownType(n: Notification): boolean {
+  return (n.type as string) !== "post_media_approved";
+}
 
 function isKnownType(type: string): boolean {
   return KNOWN_TYPES.has(type) || isContestEventType(type);
@@ -263,7 +266,6 @@ function RowAvatar({ notification }: { notification: Notification }) {
     isContestEventType(type) ||
     type === "age_milestone" ||
     type === "profile_image_rejected" ||
-    type === "post_media_approved" ||
     type === "post_media_rejected" ||
     type === "username_review_decided";
   const className = usesIconDisc
@@ -305,7 +307,7 @@ function RowAvatar({ notification }: { notification: Notification }) {
       </span>
     );
   }
-  if (type === "profile_image_rejected" || type === "post_media_approved" || type === "post_media_rejected") {
+  if (type === "profile_image_rejected" || type === "post_media_rejected") {
     return (
       <span className={className}>
         <img src={notifImageAdd} alt="" width={24} height={24} />
@@ -393,7 +395,7 @@ export default function NotificationCentrePage() {
     setLoadState("loading");
     try {
       const page = await listNotifications(token);
-      setItems(page.items);
+      setItems(page.items.filter(isShownType));
       setCursor(page.nextCursor);
       setUnreadCount(page.unreadCount);
       setLoadState("loaded");
@@ -412,7 +414,7 @@ export default function NotificationCentrePage() {
     setLoadMoreError(null);
     try {
       const page = await listNotifications(token, cursor);
-      setItems((prev) => [...prev, ...page.items]);
+      setItems((prev) => [...prev, ...page.items.filter(isShownType)]);
       setCursor(page.nextCursor);
       setUnreadCount(page.unreadCount);
     } catch (err) {
@@ -498,9 +500,7 @@ export default function NotificationCentrePage() {
       </div>
 
       {loadState === "loading" && (
-        <p className="notif-status" role="status">
-          Loading notifications…
-        </p>
+        <LoadingState variant="section" className="notif-status" label="Loading notifications…" />
       )}
 
       {loadState === "error" && (

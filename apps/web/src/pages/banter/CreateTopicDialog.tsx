@@ -25,6 +25,7 @@ import BanterModal from "./BanterModal";
 import EmojiPicker from "./EmojiPicker";
 import { SCOPE_OPTIONS } from "./banterFilters";
 import "./CreateTopicDialog.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type ClubsState = "loading" | "loaded" | "error";
 
@@ -202,7 +203,7 @@ export default function CreateTopicDialog({ accessToken, displayName, onClose, o
             </select>
           </label>
         )}
-        {clubsState === "loading" && <p className="banter-modal__hint">Checking your club memberships…</p>}
+        {clubsState === "loading" && <LoadingState variant="section" className="banter-modal__hint" label="Checking your club memberships…" />}
         {clubsState === "loaded" && clubs.length === 0 && (
           <p className="banter-modal__hint">
             Club rooms are only for clubs you&rsquo;re a member of. Join a club to create one.

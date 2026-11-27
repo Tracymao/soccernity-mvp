@@ -26,6 +26,7 @@ import { firstVideoUrl } from "../../lib/media";
 import { getStoredAccessToken } from "../../lib/session";
 import playIcon from "../../assets/icons/play-circle.svg";
 import "./VideosCarousel.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 const MAX_PAGES = 5;
 const MAX_VIDEOS = 12;
@@ -136,9 +137,7 @@ export default function VideosCarousel() {
       </div>
 
       {state === "loading" && (
-        <p className="videos-card__status" role="status">
-          Loading videos…
-        </p>
+        <LoadingState variant="section" className="videos-card__status" label="Loading videos…" />
       )}
       {state === "error" && (
         <p className="videos-card__status" role="alert">

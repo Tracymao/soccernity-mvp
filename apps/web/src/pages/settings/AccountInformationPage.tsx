@@ -18,6 +18,7 @@ import { Link } from "react-router";
 import { UsersApiError, getUser, updateUser, type UserProfile } from "../../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../../lib/session";
 import "./EmailChange.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 // The server's own phone rule (update-user.dto.ts), so the client checks exactly that.
 const PHONE_PATTERN = /^\+?[0-9\s-]{7,20}$/;
@@ -96,9 +97,7 @@ export default function AccountInformationPage() {
 
   if (!profile) {
     return (
-      <p className="settings-status" role="status">
-        Loading…
-      </p>
+      <LoadingState variant="page" className="settings-status" label="Loading…" />
     );
   }
 

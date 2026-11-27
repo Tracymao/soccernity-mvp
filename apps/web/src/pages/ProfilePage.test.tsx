@@ -118,8 +118,19 @@ describe("ProfilePage", () => {
     renderProfilePage();
 
     expect(await screen.findByText("Adeniyi Christiana")).not.toBeNull();
-    expect(screen.getByText("adeniyi@example.com")).not.toBeNull();
+    expect(screen.getByText("Adeniyi")).not.toBeNull();
+    expect(screen.queryByText("adeniyi@example.com")).toBeNull();
     expect(getUser).toHaveBeenCalledWith(expect.any(String), "user-1");
+  });
+
+  it("renders no empty meta line when the display name is empty (Decision Log #576)", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, displayName: "" });
+    renderProfilePage();
+    await screen.findByText("Adeniyi Christiana");
+    const metas = Array.from(document.querySelectorAll(".profile-header__meta"));
+    expect(metas.every((m) => (m.textContent ?? "").trim() !== "")).toBe(true);
+    expect(metas).toHaveLength(1); // only "Member since"
   });
 
   it("mounts the own-profile private line with the account's age flag (B-060)", async () => {

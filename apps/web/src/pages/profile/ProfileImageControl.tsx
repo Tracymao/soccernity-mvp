@@ -9,8 +9,9 @@
 //   none        "Add a ..." choose button
 //   uploading   file name, indeterminate bar, Cancel (aborts the request, so a
 //               cancelled upload leaves nothing behind on the server)
-//   pending     "Under review" pill: only the owner can see it
-//   approved    "Approved" pill
+//   pending     the picture with a quiet progress bar (no text) and Replace / Remove; only the owner can
+//               see it (passing checks are silent, CH-H13)
+//   approved    just Replace / Remove (no pill, no note)
 //   rejected    "wasn't approved" with the reason when the server gives one,
 //               and "Choose another"
 //   error       the upload failed (type, size, no storage, network)
@@ -48,6 +49,7 @@ import {
   type ProfileImageKind,
 } from "../../api/users";
 import { isUploadsOffError } from "../../api/postMedia";
+import QuietProgress from "../community/QuietProgress";
 import CoverCropDialog from "./CoverCropDialog";
 import "./ProfileImageControl.css";
 
@@ -62,9 +64,7 @@ const COPY = {
     chooseAnother: "Choose another picture",
     removeTitle: "Remove this picture?",
     removeBody: "Your profile will show a placeholder instead.",
-    underReviewNote: "Only you can see this picture until it has been checked.",
     rejectedTitle: "This picture wasn’t approved.",
-    approvedNote: "This picture is visible on your profile.",
   },
   cover: {
     noun: "cover photo",
@@ -76,17 +76,8 @@ const COPY = {
     chooseAnother: "Choose another cover photo",
     removeTitle: "Remove this cover photo?",
     removeBody: "Your profile will show the default cover instead.",
-    underReviewNote: "Only you can see this cover photo until it has been checked.",
     rejectedTitle: "This cover photo wasn’t approved.",
-    approvedNote: "This cover photo is visible on your profile.",
   },
-} as const;
-
-// Shown under the picture on Create Profile (Figma 6672:29233) and repeated in
-// every avatar state frame; the cover has its own sentence.
-const CHECKED_NOTE = {
-  avatar: "Pictures are checked automatically before they appear on your profile.",
-  cover: "Cover photos are checked automatically before they appear on your profile.",
 } as const;
 
 type Phase = "idle" | "uploading" | "error" | "confirm-remove";
@@ -311,14 +302,12 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
               >
                 {kind === "avatar" ? "Choose a picture" : "Choose a cover photo"}
               </button>
-              <p className="profile-image__note">{CHECKED_NOTE[kind]}</p>
             </>
           )}
 
           {phase === "idle" && current && current.status === "pending" && (
             <>
-              <span className="profile-image__pill">Under review</span>
-              <p className="profile-image__note">{copy.underReviewNote}</p>
+              <QuietProgress label={`Checking ${copy.noun}`} />
               <ReplaceRemove
                 copy={copy}
                 onReplace={choose}
@@ -330,8 +319,6 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
 
           {phase === "idle" && current && current.status === "approved" && (
             <>
-              <span className="profile-image__pill profile-image__pill--approved">Approved</span>
-              <p className="profile-image__note">{copy.approvedNote}</p>
               <ReplaceRemove
                 copy={copy}
                 onReplace={choose}
@@ -362,7 +349,6 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
       {cropFile && (
         <CoverCropDialog
           file={cropFile}
-          notice={CHECKED_NOTE.cover}
           onSave={saveCrop}
           onCancel={() => setCropFile(null)}
           onChooseAnother={chooseAnotherCover}

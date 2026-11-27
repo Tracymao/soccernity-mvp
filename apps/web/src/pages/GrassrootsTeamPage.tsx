@@ -58,6 +58,7 @@ import {
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 type SectionState = "loading" | "loaded" | "error";
@@ -221,9 +222,7 @@ export default function GrassrootsTeamPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="grassroots-status" role="status">
-        Loading team…
-      </div>
+      <LoadingState variant="page" className="grassroots-status" label="Loading team…" />
     );
   }
 
@@ -310,9 +309,7 @@ export default function GrassrootsTeamPage() {
       <hr className="grassroots-team__divider" />
 
       {fixturesState === "loading" && (
-        <p className="grassroots-status" role="status">
-          Loading fixtures…
-        </p>
+        <LoadingState variant="section" className="grassroots-status" label="Loading fixtures…" />
       )}
 
       {fixturesState === "error" && (

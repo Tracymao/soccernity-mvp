@@ -35,6 +35,7 @@ import {
   useHeadingFocus,
   useLinkPreview,
 } from "./recoveryParts";
+import LoadingState from "../../../components/loading/LoadingState";
 
 type View =
   | { name: "confirm" }
@@ -152,9 +153,7 @@ export default function RecoveryConfirmPage() {
   if (preview.status === "loading") {
     return (
       <Shell state="loading">
-        <p className="gw__lead" role="status">
-          Loading…
-        </p>
+        <LoadingState variant="page" className="gw__lead" label="Loading…" />
       </Shell>
     );
   }

@@ -1,0 +1,83 @@
+/* Design foundations: static custom properties for radius, type, elevation
+ * and motion. Mirrors packages/shared/src/tokens/index.ts (radius, typeScale,
+ * fontFamily, elevation, motion) and the "Design foundations" Figma
+ * definitions. Defaults approved 2026-11-25, veto-able.
+ *
+ * Imported from each app's entry (apps/web/src/main.tsx, apps/admin/src/main.tsx).
+ * Colours stay in applyTheme/adminTheme; the shadow colours referenced below
+ * (--sn-shadow-*) come from there. Motion and layout live here, not in the
+ * theme functions, so the reduced-motion override below can win.
+ * No existing stylesheet uses these yet.
+ */
+:root {
+  /* Radius */
+  --sn-radius-sm: 6px;
+  --sn-radius-md: 8px;
+  --sn-radius-lg: 12px;
+  --sn-radius-xl: 16px;
+  --sn-radius-full: 999px;
+
+  /* Type scale (size / line height) */
+  --sn-text-caption-size: 12px;
+  --sn-text-caption-line: 16px;
+  --sn-text-body-sm-size: 13px;
+  --sn-text-body-sm-line: 20px;
+  --sn-text-body-size: 14px;
+  --sn-text-body-line: 22px;
+  --sn-text-nav-size: 15px;
+  --sn-text-nav-line: 20px;
+  --sn-text-body-lg-size: 16px;
+  --sn-text-body-lg-line: 24px;
+  --sn-text-lead-size: 18px;
+  --sn-text-lead-line: 28px;
+  --sn-text-title-sm-size: 20px;
+  --sn-text-title-sm-line: 28px;
+  --sn-text-title-size: 24px;
+  --sn-text-title-line: 32px;
+  --sn-text-headline-size: 32px;
+  --sn-text-headline-line: 40px;
+  --sn-text-display-size: 44px;
+  --sn-text-display-line: 52px;
+  --sn-text-hero-size: 62px;
+  --sn-text-hero-line: 68px;
+
+  /* Font stacks */
+  --sn-font-ui: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sn-font-display: "Montserrat", "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Elevation (level 0 is `none`) */
+  --sn-elevation-1: 0 1px 3px var(--sn-shadow-ambient);
+  --sn-elevation-2: 0 4px 16px var(--sn-shadow-elevated);
+  --sn-elevation-3: 0 2px 6px var(--sn-shadow-ambient), 0 8px 24px var(--sn-shadow-elevated), 0 24px 56px var(--sn-shadow-key);
+
+  /* Motion */
+  --sn-duration-fast: 120ms;
+  --sn-duration-base: 200ms;
+  --sn-duration-slow: 320ms;
+  --sn-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sn-ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --sn-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --sn-ease-linear: linear;
+  --sn-distance-sm: 4px;
+  --sn-distance-md: 8px;
+  --sn-distance-lg: 16px;
+  --sn-stagger-step: 40ms;
+}
+
+/* One global reduced-motion switch. Durations collapse and distances go to 0.
+ * Deliberately no blanket `animation: none`: existing per-component
+ * reduced-motion blocks and spinners keep working untouched. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sn-duration-fast: 0.01ms;
+    --sn-duration-base: 0.01ms;
+    --sn-duration-slow: 0.01ms;
+    --sn-distance-sm: 0px;
+    --sn-distance-md: 0px;
+    --sn-distance-lg: 0px;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}

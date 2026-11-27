@@ -212,7 +212,7 @@ test.describe.serial('MEDIA_UPLOADS_ENABLED=false closes the upload routes and n
     await page.goto('/community');
     await page.getByLabel("What's happening?").fill(`b309 switch on ${RUN}`);
     await page.getByTestId('picture-input').setInputFiles({ name: 'qa.png', mimeType: 'image/png', buffer: pngOfWidth(WIDTH_CLEAR) });
-    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('li[data-phase="checking"]').getByRole('progressbar', { name: /^Checking (picture|video)$/ })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('Upload failed', { exact: true })).toHaveCount(0);
   });
 });

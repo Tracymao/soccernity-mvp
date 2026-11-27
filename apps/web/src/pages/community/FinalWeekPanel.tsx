@@ -158,10 +158,6 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
                   MP4, WebM or MOV, up to 100 MB and 120 seconds. Upload on days 22 to 24; the deadline is 23:59:59 on
                   day 24.
                 </p>
-                <p className="composer__note">
-                  Everything you upload is checked before it can be shown, and your video stays hidden from everyone but
-                  you until the reveal.
-                </p>
               </>
             ) : (
               <p className="composer__note">You can change your video until you submit.</p>

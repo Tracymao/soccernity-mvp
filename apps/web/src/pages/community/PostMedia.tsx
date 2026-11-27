@@ -5,7 +5,8 @@
 //    `mediaUrls`. Nothing is read out of a URL and the kind is never guessed from a file name.
 //  - For everyone: an <img> or a <video controls>, never a bare URL.
 //  - For the AUTHOR of the post: each file's own status, read from GET /media/uploads/:id. A file under
-//    review shows "Under review" and who can see it; a rejected file shows its reason and a Remove button.
+//    review shows only a quiet progress bar (passing checks are silent, CH-H13); a rejected file shows its
+//    reason and a Remove button.
 //    A file that is not approved is drawn ONLY through the short-lived signed `viewUrl` (from the payload,
 //    refreshed by the status read), never through its public address; if no signed link is available the
 //    file is not drawn. Removing the file is DELETE /media/uploads/:id, which also takes it out of the post,
@@ -36,6 +37,7 @@ import type { FeedPostMedia } from "../../api/feed";
 import MediaElement from "./MediaElement";
 import SensitiveMedia from "./SensitiveMedia";
 import ReportAction from "./ReportAction";
+import QuietProgress from "./QuietProgress";
 import "./MediaUpload.css";
 
 const POLL_MS = 5000;
@@ -276,18 +278,7 @@ function OwnMedia({
     <div className="post__media-item" data-media-status={status ?? "unknown"}>
       {src && <Media kind={item.kind} src={src} sensitive={sensitive} onLoadError={notPublicYet ? refreshLink : undefined} />}
       {pendingNow && (
-        <div className="post-media-author__row">
-          <div className="media-item__body">
-            <p className="media-item__name">
-              <span className="media-chip">Under review</span>
-            </p>
-            <p className="media-item__hint">
-              {noun === "video"
-                ? "Only you can see this post until its video has been checked."
-                : "Only you can see this post until its pictures have been checked."}
-            </p>
-          </div>
-        </div>
+        <QuietProgress label={`Checking ${noun}`} />
       )}
       {rejected && (
         <div className="post-media-author__row post-media-author__row--bad">

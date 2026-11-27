@@ -35,6 +35,7 @@ import ContestRulesModal from "./contest/ContestRulesModal";
 import ForfeitPopups from "./contest/ForfeitPopups";
 import { londonClock, londonDayOfMonth, londonLongDate, ordinalPlace } from "./contest/contestTime";
 import "./contest/ContestPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 
@@ -269,9 +270,7 @@ export default function ContestPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="contest-status" role="status">
-        Loading the contest…
-      </div>
+      <LoadingState variant="page" className="contest-status" label="Loading the contest…" />
     );
   }
 

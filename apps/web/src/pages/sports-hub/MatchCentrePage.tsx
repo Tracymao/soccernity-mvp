@@ -75,6 +75,7 @@ import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
+import LoadingState from "../../components/loading/LoadingState";
 import "./SportsHubPage.css";
 import "./MatchCentrePage.css";
 
@@ -201,7 +202,7 @@ function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loada
 
       <h3 className="mc-subheading">Goals</h3>
       {events.status === "idle" || events.status === "loading" ? (
-        <StatusMessage>Loading match events…</StatusMessage>
+        <LoadingState variant="section" className="mc-status" label="Loading match events…" />
       ) : events.status === "error" ? (
         <StatusMessage tone="error">Couldn&rsquo;t load this match&rsquo;s events.</StatusMessage>
       ) : (
@@ -242,7 +243,7 @@ function StatisticsTab({
   onRetryBoxScore: () => void;
 }) {
   if (stats.status === "idle" || stats.status === "loading") {
-    return <StatusMessage>Loading team statistics…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading team statistics…" />;
   }
   if (stats.status === "error") {
     return (
@@ -326,7 +327,7 @@ function AdvancedMetricGates({
 
 function BoxScoreSections({ boxScore, onRetry }: { boxScore: Loadable<MatchBoxScore>; onRetry: () => void }) {
   if (boxScore.status === "idle" || boxScore.status === "loading") {
-    return <StatusMessage>Loading player ratings and expected goals…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading player ratings and expected goals…" />;
   }
   if (boxScore.status === "error") {
     return (
@@ -438,7 +439,7 @@ function TeamLineupCard({ lineup }: { lineup: Lineups["home"] }) {
 
 function LineupsTab({ lineups, onRetry }: { lineups: Loadable<Lineups>; onRetry: () => void }) {
   if (lineups.status === "idle" || lineups.status === "loading") {
-    return <StatusMessage>Loading lineups…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading lineups…" />;
   }
   if (lineups.status === "error") {
     return (
@@ -499,7 +500,7 @@ function MomentumTab({ momentum, homeTeamName, awayTeamName, onRetry }: {
   onRetry: () => void;
 }) {
   if (momentum.status === "idle" || momentum.status === "loading") {
-    return <StatusMessage>Loading match momentum…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading match momentum…" />;
   }
   if (momentum.status === "error") {
     return (
@@ -553,7 +554,7 @@ function MomentumTab({ momentum, homeTeamName, awayTeamName, onRetry }: {
 
 function CommentaryTab({ events, onRetry }: { events: Loadable<MatchEvents>; onRetry: () => void }) {
   if (events.status === "idle" || events.status === "loading") {
-    return <StatusMessage>Loading match events…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading match events…" />;
   }
   if (events.status === "error") {
     return (
@@ -596,7 +597,7 @@ function CommentaryTab({ events, onRetry }: { events: Loadable<MatchEvents>; onR
 
 function HeadToHeadTab({ h2h, onRetry }: { h2h: Loadable<HeadToHead>; onRetry: () => void }) {
   if (h2h.status === "idle" || h2h.status === "loading") {
-    return <StatusMessage>Loading head-to-head record…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading head-to-head record…" />;
   }
   if (h2h.status === "error") {
     return (
@@ -666,7 +667,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
   onRetry: () => void;
 }) {
   if (standings.status === "idle" || standings.status === "loading") {
-    return <StatusMessage>Loading standings…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading standings…" />;
   }
   if (standings.status === "error") {
     return (
@@ -756,7 +757,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
 // failure can't take the standings table down with it.
 function TopScorersSection({ topScorers, onRetry }: { topScorers: Loadable<TopScorers>; onRetry: () => void }) {
   if (topScorers.status === "idle" || topScorers.status === "loading") {
-    return <StatusMessage>Loading top scorers…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading top scorers…" />;
   }
   if (topScorers.status === "error") {
     return (
@@ -794,7 +795,7 @@ function TopScorersSection({ topScorers, onRetry }: { topScorers: Loadable<TopSc
 
 function VideoTab({ highlights, onRetry }: { highlights: Loadable<Highlights>; onRetry: () => void }) {
   if (highlights.status === "idle" || highlights.status === "loading") {
-    return <StatusMessage>Loading video clips…</StatusMessage>;
+    return <LoadingState variant="section" className="mc-status" label="Loading video clips…" />;
   }
   if (highlights.status === "error") {
     return (
@@ -944,7 +945,7 @@ export default function MatchCentrePage() {
   if (matchState.status === "idle" || matchState.status === "loading") {
     return (
       <div className="mc-page">
-        <StatusMessage>Loading match…</StatusMessage>
+        <LoadingState variant="page" className="mc-status" label="Loading match…" />
       </div>
     );
   }

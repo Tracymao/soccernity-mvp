@@ -26,12 +26,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { getUser, getFollowers, getFollowing, UsersApiError, type UserProfile, type FollowUserSummary } from "../api/users";
 import { countryName } from "../lib/countries";
+import { splitDisplayName } from "./profile/profileFields";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
 import PinnedEntry from "./community/PinnedEntry";
 import SavedPostsTab from "./profile/SavedPostsTab";
 import PrivateProfileNote from "./profile/PrivateProfileNote";
 import "./profile/ProfilePage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Tab = "posts" | "media" | "saved";
@@ -134,9 +136,7 @@ export default function ProfilePage() {
 
   if (loadState === "loading") {
     return (
-      <div className="profile-status-message" role="status">
-        Loading your profile…
-      </div>
+      <LoadingState variant="page" className="profile-status-message" label="Loading your profile…" />
     );
   }
 
@@ -147,6 +147,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  const firstName = splitDisplayName(profile.displayName).firstName;
 
   return (
     <div className="profile-page">
@@ -166,10 +168,9 @@ export default function ProfilePage() {
           <div className="profile-header__top">
             <div>
               <h1 className="profile-header__name">{profile.publicName}</h1>
-              {/* No @username/handle field exists on the User model --
-                  email shown instead as the closest real identity data,
-                  flagged as a departure from the Figma frame's @handle. */}
-              <p className="profile-header__meta">{profile.email}</p>
+              {/* The line under the name is the first name. The account email lives in Edit Profile
+                  (read-only, with a link to Change email). Decision Log #576; code-only. */}
+              {firstName && <p className="profile-header__meta">{firstName}</p>}
               <p className="profile-header__meta">
                 Member since{" "}
                 {new Date(profile.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
@@ -227,7 +228,7 @@ export default function ProfilePage() {
               <li key={item.id}>{item.publicName}</li>
             ))}
           </ul>
-          {followLoading && <p className="profile-section__body">Loading…</p>}
+          {followLoading && <LoadingState variant="section" className="profile-section__body" label="Loading…" />}
           {followCursor && !followLoading && (
             <button type="button" className="profile-load-more" onClick={loadMoreFollow}>
               Load more

@@ -159,7 +159,9 @@ describe("ChangePasswordPage", () => {
       save();
       expect(await screen.findByText(MESSAGES.currentWrong)).not.toBeNull();
       expect(screen.getByLabelText("Current password").getAttribute("aria-invalid")).toBe("true");
-      expect(document.activeElement).toBe(screen.getByLabelText("Current password"));
+      // The page focuses the field in an effect, once the form is enabled again, which can run
+      // after the error text is already on screen.
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Current password")));
       expect((screen.getByLabelText("Current password") as HTMLInputElement).value).toBe("wrongpass");
       expect((screen.getByLabelText("New password") as HTMLInputElement).value).toBe("12345678");
       expect(screen.queryByText("Password changed")).toBeNull();

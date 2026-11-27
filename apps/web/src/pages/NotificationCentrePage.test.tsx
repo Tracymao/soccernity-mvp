@@ -550,13 +550,17 @@ describe("NotificationCentrePage", () => {
       };
     }
 
-    it("an approved picture says so and opens the Community feed", async () => {
+    it("an approved-media row is never shown (CH-H13), while a rejected one in the same list is", async () => {
       seedSession("test-token");
-      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_approved", "image")], nextCursor: null, unreadCount: 1 });
+      vi.mocked(listNotifications).mockResolvedValueOnce({
+        items: [mediaRow("post_media_approved", "image"), mediaRow("post_media_rejected", "image")],
+        nextCursor: null,
+        unreadCount: 2,
+      });
       renderPage();
-      const row = (await screen.findByText(/was approved/)).closest("a");
-      expect(row?.textContent).toMatch(/^Your picture was approved/);
-      expect(row?.getAttribute("href")).toBe("/community");
+      expect(await screen.findByText(/wasn’t approved/)).not.toBeNull();
+      expect(screen.queryByText(/was approved/)).toBeNull();
+      expect(screen.queryByText("You have a new notification")).toBeNull();
     });
 
     it("a rejected video names the video and points at the post, without ever carrying the reason", async () => {

@@ -26,6 +26,7 @@ import { Link } from "react-router";
 import { listFixtures, SportsApiError, type MatchSummary, type TeamRef } from "../../api/sports";
 import { formatKickoffTime, monogramFor, todayIso } from "../sports-hub/format";
 import refreshIcon from "../../assets/icons/trends-refresh.svg";
+import LoadingState from "../../components/loading/LoadingState";
 
 export const FIXTURES_COUNT = 7;
 
@@ -90,9 +91,7 @@ export default function FixturesPanel() {
       </header>
 
       {state === "loading" && items.length === 0 && (
-        <p className="trends-card__status" role="status">
-          Loading fixtures…
-        </p>
+        <LoadingState variant="section" className="trends-card__status" label="Loading fixtures…" />
       )}
 
       {state === "error" && (

@@ -53,6 +53,7 @@ import ClubMemberRow from "./clubs/ClubMemberRow";
 import PostCard from "./community/PostCard";
 import "./clubs/ClubsPage.css";
 import "./community/CommunityPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
 type SectionState = "loading" | "loaded" | "error";
@@ -178,9 +179,7 @@ export default function ClubFanPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="clubs-status" role="status">
-        Loading club…
-      </div>
+      <LoadingState variant="page" className="clubs-status" label="Loading club…" />
     );
   }
 
@@ -252,9 +251,7 @@ export default function ClubFanPage() {
         </h2>
 
         {feedState === "loading" && (
-          <p className="clubs-status" role="status">
-            Loading posts…
-          </p>
+          <LoadingState variant="section" className="clubs-status" label="Loading posts…" />
         )}
         {feedState === "error" && (
           <p className="clubs-status clubs-status--error" role="alert">
@@ -292,9 +289,7 @@ export default function ClubFanPage() {
         </div>
 
         {membersState === "loading" && (
-          <p className="clubs-status" role="status">
-            Loading members…
-          </p>
+          <LoadingState variant="section" className="clubs-status" label="Loading members…" />
         )}
         {membersState === "error" && (
           <p className="clubs-status clubs-status--error" role="alert">

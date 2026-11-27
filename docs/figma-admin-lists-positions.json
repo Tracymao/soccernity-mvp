@@ -1,0 +1,9 @@
+{"note":"Founder asked for /tmp/lists-before.json; no /tmp on this machine, stored here. Frame coordinates.",
+"before":{"Users 917:218":{"titleX":428,"titleY":135,"tableX":428,"tableW":912,"tableY":236},
+"Articles 123:56":{"titleX":428,"tableX":428,"tableW":912,"tableY":236},
+"Categories 128:488":{"titleX":428,"tableX":428,"tableW":912},
+"Add Category 138:93":{"titleX":428,"tableX":428,"tableW":912}},
+"after":{"Users 917:218":{"titleX":300,"titleY":129,"tabsY":250,"tableX":300,"tableW":1100,"tableY":294,"linkX":1250},
+"Articles 123:56":{"titleX":300,"titleY":129,"tabsY":250,"tableX":300,"tableW":1100,"tableY":294},
+"Categories 128:488":{"titleX":300,"titleY":129,"tabsY":250,"tableX":300,"tableW":1100,"tableY":294},
+"Add Category 138:93":{"titleX":300,"titleY":129,"backLinkY":250,"tableX":300,"tableW":1100,"tableY":294}}}

@@ -50,6 +50,7 @@ import { isAwaitingConsent, sensitiveContentFlags } from "./grassroots/errors";
 import SensitiveContentWarning from "./grassroots/SensitiveContentWarning";
 import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
+import LoadingState from "../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session" | "not-organiser";
 type OpponentMode = "registered" | "other" | "later";
@@ -197,9 +198,7 @@ export default function GrassrootsScheduleFixturePage() {
 
   if (loadState === "loading") {
     return (
-      <div className="grassroots-status" role="status">
-        Loading…
-      </div>
+      <LoadingState variant="page" className="grassroots-status" label="Loading…" />
     );
   }
 
@@ -351,7 +350,7 @@ export default function GrassrootsScheduleFixturePage() {
                     value={oppCity}
                     onChange={(e) => setOppCity(e.target.value)}
                   />
-                  {oppSearching && <p className="grassroots-field__hint">Searching…</p>}
+                  {oppSearching && <LoadingState variant="inline" className="grassroots-field__hint" label="Searching…" />}
                   {!oppSearching && oppCity.trim().length >= 2 && oppResults.length === 0 && (
                     <p className="grassroots-field__hint">No registered teams found in that city.</p>
                   )}

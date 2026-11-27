@@ -93,17 +93,16 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
   async function composeWith(page: Page, files: string | { name: string; mimeType: string; buffer: Buffer }, text: string, testId: 'picture-input' | 'video-input') {
     await page.getByLabel("What's happening?").fill(text);
     await page.getByTestId(testId).setInputFiles(files);
-    // The browser sends the file straight to the object store; the API verifies and strips it; then it is "Checking".
-    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(textMatching('Checking… only you can see this until it has been checked.'))).toBeVisible();
+    // The browser sends the file straight to the object store; the API verifies and strips it; then it is checked (CH-H13: a bar only, no wording).
+    await expect(page.locator('li[data-phase="checking"]').getByRole('progressbar', { name: /^Checking (picture|video)$/ })).toBeVisible({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Post', exact: true }).click();
-    await expect(page.getByText('Checking', { exact: true })).toHaveCount(0); // the tray is cleared once the post is out
+    await expect(page.getByRole('list', { name: 'Files for this post' })).toHaveCount(0); // the tray is cleared once the post is out
   }
 
   test('1. the author attaches files in the browser and publishes while they are still being checked', async ({ page }) => {
     await signIn(page, uploader.email);
     await page.goto('/community');
-    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toBeVisible();
+    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toHaveCount(0);
 
     await composeWith(page, png('clear.png', WIDTH_CLEAR), TEXT.clear, 'picture-input');
     posts.clear = await postId(uploader.userId, TEXT.clear);
@@ -183,8 +182,8 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await page.goto('/community');
 
     const unsureCard = page.locator('article.post', { hasText: TEXT.unsure });
-    await expect(unsureCard.getByText('Under review')).toBeVisible();
-    await expect(unsureCard.getByText(textMatching('Only you can see this post until its pictures have been checked.'))).toBeVisible();
+    await expect(unsureCard.getByRole('progressbar', { name: 'Checking picture' })).toBeVisible();
+    await expect(unsureCard.getByText('Under review')).toHaveCount(0);
     // B-260: the file under review is drawn through the signed link from the post's `media`, never through its
     // public address (the private object only exists in the private prefix until it is approved).
     const pendingSrc = await unsureCard.getByAltText('Picture attached to this post').getAttribute('src');
@@ -332,8 +331,8 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
   test('6. the uploader is told by notification, and the moderator\'s reason is on the post', async ({ page }) => {
     await signIn(page, uploader.email);
     await page.goto('/notifications');
-    await expect(page.getByText(/Your picture was approved/).first()).toBeVisible();
     await expect(page.getByText(/Your picture wasn’t approved. See why on your post/).first()).toBeVisible();
+    await expect(page.getByText(/Your picture was approved/)).toHaveCount(0); // CH-H13: passing is silent
 
     await page.goto('/community');
     const card = page.locator('article.post', { hasText: TEXT.clear });

@@ -29,7 +29,7 @@
   border: none;
   padding: 8px 4px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sn-text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -40,9 +40,15 @@
   border-bottom-color: var(--sn-brand-navy);
 }
 
+.us-tab:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
 .us-note {
   margin: 0;
   font-size: 13px;
+  line-height: 20px;
   color: var(--sn-text-secondary);
 }
 
@@ -50,6 +56,17 @@
 .us-error {
   color: var(--sn-text-secondary);
   font-size: 14px;
+}
+
+/* a page-level load error is a card, like the table */
+.us-page > .us-error {
+  padding: 20px;
+  border-width: 0 0 0 6px;
+  border-radius: var(--sn-radius-lg);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .us-error {
@@ -71,7 +88,7 @@
 
 .us-card {
   background-color: var(--sn-background-surface);
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -85,11 +102,17 @@
   color: var(--sn-text-primary);
 }
 
+/* body text under a card heading (empty states) */
+.us-card__title + .us-note {
+  font-size: 14px;
+  line-height: 22px;
+}
+
 /* table */
 
 .us-table {
   background-color: var(--sn-background-surface);
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   overflow: hidden;
 }
 
@@ -98,21 +121,28 @@
   grid-template-columns: 1.4fr 130px 110px 220px;
   gap: 16px;
   align-items: center;
-  padding: 14px 20px;
-  font-size: 13px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .us-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   background-color: var(--sn-green-tint-12);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--sn-text-secondary);
-  text-transform: uppercase;
 }
 
 .us-cell--primary {
   color: var(--sn-text-primary);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .us-cell--secondary {
@@ -130,21 +160,23 @@
 .us-pill {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--sn-radius-full);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
-  text-transform: lowercase;
+  color: var(--sn-brand-navy);
+  text-transform: capitalize;
 }
 
 .us-pill--strong {
-  background-color: var(--sn-brand-navy);
-  color: var(--sn-text-on-navy);
+  background-color: var(--sn-green-tint-12);
 }
 
 .us-pill--soft {
-  background-color: var(--sn-green-tint-12);
-  color: var(--sn-text-primary);
+  background-color: var(--sn-icon-inactive);
 }
 
 /* the frames write these labels in sentence case ("Support action"), unlike the lowercase status values */
@@ -182,23 +214,41 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: var(--sn-radius-md);
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   border: 1px solid transparent;
   cursor: pointer;
+  transition:
+    background-color var(--sn-duration-fast) var(--sn-ease-standard),
+    outline-color var(--sn-duration-fast) var(--sn-ease-standard);
 }
 
 .us-btn:disabled {
-  opacity: 0.55;
+  opacity: 0.4;
   cursor: default;
 }
 
+.us-btn:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
 .us-btn--outline {
-  background-color: var(--sn-background-surface);
+  background-color: transparent;
   border-color: var(--sn-brand-navy);
-  color: var(--sn-text-primary);
+  color: var(--sn-brand-navy);
+  font-weight: 500;
+}
+
+.us-btn--outline:hover:not(:disabled) {
+  background-color: rgba(40, 46, 101, 0.08);
+}
+
+.us-btn--outline:active:not(:disabled) {
+  background-color: rgba(40, 46, 101, 0.15);
 }
 
 .us-btn--primary {
@@ -206,8 +256,12 @@
   color: var(--sn-text-on-navy);
 }
 
+.us-btn--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
 .us-btn--sm {
-  padding: 10px 20px;
+  padding: 9px 20px;
   font-size: 14px;
   align-self: flex-start;
 }
@@ -381,7 +435,7 @@
 }
 
 .us-btn--lg {
-  padding: 10px 20px;
+  padding: 9px 20px;
   font-size: 14px;
   text-decoration: none;
 }
@@ -512,7 +566,6 @@ p.ud-callout {
 .us-pill--outline {
   background-color: var(--sn-background-surface);
   border: 1px solid var(--sn-icon-inactive);
-  color: var(--sn-text-secondary);
 }
 
 .ir-row {
@@ -520,8 +573,9 @@ p.ud-callout {
   gap: 12px;
 }
 
-.ir-row + .ir-row:not(.us-table__row--head) {
-  border-top: 1px solid var(--sn-icon-inactive);
+/* on this table the soft pill marks the positive status */
+.ir-row .us-pill--soft {
+  background-color: var(--sn-green-tint-12);
 }
 
 .ir-empty {

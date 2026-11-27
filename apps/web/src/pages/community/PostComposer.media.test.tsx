@@ -94,13 +94,11 @@ function write(text = "What a goal") {
 }
 
 describe("composer — attach controls", () => {
-  it("offers a picture and a video control, enabled, and the tagged 'checked' line", () => {
+  it("offers a picture and a video control, enabled, and no note about the check under the empty tray", () => {
     renderComposer();
     expect((screen.getByRole("button", { name: /picture/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /video/i }) as HTMLButtonElement).disabled).toBe(false);
-    expect(
-      screen.getByText("Everything you upload is checked before other people can see it."),
-    ).not.toBeNull();
+    expect(screen.queryByText(/Everything you upload is checked/)).toBeNull();
     // The poll affordance is gone and so is the old "arrive with a later media release" note.
     expect(screen.queryByText(/later media release/i)).toBeNull();
   });
@@ -114,18 +112,16 @@ describe("composer — attach controls", () => {
     write();
     choosePicture();
 
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(createUpload).toHaveBeenCalledWith("tok", { contentType: "image/png", size: 5 });
     expect(confirmUpload).toHaveBeenCalledWith("tok", "m1");
-    expect(
-      screen.getByText("Checking… only you can see this until it has been checked."),
-    ).not.toBeNull();
+    expect(screen.queryByText(/only you can see this until/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() => expect(createPost).toHaveBeenCalledWith("tok", { contentText: "What a goal", mediaIds: ["m1"] }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     // The tray is empty again after publishing.
-    expect(screen.queryByText("Checking")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("shows progress while uploading and Cancel aborts it and removes the file", async () => {
@@ -170,13 +166,15 @@ describe("composer — attach controls", () => {
     vi.mocked(getUpload).mockResolvedValue(mediaView({ status: "approved" }));
     renderComposer();
     choosePicture();
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 50);
     });
-    await screen.findByText("Approved");
-    expect(screen.getByText("Your pictures can be seen with your post.")).not.toBeNull();
+    await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull());
+    expect(screen.queryByText("Approved")).toBeNull();
+    expect(screen.queryByText(/Checking/)).toBeNull();
+    expect(screen.queryByText("Your pictures can be seen with your post.")).toBeNull();
     expect(getUpload).toHaveBeenCalledWith("tok", "m1");
   });
 
@@ -204,7 +202,7 @@ describe("composer — attach controls", () => {
     await screen.findByText("Check your connection and try again.");
     expect(screen.getAllByText("Upload failed").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(createUpload).toHaveBeenCalledTimes(2);
   });
 
@@ -264,7 +262,7 @@ describe("composer — attach controls", () => {
     const video = (name: string) =>
       fireEvent.change(screen.getByTestId("video-input"), { target: { files: [new File(["v"], name, { type: "video/mp4" })] } });
     video("a.mp4");
-    await screen.findByText("Checking");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     video("b.mp4");
     expect(screen.getByText("You can add one video to a post.")).not.toBeNull();
     expect(createUpload).toHaveBeenCalledTimes(1);

@@ -58,11 +58,9 @@ describe("PostMedia — as the author", () => {
   it("shows a picture under review with who can see it (tagged), read from the media id in the payload", async () => {
     vi.mocked(getUpload).mockResolvedValue(view());
     render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" postId="post-9" authorId="author-9" isOwn />);
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(getUpload).toHaveBeenCalledWith("tok", ID);
-    expect(
-      screen.getByText("Only you can see this post until its pictures have been checked."),
-    ).not.toBeNull();
+    expect(screen.queryByText(/Only you can see this post/)).toBeNull();
     expect(screen.getByAltText("Picture attached to this post")).not.toBeNull();
   });
 
@@ -71,7 +69,7 @@ describe("PostMedia — as the author", () => {
     render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" postId="post-9" authorId="author-9" isOwn />);
     // Before the status read arrives: the payload's signed link, not the public address.
     expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED);
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED);
     expect(document.querySelector(`[src="${IMAGE}"]`)).toBeNull();
   });
@@ -79,7 +77,7 @@ describe("PostMedia — as the author", () => {
   it("draws nothing for a not-approved file when no signed link is available (never falls back to the public address)", async () => {
     vi.mocked(getUpload).mockResolvedValue(view({ viewUrl: null }));
     render(<PostMedia media={[{ id: ID, kind: "image" }]} urls={[IMAGE]} accessToken="tok" postId="post-9" authorId="author-9" isOwn />);
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     expect(screen.queryByAltText("Picture attached to this post")).toBeNull();
     expect(document.querySelector(`[src="${IMAGE}"]`)).toBeNull();
   });
@@ -89,7 +87,7 @@ describe("PostMedia — as the author", () => {
       .mockResolvedValueOnce(view())
       .mockResolvedValue(view({ viewUrl: SIGNED_REFRESHED }));
     render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" postId="post-9" authorId="author-9" isOwn />);
-    await screen.findByText("Under review");
+    await screen.findByRole("progressbar", { name: /Checking/ });
     fireEvent.error(screen.getByAltText("Picture attached to this post"));
     await waitFor(() =>
       expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED_REFRESHED),
@@ -109,7 +107,8 @@ describe("PostMedia — as the author", () => {
     const { container } = render(
       <PostMedia media={[{ id: ID, kind: "video", viewUrl: "https://private.test/signed/blob" }]} urls={[VIDEO]} accessToken="tok" postId="post-9" authorId="author-9" isOwn />,
     );
-    await screen.findByText(/its video has been checked/);
+    await screen.findByRole("progressbar", { name: /Checking/ });
+    expect(screen.queryByText(/has been checked/)).toBeNull();
     expect(container.querySelector("video")?.getAttribute("src")).toBe("https://private.test/signed/blob");
   });
 

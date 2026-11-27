@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("AuthProvider start-up restore (B-246)", () => {
-  it("shows a loading line, renders NOTHING else until the refresh settles, then the signed-in page (no login flash)", async () => {
+  it("shows the splash, renders NOTHING else until the refresh settles, then the signed-in page (no login flash)", async () => {
     let resolve!: (r: Response) => void;
     backend.mockImplementation(() => new Promise<Response>((r) => (resolve = r)));
     const pageRendered = vi.fn();
@@ -52,7 +52,9 @@ describe("AuthProvider start-up restore (B-246)", () => {
       </AuthProvider>,
     );
 
-    expect(screen.getByRole("status").textContent).toBe("Loading…");
+    expect(screen.getByRole("status").textContent).toBe("Loading");
+    // The branded splash (Decision Log #581), not a bare paragraph.
+    expect(screen.getByRole("status").className).toContain("sn-boot");
     await waitFor(() => expect(refreshCalls()).toHaveLength(1));
     // The page has not rendered yet, so it cannot have shown a signed-out prompt.
     expect(pageRendered).not.toHaveBeenCalled();
@@ -63,7 +65,7 @@ describe("AuthProvider start-up restore (B-246)", () => {
 
     await screen.findByText("signed in:restored");
     expect(pageRendered).toHaveBeenCalled();
-    expect(screen.queryByText("Loading…")).toBeNull();
+    expect(screen.queryByText("Loading")).toBeNull();
     // The very first render of the page already had the session.
     expect(screen.queryByText(/signed out/)).toBeNull();
   });
@@ -83,12 +85,12 @@ describe("AuthProvider start-up restore (B-246)", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(RESTORE_GATE_MAX_MS - 100);
       });
-      expect(screen.getByRole("status").textContent).toBe("Loading…");
+      expect(screen.getByRole("status").textContent).toBe("Loading");
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(200);
       });
-      expect(screen.queryByText("Loading…")).toBeNull();
+      expect(screen.queryByText("Loading")).toBeNull();
       expect(screen.getByText("signed out (ready)")).toBeTruthy();
 
       await act(async () => {

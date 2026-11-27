@@ -37,6 +37,7 @@ import { getArticleById, listArticles, BlogApiError, type Article, type ArticleS
 import CoverMedia from "./CoverMedia";
 import { SAMPLE_COMMENTS } from "./blogData";
 import "./ArticleDetailPage.css";
+import LoadingState from "../../components/loading/LoadingState";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
 
@@ -132,9 +133,7 @@ export default function ArticleDetailPage() {
 
   if (loadState === "loading") {
     return (
-      <p className="article-detail" role="status">
-        Loading article&hellip;
-      </p>
+      <LoadingState variant="page" className="article-detail" label="Loading article…" />
     );
   }
 

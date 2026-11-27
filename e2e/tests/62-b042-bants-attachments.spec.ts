@@ -72,22 +72,23 @@ test.describe.serial('B-042: Bants room composer takes pictures and video', () =
     await expect(page.getByRole('button', { name: /attach photo\/video/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Picture/ })).toBeEnabled();
     await expect(page.getByRole('button', { name: /Video/ })).toBeEnabled();
-    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toBeVisible();
+    await expect(page.getByText(textMatching('Everything you upload is checked before other people can see it.'))).toHaveCount(0);
 
     const text = `Bants picture ${RUN}`;
     await page.getByPlaceholder(/say something to/i).fill(text);
     await page.getByTestId('picture-input').setInputFiles(png('goal.png', WIDTH_CLEAR));
-    // Straight to the object store, then the API verifies it: the tray shows "Checking".
-    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
+    // Straight to the object store, then the API verifies it: the tray shows the checking bar.
+    await expect(page.locator('li[data-phase="checking"]').getByRole('progressbar', { name: /^Checking (picture|video)$/ })).toBeVisible({ timeout: 60_000 });
     await shot(page, '01-attached-checking-desktop');
     await page.getByRole('button', { name: 'Post', exact: true }).click();
-    await expect(page.getByText('Checking', { exact: true })).toHaveCount(0); // the tray is cleared once the post is out
+    await expect(page.getByRole('list', { name: 'Files for this post' })).toHaveCount(0); // the tray is cleared once the post is out
 
-    // The author sees their own post, with its picture under review.
+    // The author sees their own post, with its picture still being checked.
     const mine = page.locator('article.post', { hasText: text });
     await expect(mine).toBeVisible();
-    await expect(mine.getByText('Under review')).toBeVisible();
-    await shot(page, '02-own-post-under-review-desktop');
+    await expect(mine.getByRole('progressbar', { name: 'Checking picture' })).toBeVisible();
+    await expect(mine.getByText('Under review')).toHaveCount(0);
+    await shot(page, '02-own-post-checking-desktop');
 
     // Server state: the post carries the media id the composer sent.
     const row = await db().post.findFirst({ where: { authorId: author.userId, contentText: text }, select: { id: true, banterRoomId: true } });
@@ -132,7 +133,7 @@ test.describe.serial('B-042: Bants room composer takes pictures and video', () =
     const text = `Bants text only ${RUN}`;
     await composer.fill(text);
     await page.getByTestId('picture-input').setInputFiles(png('later-removed.png', WIDTH_CLEAR));
-    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('li[data-phase="checking"]').getByRole('progressbar', { name: /^Checking (picture|video)$/ })).toBeVisible({ timeout: 60_000 });
     await page.locator('.media-item').first().getByRole('button', { name: 'Remove' }).click();
     await expect(page.locator('.media-item')).toHaveCount(0);
     await page.getByRole('button', { name: 'Post', exact: true }).click();

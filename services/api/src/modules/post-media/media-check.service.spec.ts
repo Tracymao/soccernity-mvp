@@ -188,10 +188,8 @@ describe('MediaCheckService.checkOne', () => {
     expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null, ...POST_NOT_REMOVED_BY_MODERATION });
     expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW, publishedAt: NOW, checkState: 'done', checkLabels: [] });
     // The uploader is told in the same transaction (B-037): the "approved" variant, naming the file.
-    expect(prisma.notification.create).toHaveBeenCalledWith({
-      data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
-      select: { id: true },
-    });
+    // Approved is silent (Decision Log #578): no notification is written.
+      expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   // ---- B-257 (Decision Log #430 item 2): the private prefix -------------------------------------------
@@ -314,10 +312,8 @@ describe('MediaCheckService.checkOne', () => {
       expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW });
       expect(write.data.publishedAt).toBeUndefined();
       // The decision itself is unchanged: the uploader is told "approved".
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
-        select: { id: true },
-      });
+      // Approved is silent (Decision Log #578): no notification is written.
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('LIVE post: published as before (copy, publishedAt written, private original removed)', async () => {
@@ -352,7 +348,8 @@ describe('MediaCheckService.checkOne', () => {
       expect(prisma.postMedia.updateMany.mock.calls[2][0].data.publishedAt).toBeUndefined();
       expect(objects.finishPublish).not.toHaveBeenCalled();
       expect(objects.discardUnrecordedCopy).toHaveBeenCalledWith('m1', 'post-media/u1/m1.jpg');
-      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      // Approved is silent (Decision Log #578): no notification is written.
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('a rejection is untouched by the post state (no publishing write, no extra guard)', async () => {

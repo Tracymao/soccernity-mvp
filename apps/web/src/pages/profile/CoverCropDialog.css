@@ -287,12 +287,6 @@
   color: var(--sn-text-primary);
 }
 
-.cover-crop__notice {
-  margin: 0;
-  font: 400 13px "Inter", sans-serif;
-  color: var(--sn-text-secondary);
-}
-
 @media (max-width: 480px) {
   .cover-crop__scrim {
     padding: 0;
