@@ -6059,3 +6059,9 @@ Frames `5794:8635` and `6947:40930` now match the shipped admin code. Figma-only
 - Frames `5796:8635`, `6947:41119` and `6947:41276` now match the shipped admin Report Detail page. Figma-only items are hidden and renamed "ARCHIVED - ...". Variant frames not touched. No new B-ID, no app code.
 - Open follow-up: Figma shows Status "Open"; the code renders "open" until the M1 code PR.
 - Report: `docs/figma-admin-report-detail-align-report.md`.
+
+## 161. Updates 2026-11-27 (Figma Appeal Review frame aligned to the shipped admin code; Decision Log #590; docs only)
+
+- Frame `5796:8753` now matches the shipped Appeal Review page. Figma-only layers are hidden and renamed `ARCHIVED - …`; none were deleted. Variant frames `6672:29059` and `6870:30808` are unchanged.
+- No application code changed and no new B-ID.
+- Detail: `docs/figma-admin-appeal-review-align-report.md`.
