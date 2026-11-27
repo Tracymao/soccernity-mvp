@@ -6124,3 +6124,11 @@ follow the shipped message report page; 7011:57380 is archived as superseded. Re
 | # | Decision | Status |
 |---|---|---|
 | 597 | Message-target Report Detail variants are drawn from the shipped code by cloning the premium blocks. 7011:57380 is archived as identical in state to 7041:61295 (2026-11-27 precedent). | Applied in Figma; the archive is a judgement call the founder can reverse. |
+
+## 169. Updates 2026-11-27 (Figma hold-state Moderation frames restyled to the shipped code and premium standard; Decision Log #598)
+
+Docs and Figma only; no app code, no new B-ID. Seven frames: 6870:30620, 6672:28898, 6672:29059, 6870:30808, 6672:27278, 6672:27349, 6672:27420. Report: docs/figma-admin-hold-states-premium-report.md.
+
+| # | Date | Decision | Status |
+|---|---|---|---|
+| #598 | 2026-11-27 | The seven hold-related Moderation frames now follow the shipped admin code: a Hold status row (not a card), the shipped dialog copy, and no "[COPY PENDING LEGAL REVIEW]" tag where the code has none. The removed tags are listed in the report for founder review. | Done (Figma and docs) |
