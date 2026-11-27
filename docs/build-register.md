@@ -6044,3 +6044,8 @@ All six sections add no B-ID. No counter changes: no new B-ID and no wave count 
 ## 157. Updates 2026-11-26 (Figma carry-over fixes after the admin lists code PR; Decision Log #586; docs and Figma only, no new B-ID)
 
 Figma now matches the shipped admin list code: "Load more" 92x29 on Articles and Categories, patterns load-error copy and 18px empty heading, Add Category search at y198 with a 39px input and 90px Submit, 24 hidden shell layers removed, two standalone search bars moved to the shell position. Status pills needed no change. "KA" initials left unchanged (no Inter Bold text style). No app code changed. Report: docs/figma-admin-lists-align-report.md, "Carry-over fixes". Note: #585 is cited by Section 156 but has no row in the Decision Log table; it was not filled here.
+
+## 158. Updates 2026-11-27 (Figma Incorrect-details reports frames aligned to the shipped admin code; Decision Log #587; docs and Figma only)
+
+- The eight Incorrect-details reports frames (`6737:27844`, `6738:27962`, `6738:28144`, `6738:28328`, `6738:28510`, `6738:28693`, `6738:29952`, `6738:30173`) now match `IncorrectDetailsReportsPage.tsx` and `users.css`. No application code changed; no new B-ID.
+- Report: `docs/figma-admin-incorrect-details-align-report.md`.
