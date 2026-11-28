@@ -38,3 +38,13 @@ All frames: 1440 wide, at least 1184 high, Admin Shell active item "None" (the c
 | `7073:64469` | Saving | `7408:70620` |
 | `7073:64643` | Password changed | `7408:70654` |
 
+## Group d: profile view and edit
+
+| Frame | State | New content |
+| --- | --- | --- |
+| `5403:7327` | View (two-factor on, required) | `7408:69841` |
+| `7408:70656` (new) | Edit | `7408:70816` |
+| `7408:70818` (new) | Edit, saving | `7408:70978` |
+| `7408:70980` (new) | Edit, could not save | `7408:71144` |
+| `7408:71146` (new) | Page loading | `7408:71260` |
+
