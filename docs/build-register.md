@@ -6180,3 +6180,7 @@ Figma and docs only. Full detail: `docs/figma-admin-media-fixes-report.md`.
 ## 176. Updates 2026-11-28 (Figma admin Suspected illegal imagery list L1 to L7 restyled to the premium standard)
 
 - **Decision Log #605** (branch `docs/figma-admin-suspected-illegal-list-premium`): the seven list frames L1 to L7 (`7074:64435`, `7075:65405` to `7075:66272`) are restyled to match `SuspectedIllegalListPage.tsx`. Figma and docs only; no code or CSS changed. L1 now shows filter "All" (a "Not filed" filter cannot show mixed statuses), so L1 and L2 are identical; L4 shows "All" with "Apply filter" disabled; L6 and L7 gain the filter card the code renders. Open for the code PR: sentence-case table header; full-width columns in the 110:90:150:130:100 proportions. D1 to D14 are not touched. Details: `docs/figma-admin-suspected-illegal-list-premium-report.md`.
+
+## 177. Updates 2026-11-28 (Figma admin Suspected illegal imagery record detail D1 to D14 restyled to the premium standard)
+
+Decision Log #606: the 14 record detail frames (D1 `7077:65267` to D14 `7080:68204`) are restyled to match `SuspectedIllegalDetailPage.tsx`. Figma and docs only; no code or CSS changed. Old layers are archived inside each frame. The "[COPY PENDING LEGAL REVIEW]" tags (two strings, D1 to D9) are removed; the code's "Pending counsel" wording stays. The "Already decided" callout and the "Couldn’t save" title are dropped because the code renders neither. Report: `docs/figma-admin-suspected-illegal-detail-premium-report.md`, which lists the notes for the code PR.
