@@ -67,14 +67,18 @@ import {
   type Momentum,
   type HeadToHead,
   type Standings,
+  type StandingsZone,
   type TopScorers,
   type Highlights,
-  type MatchEvent,
 } from "../../api/sports";
 import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
+import SummaryTimeline from "./SummaryTimeline";
+import TeamStatRows from "./TeamStatRows";
+import PlayerStatsTable from "./PlayerStatsTable";
+import { LineupPitch, PairedRows, canDrawPitch, coachRows } from "./LineupPitch";
 import LoadingState from "../../components/loading/LoadingState";
 import "./SportsHubPage.css";
 import "./MatchCentrePage.css";
@@ -160,10 +164,6 @@ function RetryButton({ onRetry }: { onRetry: () => void }) {
 
 // ---------- Match Summary (sub tab) ----------
 
-function isGoalEvent(e: MatchEvent): boolean {
-  return e.type.toLowerCase() === "goal";
-}
-
 // The kickoff-alert control under the status line (B-070, Figma C3 / C4). Signed-in only; the
 // caller does not render it for a logged-out visitor.
 function MatchHeaderAlert({ match }: { match: MatchListItem }) {
@@ -183,7 +183,23 @@ function MatchHeaderAlert({ match }: { match: MatchListItem }) {
 function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loadable<MatchEvents> }) {
   return (
     <Section title="Match summary">
-      <dl className="mc-facts">
+      {events.status === "idle" || events.status === "loading" ? (
+        <LoadingState variant="section" className="mc-status" label="Loading match events…" />
+      ) : events.status === "error" ? (
+        <StatusMessage tone="error">Couldn&rsquo;t load this match&rsquo;s events.</StatusMessage>
+      ) : (
+        <SummaryTimeline items={events.data.items} match={match} />
+      )}
+
+      <h3 className="mc-band">Match information</h3>
+      {/* No referee: the match data does not carry one. */}
+      <dl className="mc-info">
+        {match.venue && (
+          <div>
+            <dt>Venue</dt>
+            <dd>{match.venue}</dd>
+          </div>
+        )}
         <div>
           <dt>Competition</dt>
           <dd>{match.competition}{match.league.round ? ` · ${match.league.round}` : ""}</dd>
@@ -192,39 +208,7 @@ function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loada
           <dt>Kickoff</dt>
           <dd>{formatKickoffFull(match.kickoffTime)}</dd>
         </div>
-        {match.venue && (
-          <div>
-            <dt>Venue</dt>
-            <dd>{match.venue}</dd>
-          </div>
-        )}
       </dl>
-
-      <h3 className="mc-subheading">Goals</h3>
-      {events.status === "idle" || events.status === "loading" ? (
-        <LoadingState variant="section" className="mc-status" label="Loading match events…" />
-      ) : events.status === "error" ? (
-        <StatusMessage tone="error">Couldn&rsquo;t load this match&rsquo;s events.</StatusMessage>
-      ) : (
-        (() => {
-          const goals = events.data.items.filter(isGoalEvent);
-          if (goals.length === 0) return <StatusMessage>No goals yet.</StatusMessage>;
-          return (
-            <ul className="mc-goal-list">
-              {goals.map((g, i) => (
-                <li key={i}>
-                  <span className="mc-goal__minute">{g.displayMinute}</span>
-                  <span className="mc-goal__side">{g.side === "home" ? match.homeTeam.name : g.side === "away" ? match.awayTeam.name : ""}</span>
-                  <span className="mc-goal__player">
-                    {g.player ?? "Unknown scorer"}
-                    {g.assist ? ` (assist: ${g.assist})` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          );
-        })()
-      )}
     </Section>
   );
 }
@@ -265,37 +249,16 @@ function StatisticsTab({
     );
   }
 
-  const awayByLabel = new Map(away.statistics.map((s) => [s.label, s.value]));
-
   return (
     <>
     <Section>
+      {/* One "Match" heading only: the data has no per-half statistics. */}
+      <h3 className="mc-band">Match</h3>
       <div className="mc-stats-header">
         <span className="mc-stats-header__team">{home.team.name}</span>
         <span className="mc-stats-header__team mc-stats-header__team--right">{away.team.name}</span>
       </div>
-      <ul className="mc-stat-rows">
-        {home.statistics.map((row) => {
-          const awayValue = awayByLabel.get(row.label) ?? null;
-          const homeNum = typeof row.value === "number" ? row.value : null;
-          const awayNum = typeof awayValue === "number" ? awayValue : null;
-          const total = (homeNum ?? 0) + (awayNum ?? 0);
-          const homePct = total > 0 && homeNum != null ? (homeNum / total) * 100 : 50;
-          return (
-            <li key={row.label} className="mc-stat-row">
-              <span className="mc-stat-row__value mc-stat-row__value--home">{row.value ?? "—"}</span>
-              <span className="mc-stat-row__bar">
-                <span className="mc-stat-row__bar-fill" style={{ width: `${homePct}%` }} />
-              </span>
-              <span className="mc-stat-row__label">{row.label}</span>
-              <span className="mc-stat-row__bar mc-stat-row__bar--away">
-                <span className="mc-stat-row__bar-fill mc-stat-row__bar-fill--away" style={{ width: `${100 - homePct}%` }} />
-              </span>
-              <span className="mc-stat-row__value">{awayValue ?? "—"}</span>
-            </li>
-          );
-        })}
-      </ul>
+      <TeamStatRows home={home.statistics} away={away.statistics} />
     </Section>
     {advanced}
     </>
@@ -342,6 +305,7 @@ function BoxScoreSections({ boxScore, onRetry }: { boxScore: Loadable<MatchBoxSc
   const bothSides = home != null && away != null;
   return (
     <>
+      {bothSides && <PlayerStatsTable home={home} away={away} />}
       {availability.playerRatings === "available" && bothSides ? (
         <PlayerRatings home={home} away={away} />
       ) : (
@@ -461,17 +425,29 @@ function LineupsTab({ lineups, onRetry }: { lineups: Loadable<Lineups>; onRetry:
     );
   }
 
+  // The pitch needs a drawable formation on both sides; otherwise the list view is the fallback.
+  const pitch = canDrawPitch(home) && canDrawPitch(away);
   return (
     <>
     <Section>
-      <div className="mc-lineups">
-        <TeamLineupCard lineup={home} />
-        <TeamLineupCard lineup={away} />
-      </div>
+      {pitch ? (
+        <>
+          <LineupPitch home={home} away={away} />
+          <PairedRows title="Starting lineups" home={home.startingXI} away={away.startingXI} />
+          <PairedRows title="Substitutes" home={home.substitutes} away={away.substitutes} />
+          <PairedRows title="Missing players" home={home.missingPlayers} away={away.missingPlayers} />
+          <PairedRows title="Coaches" home={coachRows(home)} away={coachRows(away)} />
+        </>
+      ) : (
+        <div className="mc-lineups">
+          <TeamLineupCard lineup={home} />
+          <TeamLineupCard lineup={away} />
+        </div>
+      )}
 
       {substitutions.length > 0 && (
         <>
-          <h3 className="mc-subheading">Substitutions</h3>
+          <h3 className="mc-band">Substitutions</h3>
           <ul className="mc-subs-list">
             {substitutions.map((s, i) => (
               <li key={i}>
@@ -660,6 +636,12 @@ function HeadToHeadTab({ h2h, onRetry }: { h2h: Loadable<HeadToHead>; onRetry: (
 
 // ---------- Standings (level 1 tab) ----------
 
+const ZONE_PLACE: Record<StandingsZone, string> = {
+  "champions-league": "Champions League place",
+  "europa-league": "Europa League place",
+  relegation: "Relegation place",
+};
+
 function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
   standings: Loadable<Standings>;
   homeTeamId: string;
@@ -711,7 +693,16 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
                 const highlighted = row.team.id === homeTeamId || row.team.id === awayTeamId;
                 return (
                   <tr key={row.team.id || row.position} className={highlighted ? "mc-standings-table__row--highlight" : undefined}>
-                    <td>{row.position}</td>
+                    <td>
+                      {row.zone ? (
+                        <span className={`mc-zone mc-zone--${row.zone}`} title={ZONE_PLACE[row.zone]}>
+                          {row.position}
+                          <span className="mc-visually-hidden">, {ZONE_PLACE[row.zone]}</span>
+                        </span>
+                      ) : (
+                        row.position
+                      )}
+                    </td>
                     <td className="mc-standings-table__team-col">
                       <span className="mc-standings-table__team">
                         <TeamCrest name={row.team.name} logo={row.team.logo} size={20} />
@@ -747,6 +738,16 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
         </div>
         );
       })}
+      {standings.data.zones && (
+        <ul className="mc-zone-legend">
+          {standings.data.zones.map((z) => (
+            <li key={z.zone}>
+              <span className={`mc-zone-legend__swatch mc-zone--${z.zone}`} aria-hidden="true" />
+              {z.label}
+            </li>
+          ))}
+        </ul>
+      )}
     </Section>
   );
 }
@@ -836,6 +837,11 @@ function VideoTab({ highlights, onRetry }: { highlights: Loadable<Highlights>; o
 }
 
 // ---------- Page ----------
+
+// The sub-tab row scrolls sideways on a phone; keep the active one visible.
+function keepInView(element: HTMLButtonElement | null) {
+  element?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+}
 
 const LEVEL1_TABS: { key: Level1Tab; label: string }[] = [
   { key: "match", label: "Match" },
@@ -977,7 +983,7 @@ export default function MatchCentrePage() {
         <div className="mc-header__row">
           <div className="mc-header__team">
             <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={48} />
-            <span>{match.homeTeam.name}</span>
+            <span className="mc-header__name" title={match.homeTeam.name}>{match.homeTeam.name}</span>
           </div>
           <div className="mc-header__score">
             <span>{match.homeScore ?? "-"}</span>
@@ -985,7 +991,7 @@ export default function MatchCentrePage() {
             <span>{match.awayScore ?? "-"}</span>
           </div>
           <div className="mc-header__team mc-header__team--away">
-            <span>{match.awayTeam.name}</span>
+            <span className="mc-header__name" title={match.awayTeam.name}>{match.awayTeam.name}</span>
             <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={48} />
           </div>
         </div>
@@ -1013,6 +1019,7 @@ export default function MatchCentrePage() {
             <button
               key={t.key}
               type="button"
+              ref={sub === t.key ? keepInView : undefined}
               aria-selected={sub === t.key}
               className={sub === t.key ? "mc-subtab mc-subtab--active" : "mc-subtab"}
               onClick={() => setSub(t.key)}

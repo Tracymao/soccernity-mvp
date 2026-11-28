@@ -11,7 +11,20 @@
  * src/theme/applyTheme.ts — do not hardcode hex. Light theme only,
  * matching every other converted page. */
 
+/* --- CH-H21b: local values -----------------------------------------
+ * Radius, elevation, duration and easing come from the shared scale
+ * (packages/shared/src/tokens/foundations.css). Only what that scale does not
+ * have is declared here, so it can be moved to shared tokens in one place. */
+
 .mc-page {
+  --mc-stagger-player: 25ms;
+  --mc-stagger-row: 30ms;
+  /* Figma's gold header-card border (frame 632:943), sampled from the frame.
+     The palette has no gold: founder-directed for this one border only. */
+  --mc-gold-border: #e8c56b;
+  /* Derived from tokens so white badge text reaches 4.5:1 (4.1:1 on the plain alert red). */
+  --mc-badge-red: color-mix(in srgb, var(--sn-semantic-alert) 85%, var(--sn-brand-navy));
+
   max-width: 900px;
   margin: 0 auto;
   display: flex;
@@ -21,26 +34,34 @@
 
 .mc-back {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: var(--sn-radius-md);
   font: 600 13px "Inter", sans-serif;
   color: var(--sn-text-secondary);
   text-decoration: none;
+  transition: background-color var(--sn-duration-fast) var(--sn-ease-out), transform var(--sn-duration-fast) var(--sn-ease-out);
 }
 
 .mc-back:hover {
-  color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+  background: var(--sn-green-tint-12);
 }
 
 /* --- header ------------------------------------------------------- */
 
 .mc-header {
   background: var(--sn-background-surface);
-  border: 1px solid var(--sn-icon-inactive);
-  border-radius: 12px;
+  border: 1px solid var(--mc-gold-border);
+  border-radius: var(--sn-radius-xl);
+  box-shadow: var(--sn-elevation-2);
   padding: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
 }
 
@@ -52,19 +73,20 @@
 }
 
 .mc-header__competition {
-  font: 600 13px "Inter", sans-serif;
+  font: 600 12px "Inter", sans-serif;
   color: var(--sn-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
   margin: 0;
 }
 
+/* Equal outer columns: a long team name truncates and never pushes the score. */
 .mc-header__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 24px;
   width: 100%;
-  justify-content: center;
 }
 
 .mc-header__team {
@@ -72,23 +94,35 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  flex: 1;
   min-width: 0;
-  font: 600 16px "Inter", sans-serif;
+  font: 700 18px "Inter", sans-serif;
   color: var(--sn-text-primary);
+}
+
+.mc-header__team--away {
+  flex-direction: column-reverse;
+}
+
+.mc-header__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mc-header__score {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font: 700 32px "Inter", sans-serif;
+  gap: 10px;
+  font: 700 44px/1.1 "Inter", sans-serif;
+  font-variant-numeric: tabular-nums;
   color: var(--sn-text-primary);
 }
 
 .mc-crest {
+  flex: none;
   border-radius: 50%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .mc-crest--mono {
@@ -96,7 +130,7 @@
   align-items: center;
   justify-content: center;
   background: var(--sn-green-tint-12);
-  color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
   font: 700 13px "Inter", sans-serif;
 }
 
@@ -109,18 +143,44 @@
 }
 
 .mc-tab {
-  padding: 10px 16px;
+  position: relative;
+  padding: 12px 16px;
   border: none;
+  border-radius: var(--sn-radius-md) var(--sn-radius-md) 0 0;
   background: transparent;
   font: 600 14px "Inter", sans-serif;
   color: var(--sn-text-secondary);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  transition: background-color var(--sn-duration-fast) var(--sn-ease-out), transform var(--sn-duration-fast) var(--sn-ease-out);
+}
+
+/* The underline fades and widens in on the active tab. */
+.mc-tab::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: var(--sn-radius-full);
+  background: var(--sn-brand-green);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity var(--sn-duration-base) var(--sn-ease-out), transform var(--sn-duration-base) var(--sn-ease-out);
+}
+
+.mc-tab:hover {
+  color: var(--sn-text-primary);
+  background: var(--sn-green-tint-12);
 }
 
 .mc-tab--active {
-  color: var(--sn-brand-navy);
-  border-bottom-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.mc-tab--active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .mc-subtabs {
@@ -130,22 +190,87 @@
 }
 
 .mc-subtab {
-  padding: 6px 14px;
-  border-radius: 999px;
+  position: relative;
+  z-index: 0;
+  padding: 8px 14px;
+  border-radius: var(--sn-radius-full);
   border: 1px solid var(--sn-icon-inactive);
   background: var(--sn-background-page);
   font: 600 12px "Inter", sans-serif;
   color: var(--sn-text-secondary);
+  white-space: nowrap;
   cursor: pointer;
+  transition: transform var(--sn-duration-fast) var(--sn-ease-out);
 }
 
-.mc-subtab--active {
+/* The green pill fades in behind the active (or, lightly, the hovered) sub-tab. */
+.mc-subtab::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
   background: var(--sn-brand-green);
+  opacity: 0;
+  transition: opacity var(--sn-duration-base) var(--sn-ease-out);
+}
+
+.mc-subtab:hover {
+  color: var(--sn-text-primary);
+}
+
+.mc-subtab:hover::before {
+  opacity: 0.15;
+}
+
+.mc-subtab--active,
+.mc-subtab--active:hover {
   color: var(--sn-text-on-green);
   border-color: transparent;
+  background: transparent;
+}
+
+.mc-subtab--active::before,
+.mc-subtab--active:hover::before {
+  opacity: 1;
+}
+
+.mc-tab:active,
+.mc-subtab:active,
+.mc-retry:active,
+.mc-player-toggle button:active,
+.mc-back:active {
+  transform: scale(0.97);
+}
+
+.mc-page a:focus-visible,
+.mc-page button:focus-visible,
+.mc-player-table-wrap:focus-visible {
+  outline: 2px solid var(--sn-text-primary);
+  outline-offset: 2px;
 }
 
 /* --- shared section / status shapes -------------------------------- */
+
+.mc-content {
+  color: var(--sn-text-primary);
+}
+
+.mc-retry {
+  margin-top: 8px;
+  padding: 8px 18px;
+  border-radius: var(--sn-radius-md);
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+  transition: background-color var(--sn-duration-fast) var(--sn-ease-out), transform var(--sn-duration-fast) var(--sn-ease-out);
+}
+
+.mc-retry:hover {
+  background: var(--sn-green-tint-12);
+}
 
 .mc-content {
   display: flex;
@@ -182,68 +307,9 @@
   color: var(--sn-brand-navy);
 }
 
-.mc-retry {
-  margin-top: 4px;
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: 1px solid var(--sn-icon-inactive);
-  background: var(--sn-background-surface);
-  color: var(--sn-text-primary);
-  font: 600 13px "Inter", sans-serif;
-  cursor: pointer;
-}
-
 /* --- facts (summary / H2H) ------------------------------------------ */
 
-.mc-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px 20px;
-  margin: 0;
-}
-
-.mc-facts dt {
-  font: 600 12px "Inter", sans-serif;
-  color: var(--sn-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin: 0;
-}
-
-.mc-facts dd {
-  font: 500 15px "Inter", sans-serif;
-  color: var(--sn-text-primary);
-  margin: 4px 0 0;
-}
-
 /* --- goals (summary) ------------------------------------------------- */
-
-.mc-goal-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mc-goal-list li {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font: 400 14px "Inter", sans-serif;
-  color: var(--sn-text-primary);
-}
-
-.mc-goal__minute {
-  font-weight: 700;
-  min-width: 40px;
-}
-
-.mc-goal__side {
-  color: var(--sn-text-secondary);
-  min-width: 90px;
-}
 
 /* --- statistics ------------------------------------------------------- */
 
@@ -284,28 +350,6 @@
   text-align: center;
   color: var(--sn-text-secondary);
   font-size: 12px;
-}
-
-.mc-stat-row__bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--sn-green-tint-12);
-  display: flex;
-  justify-content: flex-end;
-  overflow: hidden;
-}
-
-.mc-stat-row__bar--away {
-  justify-content: flex-start;
-}
-
-.mc-stat-row__bar-fill {
-  height: 100%;
-  background: var(--sn-brand-navy);
-}
-
-.mc-stat-row__bar-fill--away {
-  background: var(--sn-brand-green);
 }
 
 /* --- lineups ------------------------------------------------------- */
@@ -703,7 +747,7 @@
 
 .mc-disabled {
   border: 1px dashed var(--sn-icon-inactive);
-  border-radius: 12px;
+  border-radius: var(--sn-radius-lg);
   background: var(--sn-background-surface);
   padding: 16px;
   opacity: 0.85;
@@ -767,4 +811,1165 @@
   background: var(--sn-green-tint-12);
   color: var(--sn-brand-navy);
   border: 1px solid var(--sn-brand-navy);
+}
+
+/* --- CH-H21: shared green-tint band (Figma 632:943, 667:1952) ----- */
+
+.mc-band {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--sn-radius-md);
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.mc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- CH-H21: lineup pitch ----------------------------------------- */
+
+.mc-band--formation {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mc-pitch-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-pitch-legend__team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-pitch-legend__team::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--sn-brand-navy);
+}
+
+.mc-pitch-legend__team--away::before {
+  background: var(--sn-brand-green);
+}
+
+/* Narrow first: home half on top, away half below, goalkeepers at the two ends. */
+.mc-pitch {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: var(--sn-radius-md);
+  background: var(--sn-background-surface);
+}
+
+.mc-pitch__half {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 14px 4px;
+}
+
+/* Penalty area, drawn at the goalkeeper's end of each half. */
+.mc-pitch__half::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 72px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-top: 0;
+  pointer-events: none;
+}
+
+.mc-pitch__half--away {
+  flex-direction: column-reverse;
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.mc-pitch__half--away::before {
+  top: auto;
+  bottom: 0;
+  border-top: 1px solid var(--sn-icon-inactive);
+  border-bottom: 0;
+}
+
+.mc-pitch__line {
+  position: relative;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.mc-pitch__half--away .mc-pitch__line {
+  flex-direction: row-reverse;
+}
+
+.mc-pitch__player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mc-pitch__shirt {
+  position: relative;
+  width: 32px;
+  height: 30px;
+}
+
+.mc-pitch__shirt svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--sn-brand-navy);
+  stroke: var(--sn-icon-inactive);
+  stroke-width: 1;
+}
+
+.mc-pitch__half--away .mc-pitch__shirt svg {
+  fill: var(--sn-brand-green);
+}
+
+.mc-pitch__number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 3px;
+  font: 700 11px "Inter", sans-serif;
+  color: var(--sn-brand-green);
+}
+
+.mc-pitch__half--away .mc-pitch__number {
+  color: var(--sn-text-on-green);
+}
+
+.mc-pitch__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+@media (min-width: 700px) {
+  .mc-pitch {
+    flex-direction: row;
+    min-height: 420px;
+  }
+
+  .mc-pitch__half {
+    flex-direction: row;
+    padding: 12px 4px;
+    gap: 4px;
+  }
+
+  .mc-pitch__half--away {
+    flex-direction: row-reverse;
+    border-top: 0;
+    border-left: 1px solid var(--sn-icon-inactive);
+  }
+
+  .mc-pitch__half::before {
+    top: 22%;
+    bottom: 22%;
+    left: 0;
+    right: auto;
+    width: 15%;
+    height: auto;
+    border: 1px solid var(--sn-icon-inactive);
+    border-left: 0;
+  }
+
+  .mc-pitch__half--away::before {
+    top: 22%;
+    bottom: 22%;
+    left: auto;
+    right: 0;
+    border: 1px solid var(--sn-icon-inactive);
+    border-right: 0;
+  }
+
+  .mc-pitch__line,
+  .mc-pitch__half--away .mc-pitch__line {
+    flex-direction: column;
+    justify-content: space-around;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mc-pitch__half--away .mc-pitch__line {
+    flex-direction: column-reverse;
+  }
+
+  .mc-pitch__player {
+    flex: 0 0 auto;
+    max-width: 100%;
+  }
+}
+
+/* --- CH-H21: paired home / away rows ------------------------------ */
+
+.mc-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mc-pairs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mc-pairs li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px;
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-pairs li:nth-child(even) {
+  background: var(--sn-green-tint-12);
+}
+
+.mc-pairs__cell {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mc-pairs__cell--away {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.mc-pairs__number {
+  min-width: 20px;
+  color: var(--sn-text-secondary);
+}
+
+/* --- CH-H21: match summary by half (Figma 632:943) ---------------- */
+
+.mc-half__score {
+  margin-left: 12px;
+}
+
+.mc-events {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mc-event {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 4px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-event--away {
+  flex-direction: row-reverse;
+}
+
+.mc-event__minute {
+  min-width: 40px;
+}
+
+.mc-event--away .mc-event__minute {
+  text-align: right;
+}
+
+.mc-event__secondary {
+  font-weight: 400;
+  color: var(--sn-text-secondary);
+}
+
+.mc-event__icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+}
+
+.mc-event__icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--sn-text-primary);
+  stroke-width: 1.4;
+}
+
+.mc-event__icon--goal svg path,
+.mc-event__icon--penalty svg path,
+.mc-event__icon--own-goal svg path {
+  fill: var(--sn-text-primary);
+}
+
+/* The palette has no yellow: a yellow card is the outlined card, a red card the solid one. */
+.mc-event__icon--yellow,
+.mc-event__icon--red {
+  width: 11px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  margin: 0 2px 0 3px;
+}
+
+.mc-event__icon--yellow {
+  border: 2px solid var(--sn-text-primary);
+  background: var(--sn-green-tint-28);
+}
+
+.mc-event__icon--red {
+  background: var(--sn-semantic-alert);
+}
+
+.mc-info {
+  margin: 0;
+}
+
+.mc-info div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px;
+  font: 400 13px "Inter", sans-serif;
+}
+
+.mc-info dt {
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mc-info dd {
+  margin: 0;
+  text-align: right;
+  color: var(--sn-text-primary);
+}
+
+/* Head-to-head record (also uses .mc-facts). */
+
+.mc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.mc-facts dt {
+  font: 600 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+.mc-facts dd {
+  font: 500 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 4px 0 0;
+}
+
+
+/* --- CH-H21: standings zone badges and legend (Figma 756:6433) ---- */
+
+.mc-zone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.mc-zone--champions-league {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.mc-zone--europa-league {
+  background: var(--sn-brand-navy);
+  color: var(--sn-brand-green);
+}
+
+.mc-zone--relegation {
+  background: var(--mc-badge-red);
+  color: var(--sn-background-page);
+}
+
+.mc-zone-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-zone-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-zone-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+/* --- CH-H21: two-sided statistics (Figma 640:3737) ---------------- */
+
+.mc-compare {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mc-compare__head {
+  display: grid;
+  grid-template-columns: minmax(48px, 1fr) auto minmax(48px, 1fr);
+  gap: 8px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-compare__label {
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.mc-compare__value--away {
+  text-align: right;
+}
+
+.mc-compare__bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Both fills grow from the centre line outwards. */
+.mc-compare__track {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--sn-radius-full);
+  background: var(--sn-icon-inactive);
+}
+
+.mc-compare__track--home {
+  justify-content: flex-end;
+}
+
+.mc-compare__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--sn-radius-full);
+  background: var(--sn-brand-navy);
+}
+
+.mc-compare__track--away .mc-compare__fill {
+  background: var(--sn-brand-green);
+}
+
+.mc-compare__fill--trail {
+  opacity: 0.55;
+}
+
+/* --- CH-H21: player statistics table ------------------------------ */
+
+.mc-player-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mc-player-toggle button {
+  padding: 8px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: var(--sn-radius-sm);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+  transition: transform var(--sn-duration-fast) var(--sn-ease-out);
+}
+
+.mc-player-toggle button[aria-pressed="true"] {
+  background: var(--sn-brand-navy);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-brand-green);
+}
+
+.mc-player-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: var(--sn-radius-md);
+}
+
+.mc-player-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-player-table th,
+.mc-player-table td {
+  padding: 8px 6px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.mc-player-table thead th {
+  font: 600 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mc-player-table tbody th {
+  font-weight: 600;
+}
+
+.mc-player-table__position {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--sn-green-tint-12);
+  font-size: 10px;
+}
+
+.mc-player-table__divider th {
+  background: var(--sn-green-tint-12);
+  font: 600 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+/* ===== CH-H21b: premium surfaces ===================================== */
+
+.mc-section {
+  padding: 16px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: var(--sn-radius-lg);
+  background: var(--sn-background-surface);
+  box-shadow: var(--sn-elevation-1);
+}
+
+.mc-section__title {
+  font-weight: 700;
+}
+
+.mc-band {
+  padding: 12px;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+}
+
+/* Empty and error states sit on the same card as the content they replace. */
+.mc-content > .mc-status:not(.sn-loading),
+.mc-content > div:not([class]) {
+  padding: 24px 16px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: var(--sn-radius-lg);
+  background: var(--sn-background-surface);
+  box-shadow: var(--sn-elevation-1);
+  text-align: center;
+}
+
+.mc-content > div:not([class]) .mc-status {
+  padding: 0;
+}
+
+.mc-standings-table,
+.mc-player-table,
+.mc-compare__head,
+.mc-event__minute,
+.mc-event__score,
+.mc-half__score,
+.mc-pairs__number,
+.mc-pitch__number,
+.mc-subs-list__minute,
+.mc-stat-row__value {
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-stats-header__team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-stats-header__team::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: var(--sn-radius-full);
+  background: var(--sn-brand-navy);
+}
+
+.mc-stats-header__team--right::before {
+  background: var(--sn-brand-green);
+}
+
+.mc-compare__label {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+  letter-spacing: 0.04em;
+}
+
+/* --- rows ----------------------------------------------------------- */
+
+.mc-standings-table tbody tr,
+.mc-standings-table tbody td,
+.mc-player-table tbody tr,
+.mc-player-table tbody th,
+.mc-pairs li,
+.mc-event {
+  transition: background-color var(--sn-duration-fast) var(--sn-ease-out);
+}
+
+.mc-standings-table tbody tr:hover,
+.mc-player-table tbody tr:not(.mc-player-table__divider):hover,
+.mc-pairs li:hover,
+.mc-event:hover {
+  background: var(--sn-green-tint-12);
+}
+
+.mc-event {
+  min-height: 32px;
+  border-radius: var(--sn-radius-md);
+}
+
+.mc-events {
+  overflow-x: clip;
+}
+
+.mc-zone {
+  border-radius: var(--sn-radius-full);
+}
+
+.mc-zone-legend__swatch {
+  border-radius: var(--sn-radius-full);
+}
+
+/* --- pitch ---------------------------------------------------------- */
+
+.mc-pitch {
+  overflow: hidden;
+  border: 2px solid var(--sn-brand-green);
+  border-radius: var(--sn-radius-lg);
+  background:
+    repeating-linear-gradient(90deg, var(--sn-green-tint-12) 0 48px, var(--sn-green-tint-28) 48px 96px),
+    var(--sn-background-surface);
+  box-shadow: inset 0 0 24px var(--sn-shadow-elevated);
+}
+
+.mc-pitch__half::before,
+.mc-pitch__half--away,
+.mc-pitch__half--away::before {
+  border-color: var(--sn-brand-green);
+}
+
+/* Centre circle, half on each side of the halfway line. */
+.mc-pitch__half::after {
+  content: "";
+  position: absolute;
+  bottom: -36px;
+  left: calc(50% - 36px);
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--sn-brand-green);
+  border-radius: 50%;
+  clip-path: inset(0 0 50% 0);
+  pointer-events: none;
+}
+
+.mc-pitch__half--away::after {
+  top: -36px;
+  bottom: auto;
+  clip-path: inset(50% 0 0 0);
+}
+
+.mc-pitch__shirt {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--sn-background-surface);
+  box-shadow: 0 0 0 2px var(--sn-brand-navy), var(--sn-elevation-1);
+}
+
+.mc-pitch__shirt svg {
+  width: 26px;
+  height: 25px;
+}
+
+.mc-pitch__number {
+  padding-top: 2px;
+}
+
+/* A surface-coloured label: full text contrast whatever stripe is behind it. */
+.mc-pitch__name {
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: var(--sn-radius-full);
+  background: var(--sn-background-surface);
+  font-weight: 600;
+}
+
+@media (min-width: 700px) {
+  .mc-pitch__half::after {
+    top: calc(50% - 36px);
+    bottom: auto;
+    left: auto;
+    right: -36px;
+    clip-path: inset(0 50% 0 0);
+  }
+
+  .mc-pitch__half--away::after {
+    top: calc(50% - 36px);
+    right: auto;
+    left: -36px;
+    clip-path: inset(0 0 0 50%);
+  }
+}
+
+/* --- phone ---------------------------------------------------------- */
+
+@media (max-width: 699px) {
+  .mc-header {
+    padding: 16px 12px;
+  }
+
+  .mc-header__row {
+    gap: 8px;
+  }
+
+  .mc-header__team {
+    font-size: 14px;
+  }
+
+  .mc-header__score {
+    font-size: 32px;
+    gap: 6px;
+  }
+
+  .mc-section {
+    padding: 12px;
+  }
+
+  .mc-back,
+  .mc-tab,
+  .mc-subtab,
+  .mc-retry,
+  .mc-player-toggle button {
+    min-height: 44px;
+  }
+
+  .mc-tabs {
+    gap: 0;
+  }
+
+  .mc-tab {
+    flex: 1;
+    padding: 12px 4px;
+  }
+
+  /* One scrolling line; the active sub-tab is scrolled into view by the page. */
+  .mc-subtabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px;
+    margin: -4px;
+    scrollbar-width: none;
+  }
+
+  .mc-subtabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mc-subtab {
+    flex: none;
+  }
+
+  .mc-standings-table th,
+  .mc-standings-table td {
+    padding: 8px 3px;
+  }
+
+  /* Position and team (standings), player (box score) stay put while the table scrolls. */
+  .mc-standings-table th:nth-child(-n + 2),
+  .mc-standings-table td:nth-child(-n + 2),
+  .mc-player-table tr:not(.mc-player-table__divider) th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--sn-background-surface);
+  }
+
+  .mc-standings-table th:nth-child(2),
+  .mc-standings-table td:nth-child(2) {
+    left: 32px;
+  }
+
+  .mc-standings-table th:first-child,
+  .mc-standings-table td:first-child {
+    width: 32px;
+    min-width: 32px;
+    box-sizing: border-box;
+  }
+
+  .mc-standings-table__row--highlight td:nth-child(-n + 2) {
+    background: linear-gradient(var(--sn-green-tint-12), var(--sn-green-tint-12)), var(--sn-background-surface);
+  }
+}
+
+/* ===== CH-H21b: motion (transform and opacity only) ================== */
+
+@keyframes mc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--sn-distance-md));
+  }
+}
+
+@keyframes mc-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes mc-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes mc-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--sn-distance-md)));
+  }
+}
+
+@keyframes mc-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--sn-distance-md));
+  }
+}
+
+/* A tab panel, once, when it mounts. The loading block keeps its own delayed appearance. */
+.mc-content > *:not(.sn-loading) {
+  animation: mc-rise var(--sn-duration-base) var(--sn-ease-out) backwards;
+}
+
+.mc-pitch__player {
+  animation: mc-pop var(--sn-duration-slow) var(--sn-ease-out) backwards;
+}
+
+.mc-compare__fill {
+  animation: mc-grow var(--sn-duration-slow) var(--sn-ease-out) backwards;
+}
+
+/* Fills grow outwards from the centre line. */
+.mc-compare__track--home .mc-compare__fill {
+  transform-origin: right center;
+}
+
+.mc-compare__track--away .mc-compare__fill {
+  transform-origin: left center;
+}
+
+.mc-event--home {
+  animation: mc-from-left var(--sn-duration-base) var(--sn-ease-out) backwards;
+}
+
+.mc-event--away {
+  animation: mc-from-right var(--sn-duration-base) var(--sn-ease-out) backwards;
+}
+
+.mc-pitch__player[data-order="2"] {
+  animation-delay: calc(1 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="3"] {
+  animation-delay: calc(2 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="4"] {
+  animation-delay: calc(3 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="5"] {
+  animation-delay: calc(4 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="6"] {
+  animation-delay: calc(5 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="7"] {
+  animation-delay: calc(6 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="8"] {
+  animation-delay: calc(7 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="9"] {
+  animation-delay: calc(8 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="10"] {
+  animation-delay: calc(9 * var(--mc-stagger-player));
+}
+
+.mc-pitch__player[data-order="11"] {
+  animation-delay: calc(10 * var(--mc-stagger-player));
+}
+
+.mc-compare > li:nth-child(2) .mc-compare__fill {
+  animation-delay: calc(1 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(3) .mc-compare__fill {
+  animation-delay: calc(2 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(4) .mc-compare__fill {
+  animation-delay: calc(3 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(5) .mc-compare__fill {
+  animation-delay: calc(4 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(6) .mc-compare__fill {
+  animation-delay: calc(5 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(7) .mc-compare__fill {
+  animation-delay: calc(6 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(8) .mc-compare__fill {
+  animation-delay: calc(7 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(9) .mc-compare__fill {
+  animation-delay: calc(8 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(10) .mc-compare__fill {
+  animation-delay: calc(9 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(11) .mc-compare__fill {
+  animation-delay: calc(10 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(12) .mc-compare__fill {
+  animation-delay: calc(11 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(13) .mc-compare__fill {
+  animation-delay: calc(12 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(14) .mc-compare__fill {
+  animation-delay: calc(13 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(15) .mc-compare__fill {
+  animation-delay: calc(14 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(16) .mc-compare__fill {
+  animation-delay: calc(15 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(17) .mc-compare__fill {
+  animation-delay: calc(16 * var(--mc-stagger-row));
+}
+
+.mc-compare > li:nth-child(18) .mc-compare__fill {
+  animation-delay: calc(17 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(2) {
+  animation-delay: calc(1 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(3) {
+  animation-delay: calc(2 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(4) {
+  animation-delay: calc(3 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(5) {
+  animation-delay: calc(4 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(6) {
+  animation-delay: calc(5 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(7) {
+  animation-delay: calc(6 * var(--mc-stagger-row));
+}
+
+.mc-events > .mc-event:nth-child(n + 8) {
+  animation-delay: calc(7 * var(--mc-stagger-row));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-content > *:not(.sn-loading),
+  .mc-pitch__player,
+  .mc-compare__fill,
+  .mc-event--home,
+  .mc-event--away {
+    animation: none;
+  }
+
+  .mc-back,
+  .mc-tab,
+  .mc-tab::after,
+  .mc-subtab,
+  .mc-subtab::before,
+  .mc-retry,
+  .mc-player-toggle button,
+  .mc-standings-table tbody tr,
+  .mc-standings-table tbody td,
+  .mc-player-table tbody tr,
+  .mc-player-table tbody th,
+  .mc-pairs li,
+  .mc-event {
+    transition: none;
+  }
+}
+
+/* ===== CH-H21b: fixes from the screenshot review ===================== */
+
+.mc-stats-header {
+  gap: 16px;
+}
+
+.mc-stats-header__team--right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.mc-stats-header__team::before {
+  flex: none;
+}
+
+.mc-zone-legend {
+  margin-top: 8px;
+}
+
+@media (max-width: 699px) {
+  .mc-player-toggle button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* All ten columns fit a 390px screen; the table still scrolls if a narrower one needs it. */
+  .mc-standings-table {
+    font-size: 12px;
+  }
+
+  .mc-standings-table th,
+  .mc-standings-table td {
+    padding: 8px 2px;
+  }
+
+  .mc-standings-table .mc-crest {
+    display: none;
+  }
+
+  .mc-standings-table th:first-child,
+  .mc-standings-table td:first-child {
+    width: 28px;
+    min-width: 28px;
+  }
+
+  .mc-standings-table th:nth-child(2),
+  .mc-standings-table td:nth-child(2) {
+    left: 28px;
+    max-width: 84px;
+    overflow-wrap: anywhere;
+  }
+
+  .mc-zone {
+    min-width: 22px;
+    height: 22px;
+  }
+
+  .mc-player-table tbody th {
+    min-width: 116px;
+    max-width: 132px;
+    white-space: normal;
+  }
+}
+
+.mc-stats-header {
+  margin-bottom: 4px;
+}
+
+/* Green on white is under 3:1 on its own, so the away shirt carries a navy outline. */
+.mc-pitch__half--away .mc-pitch__shirt svg {
+  stroke: var(--sn-brand-navy);
+  stroke-width: 1.5;
 }
