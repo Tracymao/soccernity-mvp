@@ -180,7 +180,7 @@ export default function TwoFactorCard() {
   return (
     <>
       {turnedOff ? (
-        <div className="tf-banner tf-banner--info" role="status">
+        <div className="tf-banner tf-banner--info tf-banner--session" role="status">
           <span className="tf-banner__bar" aria-hidden />
           <div>
             <p className="tf-banner__title">{copy.TURNED_OFF_TITLE}</p>
