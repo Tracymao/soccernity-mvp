@@ -6229,3 +6229,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 - The shared moderation stylesheet also changes the look of Activity and Username reviews.
 - Admin tests 65 files / 1034 pass; lint, typecheck and build pass. Not verified on a built app or staging.
 - No B-ID added. Details: docs/admin-moderation-premium-code-report.md.
+
+## 181. Updates 2026-11-28 (Admin Username reviews list and detail restyled in Figma to the premium design; no counter change)
+
+- Decision Log #609: the 7 admin Username reviews list and detail frames follow the shipped code in the premium admin style. The "Decided" list frame is now "Declined" and shows no reinstated row. Fields and cards the code does not render were archived. The decide dialog frames are the next group. No code changed; the CSS differences for the next code PR are listed in docs/figma-admin-username-reviews-premium-report.md.
