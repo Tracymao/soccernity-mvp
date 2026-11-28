@@ -17,3 +17,12 @@ All frames: 1440 wide, at least 1184 high, Admin Shell active item "None" (the c
 
 "On, required" is drawn by the profile view `5403:7327` (group d).
 
+## Group b: enforcement off
+
+| Frame | State | New content |
+| --- | --- | --- |
+| `6906:33681` | On, Turn off available | `7408:70138` |
+| `6906:33808` | Turn off, password dialog | `7408:70183` |
+| `6906:33959` | Turn off, incorrect password | `7408:70247` |
+| `6906:34113` | Turned off | `7408:70313` |
+
