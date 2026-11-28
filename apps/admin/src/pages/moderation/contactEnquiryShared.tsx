@@ -16,11 +16,11 @@ export function submitterLabel(submitter: string): string {
 }
 
 /** A label-left, value-right row, as the frames' ENQUIRY and REPORT DETAILS cards draw them. */
-export function KeyValue({ label, children }: { label: string; children: ReactNode }) {
+export function KeyValue({ label, children, valueClassName }: { label: string; children: ReactNode; valueClassName?: string }) {
   return (
     <div className="ce-kv">
       <span className="ce-kv__label">{label}</span>
-      <span className="ce-kv__value">{children}</span>
+      <span className={valueClassName ? `ce-kv__value ${valueClassName}` : "ce-kv__value"}>{children}</span>
     </div>
   );
 }

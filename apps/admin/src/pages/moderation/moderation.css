@@ -13,12 +13,13 @@
 }
 
 .mod-back {
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .mod-back a {
   color: var(--sn-brand-navy);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .mod-tabs {
@@ -31,10 +32,11 @@
   border: none;
   padding: 8px 4px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sn-text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  line-height: 17px;
 }
 
 .mod-tab--active {
@@ -42,10 +44,15 @@
   border-bottom-color: var(--sn-brand-navy);
 }
 
+.mod-tab:hover:not(.mod-tab--active) {
+  color: var(--sn-text-primary);
+}
+
 .mod-note {
   margin: 0;
   font-size: 13px;
   color: var(--sn-text-secondary);
+  line-height: 20px;
 }
 
 .mod-loading,
@@ -316,15 +323,22 @@
 
 .mod-field__label {
   font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--sn-text-secondary);
+  line-height: 16px;
 }
 
 .mod-field__value {
   font-size: 14px;
   color: var(--sn-text-primary);
   word-break: break-word;
+  line-height: 22px;
+}
+
+/* The server sends the report status in lower case ("open", "actioned"). */
+.mod-field__value--status,
+.ce-kv__value--status {
+  text-transform: capitalize;
 }
 
 /* The reported message on a message report (ReportedMessageFields.tsx). Same tinted block as the enquiry
@@ -337,7 +351,7 @@
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 20px;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -362,6 +376,7 @@
   border-radius: 8px;
   font-size: 13px;
   color: var(--sn-text-primary);
+  line-height: 20px;
 }
 
 .mod-context__row--reported {
@@ -383,6 +398,7 @@
 .mod-context__name {
   font-weight: 500;
   word-break: break-word;
+  font-size: 14px;
 }
 
 .mod-context__body {
@@ -412,12 +428,15 @@
 }
 
 .mod-context__pill {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--sn-radius-full);
+  font-size: 12px;
   line-height: 16px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -496,10 +515,15 @@
   font-size: 13px;
   color: var(--sn-text-primary);
   cursor: pointer;
+  line-height: 20px;
 }
 
 .mod-checkbox input {
-  margin-top: 3px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--sn-brand-navy);
 }
 
 a.mod-tab {
@@ -560,6 +584,7 @@ a.mod-tab {
 .mod-hold-status__since {
   font-size: 13px;
   color: var(--sn-text-secondary);
+  line-height: 20px;
 }
 
 /* dialog */
@@ -678,7 +703,7 @@ a.mod-tab {
   gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--sn-icon-inactive);
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
 }
 
 /* An unanswered required choice is marked with the alert border only, never with text colour. */
@@ -698,8 +723,9 @@ a.mod-tab {
 /* The explanatory line under the Take action buttons. */
 .mod-helper {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--sn-text-secondary);
+  line-height: 20px;
 }
 
 /* held investigations */
@@ -975,7 +1001,7 @@ a.mod-tab {
 .mod-checkbox--boxed {
   padding: 12px;
   border: 1px solid var(--sn-icon-inactive);
-  border-radius: 6px;
+  border-radius: var(--sn-radius-md);
 }
 
 .mod-checkbox--boxed > span {
