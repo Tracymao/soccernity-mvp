@@ -6261,3 +6261,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 188. Updates 2026-11-28 (Admin User detail frames restyled in Figma to the premium design; no counter change)
 
 - Decision Log #616: Admin User detail frames restyled in Figma to the premium design; no counter change. 18 frames rebuilt to match the shipped page, 3 state frames added (loading, load error, account suspended), 3 duplicate frames archived (hidden, not deleted). Figma and docs only. Report: docs/figma-admin-user-detail-premium-report.md.
+
+## 189. Updates 2026-11-28 (Admin Incorrect-details reports and Correct date of birth frames restyled in Figma to the premium design; no counter change)
+
+- Decision Log #617: Admin Incorrect-details reports and Correct date of birth frames restyled in Figma to the premium design; no counter change. 15 frames rebuilt to match the shipped pages, 2 state frames added (Correct date of birth loading and load error), none archived. On the User detail frames, 11 guardian pills now read in sentence case (founder decision 2026-11-28) and 17 wrong prototype links are re-pointed. Open for the code PR: `us-pill--plain` on the guardian notice pills, and the input, callout and error values. See docs/figma-admin-incorrect-details-dob-premium-report.md.
