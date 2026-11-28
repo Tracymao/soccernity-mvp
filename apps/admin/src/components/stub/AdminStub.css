@@ -17,6 +17,14 @@
   margin-bottom: 24px;
   max-width: 80ch;
 }
+/* The Delete Role stub (its banner follows the "← Roles" link) uses the callout look; other stubs are unchanged. */
+.rl-back ~ .admin-stub__banner {
+  padding: 12px 14px;
+  border: none;
+  border-left: 3px solid var(--sn-brand-navy);
+  border-radius: var(--sn-radius-sm);
+  line-height: 20px;
+}
 .admin-stub__banner strong {
   color: var(--sn-text-primary);
 }
