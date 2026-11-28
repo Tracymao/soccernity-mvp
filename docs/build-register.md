@@ -6233,3 +6233,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 181. Updates 2026-11-28 (Admin Username reviews list and detail restyled in Figma to the premium design; no counter change)
 
 - Decision Log #609: the 7 admin Username reviews list and detail frames follow the shipped code in the premium admin style. The "Decided" list frame is now "Declined" and shows no reinstated row. Fields and cards the code does not render were archived. The decide dialog frames are the next group. No code changed; the CSS differences for the next code PR are listed in docs/figma-admin-username-reviews-premium-report.md.
+
+## 182. Updates 2026-11-28 (Admin Username reviews decide dialog restyled in Figma to the premium design; no counter change)
+
+- Decision Log #610: the 8 admin Username reviews decide dialog frames follow the shipped `DecideDialog` in the premium admin style. The "Child-Safety Vetting Needed" frame is now "Request Not Found" (the code has no vetting state). The selected option has a navy border and no tint, as in the CSS. The handle-unavailable and user-deleted errors have no frame. Figma and docs only. Report with notes for the code PR: `docs/figma-admin-username-decide-dialog-premium-report.md`.
