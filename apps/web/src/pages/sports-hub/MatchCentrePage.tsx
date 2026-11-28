@@ -838,6 +838,11 @@ function VideoTab({ highlights, onRetry }: { highlights: Loadable<Highlights>; o
 
 // ---------- Page ----------
 
+// The sub-tab row scrolls sideways on a phone; keep the active one visible.
+function keepInView(element: HTMLButtonElement | null) {
+  element?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+}
+
 const LEVEL1_TABS: { key: Level1Tab; label: string }[] = [
   { key: "match", label: "Match" },
   { key: "h2h", label: "H2H" },
@@ -978,7 +983,7 @@ export default function MatchCentrePage() {
         <div className="mc-header__row">
           <div className="mc-header__team">
             <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={48} />
-            <span>{match.homeTeam.name}</span>
+            <span className="mc-header__name" title={match.homeTeam.name}>{match.homeTeam.name}</span>
           </div>
           <div className="mc-header__score">
             <span>{match.homeScore ?? "-"}</span>
@@ -986,7 +991,7 @@ export default function MatchCentrePage() {
             <span>{match.awayScore ?? "-"}</span>
           </div>
           <div className="mc-header__team mc-header__team--away">
-            <span>{match.awayTeam.name}</span>
+            <span className="mc-header__name" title={match.awayTeam.name}>{match.awayTeam.name}</span>
             <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={48} />
           </div>
         </div>
@@ -1014,6 +1019,7 @@ export default function MatchCentrePage() {
             <button
               key={t.key}
               type="button"
+              ref={sub === t.key ? keepInView : undefined}
               aria-selected={sub === t.key}
               className={sub === t.key ? "mc-subtab mc-subtab--active" : "mc-subtab"}
               onClick={() => setSub(t.key)}

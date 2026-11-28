@@ -66,7 +66,7 @@ export default function PlayerStatsTable({ home, away }: { home: TeamBoxScore; a
           </button>
         ))}
       </div>
-      <div className="mc-player-table-wrap">
+      <div className="mc-player-table-wrap" role="region" aria-label="Player statistics table" tabIndex={0}>
         <table className="mc-player-table">
           <thead>
             <tr>

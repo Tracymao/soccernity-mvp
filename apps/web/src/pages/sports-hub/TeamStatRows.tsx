@@ -1,5 +1,5 @@
 // CH-H21 -- team statistics as two-sided bars (Figma 640:3737): label centred, home value at the left
-// edge, away value at the right edge, both bars growing from the centre, the higher side in green.
+// edge, away value at the right edge, both bars growing from the centre. Home is navy, away green, the smaller value in the lighter tone.
 import type { StatisticItem } from "../../api/sports";
 
 // Figma's order. Each entry lists the spellings accepted for one Figma row, because the provider's real
@@ -53,7 +53,7 @@ export default function TeamStatRows({ home, away }: { home: StatisticItem[]; aw
         const side = (name: "home" | "away", own: number, other: number) => (
           <span className={`mc-compare__track mc-compare__track--${name}`}>
             <span
-              className={own > other ? "mc-compare__fill mc-compare__fill--lead" : "mc-compare__fill"}
+              className={`mc-compare__fill${own > other ? " mc-compare__fill--lead" : own < other ? " mc-compare__fill--trail" : ""}`}
               style={{ width: `${total > 0 ? (own / total) * 100 : 0}%` }}
             />
           </span>

@@ -28,12 +28,14 @@ export function surname(name: string): string {
 }
 
 function PitchSide({ lineup, side }: { lineup: TeamLineup; side: "home" | "away" }) {
+  // 1 to 11 across the whole side, for the staggered entrance in the stylesheet.
+  const before = lineup.rows.map((_, ri) => lineup.rows.slice(0, ri).reduce((n, r) => n + r.length, 0));
   return (
     <ol className={`mc-pitch__half mc-pitch__half--${side}`} aria-label={`${lineup.team.name} starting formation`}>
       {lineup.rows.map((row, ri) => (
         <li key={ri} className="mc-pitch__line">
           {row.map((p, pi) => (
-            <span key={p.id ?? pi} className="mc-pitch__player" title={p.name}>
+            <span key={p.id ?? pi} className="mc-pitch__player" data-order={Math.min(before[ri] + pi + 1, 11)} title={p.name}>
               <span className="mc-pitch__shirt">
                 <svg viewBox="0 0 32 30" aria-hidden="true">
                   <path d="M10 1 L1 7 L4 14 L8 12 L8 29 L24 29 L24 12 L28 14 L31 7 L22 1 C20 5 12 5 10 1 Z" />
