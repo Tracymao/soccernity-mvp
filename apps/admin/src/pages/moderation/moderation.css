@@ -735,6 +735,13 @@ a.mod-tab {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  min-height: 40px;
+}
+
+/* A page-level button, so 40 high although the markup uses the small class. */
+.hi-page-title .mod-btn {
+  padding: 9px 20px;
+  font-size: 14px;
 }
 
 .hi-filter {
@@ -745,9 +752,14 @@ a.mod-tab {
 
 .hi-filter__row {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+/* Bottom-aligns the 40px button with the 44px input (16px label + 8px gap), not with the help line. */
+.hi-filter__row > .mod-btn {
+  margin-top: 28px;
 }
 
 .hi-field {
@@ -761,6 +773,7 @@ a.mod-tab {
   font-size: 12px;
   font-weight: 500;
   color: var(--sn-text-secondary);
+  line-height: 16px;
 }
 
 .hi-field__box {
@@ -769,9 +782,11 @@ a.mod-tab {
   justify-content: space-between;
   gap: 8px;
   padding: 0 14px;
-  border-radius: 6px;
+  border-radius: var(--sn-radius-md);
   border: 2px solid transparent;
   background-color: var(--sn-green-tint-12);
+  box-sizing: border-box;
+  height: 44px;
 }
 
 .hi-field__box[data-invalid="true"] {
@@ -781,13 +796,14 @@ a.mod-tab {
 .hi-field__box input {
   flex: 1;
   min-width: 0;
-  padding: 13px 0;
+  padding: 0;
   border: none;
   outline: none;
   background: transparent;
   font: inherit;
   font-size: 14px;
   color: var(--sn-text-primary);
+  height: 100%;
 }
 
 .hi-field__box:focus-within {
@@ -803,6 +819,7 @@ a.mod-tab {
   margin: 0;
   font-size: 12px;
   color: var(--sn-text-secondary);
+  line-height: 16px;
 }
 
 .hi-field__error {
@@ -813,13 +830,13 @@ a.mod-tab {
   font-size: 12px;
   font-weight: 600;
   color: var(--sn-text-primary);
+  line-height: 16px;
 }
 
 .hi-field__error::before {
   content: "";
   width: 3px;
   height: 14px;
-  border-radius: 2px;
   background-color: var(--sn-semantic-alert);
 }
 
@@ -828,16 +845,22 @@ a.mod-tab {
   grid-template-columns: 150px 200px 150px 100px 70px minmax(0, 1fr) 110px;
   gap: 16px;
   align-items: center;
-  padding: 14px 20px;
-  font-size: 13px;
+  min-height: 52px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .hi-table__row.mod-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   background-color: var(--sn-green-tint-12);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--sn-text-secondary);
-  text-transform: uppercase;
 }
 
 .hi-name {
@@ -846,10 +869,6 @@ a.mod-tab {
 
 .hi-table__row {
   min-width: 0;
-}
-
-.hi-table__row + .hi-table__row:not(.mod-table__row--head) {
-  border-top: 1px solid var(--sn-icon-inactive);
 }
 
 .hi-empty {
@@ -875,13 +894,14 @@ a.mod-tab {
 .hi-field__box select {
   flex: 1;
   min-width: 0;
-  padding: 13px 0;
+  padding: 0;
   border: none;
   outline: none;
   background: transparent;
   font: inherit;
   font-size: 14px;
   color: var(--sn-text-primary);
+  height: 100%;
 }
 
 .ce-table__row {
@@ -889,8 +909,11 @@ a.mod-tab {
   grid-template-columns: 96px 130px minmax(0, 1.3fr) 130px minmax(0, 1.1fr) 80px 80px 90px 70px;
   gap: 12px;
   align-items: center;
-  padding: 14px 20px;
-  font-size: 13px;
+  min-height: 52px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  font-size: 14px;
+  line-height: 22px;
   min-width: 0;
 }
 
@@ -902,19 +925,18 @@ a.mod-tab {
 }
 
 .ce-table__row.mod-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   background-color: var(--sn-green-tint-12);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--sn-text-secondary);
-  text-transform: uppercase;
-}
-
-.ce-table__row + .ce-table__row:not(.mod-table__row--head) {
-  border-top: 1px solid var(--sn-icon-inactive);
 }
 
 .ce-cell--name {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sn-text-primary);
 }
 
@@ -929,6 +951,10 @@ a.mod-tab {
   align-items: start;
 }
 
+.ce-cards > .mod-card {
+  gap: 8px;
+}
+
 @media (max-width: 900px) {
   .ce-cards {
     grid-template-columns: minmax(0, 1fr);
@@ -940,6 +966,7 @@ a.mod-tab {
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 12px;
   font-size: 13px;
+  line-height: 20px;
 }
 
 .ce-kv--stacked {
@@ -959,11 +986,11 @@ a.mod-tab {
 .ce-message {
   margin: 0;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--sn-radius-md);
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 20px;
   white-space: pre-wrap;
   word-break: break-word;
 }
