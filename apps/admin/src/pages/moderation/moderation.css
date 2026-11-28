@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 1100px;
+  max-width: 1098px;
 }
 
 .mod-back {
@@ -50,8 +50,29 @@
 
 .mod-loading,
 .mod-error {
-  color: var(--sn-text-secondary);
+  margin: 0;
+  padding: 12px 14px;
+  border: 0 solid var(--sn-semantic-alert);
+  border-left-width: 3px;
+  border-radius: var(--sn-radius-sm);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* A page-level load error is a card, like the table, with a wider alert bar. */
+.mod-page > .mod-error {
+  padding: 20px;
+  border-left-width: 6px;
+  border-radius: var(--sn-radius-lg);
+  background-color: var(--sn-background-surface);
   font-size: 14px;
+  line-height: 22px;
+}
+
+.mod-error .mod-link {
+  text-decoration: underline;
 }
 
 .mod-error {
@@ -65,7 +86,7 @@
 
 .mod-card {
   background-color: var(--sn-background-surface);
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -83,7 +104,7 @@
 
 .mod-table {
   background-color: var(--sn-background-surface);
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   overflow: hidden;
 }
 
@@ -92,22 +113,29 @@
   grid-template-columns: 100px 90px 130px 1.3fr 110px 100px 90px;
   gap: 16px;
   align-items: center;
-  padding: 14px 20px;
-  font-size: 13px;
+  min-height: 52px;
+  padding: 14px 20px 13px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  font-size: 14px;
+  line-height: 22px;
 }
 
+/* 14 + 24px pill + 13 + 1px hairline = a 52px row, 80px with the minor flag. */
+
 .mod-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   background-color: var(--sn-green-tint-12);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--sn-text-secondary);
-  text-transform: uppercase;
 }
 
 .mod-cell--primary {
   color: var(--sn-text-primary);
-  font-weight: 600;
-  font-family: monospace;
+  font-weight: 500;
 }
 
 .mod-cell--secondary {
@@ -125,11 +153,15 @@
 .mod-pill {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--sn-radius-full);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
-  text-transform: lowercase;
+  white-space: nowrap;
+  text-transform: capitalize;
 }
 
 .mod-pill--strong {
@@ -150,7 +182,7 @@
   background-color: var(--sn-background-surface);
   border: 1px solid var(--sn-brand-navy);
   color: var(--sn-brand-navy);
-  font-weight: 700;
+  font-weight: 500;
   text-transform: none;
 }
 
@@ -175,17 +207,30 @@
   text-decoration: none;
 }
 
+.mod-link:focus-visible,
+.mod-btn:focus-visible,
+.mod-tab:focus-visible,
+.mod-dialog__close:focus-visible,
+.mod-back a:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
 .mod-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
-  border-radius: 6px;
+  box-sizing: border-box;
+  padding: 9px 20px;
+  border-radius: var(--sn-radius-md);
   font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
   border: 1px solid transparent;
   cursor: pointer;
   align-self: flex-start;
+  text-decoration: none;
+  transition: background-color var(--sn-duration-fast) var(--sn-ease-standard), opacity var(--sn-duration-fast) var(--sn-ease-standard);
 }
 
 .mod-btn:disabled {
@@ -199,14 +244,30 @@
 }
 
 .mod-btn--outline {
-  background-color: var(--sn-background-surface);
+  background-color: transparent;
   border-color: var(--sn-brand-navy);
   color: var(--sn-text-primary);
+  font-weight: 500;
 }
 
 .mod-btn--sm {
-  padding: 8px 16px;
+  padding: 5px 12px;
   font-size: 13px;
+  font-weight: 500;
+}
+
+.mod-btn--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.mod-btn--outline:hover:not(:disabled),
+.mod-btn--neutral:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--sn-brand-navy) 8%, transparent);
+}
+
+.mod-btn--outline:active:not(:disabled),
+.mod-btn--neutral:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--sn-brand-navy) 15%, transparent);
 }
 
 .mod-action-row {
@@ -220,15 +281,16 @@
 
 .mod-callout {
   display: flex;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 14px;
+  overflow: hidden;
+  padding: 12px 14px 12px 0;
   background-color: var(--sn-green-tint-12);
-  border-radius: 8px;
+  border-radius: var(--sn-radius-sm);
 }
 
 .mod-callout__bar {
   flex: 0 0 3px;
-  border-radius: 2px;
+  margin: -12px 0;
   background-color: var(--sn-brand-navy);
   align-self: stretch;
 }
@@ -237,7 +299,7 @@
   margin: 0;
   font-size: 13px;
   color: var(--sn-text-primary);
-  line-height: 1.5;
+  line-height: 20px;
 }
 
 .mod-callout code {
@@ -407,14 +469,24 @@
   width: 100%;
   box-sizing: border-box;
   margin-top: 4px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--sn-icon-inactive);
-  background-color: var(--sn-background-surface);
+  padding: 12px 14px;
+  border-radius: var(--sn-radius-md);
+  border: 2px solid transparent;
+  background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font: inherit;
   font-size: 14px;
+  line-height: 20px;
   resize: vertical;
+}
+
+.mod-textarea:focus-visible {
+  outline: none;
+  border-color: var(--sn-brand-navy);
+}
+
+.mod-textarea[aria-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
 }
 
 .mod-checkbox {
@@ -446,14 +518,15 @@ a.mod-tab {
 
 .mod-pill--outline {
   background-color: var(--sn-background-surface);
-  border: 1px solid var(--sn-icon-inactive);
-  color: var(--sn-text-secondary);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-brand-navy);
 }
 
 .mod-btn--neutral {
-  background-color: var(--sn-background-surface);
+  background-color: transparent;
   border-color: var(--sn-icon-inactive);
   color: var(--sn-text-primary);
+  font-weight: 500;
 }
 
 .mod-callout--alert .mod-callout__bar {
@@ -462,14 +535,13 @@ a.mod-tab {
 
 .mod-callout-error {
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--sn-brand-navy);
-  border-left: 6px solid var(--sn-semantic-alert);
-  border-radius: 6px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font-size: 13px;
-  font-weight: 600;
+  line-height: 20px;
 }
 
 .mod-hold-status {
@@ -507,12 +579,9 @@ a.mod-tab {
   width: min(560px, 100%);
   max-height: 100%;
   overflow: auto;
-  border-radius: 16px;
+  border-radius: var(--sn-radius-xl);
   background-color: var(--sn-background-surface);
-  box-shadow:
-    0 24px 56px var(--sn-shadow-key),
-    0 8px 24px var(--sn-shadow-elevated),
-    0 2px 6px var(--sn-shadow-ambient);
+  box-shadow: var(--sn-elevation-3);
 }
 
 .mod-dialog__head {
@@ -533,7 +602,7 @@ a.mod-tab {
 .mod-dialog__close {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
   border: 1px solid var(--sn-icon-inactive);
   background: var(--sn-background-surface);
   color: var(--sn-text-primary);
@@ -563,12 +632,6 @@ a.mod-tab {
 
 .mod-dialog__input {
   min-height: 96px;
-  background-color: var(--sn-green-tint-12);
-  border-color: transparent;
-}
-
-.mod-dialog__input[aria-invalid="true"] {
-  border: 2px solid var(--sn-semantic-alert);
 }
 
 .mod-dialog__field-error {
@@ -583,6 +646,10 @@ a.mod-tab {
   justify-content: flex-end;
   gap: 12px;
   padding: 0 28px 24px;
+}
+
+.mod-dialog__actions .mod-btn--neutral {
+  border-color: var(--sn-brand-navy);
 }
 
 /* B-295 suspension dialog (Figma 7042:61845, 7045:63231): the consequence list and the nine-category radio list. */
@@ -886,9 +953,10 @@ a.mod-tab {
 .mod-select {
   width: 100%;
   box-sizing: border-box;
-  padding: 11px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--sn-icon-inactive);
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--sn-radius-md);
+  border: 2px solid transparent;
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font: inherit;
@@ -898,6 +966,10 @@ a.mod-tab {
 .mod-select:focus-visible {
   outline: 2px solid var(--sn-brand-navy);
   outline-offset: 1px;
+}
+
+.mod-select[aria-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
 }
 
 .mod-checkbox--boxed {
