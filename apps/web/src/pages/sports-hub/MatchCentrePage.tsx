@@ -70,7 +70,6 @@ import {
   type StandingsZone,
   type TopScorers,
   type Highlights,
-  type MatchEvent,
 } from "../../api/sports";
 import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";

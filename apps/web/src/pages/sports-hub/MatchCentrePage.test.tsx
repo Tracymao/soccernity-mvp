@@ -160,7 +160,7 @@ describe("MatchCentrePage", () => {
     expect(screen.queryByText("Match not found.")).toBeNull();
   });
 
-  it("defaults to the Match / Summary tab and lazily fetches events for the goal list", async () => {
+  it("defaults to the Match / Summary tab and lazily fetches events for the summary", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
     vi.mocked(getMatchEvents).mockResolvedValueOnce({
       items: [
@@ -182,12 +182,12 @@ describe("MatchCentrePage", () => {
     expect(getHighlights).not.toHaveBeenCalled();
   });
 
-  it("shows 'No goals yet.' when the events feed has no Goal-type entries", async () => {
+  it("shows 'No events yet.' when the events feed is empty", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
 
     renderPage();
 
-    expect(await screen.findByText("No goals yet.")).not.toBeNull();
+    expect(await screen.findByText("No events yet.")).not.toBeNull();
   });
 
   it("switching to Statistics lazily fetches team stats and renders the honest team-level-only disclosure", async () => {

@@ -106,6 +106,38 @@ describe('SportsService.getMatchBoxScore', () => {
     expect(result.away?.expectedGoals).toBeCloseTo(0.25);
   });
 
+  it('maps the per-player counts when the vendor sends them, including a percentage string', async () => {
+    const raw = rawBoxScore();
+    Object.assign(raw[0].players[0].statistics, {
+      goalsScored: 1,
+      assists: 0,
+      shotsTotal: 4,
+      shotsOnTarget: 2,
+      passesTotal: 30,
+      passesAccuracy: '66.67 %',
+      tacklesTotal: 1,
+      fouledOthers: 2,
+      fouledByOthers: 5,
+    });
+    const prisma = buildPrismaMock();
+    (prisma.matchData.findUnique as jest.Mock).mockResolvedValue(matchRow({ boxScore: raw }));
+    const service = new SportsService(prisma, buildClientMock(), buildLockMock(true), buildConfig());
+
+    const players = (await service.getMatchBoxScore('match-1')).home?.players;
+
+    expect(players?.[0]).toMatchObject({
+      goals: 1,
+      assists: 0,
+      shots: 4,
+      shotsOnTarget: 2,
+      passes: 30,
+      passAccuracy: 66.67,
+      tackles: 1,
+      fouls: 2,
+    });
+    expect(players?.[1]).not.toHaveProperty('shots');
+  });
+
   it('keeps a missing rating or xG as null, never 0, and treats an empty rating string as null', async () => {
     const prisma = buildPrismaMock();
     (prisma.matchData.findUnique as jest.Mock).mockResolvedValue(matchRow({ boxScore: rawBoxScore() }));

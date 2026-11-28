@@ -447,6 +447,53 @@ describe('SportsService', () => {
     });
   });
 
+  describe('getStandings zones', () => {
+    const table = [
+      {
+        standings: Array.from({ length: 20 }, (_, i) => ({
+          position: i + 1,
+          points: 40 - i,
+          team: { id: `t${i + 1}`, name: `Team ${i + 1}` },
+          total: { games: 10, wins: 5, draws: 0, loses: 5, scoredGoals: 10, receivedGoals: 10 },
+        })),
+      },
+    ];
+
+    async function standingsFor(leagueRow: Record<string, unknown> | null) {
+      const prisma = buildPrismaMock();
+      const client = buildClientMock();
+      (prisma.standing.findUnique as jest.Mock).mockResolvedValue({ table, updatedAt: new Date() });
+      Object.assign(prisma, { sportsLeague: { findMany: jest.fn().mockResolvedValue(leagueRow ? [leagueRow] : []) } });
+      const service = new SportsService(prisma, client, buildLockMock(true), buildConfig());
+      const result = await service.getStandings({ league: '133', season: '2026' } as never);
+      return { result, client };
+    }
+
+    it('adds row zones and a legend for a league with a rule, from the stored metadata only', async () => {
+      const { result, client } = await standingsFor({ leagueId: '133', name: 'Premier League', countryName: 'England' });
+      const rows = result.groups[0].rows;
+      expect(rows[0].zone).toBe('champions-league');
+      expect(rows[4].zone).toBe('europa-league');
+      expect(rows[5]).not.toHaveProperty('zone');
+      expect(rows[19].zone).toBe('relegation');
+      expect(result.zones).toEqual([
+        { zone: 'champions-league', label: 'UEFA Champions League' },
+        { zone: 'europa-league', label: 'UEFA Europa League' },
+        { zone: 'relegation', label: 'Relegation' },
+      ]);
+      expect((client as unknown as { getStandings: jest.Mock }).getStandings).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an unlisted league', { leagueId: '133', name: 'Bundesliga', countryName: 'Germany' }],
+      ['no stored metadata', null],
+    ])('adds no zone fields for %s', async (_label, leagueRow) => {
+      const { result } = await standingsFor(leagueRow);
+      expect(result).not.toHaveProperty('zones');
+      expect(result.groups[0].rows.some((r) => 'zone' in r)).toBe(false);
+    });
+  });
+
   describe('getHighlights', () => {
     it('throws NotFoundException for an unknown match id', async () => {
       const prisma = buildPrismaMock();
