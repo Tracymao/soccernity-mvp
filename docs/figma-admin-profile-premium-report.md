@@ -26,3 +26,15 @@ All frames: 1440 wide, at least 1184 high, Admin Shell active item "None" (the c
 | `6906:33959` | Turn off, incorrect password | `7408:70247` |
 | `6906:34113` | Turned off | `7408:70313` |
 
+## Group c: change password
+
+| Frame | State | New content |
+| --- | --- | --- |
+| `7073:63591` | Panel, default | `7408:70359` |
+| `7073:63765` | New password too short | `7408:70412` |
+| `7073:63941` | Passwords don't match | `7408:70465` |
+| `7073:64117` | Current password incorrect | `7408:70518` |
+| `7073:64293` | Generic error | `7408:70571` |
+| `7073:64469` | Saving | `7408:70620` |
+| `7073:64643` | Password changed | `7408:70654` |
+
