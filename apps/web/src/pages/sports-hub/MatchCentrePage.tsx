@@ -75,6 +75,7 @@ import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
+import SummaryTimeline from "./SummaryTimeline";
 import { LineupPitch, PairedRows, canDrawPitch, coachRows } from "./LineupPitch";
 import LoadingState from "../../components/loading/LoadingState";
 import "./SportsHubPage.css";
@@ -161,10 +162,6 @@ function RetryButton({ onRetry }: { onRetry: () => void }) {
 
 // ---------- Match Summary (sub tab) ----------
 
-function isGoalEvent(e: MatchEvent): boolean {
-  return e.type.toLowerCase() === "goal";
-}
-
 // The kickoff-alert control under the status line (B-070, Figma C3 / C4). Signed-in only; the
 // caller does not render it for a logged-out visitor.
 function MatchHeaderAlert({ match }: { match: MatchListItem }) {
@@ -184,7 +181,23 @@ function MatchHeaderAlert({ match }: { match: MatchListItem }) {
 function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loadable<MatchEvents> }) {
   return (
     <Section title="Match summary">
-      <dl className="mc-facts">
+      {events.status === "idle" || events.status === "loading" ? (
+        <LoadingState variant="section" className="mc-status" label="Loading match events…" />
+      ) : events.status === "error" ? (
+        <StatusMessage tone="error">Couldn&rsquo;t load this match&rsquo;s events.</StatusMessage>
+      ) : (
+        <SummaryTimeline items={events.data.items} match={match} />
+      )}
+
+      <h3 className="mc-band">Match information</h3>
+      {/* No referee: the match data does not carry one. */}
+      <dl className="mc-info">
+        {match.venue && (
+          <div>
+            <dt>Venue</dt>
+            <dd>{match.venue}</dd>
+          </div>
+        )}
         <div>
           <dt>Competition</dt>
           <dd>{match.competition}{match.league.round ? ` · ${match.league.round}` : ""}</dd>
@@ -193,39 +206,7 @@ function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loada
           <dt>Kickoff</dt>
           <dd>{formatKickoffFull(match.kickoffTime)}</dd>
         </div>
-        {match.venue && (
-          <div>
-            <dt>Venue</dt>
-            <dd>{match.venue}</dd>
-          </div>
-        )}
       </dl>
-
-      <h3 className="mc-subheading">Goals</h3>
-      {events.status === "idle" || events.status === "loading" ? (
-        <LoadingState variant="section" className="mc-status" label="Loading match events…" />
-      ) : events.status === "error" ? (
-        <StatusMessage tone="error">Couldn&rsquo;t load this match&rsquo;s events.</StatusMessage>
-      ) : (
-        (() => {
-          const goals = events.data.items.filter(isGoalEvent);
-          if (goals.length === 0) return <StatusMessage>No goals yet.</StatusMessage>;
-          return (
-            <ul className="mc-goal-list">
-              {goals.map((g, i) => (
-                <li key={i}>
-                  <span className="mc-goal__minute">{g.displayMinute}</span>
-                  <span className="mc-goal__side">{g.side === "home" ? match.homeTeam.name : g.side === "away" ? match.awayTeam.name : ""}</span>
-                  <span className="mc-goal__player">
-                    {g.player ?? "Unknown scorer"}
-                    {g.assist ? ` (assist: ${g.assist})` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          );
-        })()
-      )}
     </Section>
   );
 }

@@ -195,55 +195,7 @@
 
 /* --- facts (summary / H2H) ------------------------------------------ */
 
-.mc-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px 20px;
-  margin: 0;
-}
-
-.mc-facts dt {
-  font: 600 12px "Inter", sans-serif;
-  color: var(--sn-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin: 0;
-}
-
-.mc-facts dd {
-  font: 500 15px "Inter", sans-serif;
-  color: var(--sn-text-primary);
-  margin: 4px 0 0;
-}
-
 /* --- goals (summary) ------------------------------------------------- */
-
-.mc-goal-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mc-goal-list li {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font: 400 14px "Inter", sans-serif;
-  color: var(--sn-text-primary);
-}
-
-.mc-goal__minute {
-  font-weight: 700;
-  min-width: 40px;
-}
-
-.mc-goal__side {
-  color: var(--sn-text-secondary);
-  min-width: 90px;
-}
 
 /* --- statistics ------------------------------------------------------- */
 
@@ -1032,4 +984,108 @@
 .mc-pairs__number {
   min-width: 20px;
   color: var(--sn-text-secondary);
+}
+
+/* --- CH-H21: match summary by half (Figma 632:943) ---------------- */
+
+.mc-half__score {
+  margin-left: 12px;
+}
+
+.mc-events {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mc-event {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 4px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-event--away {
+  flex-direction: row-reverse;
+}
+
+.mc-event__minute {
+  min-width: 40px;
+}
+
+.mc-event--away .mc-event__minute {
+  text-align: right;
+}
+
+.mc-event__secondary {
+  font-weight: 400;
+  color: var(--sn-text-secondary);
+}
+
+.mc-event__icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+}
+
+.mc-event__icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--sn-text-primary);
+  stroke-width: 1.4;
+}
+
+.mc-event__icon--goal svg path,
+.mc-event__icon--penalty svg path,
+.mc-event__icon--own-goal svg path {
+  fill: var(--sn-text-primary);
+}
+
+/* The palette has no yellow: a yellow card is the outlined card, a red card the solid one. */
+.mc-event__icon--yellow,
+.mc-event__icon--red {
+  width: 11px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  margin: 0 2px 0 3px;
+}
+
+.mc-event__icon--yellow {
+  border: 2px solid var(--sn-text-primary);
+  background: var(--sn-green-tint-28);
+}
+
+.mc-event__icon--red {
+  background: var(--sn-semantic-alert);
+}
+
+.mc-info {
+  margin: 0;
+}
+
+.mc-info div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px;
+  font: 400 13px "Inter", sans-serif;
+}
+
+.mc-info dt {
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mc-info dd {
+  margin: 0;
+  text-align: right;
+  color: var(--sn-text-primary);
 }
