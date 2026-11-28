@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServerClient } from 'postmark';
+import { emailLogoUrl, renderEmailButton, renderEmailLayout } from '../../registration/email/email-layout';
 import { buildWebAppLink } from '../../registration/email/web-app-link.util';
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
@@ -17,6 +18,18 @@ import { buildWebAppLink } from '../../registration/email/web-app-link.util';
 // Unlike the not-live branch (which deliberately logs the full reset
 // link, including the token, purely for dev/manual testing), the live branch below never logs the
 // link or token, only send success/failure and Postmark's MessageID.
+// CH-H18: the same branded layout as every other email. Exported for the preview script and the specs.
+export function renderPasswordResetHtml(subject: string, resetLink: string, webAppBaseUrl: string | undefined): string {
+  return renderEmailLayout({
+    title: subject,
+    bodyHtml:
+      `<p>We received a request to reset your Soccernity password.</p>` +
+      renderEmailButton('Reset your password', resetLink) +
+      `<p>If you did not request this, you can safely ignore this email.</p>`,
+    logoUrl: emailLogoUrl(webAppBaseUrl),
+  });
+}
+
 @Injectable()
 export class PasswordResetEmailService {
   private readonly logger = new Logger(PasswordResetEmailService.name);
@@ -74,11 +87,12 @@ export class PasswordResetEmailService {
     // close to the actual API call as possible, rather than bubbling up
     // and failing the reset flow itself.
     try {
+      const subject = 'Reset your Soccernity password';
       const result = await this.postmarkClient!.sendEmail({
         From: this.fromEmail ?? '',
         To: email,
-        Subject: 'Reset your Soccernity password',
-        HtmlBody: `<p>We received a request to reset your Soccernity password.</p><p><a href="${resetLink}">Reset your password</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
+        Subject: subject,
+        HtmlBody: renderPasswordResetHtml(subject, resetLink, this.config.get<string>('WEB_APP_BASE_URL')),
         TextBody: `We received a request to reset your Soccernity password.\n\n${resetLink}\n\nIf you did not request this, you can safely ignore this email.`,
         MessageStream: 'outbound',
       });
