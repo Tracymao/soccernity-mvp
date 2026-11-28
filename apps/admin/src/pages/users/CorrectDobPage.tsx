@@ -207,7 +207,7 @@ export default function CorrectDobPage() {
         </div>
       </div>
 
-      <div className="us-page">
+      <div className="us-page ud-page">
         {loading ? <p className="us-loading">Loading user…</p> : null}
         {loadError ? (
           <p className="us-error" role="alert">

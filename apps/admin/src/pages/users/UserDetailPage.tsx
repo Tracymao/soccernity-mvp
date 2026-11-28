@@ -257,7 +257,7 @@ export default function UserDetailPage() {
         </div>
       </div>
 
-      <div className="us-page">
+      <div className="us-page ud-page">
         {loading && !user ? <p className="us-loading">Loading user…</p> : null}
         {error ? (
           <p className="us-error" role="alert">

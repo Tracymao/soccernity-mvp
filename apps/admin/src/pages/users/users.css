@@ -69,6 +69,27 @@
   font-weight: 400;
 }
 
+/* User detail, Correct date of birth and Incorrect-details reports only. The Users list has no loading or
+ * load-error frame, so its .us-loading and .us-error are left as they were. */
+.ud-page .us-loading {
+  line-height: 22px;
+}
+
+/* the alert callout */
+.ud-page .us-error,
+.ud-dialog .us-error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: var(--sn-radius-sm);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
 .us-error {
   padding: 10px 12px;
   border: 1px solid var(--sn-brand-navy);
@@ -640,19 +661,19 @@ p.ud-callout {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background-color: var(--sn-background-surface);
-  font-weight: normal;
 }
 
 .gn-alert__title {
   margin: 0;
   font-weight: 600;
   font-size: 14px;
+  line-height: 22px;
 }
 
 .gn-alert__body {
   margin: 0;
   font-size: 13px;
+  line-height: 20px;
 }
 
 .gn-banner {
