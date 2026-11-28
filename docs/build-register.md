@@ -6222,3 +6222,10 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 - Numbers marked "Not used": none. Every missing number had a register section.
 - The sentences in Sections 156, 157 and 177 saying #585 or #605 has no Decision Log row are now out of date (older sections are not edited).
 - No B-ID added; B-rows, the Waves table, the per-wave paragraphs and the Register size paragraph are untouched. The out-of-order Section 7 row already present is not moved.
+
+## 180. Updates 2026-11-28 (Admin Moderation family restyled in code to the Figma premium design; no counter changes)
+
+- Decision Log #608: the Moderation family (queue, report detail, appeal review, dialogs, contact enquiries, held investigations, media review, suspected illegal imagery) is restyled in code to the premium design. Uppercase table headers removed; pills capitalised; callouts without stroke; dialogs restyled; no structure, route, API or behaviour change.
+- The shared moderation stylesheet also changes the look of Activity and Username reviews.
+- Admin tests 65 files / 1034 pass; lint, typecheck and build pass. Not verified on a built app or staging.
+- No B-ID added. Details: docs/admin-moderation-premium-code-report.md.

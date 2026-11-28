@@ -474,6 +474,12 @@
   border: 1px solid var(--sn-brand-navy);
 }
 
+/* A card that reports a failed load: the alert accent bar replaces the navy outline. */
+.mod-card--restricted.mod-card--load-error {
+  border-width: 0 0 0 6px;
+  border-color: var(--sn-semantic-alert);
+}
+
 .mod-escalate-form {
   display: flex;
   flex-direction: column;
@@ -493,6 +499,7 @@
   font-size: 14px;
   line-height: 20px;
   resize: vertical;
+  display: block;
 }
 
 .mod-textarea:focus-visible {
@@ -649,6 +656,8 @@ a.mod-tab {
   font-size: 12px;
   font-weight: 500;
   color: var(--sn-text-secondary);
+  display: block;
+  line-height: 16px;
 }
 
 .mod-dialog__input {
@@ -732,12 +741,6 @@ a.mod-tab {
   gap: 16px;
   flex-wrap: wrap;
   min-height: 40px;
-}
-
-/* A page-level button, so 40 high although the markup uses the small class. */
-.hi-page-title .mod-btn {
-  padding: 9px 20px;
-  font-size: 14px;
 }
 
 .hi-filter {

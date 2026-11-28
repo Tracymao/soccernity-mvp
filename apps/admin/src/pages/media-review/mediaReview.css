@@ -28,6 +28,7 @@
   font-size: 28px;
   font-weight: 700;
   color: var(--sn-text-primary);
+  line-height: 36px;
 }
 
 .media-filters {
@@ -39,7 +40,7 @@
 .media-filters label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   font-size: 12px;
   line-height: 16px;
   font-weight: 500;
@@ -106,6 +107,11 @@
   padding: 16px;
   border-radius: var(--sn-radius-lg);
   background: var(--sn-green-tint-12);
+}
+
+/* 16px between the back link and the viewer, tighter than the page's 20px (Figma 6852:30003). */
+.mod-back + .media-viewer {
+  margin-top: -4px;
 }
 
 .media-viewer img,

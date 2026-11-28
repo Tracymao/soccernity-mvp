@@ -223,7 +223,7 @@ export default function MediaReviewItemPage() {
         <AdminPageHeader title="Media review" />
         <div className="mod-page">
           {back}
-          <div className="mod-card mod-card--restricted" role="alert">
+          <div className={load === "not-found" ? "mod-card mod-card--restricted" : "mod-card mod-card--restricted mod-card--load-error"} role="alert">
             <h2 className="mod-card__title">{load === "not-found" ? "Item not found" : "Couldn’t load this item"}</h2>
             <p className="mod-note">
               {load === "not-found"
@@ -233,7 +233,7 @@ export default function MediaReviewItemPage() {
                 : "Check your connection and try again. Nothing has been approved or rejected."}
             </p>
             {load === "error" ? (
-              <button type="button" className="mod-btn mod-btn--primary mod-btn--sm" onClick={() => void fetchItem()}>
+              <button type="button" className="mod-btn mod-btn--primary" onClick={() => void fetchItem()}>
                 Try again
               </button>
             ) : null}

@@ -173,7 +173,7 @@ export default function SuspectedIllegalListPage() {
               </div>
             </div>
             <div>
-              <button type="button" className="mod-btn mod-btn--outline mod-btn--sm" onClick={reload}>
+              <button type="button" className="mod-btn mod-btn--outline" onClick={reload}>
                 Retry
               </button>
             </div>
@@ -210,7 +210,7 @@ export default function SuspectedIllegalListPage() {
 
         {!error && effectiveCursor ? (
           <div>
-            <button type="button" className="mod-btn mod-btn--outline mod-btn--sm" onClick={loadMore} disabled={loadingMore}>
+            <button type="button" className="mod-btn mod-btn--outline" onClick={loadMore} disabled={loadingMore}>
               {loadingMore ? "Loading…" : "Load more"}
             </button>
           </div>

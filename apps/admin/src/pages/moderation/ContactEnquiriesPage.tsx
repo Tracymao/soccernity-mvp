@@ -228,7 +228,7 @@ export default function ContactEnquiriesPage() {
         ) : null}
 
         {!error && effectiveCursor ? (
-          <button type="button" className="mod-btn mod-btn--outline mod-btn--sm" onClick={loadMore} disabled={loadingMore}>
+          <button type="button" className="mod-btn mod-btn--outline" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? "Loading…" : "Load more"}
           </button>
         ) : null}
