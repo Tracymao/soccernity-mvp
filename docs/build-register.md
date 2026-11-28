@@ -6143,3 +6143,9 @@ Docs and Figma only; no app code, no new B-ID. Seven frames: 6870:30620, 6672:28
 - Restyled `7115:68271`, `68463`, `68655`, `68839`, `69025`, `69211`, `69406`, `69601`, `69783`. Frame ids unchanged; old layers hidden and prefixed `ARCHIVED `. The nine now sit in one row, with the notes frame `7116:69255` after them. Figma and docs only. Report: `docs/figma-admin-room-reactivation-premium-report.md`.
 - **Decision Log #600:** code is the source of truth for these states. The page is drawn as an actioned report (Action taken "Room deactivated"); error lines use the restyled Error callout; the 9 "[COPY PENDING LEGAL REVIEW]" tags are not carried into the restyled frames.
 - Open for the single Moderation code PR: `.mod-error` (1px navy border today) and `mod-pill--outline` (grey today, drawn navy for "Active").
+
+## 172. Updates 2026-11-28 (Figma profile-picture and cover-photo Media review frames restyled to the shipped code and premium standard)
+
+Figma and docs only. Seven frames (6972:46142, 46346, 46516, 46686, 46863, 47057, 47248) rebuilt from the restyled Media review frames; old layers archived in place. Report: `docs/figma-admin-media-profile-premium-report.md`.
+
+**Decision Log #601:** these seven frames follow the shipped code where it differs from the old frames: the picture preview is square (radius 8), the already-decided frame shows the code's `conflict` wording, "Showing 5 of 27" is dropped, and the reject button is disabled while the reason is empty. Open, not changed: shipped picture reject dialogs 6852:30985 / 6852:31327 say "Up to 500 characters" (code: 300) and show that button enabled when empty.
