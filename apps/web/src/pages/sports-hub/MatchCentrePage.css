@@ -768,3 +768,268 @@
   color: var(--sn-brand-navy);
   border: 1px solid var(--sn-brand-navy);
 }
+
+/* --- CH-H21: shared green-tint band (Figma 632:943, 667:1952) ----- */
+
+.mc-band {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.mc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- CH-H21: lineup pitch ----------------------------------------- */
+
+.mc-band--formation {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mc-pitch-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-pitch-legend__team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-pitch-legend__team::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--sn-brand-navy);
+}
+
+.mc-pitch-legend__team--away::before {
+  background: var(--sn-brand-green);
+}
+
+/* Narrow first: home half on top, away half below, goalkeepers at the two ends. */
+.mc-pitch {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+}
+
+.mc-pitch__half {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 14px 4px;
+}
+
+/* Penalty area, drawn at the goalkeeper's end of each half. */
+.mc-pitch__half::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 72px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-top: 0;
+  pointer-events: none;
+}
+
+.mc-pitch__half--away {
+  flex-direction: column-reverse;
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.mc-pitch__half--away::before {
+  top: auto;
+  bottom: 0;
+  border-top: 1px solid var(--sn-icon-inactive);
+  border-bottom: 0;
+}
+
+.mc-pitch__line {
+  position: relative;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.mc-pitch__half--away .mc-pitch__line {
+  flex-direction: row-reverse;
+}
+
+.mc-pitch__player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mc-pitch__shirt {
+  position: relative;
+  width: 32px;
+  height: 30px;
+}
+
+.mc-pitch__shirt svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--sn-brand-navy);
+  stroke: var(--sn-icon-inactive);
+  stroke-width: 1;
+}
+
+.mc-pitch__half--away .mc-pitch__shirt svg {
+  fill: var(--sn-brand-green);
+}
+
+.mc-pitch__number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 3px;
+  font: 700 11px "Inter", sans-serif;
+  color: var(--sn-text-on-navy, var(--sn-text-on-green));
+}
+
+.mc-pitch__half--away .mc-pitch__number {
+  color: var(--sn-text-on-green);
+}
+
+.mc-pitch__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+@media (min-width: 700px) {
+  .mc-pitch {
+    flex-direction: row;
+    min-height: 420px;
+  }
+
+  .mc-pitch__half {
+    flex-direction: row;
+    padding: 12px 4px;
+    gap: 4px;
+  }
+
+  .mc-pitch__half--away {
+    flex-direction: row-reverse;
+    border-top: 0;
+    border-left: 1px solid var(--sn-icon-inactive);
+  }
+
+  .mc-pitch__half::before {
+    top: 22%;
+    bottom: 22%;
+    left: 0;
+    right: auto;
+    width: 15%;
+    height: auto;
+    border: 1px solid var(--sn-icon-inactive);
+    border-left: 0;
+  }
+
+  .mc-pitch__half--away::before {
+    top: 22%;
+    bottom: 22%;
+    left: auto;
+    right: 0;
+    border: 1px solid var(--sn-icon-inactive);
+    border-right: 0;
+  }
+
+  .mc-pitch__line,
+  .mc-pitch__half--away .mc-pitch__line {
+    flex-direction: column;
+    justify-content: space-around;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mc-pitch__half--away .mc-pitch__line {
+    flex-direction: column-reverse;
+  }
+
+  .mc-pitch__player {
+    flex: 0 0 auto;
+    max-width: 100%;
+  }
+}
+
+/* --- CH-H21: paired home / away rows ------------------------------ */
+
+.mc-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mc-pairs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mc-pairs li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px;
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-pairs li:nth-child(even) {
+  background: var(--sn-green-tint-12);
+}
+
+.mc-pairs__cell {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mc-pairs__cell--away {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.mc-pairs__number {
+  min-width: 20px;
+  color: var(--sn-text-secondary);
+}

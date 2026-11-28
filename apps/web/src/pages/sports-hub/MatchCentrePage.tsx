@@ -75,6 +75,7 @@ import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
+import { LineupPitch, PairedRows, canDrawPitch, coachRows } from "./LineupPitch";
 import LoadingState from "../../components/loading/LoadingState";
 import "./SportsHubPage.css";
 import "./MatchCentrePage.css";
@@ -461,17 +462,29 @@ function LineupsTab({ lineups, onRetry }: { lineups: Loadable<Lineups>; onRetry:
     );
   }
 
+  // The pitch needs a drawable formation on both sides; otherwise the list view is the fallback.
+  const pitch = canDrawPitch(home) && canDrawPitch(away);
   return (
     <>
     <Section>
-      <div className="mc-lineups">
-        <TeamLineupCard lineup={home} />
-        <TeamLineupCard lineup={away} />
-      </div>
+      {pitch ? (
+        <>
+          <LineupPitch home={home} away={away} />
+          <PairedRows title="Starting lineups" home={home.startingXI} away={away.startingXI} />
+          <PairedRows title="Substitutes" home={home.substitutes} away={away.substitutes} />
+          <PairedRows title="Missing players" home={home.missingPlayers} away={away.missingPlayers} />
+          <PairedRows title="Coaches" home={coachRows(home)} away={coachRows(away)} />
+        </>
+      ) : (
+        <div className="mc-lineups">
+          <TeamLineupCard lineup={home} />
+          <TeamLineupCard lineup={away} />
+        </div>
+      )}
 
       {substitutions.length > 0 && (
         <>
-          <h3 className="mc-subheading">Substitutions</h3>
+          <h3 className="mc-band">Substitutions</h3>
           <ul className="mc-subs-list">
             {substitutions.map((s, i) => (
               <li key={i}>
