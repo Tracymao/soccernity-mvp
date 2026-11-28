@@ -6237,3 +6237,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 182. Updates 2026-11-28 (Admin Username reviews decide dialog restyled in Figma to the premium design; no counter change)
 
 - Decision Log #610: the 8 admin Username reviews decide dialog frames follow the shipped `DecideDialog` in the premium admin style. The "Child-Safety Vetting Needed" frame is now "Request Not Found" (the code has no vetting state). The selected option has a navy border and no tint, as in the CSS. The handle-unavailable and user-deleted errors have no frame. Figma and docs only. Report with notes for the code PR: `docs/figma-admin-username-decide-dialog-premium-report.md`.
+
+## 183. Updates 2026-11-28 (Admin Audit log and My activity restyled in Figma to the premium design; no counter change)
+
+- Decision Log #611: the 8 admin Activity frames follow the shipped `AuditLogPage` in the premium admin style (skeleton loading, alert callout with inline Retry, "<Type> #xxxxxxxx" targets). Headers are sentence case, rows 14/22 and the filter gap 12, which differ from `activity.css` / `.hi-filter__row`. Filtered empty, date errors and Load more have no frame. Page counts outside the 8 frames dropped in two index ranges with no established cause. Figma and docs only. Report: `docs/figma-admin-activity-premium-report.md`.
