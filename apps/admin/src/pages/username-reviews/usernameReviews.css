@@ -91,7 +91,7 @@
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--sn-icon-inactive);
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
   background-color: var(--sn-background-surface);
   cursor: pointer;
 }

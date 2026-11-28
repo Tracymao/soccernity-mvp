@@ -63,7 +63,7 @@
 .al-skeleton {
   display: block;
   height: 12px;
-  border-radius: 4px;
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-icon-inactive);
 }
 
