@@ -144,7 +144,7 @@ export default function IncorrectDetailsReportsPage() {
         </div>
       </div>
 
-      <div className="us-page">
+      <div className="us-page ud-page">
         <p className="ud-callout" role="note">
           {EXPLAINER}
         </p>

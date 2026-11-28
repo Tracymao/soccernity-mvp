@@ -69,6 +69,27 @@
   font-weight: 400;
 }
 
+/* User detail, Correct date of birth and Incorrect-details reports only. The Users list has no loading or
+ * load-error frame, so its .us-loading and .us-error are left as they were. */
+.ud-page .us-loading {
+  line-height: 22px;
+}
+
+/* the alert callout */
+.ud-page .us-error,
+.ud-dialog .us-error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: var(--sn-radius-sm);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
 .us-error {
   padding: 10px 12px;
   border: 1px solid var(--sn-brand-navy);
@@ -347,31 +368,39 @@
 .ud-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-width: 320px;
 }
 
 .ud-field label {
-  font-size: 12px;
-  color: var(--sn-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
 }
 
 .ud-input {
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--sn-icon-inactive);
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--sn-radius-md);
+  border: 2px solid transparent;
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font: inherit;
   font-size: 14px;
+  line-height: 22px;
 }
 
 .ud-input--readonly {
+  border: 1px solid var(--sn-icon-inactive);
   background-color: var(--sn-background-surface);
 }
 
 .ud-textarea {
+  height: 96px;
   min-height: 96px;
+  padding: 11px 14px;
   resize: vertical;
 }
 
@@ -383,6 +412,7 @@
 .ud-field__help {
   margin: 0;
   font-size: 12px;
+  line-height: 16px;
   color: var(--sn-text-secondary);
 }
 
@@ -391,6 +421,7 @@
   padding-left: 8px;
   border-left: 3px solid var(--sn-semantic-alert);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
   color: var(--sn-text-primary);
 }
@@ -398,17 +429,11 @@
 .ud-callout {
   padding: 12px 14px;
   border-left: 3px solid var(--sn-brand-navy);
-  border-radius: 6px;
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-green-tint-12);
   font-size: 13px;
+  line-height: 20px;
   color: var(--sn-text-primary);
-}
-
-/* The "never put a date of birth in the reason" warning is the one callout
- * that must not be skimmed past: heavier border, same two-colour palette. */
-.ud-callout--warning {
-  border: 1px solid var(--sn-brand-navy);
-  border-left-width: 6px;
 }
 
 .ud-guardian {
@@ -416,13 +441,14 @@
   flex-direction: column;
   gap: 12px;
   border: 1px solid var(--sn-icon-inactive);
-  border-radius: 6px;
-  padding: 12px 14px;
+  border-radius: var(--sn-radius-md);
+  padding: 14px;
 }
 
 .ud-guardian legend {
   padding: 0 6px;
   font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--sn-text-primary);
 }
@@ -456,10 +482,10 @@ a.us-btn {
 }
 
 .ud-dialog {
-  width: min(520px, 100%);
+  width: min(560px, 100%);
   max-height: 100%;
   overflow: auto;
-  border-radius: 12px;
+  border-radius: var(--sn-radius-xl);
   background-color: var(--sn-background-surface);
   box-shadow: 0 4px 16px var(--sn-shadow-elevated);
 }
@@ -468,38 +494,42 @@ a.us-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 22px;
+  padding: 24px 28px 20px;
   border-bottom: 1px solid var(--sn-icon-inactive);
 }
 
 .ud-dialog__head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
   color: var(--sn-text-primary);
 }
 
 .ud-dialog__close {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--sn-radius-md);
   border: 1px solid var(--sn-icon-inactive);
   background: var(--sn-background-surface);
-  font-size: 18px;
+  color: var(--sn-text-primary);
+  font-size: 13px;
   cursor: pointer;
 }
 
 .ud-dialog__body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 22px 22px;
-  font-size: 13px;
+  gap: 16px;
+  padding: 22px 28px 24px;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--sn-text-primary);
 }
 
 .ud-dialog__summary {
   padding: 12px 14px;
-  border-radius: 6px;
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-green-tint-12);
 }
 
@@ -528,6 +558,11 @@ a.us-btn {
   justify-content: flex-end;
 }
 
+/* The frames draw the buttons as their own row: 22px under the content (16px body gap + 6px), 24px below. */
+.ud-dialog__body > .ud-dialog__buttons {
+  margin-top: 6px;
+}
+
 /* B-033 revoke dialog, B-120 incorrect-details reports, B-104 guardian block
  * (Figma W0 pass C / pass K). Tokens only. The frames draw the error bar and
  * the invalid-field stroke in semantic/alert (#FA0606), a founder-authorised
@@ -537,9 +572,7 @@ a.us-btn {
 
 .ud-callout--error {
   margin: 0;
-  border: 1px solid var(--sn-brand-navy);
-  border-left: 6px solid var(--sn-semantic-alert);
-  font-weight: 600;
+  border-left-color: var(--sn-semantic-alert);
 }
 
 p.ud-callout {
@@ -628,19 +661,19 @@ p.ud-callout {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background-color: var(--sn-background-surface);
-  font-weight: normal;
 }
 
 .gn-alert__title {
   margin: 0;
   font-weight: 600;
   font-size: 14px;
+  line-height: 22px;
 }
 
 .gn-alert__body {
   margin: 0;
   font-size: 13px;
+  line-height: 20px;
 }
 
 .gn-banner {

@@ -310,13 +310,13 @@ export default function GuardianNoticesSection({
             state.withheld ? (
               <>
                 <span className="us-pill us-pill--strong">{copy.PILL_WITHHOLDING}</span>
-                {state.reviewDue ? <span className="us-pill us-pill--outline">{copy.PILL_REVIEW_DUE}</span> : null}
-                {!hasConfirmedGuardian ? <span className="us-pill us-pill--soft">{copy.PILL_NO_GUARDIAN}</span> : null}
+                {state.reviewDue ? <span className="us-pill us-pill--plain us-pill--outline">{copy.PILL_REVIEW_DUE}</span> : null}
+                {!hasConfirmedGuardian ? <span className="us-pill us-pill--plain us-pill--soft">{copy.PILL_NO_GUARDIAN}</span> : null}
               </>
             ) : hasConfirmedGuardian ? (
-              <span className="us-pill us-pill--soft">{copy.PILL_SENDING}</span>
+              <span className="us-pill us-pill--plain us-pill--soft">{copy.PILL_SENDING}</span>
             ) : (
-              <span className="us-pill us-pill--soft">{copy.PILL_NO_GUARDIAN}</span>
+              <span className="us-pill us-pill--plain us-pill--soft">{copy.PILL_NO_GUARDIAN}</span>
             )
           ) : null}
         </div>

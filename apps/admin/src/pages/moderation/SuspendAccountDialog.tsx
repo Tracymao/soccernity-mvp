@@ -115,7 +115,7 @@ export default function SuspendAccountDialog({
             ✕
           </button>
         </div>
-        <div className="mod-dialog__body">
+        <div className={mode === "user" ? "mod-dialog__body mod-dialog__body--suspend-user" : "mod-dialog__body"}>
           {error ? (
             <p className="mod-callout-error" role="alert">
               {error}
