@@ -6269,3 +6269,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 190. Updates 2026-11-28 (Admin User detail, Incorrect-details reports and Correct date of birth aligned to the premium design in code; no counter change)
 
 - Decision Log #618: Admin User detail, Incorrect-details reports and Correct date of birth aligned to the premium design in code. CSS and class names only; no structure, copy or behaviour change; no counter change. Multi-word Guardian notices pills now read in sentence case (founder decision 2026-11-28). Shared rules are scoped where not every frame shows the new value: `.us-loading` and `.us-error` to this page family, the 14/22 body and field-error bar to the User page Suspend dialog. The Users list table divider already matches and was not changed. Report: `docs/admin-user-detail-premium-code-report.md`.
+
+## 191. Updates 2026-11-28 (Admin Search family restyled in Figma to the premium design; no counter change)
+
+- Decision Log #619: Admin Search family restyled in Figma to the premium design; no counter change. 14 screen frames rebuilt to match the shipped page, the column reference sheet restyled (tokens only), 2 superseded layout studies archived (hidden, not deleted), the "Review due" pill set to 24 high. Figma and docs only. Open: whether the search bar's new fill applies to every admin page in code. Report: docs/figma-admin-search-premium-report.md.
