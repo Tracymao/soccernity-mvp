@@ -21,3 +21,28 @@ The three existing prototype links were copied to the new elements: Resolve (fir
 
 The task wrote the already-resolved case as 409. The code treats **404** as already resolved, and the frame is drawn that way.
 
+## Group b: Correct date of birth
+
+| Frame | State | Height | New content | Dialog |
+| --- | --- | --- | --- | --- |
+| `6649:24980` | Form | 1184 | `7424:69881` | |
+| `6649:25217` | Validation | 1184 | `7424:69920` | |
+| `6649:25463` | Confirm dialog | 1184 | `7424:69965` | `7424:69998` |
+| `6649:25721` | Success | 1184 | `7424:70026` | |
+| `6649:25952` | Error in the confirm dialog | 1184 | `7424:70059` | `7424:70092` |
+| `6752:29980` | Adult to minor, guardian details | 1237 | `7424:70124` | |
+| `6752:30141` | Adult to minor, guardian details missing | 1301 | `7424:70179` | |
+
+### New frames (the code renders the state and no frame drew it)
+
+At the end of the page, row y 373200.
+
+| Frame | State | Content |
+| --- | --- | --- |
+| `7424:70232` | Page loading | `7424:70427` |
+| `7424:70429` | Page load error | `7424:70624` |
+
+## Archive decisions
+
+No frame was archived. Each of the 15 existing frames draws a state the code renders, and no two draw the same state. The only things archived are the old layers inside each restyled frame.
+
