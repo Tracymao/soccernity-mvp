@@ -85,7 +85,7 @@ export default function ReportedRoomCard({ room, onChanged }: Props) {
   const active = room.status === "active";
 
   return (
-    <div className="mod-card">
+    <div className="mod-card mod-room-card">
       <h2 className="mod-card__title">Bants room</h2>
       <div className="mod-field">
         <span className="mod-field__label">Room status</span>

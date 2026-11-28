@@ -129,7 +129,7 @@ export default function UsernameReviewDetailPage() {
   return (
     <>
       <AdminPageHeader title={`Review request ${requestNumber(request.id)}`} />
-      <div className="mod-page">
+      <div className="mod-page ur-detail">
         {BACK_LINK}
 
         <div className="ce-pills">
@@ -166,7 +166,7 @@ export default function UsernameReviewDetailPage() {
         </div>
 
         {!pending ? (
-          <section className="mod-card" aria-label="Decision">
+          <section className="mod-card ur-decision" aria-label="Decision">
             <h2 className="mod-card__title">Decision</h2>
             <KeyValue label="Decision">{statusLabel(status)}</KeyValue>
             {decided ? <KeyValue label="Decided on">{formatShortDate(decided.result.decidedAt)}</KeyValue> : null}
