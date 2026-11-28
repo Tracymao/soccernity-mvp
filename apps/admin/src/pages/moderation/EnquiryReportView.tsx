@@ -57,7 +57,7 @@ export default function EnquiryReportView({ report }: { report: Report }) {
 
         <div className="ce-pills">
           <span className="mod-pill mod-pill--plain mod-pill--outline">From Contact Us</span>
-          <span className={`mod-pill mod-pill--plain ${report.status === "open" ? "mod-pill--soft" : "mod-pill--strong"}`}>
+          <span className={`mod-pill ${report.status === "open" ? "mod-pill--soft" : "mod-pill--strong"}`}>
             {report.status === "open" ? "Open" : report.status}
           </span>
         </div>
@@ -90,7 +90,7 @@ export default function EnquiryReportView({ report }: { report: Report }) {
             </KeyValue>
             <KeyValue label="Concerns a minor">{report.concernsMinor ? <MinorFlagBadge /> : "No"}</KeyValue>
             <KeyValue label="Submitted">{formatDateTime(report.createdAt)}</KeyValue>
-            <KeyValue label="Status">{report.status}</KeyValue>
+            <KeyValue label="Status" valueClassName="ce-kv__value--status">{report.status}</KeyValue>
           </section>
         </div>
 

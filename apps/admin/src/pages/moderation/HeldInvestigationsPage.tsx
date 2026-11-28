@@ -125,7 +125,7 @@ export default function HeldInvestigationsPage() {
           {data ? (
             <span className="mod-pill mod-pill--plain mod-pill--strong">Held more than {data.thresholdDays} days</span>
           ) : null}
-          <Link className="mod-btn mod-btn--outline mod-btn--sm" to="/moderation">
+          <Link className="mod-btn mod-btn--outline" to="/moderation">
             Back to moderation
           </Link>
         </div>
