@@ -6253,3 +6253,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 186. Updates 2026-11-28 (Admin Profile frames restyled in Figma to the premium design; no counter change)
 
 - Decision Log #614: Admin Profile frames restyled in Figma to the premium design; no counter change. 16 frames restyled, 6 new state frames (page top-level count 2023), 1 redundant frame (6902:32565) archived. Figma and docs only; the CSS follow-up is listed in docs/figma-admin-profile-premium-report.md.
+
+## 187. Updates 2026-11-28 (Admin Settings/Roles and Profile aligned to the premium design in code; no counter change)
+
+- Decision Log #615: Admin Settings/Roles and Profile aligned to the premium design in code. CSS and one class-name edit; two-factor values scoped so the sign-in screens measure the same as before. Details in docs/admin-settings-profile-premium-code-report.md.
