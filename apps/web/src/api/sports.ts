@@ -226,6 +226,8 @@ export interface HeadToHead {
   updatedAt: string | null;
 }
 
+export type StandingsZone = "champions-league" | "europa-league" | "relegation";
+
 // `form` is present only when the active data provider supplies it (the server adds the
 // key only if the capability registry says so and the row carries data). With Highlightly
 // it is always absent, so the FORM column is not drawn.
@@ -241,6 +243,8 @@ export interface StandingRow {
   goalsAgainst: number;
   goalDifference: number;
   form?: ("W" | "D" | "L")[];
+  // Present only for a league the server has zone rules for.
+  zone?: StandingsZone;
 }
 
 export interface StandingsGroup {
@@ -253,6 +257,7 @@ export interface Standings {
   season: string;
   groups: StandingsGroup[];
   updatedAt: string | null;
+  zones?: { zone: StandingsZone; label: string }[];
 }
 
 export interface Highlight {

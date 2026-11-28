@@ -89,7 +89,7 @@ const COUNTRY_SYNONYMS: Record<string, string> = {
   uk: 'england',
 };
 
-function normalizeCountry(value: string | null | undefined): string {
+export function normalizeCountry(value: string | null | undefined): string {
   const n = normalizeLeagueText(value);
   return COUNTRY_SYNONYMS[n] ?? n;
 }

@@ -67,6 +67,7 @@ import {
   type Momentum,
   type HeadToHead,
   type Standings,
+  type StandingsZone,
   type TopScorers,
   type Highlights,
   type MatchEvent,
@@ -654,6 +655,12 @@ function HeadToHeadTab({ h2h, onRetry }: { h2h: Loadable<HeadToHead>; onRetry: (
 
 // ---------- Standings (level 1 tab) ----------
 
+const ZONE_PLACE: Record<StandingsZone, string> = {
+  "champions-league": "Champions League place",
+  "europa-league": "Europa League place",
+  relegation: "Relegation place",
+};
+
 function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
   standings: Loadable<Standings>;
   homeTeamId: string;
@@ -705,7 +712,16 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
                 const highlighted = row.team.id === homeTeamId || row.team.id === awayTeamId;
                 return (
                   <tr key={row.team.id || row.position} className={highlighted ? "mc-standings-table__row--highlight" : undefined}>
-                    <td>{row.position}</td>
+                    <td>
+                      {row.zone ? (
+                        <span className={`mc-zone mc-zone--${row.zone}`} title={ZONE_PLACE[row.zone]}>
+                          {row.position}
+                          <span className="mc-visually-hidden">, {ZONE_PLACE[row.zone]}</span>
+                        </span>
+                      ) : (
+                        row.position
+                      )}
+                    </td>
                     <td className="mc-standings-table__team-col">
                       <span className="mc-standings-table__team">
                         <TeamCrest name={row.team.name} logo={row.team.logo} size={20} />
@@ -741,6 +757,16 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
         </div>
         );
       })}
+      {standings.data.zones && (
+        <ul className="mc-zone-legend">
+          {standings.data.zones.map((z) => (
+            <li key={z.zone}>
+              <span className={`mc-zone-legend__swatch mc-zone--${z.zone}`} aria-hidden="true" />
+              {z.label}
+            </li>
+          ))}
+        </ul>
+      )}
     </Section>
   );
 }

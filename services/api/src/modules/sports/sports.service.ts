@@ -20,6 +20,7 @@ import { SportsDataBudgetExhaustedError } from '../../sports-data/sports-data.er
 import { SportsRefreshLock } from '../../sports-data/sports-refresh-lock';
 import { decodeRankedCursor, encodeRankedCursor } from './cursor.util';
 import { compareLeagues, leagueRank } from './league-priority.constants';
+import { STANDINGS_ZONE_LABELS, StandingsZone, leagueZoneRules, zoneFor } from './standings-zones.constants';
 import { deriveMomentum, MomentumChart } from './momentum.util';
 import {
   DEFAULT_BOX_SCORE_LIVE_CACHE_TTL_SECONDS,
@@ -255,6 +256,8 @@ export interface PublicStandingRow {
   // OMITTED (key absent, never null/[]) unless the active provider supports standingsForm AND the row
   // carries form data. Oldest -> newest.
   form?: ('W' | 'D' | 'L')[];
+  // OMITTED unless the league has a rule in standings-zones.constants.ts and this position is in one.
+  zone?: StandingsZone;
 }
 
 export interface PublicStandingsGroup {
@@ -267,6 +270,8 @@ export interface PublicStandings {
   season: string;
   groups: PublicStandingsGroup[];
   updatedAt: string | null;
+  // Legend for the row `zone` values; OMITTED when no row has one.
+  zones?: { zone: StandingsZone; label: string }[];
 }
 
 export interface PublicHighlight {
@@ -1218,15 +1223,34 @@ export class SportsService {
     });
 
     const groups = (row?.table as unknown as { name?: string | null; standings: RawStandingRow[] }[] | undefined) ?? [];
-    return {
+    // Name and country come from the stored league metadata only (`false`: never a vendor call).
+    const league = (await this.loadLeagueMeta([query.league], false)).get(query.league);
+    const rules = leagueZoneRules({ id: query.league, name: league?.name ?? null, country: league?.countryName ?? null });
+    const present = new Set<StandingsZone>();
+    const publicGroups: PublicStandingsGroup[] = groups.map((g) => ({
+      name: g.name ?? null,
+      rows: g.standings.map((r) => {
+        const publicRow = this.toPublicStandingRow(r);
+        const zone = rules ? zoneFor(rules, publicRow.position, g.standings.length) : undefined;
+        if (zone) {
+          publicRow.zone = zone;
+          present.add(zone);
+        }
+        return publicRow;
+      }),
+    }));
+    const result: PublicStandings = {
       leagueId: query.league,
       season,
-      groups: groups.map((g) => ({
-        name: g.name ?? null,
-        rows: g.standings.map((r) => this.toPublicStandingRow(r)),
-      })),
+      groups: publicGroups,
       updatedAt: row?.updatedAt?.toISOString() ?? null,
     };
+    if (present.size > 0) {
+      result.zones = (Object.keys(STANDINGS_ZONE_LABELS) as StandingsZone[])
+        .filter((zone) => present.has(zone))
+        .map((zone) => ({ zone, label: STANDINGS_ZONE_LABELS[zone] }));
+    }
+    return result;
   }
 
   // GET /sports/highlights/:matchId — no pagination (see cursor.util.ts's own comment: a single

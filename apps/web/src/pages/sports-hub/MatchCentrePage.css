@@ -1113,3 +1113,53 @@
   margin: 4px 0 0;
 }
 
+
+/* --- CH-H21: standings zone badges and legend (Figma 756:6433) ---- */
+
+.mc-zone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.mc-zone--champions-league {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.mc-zone--europa-league {
+  background: var(--sn-brand-navy);
+  color: var(--sn-brand-green);
+}
+
+.mc-zone--relegation {
+  background: var(--sn-semantic-alert);
+  color: var(--sn-background-page);
+}
+
+.mc-zone-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-zone-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-zone-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
