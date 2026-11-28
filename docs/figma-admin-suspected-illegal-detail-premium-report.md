@@ -79,5 +79,5 @@ Back links go to L1 `7074:64435` as before. "Record that this was filed" goes to
 - Top-level count 2004. Id hash 2327422288.
 - Queue content `5794:8710` 1100x620; Report Detail `5796:8635` Content 1098x1282; Appeal Review `5796:8753` Content 1098x1455.
 - All 14 frames, outside the Admin Shell: no overlapping blocks, no overlapping top-level frames, no text under 12px, no uppercase labels, one search bar, no unbound solid fills, no tag.
-- Contrast was judged by eye from the existing text tokens, not measured. The disabled button on D6 is exempt.
-- Screenshots reviewed for all 14, at 500 to 1000px. D1 was fixed after its first screenshot (field heights) and not re-shot; the fix was confirmed by reading the control heights.
+- Contrast: 70% navy secondary text calculates at 5.0:1 on white and about 4.8:1 on off-white and green tint (token values assumed, not read from Figma). The disabled button on D6 is exempt.
+- Screenshots reviewed for all 14, at 500 to 1000px, including D1 again after its field heights were fixed.
