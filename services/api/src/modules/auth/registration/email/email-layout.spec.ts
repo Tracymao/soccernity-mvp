@@ -100,10 +100,11 @@ describe('branded email layout', () => {
   it('renders the Welcome email with its title, button, sign-off and footer', () => {
     const html = renderEmailHtml({ template: 'welcome', ...samples.welcome }, BASE);
     expect(html).toContain('>Welcome to Soccernity</h1>');
-    expect(html).toMatch(new RegExp(`<a href="${BASE}/login" style="display:block;[^"]*">Sign in to Soccernity</a>`));
+    const button = html.match(/<a href="([^"]*)" style="display:block;[^"]*">Sign in to Soccernity<\/a>/);
+    expect(button?.[1]).toBe(`${BASE}/login`);
     expect(html).toContain('See you on the pitch,<br>The Soccernity Team</p>');
     const footer = 'You are receiving this email because you have a Soccernity account.';
-    expect(count(html, new RegExp(footer.replace('.', '\\.'), 'g'))).toBe(1);
+    expect(html.split(footer)).toHaveLength(2);
     expect(html.indexOf(footer)).toBeGreaterThan(html.indexOf('border-top:1px dashed'));
   });
 
