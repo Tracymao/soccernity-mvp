@@ -7,6 +7,8 @@ import {
   RECOVERY_GUARDIAN_PATH,
 } from '../../../two-factor/recovery/two-factor-recovery.constants';
 import { DEFAULT_EMAIL_VERIFICATION_TTL_MS } from '../email-verification/email-verification-token.store';
+import { emailLogoUrl, renderEmailButton, renderEmailLayout } from './email-layout';
+import { escapeHtml } from './escape-html';
 import { buildWebAppLink } from './web-app-link.util';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry added the five
@@ -844,7 +846,7 @@ export class RegistrationEmailService {
         From: this.fromEmail ?? '',
         To: email.to,
         Subject: email.subject,
-        HtmlBody: renderHtmlBody(email.template, email.data),
+        HtmlBody: renderEmailHtml(email, this.config.get<string>('WEB_APP_BASE_URL')),
         TextBody: renderTextBody(email.template, email.data),
         MessageStream: 'outbound',
       });
@@ -1233,6 +1235,27 @@ ${data.link}
   }
 }
 
+// The footer line under the divider, only for the templates that already ship one.
+const EMAIL_FOOTERS: Partial<Record<RegistrationEmailTemplate, string>> = {
+  welcome: 'You are receiving this email because you have a Soccernity account.',
+};
+
+// CH-H18: every outgoing HTML body is the template's own paragraphs inside the shared branded layout, with the
+// subject line as the heading. Exported for the preview script and the specs.
+export function renderEmailHtml(
+  email: Pick<OutboundRegistrationEmail, 'subject' | 'template' | 'data'>,
+  webAppBaseUrl: string | undefined,
+): string {
+  return renderEmailLayout({
+    title: email.subject,
+    bodyHtml: renderHtmlBody(email.template, email.data),
+    footer: EMAIL_FOOTERS[email.template],
+    logoUrl: emailLogoUrl(webAppBaseUrl),
+  });
+}
+
+// CH-H19: EVERY value placed into this HTML goes through escapeHtml() (renderEmailButton escapes its own
+// arguments). email-html-escaping.spec.ts fails on a bare ${data.x}. renderTextBody is never escaped.
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
     case 'password-changed':
@@ -1248,7 +1271,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>The password for your Soccernity account was just changed using a password reset link sent to this email address. For your security, all your signed-in sessions have been ended, so you will need to sign in again.</p>` +
         `<p>If this was you, there is nothing more to do.</p>` +
         `<p>If it was not you, someone may have had access to your email. Reset your password again now:</p>` +
-        `<p><a href="${escapeHtml(data.link)}">Reset your password</a></p>` +
+        renderEmailButton('Reset your password', data.link) +
         `<p>If the button does not work, copy this into your browser: ${escapeHtml(data.link)}</p>` +
         `<p>Then contact us at support@soccernity.com so we can help secure your account.</p>` +
         `<p>Thanks,<br>The Soccernity Team</p>`
@@ -1258,9 +1281,8 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>Hi ${escapeHtml(data.firstName)},</p>` +
         `<p>Your email is verified and your account is ready. Welcome aboard.</p>` +
         `<p>Soccernity is where grassroots football lives: follow the clubs and communities you care about, and keep up with the game as it happens.</p>` +
-        `<p><a href="${escapeHtml(data.link)}">Sign in to Soccernity</a></p>` +
-        `<p>See you on the pitch,<br>The Soccernity Team</p>` +
-        `<p>You are receiving this email because you have a Soccernity account.</p>`
+        renderEmailButton('Sign in to Soccernity', data.link) +
+        `<p>See you on the pitch,<br>The Soccernity Team</p>`
       );
     case 'staff-account-created':
       return (
@@ -1268,7 +1290,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>A ${escapeHtml(data.roleLabel)} account has been created for you on Soccernity.</p>` +
         `<p>${escapeHtml(data.roleSentence)}</p>` +
         `<p>Your sign-in email: ${escapeHtml(data.email)}</p>` +
-        (data.link ? `<p><a href="${escapeHtml(data.link)}">Sign in to the admin console</a></p>` : '') +
+        (data.link ? renderEmailButton('Sign in to the admin console', data.link) : '') +
         `<p>This email does not contain a password. The person who created your account will give you your password separately. Sign in and change it straight away.</p>` +
         (data.twoFactorRequired
           ? `<p>Admin accounts need two-factor authentication with an authenticator app. You will be asked to set it up the first time you sign in.</p>`
@@ -1327,7 +1349,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
     case 'email-change-verify':
       return (
         `<p>Someone asked to use this address for a Soccernity account. To confirm the change:</p>` +
-        `<p><a href="${escapeHtml(data.link)}">Confirm my new email</a></p>` +
+        renderEmailButton('Confirm my new email', data.link) +
         `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
         `<p>The link works once and expires in ${escapeHtml(data.hours)} hours. If you did not ask for this, ignore this email and nothing changes.</p>`
       );
@@ -1342,82 +1364,88 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>It cannot be used for that change because it already belongs to a Soccernity account. Nothing has changed on your account and you do not need to do anything.</p>`
       );
     case 'verify-email':
-      return `<p>Verify your Soccernity email address:</p><p><a href="${data.link}">Verify my email</a></p><p>If the button does not work, copy this link into your browser: ${data.link}</p><p>If you did not request this, you can safely ignore this email.</p>`;
+      return (
+        `<p>Verify your Soccernity email address:</p>` +
+        renderEmailButton('Verify my email', data.link) +
+        `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>If you did not request this, you can safely ignore this email.</p>`
+      );
     case 'guardian-consent':
       return (
-        `<p><strong>${data.minorDisplayName}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
-        `<p>To review and respond to the request (no account needed):</p><p><a href="${data.link}">Review the request</a></p>` +
-        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
-        `<p>If you approve and later change your mind, you can <a href="${data.withdrawalPageLink}">withdraw your consent</a> at any time.</p>` +
+        `<p><strong>${escapeHtml(data.minorDisplayName)}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
+        `<p>To review and respond to the request (no account needed):</p>` +
+        renderEmailButton('Review the request', data.link) +
+        `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>If you approve and later change your mind, you can <a href="${escapeHtml(data.withdrawalPageLink)}">withdraw your consent</a> at any time.</p>` +
         `<p>If you did not expect this email, you can safely ignore it.</p>`
       );
     case 'guardian-consent-withdrawal-request':
       return (
-        `<p>You asked to withdraw your consent for <strong>${data.minorDisplayName}</strong>'s Soccernity account.</p>` +
-        `<p><a href="${data.link}">Confirm withdrawing consent</a></p>` +
-        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
-        `<p>Or enter this withdrawal code on the page: <strong>${data.withdrawalToken}</strong></p>` +
+        `<p>You asked to withdraw your consent for <strong>${escapeHtml(data.minorDisplayName)}</strong>'s Soccernity account.</p>` +
+        renderEmailButton('Confirm withdrawing consent', data.link) +
+        `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>Or enter this withdrawal code on the page: <strong>${escapeHtml(data.withdrawalToken)}</strong></p>` +
         `<p>Confirming will close the account and schedule it for deletion.</p>` +
         `<p>If you did not request this, you can ignore this email. Nothing changes unless the code above is used.</p>`
       );
     case 'guardian-approved-minor':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your guardian has approved your Soccernity account.</p>` +
         `<p>There are still a few steps to finish setting up.</p>` +
-        `<p><a href="${data.link}">Log in to continue registration</a></p>` +
-        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
+        renderEmailButton('Log in to continue registration', data.link) +
+        `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
         `<p>If you did not create a Soccernity account, you can ignore this email.</p>`
       );
     case 'guardian-consent-declined':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your guardian declined the approval request for your Soccernity account again, and the limit on declined requests has now been reached, so your account cannot be activated.</p>` +
-        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${escapeHtml(data.graceDays)} days</strong>.</p>` +
         `<p>If you think this was a mistake, speak to your guardian before then.</p>`
       );
     case 'guardian-consent-withdrawn':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your guardian has withdrawn their consent for your Soccernity account, so it has been closed.</p>` +
-        `<p>It is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>It is scheduled to be permanently deleted in <strong>${escapeHtml(data.graceDays)} days</strong>.</p>` +
         `<p>If you think this was a mistake, speak to your guardian before then.</p>`
       );
     case 'guardian-consent-reminder':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your Soccernity account is still waiting for your guardian to approve it, and the first request has now expired.</p>` +
-        `<p>We have sent a new request to <strong>${data.guardianEmail}</strong>. Please ask them to check their email, including their spam folder.</p>` +
+        `<p>We have sent a new request to <strong>${escapeHtml(data.guardianEmail)}</strong>. Please ask them to check their email, including their spam folder.</p>` +
         `<p>If this second request is not answered either, your account will be closed and scheduled for deletion.</p>`
       );
     case 'guardian-consent-decline-lapse-reminder':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your Soccernity account is still not approved, and nothing has changed on it for a while.</p>` +
-        `<p>We have sent a new approval request to <strong>${data.guardianEmail}</strong>. Please ask them to check their email, including their spam folder. You can also change your guardian's email address from your account.</p>` +
+        `<p>We have sent a new approval request to <strong>${escapeHtml(data.guardianEmail)}</strong>. Please ask them to check their email, including their spam folder. You can also change your guardian's email address from your account.</p>` +
         `<p>If this new request is not answered, your account will be closed and scheduled for deletion.</p>`
       );
     case 'guardian-consent-expired':
       return (
-        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
         `<p>Your Soccernity account was not approved in time, so it cannot be activated.</p>` +
-        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${escapeHtml(data.graceDays)} days</strong>.</p>` +
         `<p>If you still want an account, talk to your guardian and sign up again.</p>`
       );
     case 'guardian-minor-turned-18':
       return (
-        `<p>Hi ${data.guardianFirstName},</p>` +
-        `<p>We're writing to let you know that ${data.minorDisplayName}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.</p>` +
-        `<p>This means the guardian consent and oversight settings you originally set up no longer apply. ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.</p>` +
+        `<p>Hi ${escapeHtml(data.guardianFirstName)},</p>` +
+        `<p>We're writing to let you know that ${escapeHtml(data.minorDisplayName)}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.</p>` +
+        `<p>This means the guardian consent and oversight settings you originally set up no longer apply. ${escapeHtml(data.minorDisplayName)} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.</p>` +
         `<p>If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.</p>` +
-        `<p>Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.</p>` +
+        `<p>Thanks for being part of ${escapeHtml(data.minorDisplayName)}'s Soccernity journey so far.</p>` +
         `<p>The Soccernity team</p>`
       );
     case 'guardian-email-replaced':
       return (
-        `<p>You were asked to approve a Soccernity account for ${data.minorDisplayName}.</p>` +
+        `<p>You were asked to approve a Soccernity account for ${escapeHtml(data.minorDisplayName)}.</p>` +
         `<p>The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.</p>` +
-        `<p>If you are ${data.minorDisplayName}'s guardian and did not expect this, please contact support@soccernity.com.</p>`
+        `<p>If you are ${escapeHtml(data.minorDisplayName)}'s guardian and did not expect this, please contact support@soccernity.com.</p>`
       );
     case 'guardian-security-notice':
       return (
@@ -1493,8 +1521,8 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
       return (
         `<p>Thank you for letting us know.</p>` +
         `<p>We have reviewed your report.</p>` +
-        `<p><strong>Outcome:</strong> ${data.outcomeLabel}</p>` +
-        `<p>${data.outcomeReason}</p>` +
+        `<p><strong>Outcome:</strong> ${escapeHtml(data.outcomeLabel)}</p>` +
+        `<p>${escapeHtml(data.outcomeReason)}</p>` +
         `<p>For privacy reasons we can't share further details about any action taken on another account.</p>`
       );
     case 'appeal-decision':
@@ -1570,17 +1598,4 @@ function reportOutcomeCopy(action: string): { label: string; reason: string } {
 // username-review-window.util.ts). en-GB for day-month-year order.
 function formatLongDateUtc(value: Date): string {
   return value.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-
-// Minimal HTML escape for user-supplied text placed in an HTML body. Added with
-// the username-revoked template (B-033): displayName is free text. The older
-// templates in this file interpolate it unescaped; that is a pre-existing
-// weakness of theirs, not something this change widens.
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

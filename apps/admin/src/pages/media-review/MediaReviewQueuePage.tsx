@@ -172,7 +172,7 @@ export default function MediaReviewQueuePage() {
             </Link>
           ) : null}
           {status === "pending" && data ? (
-            <span className="mod-pill mod-pill--strong" data-testid="pending-count">
+            <span className="mod-pill mod-pill--strong mod-pill--plain" data-testid="pending-count">
               {items.length}
               {nextCursor ? "+" : ""} pending
             </span>
@@ -206,10 +206,10 @@ export default function MediaReviewQueuePage() {
 
         {loading ? <p className="mod-loading">Loading the review queue…</p> : null}
         {error ? (
-          <div className="mod-card mod-card--restricted" role="alert">
+          <div className="mod-card mod-card--restricted mod-card--load-error" role="alert">
             <h2 className="mod-card__title">Couldn’t load the review queue</h2>
             <p className="mod-note">Check your connection and try again. Nothing has been approved or rejected.</p>
-            <button type="button" className="mod-btn mod-btn--primary mod-btn--sm" onClick={reload}>
+            <button type="button" className="mod-btn mod-btn--primary" onClick={reload}>
               Try again
             </button>
           </div>
@@ -242,7 +242,7 @@ export default function MediaReviewQueuePage() {
         ) : null}
 
         {nextCursor && !loading ? (
-          <button type="button" className="mod-btn mod-btn--outline mod-btn--sm" onClick={loadMore} disabled={loadingMore}>
+          <button type="button" className="mod-btn mod-btn--outline" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? "Loading…" : "Load more"}
           </button>
         ) : null}

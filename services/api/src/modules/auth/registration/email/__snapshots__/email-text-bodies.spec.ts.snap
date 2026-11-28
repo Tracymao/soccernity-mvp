@@ -1,0 +1,395 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`plain-text email bodies account-deletion-requested is unchanged 1`] = `
+"Hi Ada,
+
+We have received your request to delete your Soccernity account. Your account is now closed: you have been signed out everywhere and can no longer sign in.
+
+After 30 days your account is anonymised. Your name, email address, phone number and profile details are removed or replaced, and the account can no longer be used. Posts, comments and messages you wrote are not deleted; they stay and are shown as "[deleted user]". Your likes, follows, saved posts, notifications and memberships of rooms, groups and clubs are removed.
+
+In some cases we keep an account's data for longer, for example while a report involving it is still being looked at.
+
+If you did not ask for this, contact us at support@soccernity.com as soon as you can.
+
+The Soccernity Team"
+`;
+
+exports[`plain-text email bodies account-reinstated is unchanged 1`] = `
+"Hi,
+
+The suspension on your Soccernity account has been lifted. You can sign in again."
+`;
+
+exports[`plain-text email bodies account-suspended is unchanged 1`] = `
+"Hi,
+
+Your Soccernity account has been suspended for breaching our community rules.
+
+You can't sign in while your account is suspended.
+
+If you think this is a mistake, you can appeal by contacting us through the Contact Us page: https://app.soccernity.com/contact."
+`;
+
+exports[`plain-text email bodies appeal-decision (overturned) is unchanged 1`] = `
+"Hi,
+
+We have reviewed your appeal and overturned the original decision on this report.
+
+The report has been returned to our review queue so that it can be decided again.
+
+If you have more information to add, you can reply to this email."
+`;
+
+exports[`plain-text email bodies appeal-decision is unchanged 1`] = `
+"Hi,
+
+We have reviewed your appeal. The original decision on this report has been upheld, so no change has been made.
+
+If you have more information to add, you can reply to this email."
+`;
+
+exports[`plain-text email bodies contact-enquiry-notification is unchanged 1`] = `
+"A new enquiry arrived through the Soccernity Contact Us form.
+
+Category: General
+
+Read it in the admin inbox: https://app.soccernity.com/admin/enquiries"
+`;
+
+exports[`plain-text email bodies email-change-notice is unchanged 1`] = `
+"A request was made to change the email address on your Soccernity account.
+
+Nothing changes until the request is confirmed from the new address. If this was not you, contact support@soccernity.com and change your password."
+`;
+
+exports[`plain-text email bodies email-change-unavailable is unchanged 1`] = `
+"Someone asked to use this email address to change the email on a Soccernity account.
+
+It cannot be used for that change because it already belongs to a Soccernity account. Nothing has changed on your account and you do not need to do anything."
+`;
+
+exports[`plain-text email bodies email-change-verify is unchanged 1`] = `
+"Someone asked to use this address for a Soccernity account. To confirm the change, open this link:
+
+https://app.soccernity.com/email-change/confirm?token=sample
+
+The link works once and expires in 24 hours. If you did not ask for this, ignore this email and nothing changes."
+`;
+
+exports[`plain-text email bodies guardian-approved-minor is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your guardian has approved your Soccernity account.
+
+There are still a few steps to finish setting up. Log in to continue registration:
+
+https://app.soccernity.com/login
+
+If you did not create a Soccernity account, you can ignore this email."
+`;
+
+exports[`plain-text email bodies guardian-consent is unchanged 1`] = `
+"Sam Obi has registered for a Soccernity account and listed you as their guardian.
+
+To review and respond to the request, open this link (no account needed):
+
+https://app.soccernity.com/guardian-consent/confirm?token=sample
+
+If you approve and later change your mind, you can withdraw your consent at any time:
+
+https://app.soccernity.com/guardian-consent/withdraw
+
+If you did not expect this email, you can safely ignore it."
+`;
+
+exports[`plain-text email bodies guardian-consent-decline-lapse-reminder is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your Soccernity account is still not approved, and nothing has changed on it for a while.
+
+We have sent a new approval request to guardian@example.com. Please ask them to check their email, including their spam folder. You can also change your guardian's email address from your account.
+
+If this new request is not answered, your account will be closed and scheduled for deletion."
+`;
+
+exports[`plain-text email bodies guardian-consent-declined is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your guardian declined the approval request for your Soccernity account again, and the limit on declined requests has now been reached, so your account cannot be activated.
+
+Your account has been closed and is scheduled to be permanently deleted in 30 days.
+
+If you think this was a mistake, speak to your guardian before then."
+`;
+
+exports[`plain-text email bodies guardian-consent-expired is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your Soccernity account was not approved in time, so it cannot be activated.
+
+Your account has been closed and is scheduled to be permanently deleted in 30 days.
+
+If you still want an account, talk to your guardian and sign up again."
+`;
+
+exports[`plain-text email bodies guardian-consent-reminder is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your Soccernity account is still waiting for your guardian to approve it, and the first request has now expired.
+
+We have sent a new request to guardian@example.com. Please ask them to check their email, including their spam folder.
+
+If this second request is not answered either, your account will be closed and scheduled for deletion."
+`;
+
+exports[`plain-text email bodies guardian-consent-withdrawal-request is unchanged 1`] = `
+"You asked to withdraw your consent for Sam Obi's Soccernity account.
+
+To confirm, open this link:
+
+https://app.soccernity.com/guardian-consent/withdraw?token=sample
+
+Or enter this withdrawal code on the page: sample-code
+
+Confirming will close the account and schedule it for deletion.
+
+If you did not request this, you can ignore this email. Nothing changes unless the code above is used."
+`;
+
+exports[`plain-text email bodies guardian-consent-withdrawn is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your guardian has withdrawn their consent for your Soccernity account, so it has been closed.
+
+It is scheduled to be permanently deleted in 30 days.
+
+If you think this was a mistake, speak to your guardian before then."
+`;
+
+exports[`plain-text email bodies guardian-email-replaced is unchanged 1`] = `
+"You were asked to approve a Soccernity account for Sam Obi.
+
+The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.
+
+If you are Sam Obi's guardian and did not expect this, please contact support@soccernity.com."
+`;
+
+exports[`plain-text email bodies guardian-minor-turned-18 is unchanged 1`] = `
+"Hi Ada,
+
+We're writing to let you know that Sam Obi's Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
+
+This means the guardian consent and oversight settings you originally set up no longer apply. Sam Obi now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+
+If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
+
+Thanks for being part of Sam Obi's Soccernity journey so far.
+
+The Soccernity team"
+`;
+
+exports[`plain-text email bodies guardian-safety-notice is unchanged 1`] = `
+"Two-factor was turned off on this account.
+
+When: 1 November 2026, 14:32 UTC
+
+You are receiving this because you are the guardian on this account. If you have questions, you can contact support through the Contact Us page on Soccernity: https://app.soccernity.com/contact"
+`;
+
+exports[`plain-text email bodies guardian-security-notice is unchanged 1`] = `
+"Two-factor was turned off on this account.
+
+When: 1 November 2026, 14:32 UTC
+
+You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com."
+`;
+
+exports[`plain-text email bodies login-lockout-notice is unchanged 1`] = `
+"Hi,
+
+Someone entered the wrong password for your Soccernity account several times, so we have temporarily paused further sign-in attempts.
+
+If this was you, there is nothing to do.
+
+If it was not you, reset your password: https://app.soccernity.com/forgot-password"
+`;
+
+exports[`plain-text email bodies password-changed is unchanged 1`] = `
+"Hi Ada,
+
+This confirms that the password for your Soccernity account was changed. For your security, all your signed-in sessions have been ended, so you will need to sign in again.
+
+If you did not make this change, contact us right away at support@soccernity.com so we can help secure your account.
+
+Thanks,
+The Soccernity Team"
+`;
+
+exports[`plain-text email bodies password-reset is unchanged 1`] = `
+"We received a request to reset your Soccernity password.
+
+https://app.soccernity.com/reset-password?token=sample
+
+If you did not request this, you can safely ignore this email."
+`;
+
+exports[`plain-text email bodies password-reset-completed is unchanged 1`] = `
+"Hi Ada,
+
+The password for your Soccernity account was just changed using a password reset link sent to this email address. For your security, all your signed-in sessions have been ended, so you will need to sign in again.
+
+If this was you, there is nothing more to do.
+
+If it was not you, someone may have had access to your email. Reset your password again now: https://app.soccernity.com/forgot-password
+
+Then contact us at support@soccernity.com so we can help secure your account.
+
+Thanks,
+The Soccernity Team"
+`;
+
+exports[`plain-text email bodies public-report-acknowledgement is unchanged 1`] = `
+"Thank you for letting us know.
+
+We've received your report and a moderator will review it. We won't be able to share the outcome or a timeline, but we take every report seriously.
+
+If you have more information to add, you can reply to this email."
+`;
+
+exports[`plain-text email bodies report-actioned is unchanged 1`] = `
+"Thank you for letting us know.
+
+We have reviewed your report.
+
+Outcome: Content removed
+
+The content you reported was found to break Soccernity's community guidelines and has been removed.
+
+For privacy reasons we can't share further details about any action taken on another account."
+`;
+
+exports[`plain-text email bodies staff-account-created is unchanged 1`] = `
+"Hi Ada,
+
+A moderator account has been created for you on Soccernity.
+
+You can review reports and act on content.
+
+Your sign-in email: ada@example.com
+Sign in here: https://app.soccernity.com/admin/login
+
+This email does not contain a password. The person who created your account will give you your password separately. Sign in and change it straight away.
+
+Admin accounts need two-factor authentication with an authenticator app. You will be asked to set it up the first time you sign in.
+
+Welcome to the team,
+The Soccernity Team"
+`;
+
+exports[`plain-text email bodies two-factor-recovery-approved is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your guardian approved your request. Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.
+
+If you did not ask for this, change your password and tell your guardian."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-completed is unchanged 1`] = `
+"Hi,
+
+Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.
+
+If you did not ask for this, reset your password and contact support@soccernity.com."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-declined is unchanged 1`] = `
+"Hi Sam Obi,
+
+Your guardian said they did not expect your request to remove two-factor, so nothing has changed on your Soccernity account.
+
+If you did not make that request, change your password now."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-guardian-link is unchanged 1`] = `
+"Sam Obi has asked us to remove two-factor (a second sign-in step) from their Soccernity account, because they lost their device and their backup codes.
+
+As their guardian you can approve this or say you did not expect it. No account is needed:
+
+https://app.soccernity.com/two-factor/recovery/guardian?token=sample
+
+The link works for 72 hours. Nothing changes unless you approve.
+
+If you did not expect this, you can answer "I didn't expect this" on the page, or just ignore this email."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-link is unchanged 1`] = `
+"Hi,
+
+Someone said they have lost both the device and the backup codes for two-factor on your Soccernity account, and asked us to remove it. If that was you, open this link to continue:
+
+https://app.soccernity.com/two-factor/recovery/confirm?token=sample
+
+Opening the link changes nothing yet. After you confirm, we wait 24 hours before removing two-factor, and we email you so you can stop it.
+
+If this was not you, ignore this email and think about changing your password."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-minor-notice is unchanged 1`] = `
+"Hi Sam Obi,
+
+You asked to remove two-factor from your Soccernity account. Because you are under 18, we have sent the request to your guardian instead of your own inbox.
+
+Nothing changes unless they approve it. Ask them to check their email, including their spam folder.
+
+If you did not make this request, change your password."
+`;
+
+exports[`plain-text email bodies two-factor-recovery-waiting is unchanged 1`] = `
+"Hi,
+
+You confirmed a request to remove two-factor from your Soccernity account. It will be removed after 2 November 2026, 14:32 UTC.
+
+If this was not you, stop it now:
+
+https://app.soccernity.com/two-factor/recovery/cancel?token=sample
+
+Signing in with your authenticator app or a backup code before then also stops it."
+`;
+
+exports[`plain-text email bodies username-revoked is unchanged 1`] = `
+"Hi Ada,
+
+A Soccernity moderator has removed your username because it did not follow our username rules. Usernames must not be offensive, must not pretend to be another person or organisation, and must not include personal details such as a real name, phone number or email address.
+
+What this means for your account:
+- Until you choose a new username, other people see you as "Soccernity member" and you can't post, comment or send messages.
+- The next time you log in you will be asked to choose a new username.
+- You can't use the removed username again, and nobody else can take it for 30 days.
+
+You can ask for a review of this decision. The next time you log in, the screen where you choose a new username has an "Ask for a review" button. You can ask until 3 December 2026.
+
+If you think this was a mistake, contact support@soccernity.com."
+`;
+
+exports[`plain-text email bodies verify-email is unchanged 1`] = `
+"Verify your Soccernity email address by opening this link:
+
+https://app.soccernity.com/verify-email?token=sample
+
+If you did not request this, you can safely ignore this email."
+`;
+
+exports[`plain-text email bodies welcome is unchanged 1`] = `
+"Hi Ada,
+
+Your email is verified and your account is ready. Welcome aboard.
+
+Soccernity is where grassroots football lives: follow the clubs and communities you care about, and keep up with the game as it happens.
+
+Sign in to Soccernity: https://app.soccernity.com/login
+
+See you on the pitch,
+The Soccernity Team
+
+You are receiving this email because you have a Soccernity account."
+`;

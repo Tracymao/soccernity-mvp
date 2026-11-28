@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "create-first-superadmin": "node dist/scripts/create-first-superadmin.js",
-    "delete-test-users": "node dist/scripts/delete-test-users.js"
+    "delete-test-users": "node dist/scripts/delete-test-users.js",
+    "email:preview": "nest build && node dist/scripts/render-email-previews.js"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1158.0",

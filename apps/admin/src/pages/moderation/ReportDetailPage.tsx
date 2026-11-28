@@ -335,7 +335,7 @@ export default function ReportDetailPage() {
             <div className="mod-field">
               <span className="mod-field__label">Content</span>
               <span className="mod-field__value">
-                <span className="mod-pill mod-pill--strong">Content removed</span>
+                <span className="mod-pill mod-pill--strong mod-pill--plain">Content removed</span>
               </span>
             </div>
           ) : null}
@@ -389,7 +389,7 @@ export default function ReportDetailPage() {
           </div>
           <div className="mod-field">
             <span className="mod-field__label">Status</span>
-            <span className="mod-field__value">{report.status}</span>
+            <span className="mod-field__value mod-field__value--status">{report.status}</span>
           </div>
           {report.actionTaken ? (
             <div className="mod-field">

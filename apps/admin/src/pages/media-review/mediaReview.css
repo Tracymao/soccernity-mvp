@@ -18,8 +18,8 @@
 
 .media-stats__grid dt {
   font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  line-height: 16px;
+  font-weight: 500;
   color: var(--sn-text-secondary);
 }
 
@@ -28,6 +28,7 @@
   font-size: 28px;
   font-weight: 700;
   color: var(--sn-text-primary);
+  line-height: 36px;
 }
 
 .media-filters {
@@ -39,29 +40,36 @@
 .media-filters label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  line-height: 16px;
+  font-weight: 500;
   color: var(--sn-text-secondary);
 }
 
 .media-filters select {
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--sn-icon-inactive);
-  background: var(--sn-background-surface);
+  box-sizing: border-box;
+  width: 220px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--sn-radius-md);
+  border: 2px solid transparent;
+  background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font: inherit;
   font-size: 14px;
-  text-transform: none;
+}
+
+.media-filters select:focus-visible {
+  border-color: var(--sn-brand-navy);
+  outline: none;
 }
 
 .media-table {
   display: flex;
   flex-direction: column;
   background: var(--sn-background-surface);
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   overflow: hidden;
 }
 
@@ -70,16 +78,22 @@
   grid-template-columns: 1.4fr 1.4fr 0.8fr 0.8fr 0.8fr;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  min-height: 52px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--sn-icon-inactive);
   font-size: 14px;
+  line-height: 22px;
   color: var(--sn-text-primary);
 }
 
 .media-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background-color: var(--sn-green-tint-12);
   font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  line-height: 16px;
+  font-weight: 500;
   color: var(--sn-text-secondary);
 }
 
@@ -91,15 +105,20 @@
   display: flex;
   justify-content: center;
   padding: 16px;
-  border-radius: 10px;
+  border-radius: var(--sn-radius-lg);
   background: var(--sn-green-tint-12);
+}
+
+/* 16px between the back link and the viewer, tighter than the page's 20px (Figma 6852:30003). */
+.mod-back + .media-viewer {
+  margin-top: -4px;
 }
 
 .media-viewer img,
 .media-viewer video {
   max-width: 100%;
   max-height: 480px;
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
 }
 
 .media-details {
@@ -121,7 +140,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sn-overlay-scrim, rgba(40, 46, 101, 0.28));
+  background: var(--sn-overlay-scrim);
 }
 
 .media-dialog {
@@ -130,9 +149,9 @@
   flex-direction: column;
   gap: 12px;
   padding: 24px;
-  border-radius: 12px;
+  border-radius: var(--sn-radius-xl);
   background: var(--sn-background-surface);
-  box-shadow: 0 8px 24px var(--sn-shadow-elevated, rgba(40, 46, 101, 0.14));
+  box-shadow: var(--sn-elevation-3);
 }
 
 .media-dialog__help {
@@ -148,14 +167,26 @@
 }
 
 .media-dialog__close {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
   border: 0;
   background: transparent;
   color: var(--sn-text-primary);
   font-size: 24px;
   line-height: 1;
-  padding: 4px 8px;
+  padding: 0;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--sn-radius-md);
+}
+
+.media-dialog__close:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--sn-brand-navy) 8%, transparent);
+}
+
+.media-dialog__close:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
 }
 
 .media-dialog__close:disabled {
@@ -177,7 +208,7 @@
 
 .media-profile-viewer img {
   display: block;
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
   /* The reviewer sees the whole upload, never a crop that hides part of it. */
   object-fit: contain;
 }
@@ -211,7 +242,6 @@
 
 .media-details__row .mod-field__label {
   flex: 0 0 110px;
-  text-transform: none;
   font-weight: 400;
 }
 
@@ -227,24 +257,18 @@
   width: 8px;
   height: 8px;
   margin-right: 6px;
-  border-radius: 50%;
+  border-radius: var(--sn-radius-full);
   background-color: var(--sn-semantic-alert);
 }
 
 /* Reject dialog fields as drawn in 6972:46863: a sentence-case label, and a red border and bar when the reason is missing. */
 .media-dialog .mod-field__label {
-  text-transform: none;
   font-size: 13px;
   font-weight: 600;
   color: var(--sn-text-primary);
 }
 
-.media-dialog .mod-textarea[aria-invalid="true"] {
-  border-color: var(--sn-semantic-alert);
-  background-color: var(--sn-green-tint-12);
-}
-
-.media-dialog__error {
+.media-dialog .media-dialog__error {
   border: 0;
   border-left: 3px solid var(--sn-semantic-alert);
   border-radius: 0;
@@ -252,4 +276,5 @@
   padding: 0 0 0 8px;
   font-size: 13px;
   font-weight: 400;
+  line-height: 20px;
 }

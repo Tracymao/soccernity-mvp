@@ -9,8 +9,11 @@
   display: grid;
   gap: 16px;
   align-items: center;
-  padding: 14px 20px;
-  font-size: 13px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px 20px;
+  font-size: 14px;
+  line-height: 22px;
   min-width: 0;
   grid-template-columns: 170px 170px minmax(0, 1fr) 130px 170px minmax(0, 1fr);
 }
@@ -24,11 +27,14 @@
 }
 
 .al-row.mod-table__row--head {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: 16px;
   background-color: var(--sn-green-tint-12);
   font-size: 12px;
   font-weight: 500;
   color: var(--sn-text-secondary);
-  text-transform: uppercase;
 }
 
 .al-row + .al-row:not(.mod-table__row--head) {
@@ -49,10 +55,15 @@
   text-decoration: none;
 }
 
+/* Loading rows stay 40 high; only rows with text take the 52px minimum. */
+.al-row[aria-hidden] {
+  min-height: 40px;
+}
+
 .al-skeleton {
   display: block;
   height: 12px;
-  border-radius: 4px;
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-icon-inactive);
 }
 

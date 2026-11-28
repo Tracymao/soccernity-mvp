@@ -3,6 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { ADMIN_ROLE_EMAIL_DETAILS } from '../../../admin-staff-roles/admin-staff-roles.constants';
 import { RegistrationEmailService } from './registration-email.service';
 
+// CH-H18: these specs assert each template's OWN content, so the shared outer layout is stubbed to hand that content
+// straight back. The layout itself (and what it adds around every template) is covered by email-layout.spec.ts.
+jest.mock('./email-layout', () => ({
+  ...jest.requireActual('./email-layout'),
+  renderEmailLayout: ({ bodyHtml, footer }: { bodyHtml: string; footer?: string }) =>
+    footer ? `${bodyHtml}<p>${footer}</p>` : bodyHtml,
+}));
+
 // backend/b069-transactional-emails (B-069). The five plain account templates, rendered through the real Postmark
 // code path with the client mocked (the pattern registration-email.service.spec.ts uses). A separate file so the
 // existing spec stays unchanged.
