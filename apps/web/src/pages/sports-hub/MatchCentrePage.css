@@ -238,28 +238,6 @@
   font-size: 12px;
 }
 
-.mc-stat-row__bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--sn-green-tint-12);
-  display: flex;
-  justify-content: flex-end;
-  overflow: hidden;
-}
-
-.mc-stat-row__bar--away {
-  justify-content: flex-start;
-}
-
-.mc-stat-row__bar-fill {
-  height: 100%;
-  background: var(--sn-brand-navy);
-}
-
-.mc-stat-row__bar-fill--away {
-  background: var(--sn-brand-green);
-}
-
 /* --- lineups ------------------------------------------------------- */
 
 .mc-lineups {
@@ -1162,4 +1140,131 @@
   width: 14px;
   height: 14px;
   border-radius: 3px;
+}
+
+/* --- CH-H21: two-sided statistics (Figma 640:3737) ---------------- */
+
+.mc-compare {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mc-compare__head {
+  display: grid;
+  grid-template-columns: minmax(48px, 1fr) auto minmax(48px, 1fr);
+  gap: 8px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-compare__label {
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.mc-compare__value--away {
+  text-align: right;
+}
+
+.mc-compare__bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Both fills grow from the centre line outwards. */
+.mc-compare__track {
+  display: flex;
+  height: 8px;
+  background: var(--sn-icon-inactive);
+}
+
+.mc-compare__track--home {
+  justify-content: flex-end;
+}
+
+.mc-compare__fill {
+  display: block;
+  height: 100%;
+  background: var(--sn-brand-navy);
+}
+
+.mc-compare__fill--lead {
+  background: var(--sn-brand-green);
+}
+
+/* --- CH-H21: player statistics table ------------------------------ */
+
+.mc-player-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mc-player-toggle button {
+  padding: 8px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.mc-player-toggle button[aria-pressed="true"] {
+  background: var(--sn-brand-navy);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-brand-green);
+}
+
+.mc-player-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+}
+
+.mc-player-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-player-table th,
+.mc-player-table td {
+  padding: 8px 6px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.mc-player-table thead th {
+  font: 600 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mc-player-table tbody th {
+  font-weight: 600;
+}
+
+.mc-player-table__position {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--sn-green-tint-12);
+  font-size: 10px;
+}
+
+.mc-player-table__divider th {
+  background: var(--sn-green-tint-12);
+  font: 600 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
 }

@@ -305,6 +305,16 @@ export interface PublicBoxScorePlayer {
   rating: number | null;
   expectedGoals: number | null;
   expectedAssists: number | null;
+  // The keys below are OMITTED when the vendor row has no value for them (names from Highlightly's
+  // box-score docs).
+  goals?: number;
+  assists?: number;
+  shots?: number;
+  shotsOnTarget?: number;
+  passes?: number;
+  passAccuracy?: number;
+  tackles?: number;
+  fouls?: number;
 }
 
 export interface PublicTeamBoxScore {
@@ -340,6 +350,29 @@ function toFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+// Public key -> vendor `statistics` key. `fouledOthers` is fouls committed (`fouledByOthers` is suffered).
+const BOX_SCORE_COUNTS = {
+  goals: 'goalsScored',
+  assists: 'assists',
+  shots: 'shotsTotal',
+  shotsOnTarget: 'shotsOnTarget',
+  passes: 'passesTotal',
+  passAccuracy: 'passesAccuracy',
+  tackles: 'tacklesTotal',
+  fouls: 'fouledOthers',
+} as const;
+
+function boxScoreCounts(statistics: RawBoxScorePlayer['statistics']): Partial<Record<keyof typeof BOX_SCORE_COUNTS, number>> {
+  const result: Partial<Record<keyof typeof BOX_SCORE_COUNTS, number>> = {};
+  for (const [key, vendorKey] of Object.entries(BOX_SCORE_COUNTS) as [keyof typeof BOX_SCORE_COUNTS, string][]) {
+    const raw = statistics?.[vendorKey];
+    // Rates arrive as strings such as "66.67 %".
+    const value = toFiniteNumber(typeof raw === 'string' ? raw.replace('%', '') : raw);
+    if (value != null) result[key] = value;
+  }
+  return result;
+}
+
 function toPublicBoxScorePlayer(p: RawBoxScorePlayer): PublicBoxScorePlayer {
   return {
     id: p.id != null ? String(p.id) : null,
@@ -351,6 +384,7 @@ function toPublicBoxScorePlayer(p: RawBoxScorePlayer): PublicBoxScorePlayer {
     rating: toFiniteNumber(p.matchRating),
     expectedGoals: toFiniteNumber(p.statistics?.expectedGoals),
     expectedAssists: toFiniteNumber(p.statistics?.expectedAssists),
+    ...boxScoreCounts(p.statistics),
   };
 }
 

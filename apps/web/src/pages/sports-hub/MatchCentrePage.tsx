@@ -77,6 +77,8 @@ import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
 import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
 import SummaryTimeline from "./SummaryTimeline";
+import TeamStatRows from "./TeamStatRows";
+import PlayerStatsTable from "./PlayerStatsTable";
 import { LineupPitch, PairedRows, canDrawPitch, coachRows } from "./LineupPitch";
 import LoadingState from "../../components/loading/LoadingState";
 import "./SportsHubPage.css";
@@ -248,37 +250,16 @@ function StatisticsTab({
     );
   }
 
-  const awayByLabel = new Map(away.statistics.map((s) => [s.label, s.value]));
-
   return (
     <>
     <Section>
+      {/* One "Match" heading only: the data has no per-half statistics. */}
+      <h3 className="mc-band">Match</h3>
       <div className="mc-stats-header">
         <span className="mc-stats-header__team">{home.team.name}</span>
         <span className="mc-stats-header__team mc-stats-header__team--right">{away.team.name}</span>
       </div>
-      <ul className="mc-stat-rows">
-        {home.statistics.map((row) => {
-          const awayValue = awayByLabel.get(row.label) ?? null;
-          const homeNum = typeof row.value === "number" ? row.value : null;
-          const awayNum = typeof awayValue === "number" ? awayValue : null;
-          const total = (homeNum ?? 0) + (awayNum ?? 0);
-          const homePct = total > 0 && homeNum != null ? (homeNum / total) * 100 : 50;
-          return (
-            <li key={row.label} className="mc-stat-row">
-              <span className="mc-stat-row__value mc-stat-row__value--home">{row.value ?? "—"}</span>
-              <span className="mc-stat-row__bar">
-                <span className="mc-stat-row__bar-fill" style={{ width: `${homePct}%` }} />
-              </span>
-              <span className="mc-stat-row__label">{row.label}</span>
-              <span className="mc-stat-row__bar mc-stat-row__bar--away">
-                <span className="mc-stat-row__bar-fill mc-stat-row__bar-fill--away" style={{ width: `${100 - homePct}%` }} />
-              </span>
-              <span className="mc-stat-row__value">{awayValue ?? "—"}</span>
-            </li>
-          );
-        })}
-      </ul>
+      <TeamStatRows home={home.statistics} away={away.statistics} />
     </Section>
     {advanced}
     </>
@@ -325,6 +306,7 @@ function BoxScoreSections({ boxScore, onRetry }: { boxScore: Loadable<MatchBoxSc
   const bothSides = home != null && away != null;
   return (
     <>
+      {bothSides && <PlayerStatsTable home={home} away={away} />}
       {availability.playerRatings === "available" && bothSides ? (
         <PlayerRatings home={home} away={away} />
       ) : (

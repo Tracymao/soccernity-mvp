@@ -119,6 +119,15 @@ export interface BoxScorePlayer {
   rating: number | null;
   expectedGoals: number | null;
   expectedAssists: number | null;
+  // Sent only when the vendor row carries them.
+  goals?: number;
+  assists?: number;
+  shots?: number;
+  shotsOnTarget?: number;
+  passes?: number;
+  passAccuracy?: number;
+  tackles?: number;
+  fouls?: number;
 }
 
 export interface TeamBoxScore {
