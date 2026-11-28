@@ -6149,3 +6149,9 @@ Docs and Figma only; no app code, no new B-ID. Seven frames: 6870:30620, 6672:28
 Figma and docs only. Seven frames (6972:46142, 46346, 46516, 46686, 46863, 47057, 47248) rebuilt from the restyled Media review frames; old layers archived in place. Report: `docs/figma-admin-media-profile-premium-report.md`.
 
 **Decision Log #601:** these seven frames follow the shipped code where it differs from the old frames: the picture preview is square (radius 8), the already-decided frame shows the code's `conflict` wording, "Showing 5 of 27" is dropped, and the reject button is disabled while the reason is empty. Open, not changed: shipped picture reject dialogs 6852:30985 / 6852:31327 say "Up to 500 characters" (code: 300) and show that button enabled when empty.
+
+## 173. Updates 2026-11-28 (Figma admin Media review: three corrections to match shipped code)
+
+Figma and docs only. Full detail: `docs/figma-admin-media-fixes-report.md`.
+
+- **Decision Log #602:** where the admin Media review frames differed from the shipped code, the frames follow the code: the reject reason limit reads "Up to 300 characters." (`6852:30985`, `6852:31327`); the submit button is Disabled while the reason is empty (`6852:30985`); the pending pill reads "5+ pending" when Load more is shown (`6851:29675`, `6972:46142`). The pill stays hug-width (78px to 86px, right edge fixed). Empty and Load error frames unchanged.
