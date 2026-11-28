@@ -6189,3 +6189,7 @@ Figma and docs only. Full detail: `docs/figma-admin-media-fixes-report.md`.
 - Guard: `email-html-escaping.spec.ts` renders every template with hostile values and fails on a bare `${data.x}` in the HTML builder. It does not follow a value copied into a local variable first.
 - Not tested: a live send, Gmail, Outlook, Apple Mail.
 - #605 is named in Section 176 but has no row in the Decision Log table, so this entry took #606. Not repaired here.
+
+## 178. Updates 2026-11-28 (Figma admin Suspected illegal imagery record detail D1 to D14 restyled to the premium standard)
+
+Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:68204`) are restyled to match `SuspectedIllegalDetailPage.tsx`. Figma and docs only; no code or CSS changed. Old layers are archived inside each frame. The "[COPY PENDING LEGAL REVIEW]" tags (two strings, D1 to D9) are removed; the code's "Pending counsel" wording stays. The "Already decided" callout and the "Couldn’t save" title are dropped because the code renders neither. Report: `docs/figma-admin-suspected-illegal-detail-premium-report.md`, which lists the notes for the code PR.
