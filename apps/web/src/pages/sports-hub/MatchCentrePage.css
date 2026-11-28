@@ -1089,3 +1089,27 @@
   text-align: right;
   color: var(--sn-text-primary);
 }
+
+/* Head-to-head record (also uses .mc-facts). */
+
+.mc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.mc-facts dt {
+  font: 600 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+.mc-facts dd {
+  font: 500 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 4px 0 0;
+}
+
