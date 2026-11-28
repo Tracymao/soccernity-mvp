@@ -10620,3 +10620,4 @@ Do NOT open this whole file in a session. Use grep -n and sed -n ranges.
 
 - 2026-11-28 (`ui/admin-moderation-premium`, Decision Log #608, register section 180): admin Moderation family restyled in code to the Figma premium design (CSS and class names only); Activity and Username reviews change with it through the shared stylesheet. Not verified on staging. Report: `docs/admin-moderation-premium-code-report.md`.
 - Admin Settings/Roles and Profile aligned to the premium design in code (ui/admin-settings-profile-premium, PR #964, Decision Log #615). Design values only; the two-factor sign-in screens and the sign-in page are not restyled yet. See docs/admin-settings-profile-premium-code-report.md.
+- Admin User detail frames restyled in Figma to the premium design (figma/admin-user-detail-premium, Decision Log #616). Figma and docs only; the code PR for the dialogs and inputs is still open. See docs/figma-admin-user-detail-premium-report.md.

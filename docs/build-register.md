@@ -6257,3 +6257,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 187. Updates 2026-11-28 (Admin Settings/Roles and Profile aligned to the premium design in code; no counter change)
 
 - Decision Log #615: Admin Settings/Roles and Profile aligned to the premium design in code. CSS and one class-name edit; two-factor values scoped so the sign-in screens measure the same as before. Details in docs/admin-settings-profile-premium-code-report.md.
+
+## 188. Updates 2026-11-28 (Admin User detail frames restyled in Figma to the premium design; no counter change)
+
+- Decision Log #616: Admin User detail frames restyled in Figma to the premium design; no counter change. 18 frames rebuilt to match the shipped page, 3 state frames added (loading, load error, account suspended), 3 duplicate frames archived (hidden, not deleted). Figma and docs only. Report: docs/figma-admin-user-detail-premium-report.md.
