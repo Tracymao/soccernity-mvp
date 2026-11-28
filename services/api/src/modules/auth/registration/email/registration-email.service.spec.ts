@@ -2,6 +2,14 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RegistrationEmailService, SUSPENSION_GENERIC_REASON_LINE, suspensionReasonLine } from './registration-email.service';
 
+// CH-H18: these specs assert each template's OWN content, so the shared outer layout is stubbed to hand that content
+// straight back. The layout itself (and what it adds around every template) is covered by email-layout.spec.ts.
+jest.mock('./email-layout', () => ({
+  ...jest.requireActual('./email-layout'),
+  renderEmailLayout: ({ bodyHtml, footer }: { bodyHtml: string; footer?: string }) =>
+    footer ? `${bodyHtml}<p>${footer}</p>` : bodyHtml,
+}));
+
 const mockSendEmail = jest.fn();
 
 jest.mock('postmark', () => ({

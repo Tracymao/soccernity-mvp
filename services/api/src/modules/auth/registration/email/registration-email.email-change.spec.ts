@@ -1,6 +1,14 @@
 import { ConfigService } from '@nestjs/config';
 import { RegistrationEmailService } from './registration-email.service';
 
+// CH-H18: these specs assert each template's OWN content, so the shared outer layout is stubbed to hand that content
+// straight back. The layout itself (and what it adds around every template) is covered by email-layout.spec.ts.
+jest.mock('./email-layout', () => ({
+  ...jest.requireActual('./email-layout'),
+  renderEmailLayout: ({ bodyHtml, footer }: { bodyHtml: string; footer?: string }) =>
+    footer ? `${bodyHtml}<p>${footer}</p>` : bodyHtml,
+}));
+
 // Decision Log #476. The "cannot be used" email to an address that already belongs to an account, and the
 // configuration check the email-change route uses for its 503. Same pattern as registration-email.account-emails.spec.ts.
 const mockSendEmail = jest.fn();
