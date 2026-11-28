@@ -17,7 +17,7 @@
   width: min(560px, 100%);
   max-height: 100%;
   overflow: auto;
-  border-radius: 16px;
+  border-radius: var(--sn-radius-xl);
   background-color: var(--sn-background-surface);
   box-shadow:
     0 24px 56px var(--sn-shadow-key),
@@ -43,7 +43,7 @@
 .rm-dialog__close {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--sn-radius-md);
   border: 1px solid var(--sn-icon-inactive);
   background: var(--sn-background-surface);
   color: var(--sn-text-primary);
@@ -57,7 +57,10 @@
 }
 
 .rm-dialog__body {
-  padding: 22px 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 28px;
   font-size: 14px;
   color: var(--sn-text-primary);
 }
@@ -78,8 +81,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
-  border-radius: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--sn-radius-md);
   font-size: 14px;
   font-weight: 600;
   border: 1px solid transparent;
