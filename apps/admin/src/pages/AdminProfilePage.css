@@ -3,11 +3,17 @@
 .admin-profile__card {
   max-width: 760px;
   background-color: var(--sn-background-surface);
-  border-radius: 12px;
-  padding: 36px;
+  border-radius: var(--sn-radius-lg);
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
+}
+
+/* The turned-off banner and the two-factor card sit 20 below what is above them. */
+.admin-profile__card ~ .tf-banner,
+.admin-profile__card ~ .tf-profile-card {
+  margin-top: 20px;
 }
 
 .admin-profile__header {
@@ -37,13 +43,13 @@
 }
 
 .admin-profile__name {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--sn-text-primary);
 }
 
 .admin-profile__role {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--sn-text-secondary);
 }
 
@@ -54,9 +60,9 @@
 }
 
 .admin-profile__label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--sn-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
 }
 
 /* Figma draws the value box at a fixed 100px height with top-aligned
@@ -64,11 +70,12 @@
  * a comfortable min-height instead — a deliberate, disclosed deviation
  * from the literal spec. */
 .admin-profile__value {
-  min-height: 48px;
-  padding: 14px 16px;
-  border-radius: 6px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: var(--sn-radius-md);
   background-color: var(--sn-green-tint-12);
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--sn-text-primary);
   word-break: break-word;
 }
@@ -80,11 +87,11 @@
 .admin-profile__field input {
   height: 44px;
   padding: 0 16px;
-  border: 1px solid var(--sn-icon-inactive);
-  border-radius: 6px;
-  background-color: var(--sn-background-surface);
+  border: 2px solid transparent;
+  border-radius: var(--sn-radius-md);
+  background-color: var(--sn-green-tint-12);
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--sn-text-primary);
 }
 
@@ -105,10 +112,11 @@
 }
 
 .admin-btn {
-  padding: 12px 24px;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 500;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--sn-radius-md);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
 }
@@ -132,7 +140,7 @@
 .admin-profile__panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .admin-profile__panel-title {
@@ -148,17 +156,16 @@
   color: var(--sn-text-secondary);
 }
 
-/* No invented error hue — navy text on a navy-tint wash with a border,
- * matching apps/web's Auth.css convention and this app's login screen. */
+/* The alert callout look: the alert colour is the accent bar only, text stays navy. */
 .admin-profile__error {
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--sn-brand-navy);
-  border-radius: 4px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: var(--sn-radius-sm);
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
   font-size: 13px;
-  font-weight: 600;
+  line-height: 20px;
 }
 
 .admin-profile__loading {
