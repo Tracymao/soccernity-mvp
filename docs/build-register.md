@@ -6155,3 +6155,11 @@ Figma and docs only. Seven frames (6972:46142, 46346, 46516, 46686, 46863, 47057
 Figma and docs only. Full detail: `docs/figma-admin-media-fixes-report.md`.
 
 - **Decision Log #602:** where the admin Media review frames differed from the shipped code, the frames follow the code: the reject reason limit reads "Up to 300 characters." (`6852:30985`, `6852:31327`); the submit button is Disabled while the reason is empty (`6852:30985`); the pending pill reads "5+ pending" when Load more is shown (`6851:29675`, `6972:46142`). The pill stays hug-width (78px to 86px, right edge fixed). Empty and Load error frames unchanged.
+
+## 174. Updates 2026-11-28 (Figma admin Media review "Set aside as suspected illegal imagery" frames SA-1 to SA-8 restyled to the shipped code and premium standard)
+
+- SA-1 `7092:67168`, SA-2 `7094:67304`, SA-3 `7094:67493`, SA-4 `7094:67685`, SA-5 `7097:67707` (dialog states on the Moderation dialog shell, 560 wide) and SA-6 `7099:67843`, SA-7 `7099:68023`, SA-8 `7101:68108` (page states) rebuilt from the restyled Media item frames. Frame ids kept; superseded layers hidden, prefixed "ARCHIVED " and moved below the frame. Notes frame `7102:68239` corrected. No code or CSS change.
+- Standing check: 2004 top-level nodes, id hash 2327422288, reference content sizes unchanged, no overlaps.
+- Report: `docs/figma-admin-set-aside-premium-report.md`.
+- Follow-up noted, not done: item frame `6852:30003` shows Source "User report" without the "Reported by" callout the code would render.
+- **Decision Log #603** (2026-11-28; Figma only, defaults veto-able): the SA frames follow the shipped code. SA-6 gains the "Already decided." callout with the stored rejection reason; SA-6 to SA-8 hide "Suspected illegal imagery"; SA-3 uses the Disabled button variants (Cancel as Secondary Disabled); no frame carries a copy-pending tag (founder review of 2026-11-22), and the one wrongly kinded note was changed to "Scope open".
