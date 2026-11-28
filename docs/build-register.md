@@ -6176,3 +6176,7 @@ Figma and docs only. Full detail: `docs/figma-admin-media-fixes-report.md`.
 - Not tested: real Gmail, Outlook and Apple Mail rendering, and a live Postmark send.
 - Found, not changed: several older templates place display names into the HTML without escaping (the guardian-facing ones among them).
 - No `docs/check_version_consistency.py` exists, so no consistency check was run.
+
+## 176. Updates 2026-11-28 (Figma admin Suspected illegal imagery list L1 to L7 restyled to the premium standard)
+
+- **Decision Log #605** (branch `docs/figma-admin-suspected-illegal-list-premium`): the seven list frames L1 to L7 (`7074:64435`, `7075:65405` to `7075:66272`) are restyled to match `SuspectedIllegalListPage.tsx`. Figma and docs only; no code or CSS changed. L1 now shows filter "All" (a "Not filed" filter cannot show mixed statuses), so L1 and L2 are identical; L4 shows "All" with "Apply filter" disabled; L6 and L7 gain the filter card the code renders. Open for the code PR: sentence-case table header; full-width columns in the 110:90:150:130:100 proportions. D1 to D14 are not touched. Details: `docs/figma-admin-suspected-illegal-list-premium-report.md`.
