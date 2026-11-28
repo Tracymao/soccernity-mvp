@@ -6245,3 +6245,7 @@ Decision Log #607: the 14 record detail frames (D1 `7077:65267` to D14 `7080:682
 ## 184. Updates 2026-11-28 (Admin Username reviews and Activity aligned to the premium design in code; no counter change)
 
 - Decision Log #612: Admin Username reviews and Activity aligned to the premium design in code. Sentence-case 40px headers, 14/22 rows of at least 52, filter gap 12, loading line 22, Username review detail values scoped to `.ur-detail`, dialog textareas 96 and the other `.mod-textarea` users 90, Bants room restricted notice radius 6. No structure or behaviour change. Still open: decide dialog option and field-error line heights. Report: `docs/admin-username-activity-premium-code-report.md`.
+
+## 185. Updates 2026-11-28 (Admin Roles (Settings) frames restyled in Figma to the premium design; no counter change)
+
+- Decision Log #613: Admin Roles (Settings) frames restyled in Figma to the premium design, matching the shipped code. 15 frames rebuilt in place, 13 new frames for states the code renders and no frame drew, 5 stale or redundant frames archived (hidden, not deleted). Page top-level count is now 2017 (was 2004); the first 2004 ids are unchanged. Figma and docs only; the code differences are listed for a later code PR. Report: docs/figma-admin-settings-roles-premium-report.md.
